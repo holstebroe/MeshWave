@@ -8,4 +8,10 @@
     <UseWPF>true</UseWPF>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../MeshWave.Common.Core/MeshWave.Common.Core.csproj" />
+    <ProjectReference Include="../MeshWave.LibraryManager/MeshWave.LibraryManager.csproj" />
+    <ProjectReference Include="../MeshWave.Synchronizer/MeshWave.Synchronizer.csproj" />
+  </ItemGroup>
+
 </Project>
