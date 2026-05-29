@@ -34,6 +34,11 @@ namespace MeshWave
             ViewModel.NavigateToLibrary();
         }
 
+        private void MyMusicMenu_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel.NavigateToMyMusic();
+        }
+
         private void PlaybackMenu_Click(object sender, RoutedEventArgs e)
         {
             ViewModel.CurrentViewModel = new ViewModels.PlaybackViewModel();

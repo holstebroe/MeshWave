@@ -1,3 +1,4 @@
+using MeshWave.LibraryManager;
 using MeshWave.Mvvm;
 using MeshWave.Services;
 using System.Collections.ObjectModel;
@@ -21,6 +22,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     private AudioPlaybackService? _audioService;
     private string? _currentFilePath;
     private bool _isUpdatingPosition = false;
+    private string _coverImagePath = string.Empty;
 
     public PlaybackViewModel()
     {
@@ -89,6 +91,12 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         set => SetProperty(ref _comments, value);
     }
 
+    public string CoverImagePath
+    {
+        get => _coverImagePath;
+        set => SetProperty(ref _coverImagePath, value);
+    }
+
     public void Play()
     {
         if (_audioService != null)
@@ -154,6 +162,9 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
 
         if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
         {
+            var coverResolver = new LocalLibraryManager(Path.GetDirectoryName(filePath) ?? string.Empty);
+            CoverImagePath = coverResolver.GetTrackCoverPath(filePath);
+
             _audioService?.Dispose();
             _audioService = new AudioPlaybackService();
             _audioService.PositionChanged += (s, pos) =>
@@ -166,6 +177,10 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             _audioService.LoadFile(filePath);
             Duration = _audioService.Duration;
             Play();
+        }
+        else
+        {
+            CoverImagePath = string.Empty;
         }
     }
 

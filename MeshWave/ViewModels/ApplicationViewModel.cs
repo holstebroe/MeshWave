@@ -36,7 +36,12 @@ public class ApplicationViewModel : ViewModelBase
 
     public void NavigateToLibrary()
     {
-        CurrentViewModel = new LibraryViewModel();
+        CurrentViewModel = new LibraryViewModel(isMyMusicLibrary: false);
+    }
+
+    public void NavigateToMyMusic()
+    {
+        CurrentViewModel = new LibraryViewModel(isMyMusicLibrary: true);
     }
 
     public void NavigateToSettings()

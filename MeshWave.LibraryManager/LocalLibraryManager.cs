@@ -44,6 +44,7 @@ public class LocalLibraryManager
             {
                 var metadata = TryReadCachedMetadata(file) ?? ExtractMetadata(file);
                 WriteMetadataCache(file, metadata);
+                EnsureCoverCached(file);
 
                 var fileInfo = new FileInfo(file);
                 var trackId = ComputeStableId(fileInfo.FullName);
@@ -135,6 +136,7 @@ public class LocalLibraryManager
                 }
 
                 WriteMetadataCache(destinationFile, metadata);
+                EnsureCoverCached(destinationFile);
             }
             catch
             {
@@ -152,6 +154,22 @@ public class LocalLibraryManager
 
     public IEnumerable<Track> GetAllTracks() => _tracks;
     public IEnumerable<Album> GetAllAlbums() => _albums;
+
+    public string GetTrackCoverPath(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath) || !System.IO.File.Exists(filePath))
+        {
+            return string.Empty;
+        }
+
+        var cachePath = GetCoverCachePath(filePath);
+        if (!System.IO.File.Exists(cachePath))
+        {
+            EnsureCoverCached(filePath);
+        }
+
+        return System.IO.File.Exists(cachePath) ? cachePath : string.Empty;
+    }
 
     private static IEnumerable<string> EnumerateSupportedFiles(string folder, HashSet<string> supportedExtensions)
     {
@@ -238,6 +256,44 @@ public class LocalLibraryManager
         var fileName = NormalizeFolderName(Path.GetFileNameWithoutExtension(filePath));
         var albumFolder = Path.GetDirectoryName(filePath) ?? string.Empty;
         return Path.Combine(albumFolder, ".cache", $"{fileName}.meta.json");
+    }
+
+    private static string GetCoverCachePath(string filePath)
+    {
+        var fileName = NormalizeFolderName(Path.GetFileNameWithoutExtension(filePath));
+        var albumFolder = Path.GetDirectoryName(filePath) ?? string.Empty;
+        return Path.Combine(albumFolder, ".cache", $"{fileName}.cover.jpg");
+    }
+
+    private static void EnsureCoverCached(string filePath)
+    {
+        try
+        {
+            var coverPath = GetCoverCachePath(filePath);
+            if (System.IO.File.Exists(coverPath))
+            {
+                return;
+            }
+
+            using var tagFile = TagLib.File.Create(filePath);
+            var picture = tagFile.Tag.Pictures?.FirstOrDefault();
+            if (picture == null || picture.Data == null || picture.Data.Count == 0)
+            {
+                return;
+            }
+
+            var coverDir = Path.GetDirectoryName(coverPath);
+            if (!string.IsNullOrWhiteSpace(coverDir))
+            {
+                Directory.CreateDirectory(coverDir);
+            }
+
+            System.IO.File.WriteAllBytes(coverPath, picture.Data.Data);
+        }
+        catch
+        {
+            // ignore cover extraction errors
+        }
     }
 
     private static string NormalizeFolderName(string value)

@@ -31,11 +31,11 @@ namespace MeshWave.Views
 
         private void OnTrackDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            if (sender is ListBox listBox && listBox.SelectedItem is string trackTitle)
+            if (sender is ListBox listBox && listBox.SelectedItem is MeshWave.ViewModels.LibraryTrackItem trackItem)
             {
                 if (DataContext is MeshWave.ViewModels.LibraryViewModel vm)
                 {
-                    var track = vm.GetTrackByTitle(trackTitle);
+                    var track = vm.GetTrackById(trackItem.TrackId);
                     if (track != null)
                     {
                         var mainWindow = System.Windows.Application.Current.MainWindow as MainWindow;
@@ -56,26 +56,14 @@ namespace MeshWave.Views
 
         private void OnAlbumDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            if (sender is ListBox listBox && listBox.SelectedItem is string albumTitle)
+            if (sender is ListBox listBox && listBox.SelectedItem is MeshWave.ViewModels.LibraryAlbumItem albumItem)
             {
                 if (DataContext is MeshWave.ViewModels.LibraryViewModel vm)
                 {
-                    var album = vm.GetAlbumByTitle(albumTitle);
+                    var album = vm.GetAlbumById(albumItem.AlbumId);
                     if (album != null)
                     {
-                        // TODO: Play first track of album
-                        // For now, just navigate to playback with album info
-                        var mainWindow = System.Windows.Application.Current.MainWindow as MainWindow;
-                        if (mainWindow != null)
-                        {
-                            var appVm = mainWindow.DataContext as MeshWave.ViewModels.ApplicationViewModel;
-                            var playbackVm = new MeshWave.ViewModels.PlaybackViewModel();
-                            playbackVm.LoadTrack(album.Title, "Album", System.TimeSpan.Zero);
-                            if (appVm != null)
-                            {
-                                appVm.CurrentViewModel = playbackVm;
-                            }
-                        }
+                        // TODO: optionally play first track in selected album
                     }
                 }
             }

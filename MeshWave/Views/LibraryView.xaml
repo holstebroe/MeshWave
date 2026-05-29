@@ -6,15 +6,26 @@
              mc:Ignorable="d"
              Height="Auto" Width="Auto"
              Background="{StaticResource BackgroundColor}">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+    </UserControl.Resources>
     <Grid Margin="20">
-        <StackPanel>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
             <Button Content="Import My Music" 
-                    Click="ImportMyMusic_Click" 
+                    Click="ImportMyMusic_Click"
+                    Visibility="{Binding CanImportMyMusic, Converter={StaticResource BoolToVisibilityConverter}}"
                     Style="{StaticResource PrimaryButton}"
                     FontSize="16"
                     Padding="20,12"/>
 
-            <Border Background="{StaticResource SurfaceColor}" CornerRadius="6" Padding="12" Margin="0,10,0,10">
+            <Border Background="{StaticResource SurfaceColor}" CornerRadius="6" Padding="12" Margin="0,10,0,10"
+                    Visibility="{Binding CanImportMyMusic, Converter={StaticResource BoolToVisibilityConverter}}">
                 <StackPanel>
                     <TextBlock Text="Import status" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
                     <TextBlock Text="{Binding ImportStatusMessage}"/>
@@ -38,22 +49,70 @@
 
             <TextBox Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
                     Margin="0,10,0,12"/>
-
-            <TextBlock Text="🎤 Artists" Style="{StaticResource SectionHeader}"/>
-            <ListBox ItemsSource="{Binding Artists}" MinHeight="100"/>
-
-            <TextBlock Text="🎵 Tracks" Style="{StaticResource SectionHeader}"/>
-            <ListBox ItemsSource="{Binding Tracks}" 
-                    MouseDoubleClick="OnTrackDoubleClick"
-                    MinHeight="200"/>
-            <TextBlock Text="💿 Albums" Style="{StaticResource SectionHeader}"/>
-            <ListBox ItemsSource="{Binding Albums}" 
-                    MouseDoubleClick="OnAlbumDoubleClick"
-                    MinHeight="150"/>
-            <TextBlock Text="Tip: Double-click a track to play it" 
-                      FontStyle="Italic" 
-                      Foreground="{StaticResource TextSecondaryColor}"
-                      Margin="0,10,0,0"/>
         </StackPanel>
+
+        <TextBlock Grid.Row="1"
+                   Text="Select artist -> select album -> tracks"
+                   FontStyle="Italic"
+                   Foreground="{StaticResource TextSecondaryColor}"
+                   Margin="0,0,0,10"/>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*"/>
+                <ColumnDefinition Width="2*"/>
+                <ColumnDefinition Width="3*"/>
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                <TextBlock Text="🎤 Artists" Style="{StaticResource SectionHeader}"/>
+                <ListBox ItemsSource="{Binding Artists}"
+                         SelectedItem="{Binding SelectedArtist, Mode=TwoWay}"
+                         DisplayMemberPath="Name"
+                         MinHeight="220"/>
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Margin="0,0,10,0">
+                <TextBlock Text="💿 Albums" Style="{StaticResource SectionHeader}"/>
+                <ListBox ItemsSource="{Binding Albums}"
+                         SelectedItem="{Binding SelectedAlbum, Mode=TwoWay}"
+                         MinHeight="220">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Margin="0,2">
+                                <Border Width="36" Height="36" CornerRadius="4" ClipToBounds="True" Background="{StaticResource SurfaceColor}" Margin="0,0,8,0">
+                                    <Image Source="{Binding CoverPath}" Stretch="UniformToFill"/>
+                                </Border>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Name}"/>
+                                    <TextBlock Text="{Binding TrackCount, StringFormat={}{0} tracks}" FontSize="11" Foreground="{StaticResource TextSecondaryColor}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </StackPanel>
+
+            <StackPanel Grid.Column="2">
+                <TextBlock Text="🎵 Tracks" Style="{StaticResource SectionHeader}"/>
+                <ListBox ItemsSource="{Binding Tracks}"
+                         MouseDoubleClick="OnTrackDoubleClick"
+                         MinHeight="220">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Margin="0,2">
+                                <Border Width="36" Height="36" CornerRadius="4" ClipToBounds="True" Background="{StaticResource SurfaceColor}" Margin="0,0,8,0">
+                                    <Image Source="{Binding CoverPath}" Stretch="UniformToFill"/>
+                                </Border>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Title}"/>
+                                    <TextBlock Text="{Binding Artist}" FontSize="11" Foreground="{StaticResource TextSecondaryColor}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </StackPanel>
+        </Grid>
     </Grid>
 </UserControl>

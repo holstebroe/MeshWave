@@ -23,12 +23,19 @@ namespace MeshWave.ViewModels
         {
             _settingsService.EnsureFoldersExist();
             var settings = _settingsService.LoadSettings();
-            var myMusicFolder = _settingsService.GetMyMusicFolder();
-            LoadLibrary(myMusicFolder, settings.SupportedExtensions);
+            var libraryFolder = IsMyMusicLibrary
+                ? _settingsService.GetMyMusicFolder()
+                : _settingsService.GetOtherMusicFolder();
+            LoadLibrary(libraryFolder, settings.SupportedExtensions);
         }
 
         public async Task ImportMyMusicAsync(string sourceFolder)
         {
+            if (!IsMyMusicLibrary)
+            {
+                return;
+            }
+
             _settingsService.EnsureFoldersExist();
             var settings = _settingsService.LoadSettings();
             var myMusicFolder = _settingsService.GetMyMusicFolder();
@@ -96,13 +103,52 @@ namespace MeshWave.ViewModels
             _libraryManager.IndexLibrary();
             _trackObjects = _libraryManager.GetAllTracks().ToList();
             _albumObjects = _libraryManager.GetAllAlbums().ToList();
-            Tracks = _trackObjects.Select(t => t.Title).ToList();
-            Albums = _albumObjects.Select(a => a.Title).ToList();
-            Artists = _trackObjects
-                .Select(t => string.IsNullOrWhiteSpace(t.Description) ? "Unknown Artist" : t.Description!)
-                .Distinct()
-                .OrderBy(a => a)
+
+            var trackItems = _trackObjects.Select(t =>
+            {
+                var album = _albumObjects.FirstOrDefault(a => a.AlbumId == t.AlbumId);
+                var coverPath = _libraryManager.GetTrackCoverPath(t.FileHash);
+                return new LibraryTrackItem
+                {
+                    TrackId = t.TrackId,
+                    Title = t.Title,
+                    Artist = string.IsNullOrWhiteSpace(t.Description) ? "Unknown Artist" : t.Description!,
+                    AlbumId = t.AlbumId ?? string.Empty,
+                    CoverPath = coverPath
+                };
+            }).ToList();
+
+            var albumItems = _albumObjects.Select(a =>
+            {
+                var tracksInAlbum = trackItems.Where(t => t.AlbumId == a.AlbumId).ToList();
+                var coverPath = tracksInAlbum.Select(t => t.CoverPath).FirstOrDefault(p => !string.IsNullOrWhiteSpace(p)) ?? string.Empty;
+                return new LibraryAlbumItem
+                {
+                    AlbumId = a.AlbumId,
+                    Artist = tracksInAlbum.FirstOrDefault()?.Artist ?? "Unknown Artist",
+                    Name = a.Title,
+                    CoverPath = coverPath,
+                    TrackCount = tracksInAlbum.Count
+                };
+            }).ToList();
+
+            var artistItems = trackItems
+                .GroupBy(t => t.Artist)
+                .Select(g => new LibraryArtistItem
+                {
+                    Name = g.Key,
+                    CoverPath = g.Select(t => t.CoverPath).FirstOrDefault(p => !string.IsNullOrWhiteSpace(p)) ?? string.Empty,
+                    AlbumCount = albumItems.Count(a => a.Artist == g.Key),
+                    TrackCount = g.Count()
+                })
+                .OrderBy(a => a.Name)
                 .ToList();
+
+            Artists = artistItems;
+            SelectedArtist = artistItems.FirstOrDefault();
+            _allAlbumItems = albumItems;
+            _allTrackItems = trackItems;
+            RefreshAlbumAndTrackSelection();
 
             if (Directory.Exists(folderPath))
             {
@@ -116,14 +162,30 @@ namespace MeshWave.ViewModels
             }
         }
 
-        public Track? GetTrackByTitle(string title)
+        private List<LibraryAlbumItem> _allAlbumItems = [];
+        private List<LibraryTrackItem> _allTrackItems = [];
+
+        private void RefreshAlbumAndTrackSelection()
         {
-            return _trackObjects.FirstOrDefault(t => t.Title == title);
+            var filteredAlbums = SelectedArtist == null
+                ? _allAlbumItems
+                : _allAlbumItems.Where(a => a.Artist == SelectedArtist.Name).ToList();
+            Albums = filteredAlbums;
+
+            var filteredTracks = SelectedAlbum == null
+                ? []
+                : _allTrackItems.Where(t => t.AlbumId == SelectedAlbum.AlbumId).ToList();
+            Tracks = filteredTracks;
         }
 
-        public Album? GetAlbumByTitle(string title)
+        public Track? GetTrackById(string trackId)
         {
-            return _albumObjects.FirstOrDefault(a => a.Title == title);
+            return _trackObjects.FirstOrDefault(t => t.TrackId == trackId);
+        }
+
+        public Album? GetAlbumById(string albumId)
+        {
+            return _albumObjects.FirstOrDefault(a => a.AlbumId == albumId);
         }
 
         public void Dispose()

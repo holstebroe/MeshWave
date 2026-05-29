@@ -9,9 +9,11 @@ namespace MeshWave.ViewModels;
 public partial class LibraryViewModel : ViewModelBase
 {
     private string _searchQuery = string.Empty;
-    private List<string> _tracks = [];
-    private List<string> _albums = [];
-    private List<string> _artists = [];
+    private List<LibraryTrackItem> _tracks = [];
+    private List<LibraryAlbumItem> _albums = [];
+    private List<LibraryArtistItem> _artists = [];
+    private LibraryArtistItem? _selectedArtist;
+    private LibraryAlbumItem? _selectedAlbum;
     private bool _isImporting;
     private string _importCurrentFile = string.Empty;
     private string _importStatusMessage = "Idle";
@@ -19,13 +21,16 @@ public partial class LibraryViewModel : ViewModelBase
     private int _importRemainingFiles;
     private int _importImportedFiles;
 
-    public LibraryViewModel()
+    public LibraryViewModel(bool isMyMusicLibrary = false)
     {
+        IsMyMusicLibrary = isMyMusicLibrary;
         CancelImportCommand = new RelayCommand(_ => CancelImport(), _ => IsImporting);
         LoadFromConfiguredBaseFolder();
     }
 
     public ICommand CancelImportCommand { get; }
+    public bool IsMyMusicLibrary { get; }
+    public bool CanImportMyMusic => IsMyMusicLibrary;
 
     public string SearchQuery
     {
@@ -33,22 +38,47 @@ public partial class LibraryViewModel : ViewModelBase
         set => SetProperty(ref _searchQuery, value);
     }
 
-    public List<string> Tracks
+    public List<LibraryTrackItem> Tracks
     {
         get => _tracks;
         set => SetProperty(ref _tracks, value);
     }
 
-    public List<string> Albums
+    public List<LibraryAlbumItem> Albums
     {
         get => _albums;
         set => SetProperty(ref _albums, value);
     }
 
-    public List<string> Artists
+    public List<LibraryArtistItem> Artists
     {
         get => _artists;
         set => SetProperty(ref _artists, value);
+    }
+
+    public LibraryArtistItem? SelectedArtist
+    {
+        get => _selectedArtist;
+        set
+        {
+            if (SetProperty(ref _selectedArtist, value))
+            {
+                SelectedAlbum = null;
+                RefreshAlbumAndTrackSelection();
+            }
+        }
+    }
+
+    public LibraryAlbumItem? SelectedAlbum
+    {
+        get => _selectedAlbum;
+        set
+        {
+            if (SetProperty(ref _selectedAlbum, value))
+            {
+                RefreshAlbumAndTrackSelection();
+            }
+        }
     }
 
     public bool IsImporting
@@ -108,4 +138,33 @@ public partial class LibraryViewModel : ViewModelBase
     {
         // TODO: Implement library refresh
     }
+}
+
+public sealed class LibraryArtistItem
+{
+    public required string Name { get; set; }
+    public required string CoverPath { get; set; }
+    public int AlbumCount { get; set; }
+    public int TrackCount { get; set; }
+    public override string ToString() => Name;
+}
+
+public sealed class LibraryAlbumItem
+{
+    public required string AlbumId { get; set; }
+    public required string Artist { get; set; }
+    public required string Name { get; set; }
+    public required string CoverPath { get; set; }
+    public int TrackCount { get; set; }
+    public override string ToString() => Name;
+}
+
+public sealed class LibraryTrackItem
+{
+    public required string TrackId { get; set; }
+    public required string Title { get; set; }
+    public required string Artist { get; set; }
+    public required string AlbumId { get; set; }
+    public required string CoverPath { get; set; }
+    public override string ToString() => Title;
 }

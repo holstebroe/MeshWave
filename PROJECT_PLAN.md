@@ -84,7 +84,8 @@ Formats: JSON for metadata, binary files for audio and images.
 - **Audio Playback (NAudio)**: Play/Pause/Stop (icon-only controls), volume control, seek, position tracking
 - **Waveform Visualization**: Visual waveform canvas with playback cursor (placeholder data)
 - **Time-Linked Comments**: Add comments at current timestamp, scrollable panel
-- **Library Browser**: List artists, tracks and albums from configured My Music folder
+- **Library Browser**: Split views for community Library and My Music management
+- **Hierarchical browsing**: Artist -> Album -> Tracks selection flow
 - **Metadata Extraction (TagLib#)**: Title, album, artist, duration from ID3 tags
 - **File Watcher**: Auto-refresh library when files change
 - **Navigation**: Menu bar, double-click track to play
@@ -96,7 +97,7 @@ Formats: JSON for metadata, binary files for audio and images.
 
 ### 📋 **Planned/TODO Features**
 - [ ] **Real Waveform Generation**: Generate and cache 1024-point waveform amplitudes in `.cache`
-- [ ] **Album Cover Display**: Extract and cache cover art in `.cache` and show in playback/library
+- [ ] **Album Cover Display**: Extract and cache cover art in `.cache` and show in playback/library (in progress)
 - [ ] **Comment Timeline Markers**: Show comment markers with rounded user icons on waveform timeline
 - [ ] **Click Comment to Seek**: Click timestamp in comment to jump to that position
 - [ ] **Delete Comments**: Remove comments from the list

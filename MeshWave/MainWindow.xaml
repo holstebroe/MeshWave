@@ -15,6 +15,7 @@
                   Foreground="{StaticResource TextPrimaryColor}">
                 <MenuItem Header="Home" Click="HomeMenu_Click"/>
                 <MenuItem Header="Library" Click="LibraryMenu_Click"/>
+                <MenuItem Header="My Music" Click="MyMusicMenu_Click"/>
                 <MenuItem Header="Playback" Click="PlaybackMenu_Click"/>
                 <MenuItem Header="Settings" Click="SettingsMenu_Click"/>
             </Menu>
