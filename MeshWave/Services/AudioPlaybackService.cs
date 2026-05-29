@@ -39,6 +39,12 @@ namespace MeshWave.Services
 
         public void Play()
         {
+            // If disposed or never loaded, reload
+            if (_waveOut == null && !string.IsNullOrEmpty(_currentFilePath))
+            {
+                LoadFile(_currentFilePath);
+            }
+
             _waveOut?.Play();
             _positionTimer?.Start();
         }
@@ -53,10 +59,10 @@ namespace MeshWave.Services
         {
             _waveOut?.Stop();
             _positionTimer?.Stop();
-            _audioFile?.Dispose();
-            _waveOut?.Dispose();
-            _audioFile = null;
-            _waveOut = null;
+            if (_audioFile != null)
+            {
+                _audioFile.CurrentTime = TimeSpan.Zero;
+            }
         }
 
         public void SetPosition(TimeSpan position)
@@ -84,8 +90,12 @@ namespace MeshWave.Services
 
         public void Dispose()
         {
-            Stop();
             _positionTimer?.Stop();
+            _waveOut?.Stop();
+            _audioFile?.Dispose();
+            _waveOut?.Dispose();
+            _audioFile = null;
+            _waveOut = null;
         }
     }
 }

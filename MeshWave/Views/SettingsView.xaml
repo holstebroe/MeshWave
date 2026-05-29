@@ -1,0 +1,144 @@
+<UserControl x:Class="MeshWave.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Height="Auto" Width="Auto"
+             Background="{StaticResource BackgroundColor}">
+    <Grid Margin="20">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel MaxWidth="600">
+                <TextBlock Text="⚙️ Settings" 
+                          Style="{StaticResource SectionHeader}"
+                          FontSize="28"
+                          Margin="0,0,0,20"/>
+
+                <!-- Base Folder Section -->
+                <Border Background="{StaticResource SurfaceColor}" 
+                       CornerRadius="8" 
+                       Padding="20"
+                       Margin="0,0,0,20">
+                    <StackPanel>
+                        <TextBlock Text="📁 Base Folder" 
+                                  Style="{StaticResource SectionHeader}"
+                                  Margin="0,0,0,10"/>
+                        <TextBlock Text="All MeshWave data will be stored here (My Music, Other Music, etc.)"
+                                  Foreground="{StaticResource TextSecondaryColor}"
+                                  TextWrapping="Wrap"
+                                  Margin="0,0,0,10"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" 
+                                    Text="{Binding BaseFolder, UpdateSourceTrigger=PropertyChanged}"
+                                    Margin="0,0,10,0"/>
+                            <Button Grid.Column="1" 
+                                   Content="Browse..." 
+                                   Command="{Binding BrowseBaseFolderCommand}"
+                                   Style="{StaticResource PrimaryButton}"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Playback Settings -->
+                <Border Background="{StaticResource SurfaceColor}" 
+                       CornerRadius="8" 
+                       Padding="20"
+                       Margin="0,0,0,20">
+                    <StackPanel>
+                        <TextBlock Text="🎵 Playback" 
+                                  Style="{StaticResource SectionHeader}"
+                                  Margin="0,0,0,10"/>
+
+                        <TextBlock Text="Default Volume"
+                                  Foreground="{StaticResource TextPrimaryColor}"
+                                  Margin="0,0,0,5"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Slider Grid.Column="0"
+                                   Minimum="0" 
+                                   Maximum="1" 
+                                   Value="{Binding Volume, Mode=TwoWay}"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,10,0"/>
+                            <TextBlock Grid.Column="1"
+                                      Text="{Binding Volume, StringFormat={}{0:P0}}"
+                                      Foreground="{StaticResource TextSecondaryColor}"
+                                      VerticalAlignment="Center"
+                                      Width="50"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Supported File Extensions -->
+                <Border Background="{StaticResource SurfaceColor}" 
+                       CornerRadius="8" 
+                       Padding="20"
+                       Margin="0,0,0,20">
+                    <StackPanel>
+                        <TextBlock Text="🧩 Supported Audio Extensions" 
+                                  Style="{StaticResource SectionHeader}"
+                                  Margin="0,0,0,10"/>
+                        <TextBlock Text="Comma-separated list used for import and library indexing (example: .mp3, .flac, .wav)"
+                                  Foreground="{StaticResource TextSecondaryColor}"
+                                  TextWrapping="Wrap"
+                                  Margin="0,0,0,10"/>
+                        <TextBox Text="{Binding SupportedExtensionsText, UpdateSourceTrigger=PropertyChanged}"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 MinHeight="60"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Theme Settings (Future) -->
+                <Border Background="{StaticResource SurfaceColor}" 
+                       CornerRadius="8" 
+                       Padding="20"
+                       Margin="0,0,0,20">
+                    <StackPanel>
+                        <TextBlock Text="🎨 Appearance" 
+                                  Style="{StaticResource SectionHeader}"
+                                  Margin="0,0,0,10"/>
+                        <TextBlock Text="Theme: Dark (Light theme coming soon)"
+                                  Foreground="{StaticResource TextSecondaryColor}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- P2P Settings (Future) -->
+                <Border Background="{StaticResource SurfaceColor}" 
+                       CornerRadius="8" 
+                       Padding="20"
+                       Margin="0,0,0,20">
+                    <StackPanel>
+                        <TextBlock Text="🌐 Peer-to-Peer (Coming Soon)" 
+                                  Style="{StaticResource SectionHeader}"
+                                  Margin="0,0,0,10"/>
+                        <TextBlock Text="P2P music sharing features will be available in a future update."
+                                  Foreground="{StaticResource TextSecondaryColor}"
+                                  TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Save Button -->
+                <Button Content="💾 Save Settings" 
+                       Command="{Binding SaveCommand}"
+                       Style="{StaticResource PrimaryButton}"
+                       FontSize="16"
+                       Padding="20,12"
+                       HorizontalAlignment="Stretch"/>
+
+                <TextBlock Text="Settings are saved to your AppData folder"
+                          Foreground="{StaticResource TextSecondaryColor}"
+                          FontStyle="Italic"
+                          HorizontalAlignment="Center"
+                          Margin="0,10,0,0"/>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

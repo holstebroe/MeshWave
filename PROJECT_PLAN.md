@@ -81,31 +81,38 @@ Formats: JSON for metadata, binary files for audio and images.
 
 ### ✅ **Implemented Features**
 - **Modern Dark Theme UI**: Material Design colors, rounded buttons, hover effects
-- **Audio Playback (NAudio)**: Play/Pause/Stop, volume control, seek, position tracking
+- **Audio Playback (NAudio)**: Play/Pause/Stop (icon-only controls), volume control, seek, position tracking
 - **Waveform Visualization**: Visual waveform canvas with playback cursor (placeholder data)
 - **Time-Linked Comments**: Add comments at current timestamp, scrollable panel
-- **Library Browser**: List tracks and albums from local folder
+- **Library Browser**: List artists, tracks and albums from configured My Music folder
 - **Metadata Extraction (TagLib#)**: Title, album, artist, duration from ID3 tags
 - **File Watcher**: Auto-refresh library when files change
 - **Navigation**: Menu bar, double-click track to play
+- **Settings persistence in AppData**: `%APPDATA%\\MeshWave\\settings.json`
+- **Base folder architecture**: fixed `My Music` and `Other Music` folders
+- **Import My Music workflow**: import to `My Music/Artist/Album` with `_singles_` support
+- **Import progress UX**: current file, counts (total/imported/remaining), progress bar and cancellation
+- **Configurable supported extensions**: editable and persisted in settings
 
 ### 📋 **Planned/TODO Features**
-- [ ] **Real Waveform Generation**: Generate actual waveform from audio data (currently placeholder bars)
-- [ ] **Album Cover Display**: Extract and show cover art in playback view
+- [ ] **Real Waveform Generation**: Generate and cache 1024-point waveform amplitudes in `.cache`
+- [ ] **Album Cover Display**: Extract and cache cover art in `.cache` and show in playback/library
+- [ ] **Comment Timeline Markers**: Show comment markers with rounded user icons on waveform timeline
 - [ ] **Click Comment to Seek**: Click timestamp in comment to jump to that position
 - [ ] **Delete Comments**: Remove comments from the list
 - [ ] **Playlist Support**: Create, save, and load playlists
-- [ ] **Search/Filter**: Search tracks and albums in library view
+- [ ] **Search/Filter**: Search artists, tracks and albums in library view
 - [ ] **Drag-and-Drop Import**: Drag files/folders into library view to add
 - [ ] **Keyboard Shortcuts**: Space for play/pause, arrow keys for seek, etc.
 - [ ] **Setup Wizard**: Choose storage folder, set DisplayName, generate keypair
 - [ ] **Community Library View**: List communities, users, albums, tracks from P2P network
 - [ ] **Sync Control UI**: Choose groups/users/albums/tracks to follow; sync status view
 - [ ] **Notifications**: Incoming content and sync progress
-- [ ] **Persist Library Index**: Save/load library database to avoid re-scanning
+- [ ] **Persist Library Index**: Save/load library database to avoid re-scanning (future simple file DB)
 - [ ] **Edit Track Metadata**: Edit descriptions, covers, tags
-- [ ] **Settings Page**: Audio device selection, storage paths, P2P settings
-- [ ] **User Profile Page**: Display name, public key, bio, avatar
+- [ ] **Settings Page**: Audio device selection, storage paths, supported extensions, P2P settings
+- [ ] **User Profile Page**: Display name, picture/avatar, rounded icon generation for comments
+- [ ] **Play Count Registration**: Register play after threshold % and sync play counts with community
 
 Recommended libraries:
 - ✅ Audio playback: NAudio (implemented)
@@ -120,6 +127,9 @@ Recommended libraries:
 - Index local files and metadata (incremental watchers with FileSystemWatcher)
 - Separate My Music (user-managed, direct file updates) and Community Music (app-managed, P2P sync only)
 - Scan and index My Music for metadata (ID3, cover, etc.) using TagLib#
+- Import My Music into normalized structure: `My Music/{Artist}/{Album|_singles_}`
+- Create album-level `.cache` and `.comments` folders during import
+- Read cached metadata first; rescan only when source file changed or cache missing
 
 ### 📋 **Planned/TODO**
 - [ ] Validate file hashes and manifest entries

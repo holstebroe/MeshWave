@@ -27,9 +27,11 @@ namespace MeshWave.Converters
             {
                 return new TextBlock { Text = vm3.StatusMessage };
             }
-            if (value is SettingsViewModel)
+            if (value is SettingsViewModel vm4)
             {
-                return new TextBlock { Text = "Settings" };
+                var view = new SettingsView();
+                view.DataContext = vm4;
+                return view;
             }
             return null;
         }

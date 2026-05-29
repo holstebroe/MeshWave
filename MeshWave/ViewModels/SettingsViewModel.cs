@@ -1,4 +1,8 @@
+using MeshWave.LibraryManager;
+using System.Windows.Input;
+using MeshWave.Models;
 using MeshWave.Mvvm;
+using MeshWave.Services;
 
 namespace MeshWave.ViewModels;
 
@@ -7,14 +11,30 @@ namespace MeshWave.ViewModels;
 /// </summary>
 public class SettingsViewModel : ViewModelBase
 {
-    private string _storageFolder = string.Empty;
+    private readonly SettingsService _settingsService;
+    private string _baseFolder = string.Empty;
     private string _username = string.Empty;
     private bool _isInitialized = false;
+    private string _theme = "Dark";
+    private double _volume = 0.8;
+    private string _supportedExtensionsText = string.Empty;
 
-    public string StorageFolder
+    public SettingsViewModel()
     {
-        get => _storageFolder;
-        set => SetProperty(ref _storageFolder, value);
+        _settingsService = new SettingsService();
+        LoadSettings();
+
+        SaveCommand = new RelayCommand(_ => SaveSettings());
+        BrowseBaseFolderCommand = new RelayCommand(_ => BrowseStorageFolder());
+    }
+
+    public ICommand SaveCommand { get; }
+    public ICommand BrowseBaseFolderCommand { get; }
+
+    public string BaseFolder
+    {
+        get => _baseFolder;
+        set => SetProperty(ref _baseFolder, value);
     }
 
     public string Username
@@ -23,15 +43,63 @@ public class SettingsViewModel : ViewModelBase
         set => SetProperty(ref _username, value);
     }
 
+    public string Theme
+    {
+        get => _theme;
+        set => SetProperty(ref _theme, value);
+    }
+
+    public double Volume
+    {
+        get => _volume;
+        set => SetProperty(ref _volume, value);
+    }
+
+    public string SupportedExtensionsText
+    {
+        get => _supportedExtensionsText;
+        set => SetProperty(ref _supportedExtensionsText, value);
+    }
+
     public bool IsInitialized
     {
         get => _isInitialized;
         set => SetProperty(ref _isInitialized, value);
     }
 
+    private void LoadSettings()
+    {
+        var settings = _settingsService.LoadSettings();
+        BaseFolder = settings.BaseFolder;
+        Theme = settings.Theme;
+        Volume = settings.Playback.Volume;
+
+        var extensions = settings.SupportedExtensions.Count > 0
+            ? settings.SupportedExtensions
+            : LocalLibraryManager.SupportedExtensions;
+        SupportedExtensionsText = string.Join(", ", extensions);
+
+        IsInitialized = !string.IsNullOrEmpty(settings.BaseFolder);
+    }
+
     public void BrowseStorageFolder()
     {
-        // TODO: Implement folder browser
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            CheckFileExists = false,
+            CheckPathExists = true,
+            FileName = "Select Folder...",
+            Filter = "Folders|*.*"
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            var folder = System.IO.Path.GetDirectoryName(dialog.FileName);
+            if (folder != null)
+            {
+                BaseFolder = folder;
+            }
+        }
     }
 
     public void GenerateKeypair()
@@ -41,6 +109,27 @@ public class SettingsViewModel : ViewModelBase
 
     public void SaveSettings()
     {
-        // TODO: Implement settings persistence
+        var settings = new AppSettings
+        {
+            BaseFolder = BaseFolder,
+            Theme = Theme,
+            AudioDevice = "Default",
+            SupportedExtensions = SupportedExtensionsText
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(ext => ext.StartsWith('.') ? ext : $".{ext}")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            Playback = new PlaybackSettings
+            {
+                Volume = Volume,
+                RegisterPlayAt = 0.5
+            }
+        };
+
+        _settingsService.SaveSettings(settings);
+        _settingsService.EnsureFoldersExist();
+        IsInitialized = true;
+
+        // TODO: Show success message
     }
 }

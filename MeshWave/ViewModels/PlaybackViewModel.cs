@@ -27,11 +27,13 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         PlayCommand = new RelayCommand(_ => Play());
         PauseCommand = new RelayCommand(_ => Pause());
         StopCommand = new RelayCommand(_ => Stop());
+        PlayPauseToggleCommand = new RelayCommand(_ => PlayPauseToggle());
     }
 
     public ICommand PlayCommand { get; }
     public ICommand PauseCommand { get; }
     public ICommand StopCommand { get; }
+    public ICommand PlayPauseToggleCommand { get; }
 
     public string CurrentTrackTitle
     {
@@ -102,6 +104,18 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         {
             _audioService.Pause();
             IsPlaying = false;
+        }
+    }
+
+    public void PlayPauseToggle()
+    {
+        if (IsPlaying)
+        {
+            Pause();
+        }
+        else
+        {
+            Play();
         }
     }
 

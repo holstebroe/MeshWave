@@ -9,7 +9,7 @@ namespace MeshWave.Views
             InitializeComponent();
         }
 
-        private void SelectFolder_Click(object sender, System.Windows.RoutedEventArgs e)
+        private async void ImportMyMusic_Click(object sender, System.Windows.RoutedEventArgs e)
         {
             var dialog = new Microsoft.Win32.OpenFileDialog
             {
@@ -18,12 +18,13 @@ namespace MeshWave.Views
                 FileName = "Select Folder...",
                 Filter = "Folders|*.*"
             };
+
             if (dialog.ShowDialog() == true)
             {
-                var folder = System.IO.Path.GetDirectoryName(dialog.FileName);
-                if (DataContext is MeshWave.ViewModels.LibraryViewModel vm && folder != null)
+                var sourceFolder = System.IO.Path.GetDirectoryName(dialog.FileName);
+                if (DataContext is MeshWave.ViewModels.LibraryViewModel vm && sourceFolder != null)
                 {
-                    vm.LoadLibrary(folder);
+                    await vm.ImportMyMusicAsync(sourceFolder);
                 }
             }
         }

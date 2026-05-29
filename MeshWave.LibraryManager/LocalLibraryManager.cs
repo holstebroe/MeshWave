@@ -1,9 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using MeshWave.Common.Core.Models;
-using TagLib;
 
 namespace MeshWave.LibraryManager;
 
@@ -12,58 +10,66 @@ namespace MeshWave.LibraryManager;
 /// </summary>
 public class LocalLibraryManager
 {
+    private static readonly string[] DefaultExtensionList = [".mp3", ".flac", ".wav", ".ogg", ".m4a"];
     private readonly string _basePath;
+    private readonly HashSet<string> _supportedExtensions;
     private readonly List<Track> _tracks = new();
     private readonly List<Album> _albums = new();
 
-    public LocalLibraryManager(string basePath)
+    public LocalLibraryManager(string basePath, IEnumerable<string>? supportedExtensions = null)
     {
         _basePath = basePath;
+        _supportedExtensions = NormalizeExtensions(supportedExtensions);
     }
 
+    public static IReadOnlyList<string> SupportedExtensions => DefaultExtensionList;
+
     /// <summary>
-    /// Indexes music files in the local library.
+    /// Indexes music files in the local library. Reads cached metadata when available.
     /// </summary>
     public void IndexLibrary()
     {
         _tracks.Clear();
         _albums.Clear();
+
+        if (!Directory.Exists(_basePath))
+        {
+            return;
+        }
+
         var albumDict = new Dictionary<string, Album>(StringComparer.OrdinalIgnoreCase);
-        var supported = new[] { ".mp3", ".flac", ".wav", ".ogg", ".m4a" };
-        foreach (var file in Directory.EnumerateFiles(_basePath, "*.*", SearchOption.AllDirectories)
-            .Where(f => supported.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase)))
+        foreach (var file in EnumerateSupportedFiles(_basePath, _supportedExtensions))
         {
             try
             {
-                var tagFile = TagLib.File.Create(file);
-                var title = tagFile.Tag.Title ?? Path.GetFileNameWithoutExtension(file);
-                var albumTitle = tagFile.Tag.Album ?? "Unknown Album";
-                var artist = tagFile.Tag.FirstPerformer ?? "Unknown Artist";
-                var duration = tagFile.Properties.Duration;
+                var metadata = TryReadCachedMetadata(file) ?? ExtractMetadata(file);
+                WriteMetadataCache(file, metadata);
+
                 var fileInfo = new FileInfo(file);
-                var trackId = fileInfo.FullName.GetHashCode().ToString();
-                var albumId = albumTitle.GetHashCode().ToString();
+                var trackId = ComputeStableId(fileInfo.FullName);
+                var albumId = ComputeStableId($"{metadata.Artist}|{metadata.Album}");
                 var track = new Track
                 {
                     TrackId = trackId,
                     AlbumId = albumId,
-                    OwnerUserId = "local", // TODO: set real user
-                    Title = title,
-                    Duration = duration,
-                    FileHash = fileInfo.FullName, // Temporarily store file path here
+                    OwnerUserId = "local",
+                    Title = metadata.Title,
+                    Duration = TimeSpan.FromSeconds(metadata.DurationSeconds),
+                    FileHash = fileInfo.FullName,
                     FileSize = fileInfo.Length,
-                    CoverImageHash = null, // TODO: extract cover
-                    Description = artist,
+                    CoverImageHash = null,
+                    Description = metadata.Artist,
                     Signature = "local"
                 };
                 _tracks.Add(track);
+
                 if (!albumDict.TryGetValue(albumId, out var album))
                 {
                     album = new Album
                     {
                         AlbumId = albumId,
                         OwnerUserId = "local",
-                        Title = albumTitle,
+                        Title = $"{metadata.Artist} - {metadata.Album}",
                         CoverImageHash = null,
                         Description = null,
                         Signature = "local"
@@ -72,11 +78,188 @@ public class LocalLibraryManager
                 }
                 album.TrackIds.Add(trackId);
             }
-            catch { /* skip unreadable files */ }
+            catch
+            {
+                // skip unreadable files
+            }
         }
+
         _albums.AddRange(albumDict.Values);
+    }
+
+    public static void ImportMusicToOrganizedStructure(
+        string sourceFolder,
+        string myMusicBaseFolder,
+        IEnumerable<string>? supportedExtensions = null,
+        Action<ImportProgress>? progressCallback = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!Directory.Exists(sourceFolder))
+        {
+            progressCallback?.Invoke(new ImportProgress(0, 0, 0, string.Empty, "Source folder does not exist."));
+            return;
+        }
+
+        Directory.CreateDirectory(myMusicBaseFolder);
+        var normalizedExtensions = NormalizeExtensions(supportedExtensions);
+        var files = EnumerateSupportedFiles(sourceFolder, normalizedExtensions).ToList();
+
+        var total = files.Count;
+        var processed = 0;
+        var imported = 0;
+
+        foreach (var file in files)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var remainingBeforeCurrent = total - processed;
+            progressCallback?.Invoke(new ImportProgress(total, imported, remainingBeforeCurrent, file, "Copying..."));
+
+            try
+            {
+                var metadata = ExtractMetadata(file);
+                var extension = Path.GetExtension(file);
+                var albumFolder = Path.Combine(myMusicBaseFolder, metadata.Artist, metadata.Album);
+                var cacheFolder = Path.Combine(albumFolder, ".cache");
+                var commentsFolder = Path.Combine(albumFolder, ".comments");
+
+                Directory.CreateDirectory(albumFolder);
+                Directory.CreateDirectory(cacheFolder);
+                Directory.CreateDirectory(commentsFolder);
+
+                var destinationFile = Path.Combine(albumFolder, $"{metadata.Title}{extension}");
+                if (!System.IO.File.Exists(destinationFile))
+                {
+                    System.IO.File.Copy(file, destinationFile, overwrite: false);
+                    imported++;
+                }
+
+                WriteMetadataCache(destinationFile, metadata);
+            }
+            catch
+            {
+                // skip files that cannot be read/imported
+            }
+            finally
+            {
+                processed++;
+                progressCallback?.Invoke(new ImportProgress(total, imported, total - processed, file, "Processed"));
+            }
+        }
+
+        progressCallback?.Invoke(new ImportProgress(total, imported, 0, string.Empty, "Import completed."));
     }
 
     public IEnumerable<Track> GetAllTracks() => _tracks;
     public IEnumerable<Album> GetAllAlbums() => _albums;
+
+    private static IEnumerable<string> EnumerateSupportedFiles(string folder, HashSet<string> supportedExtensions)
+    {
+        return Directory.EnumerateFiles(folder, "*.*", SearchOption.AllDirectories)
+            .Where(f => supportedExtensions.Contains(Path.GetExtension(f)));
+    }
+
+    private static HashSet<string> NormalizeExtensions(IEnumerable<string>? extensions)
+    {
+        var source = extensions?.Where(e => !string.IsNullOrWhiteSpace(e)).Select(e => e.Trim()) ?? SupportedExtensions;
+
+        var normalized = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var ext in source)
+        {
+            var value = ext.StartsWith('.') ? ext.ToLowerInvariant() : $".{ext.ToLowerInvariant()}";
+            normalized.Add(value);
+        }
+
+        return normalized.Count > 0
+            ? normalized
+            : new HashSet<string>(SupportedExtensions, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static CachedTrackMetadata ExtractMetadata(string filePath)
+    {
+        using var tagFile = TagLib.File.Create(filePath);
+        var title = NormalizeFolderName(tagFile.Tag.Title ?? Path.GetFileNameWithoutExtension(filePath));
+        var artist = NormalizeFolderName(tagFile.Tag.FirstPerformer ?? "Unknown Artist");
+        var album = NormalizeFolderName(tagFile.Tag.Album ?? "_singles_");
+        var duration = tagFile.Properties.Duration;
+
+        return new CachedTrackMetadata
+        {
+            Title = title,
+            Artist = artist,
+            Album = album,
+            DurationSeconds = duration.TotalSeconds,
+            SourceLastWriteUtc = System.IO.File.GetLastWriteTimeUtc(filePath)
+        };
+    }
+
+    private static CachedTrackMetadata? TryReadCachedMetadata(string filePath)
+    {
+        var cachePath = GetCacheMetadataPath(filePath);
+        if (!System.IO.File.Exists(cachePath))
+        {
+            return null;
+        }
+
+        var cacheWrite = System.IO.File.GetLastWriteTimeUtc(cachePath);
+        var sourceWrite = System.IO.File.GetLastWriteTimeUtc(filePath);
+        if (cacheWrite < sourceWrite)
+        {
+            return null;
+        }
+
+        try
+        {
+            var json = System.IO.File.ReadAllText(cachePath);
+            var metadata = JsonSerializer.Deserialize<CachedTrackMetadata>(json);
+            return metadata;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static void WriteMetadataCache(string filePath, CachedTrackMetadata metadata)
+    {
+        var cachePath = GetCacheMetadataPath(filePath);
+        var cacheDir = Path.GetDirectoryName(cachePath);
+        if (!string.IsNullOrWhiteSpace(cacheDir))
+        {
+            Directory.CreateDirectory(cacheDir);
+        }
+
+        var json = JsonSerializer.Serialize(metadata, new JsonSerializerOptions { WriteIndented = true });
+        System.IO.File.WriteAllText(cachePath, json);
+    }
+
+    private static string GetCacheMetadataPath(string filePath)
+    {
+        var fileName = NormalizeFolderName(Path.GetFileNameWithoutExtension(filePath));
+        var albumFolder = Path.GetDirectoryName(filePath) ?? string.Empty;
+        return Path.Combine(albumFolder, ".cache", $"{fileName}.meta.json");
+    }
+
+    private static string NormalizeFolderName(string value)
+    {
+        var cleaned = string.Concat(value.Where(c => !Path.GetInvalidFileNameChars().Contains(c))).Trim();
+        return string.IsNullOrWhiteSpace(cleaned) ? "Unknown" : cleaned;
+    }
+
+    private static string ComputeStableId(string input)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
+        return Convert.ToHexString(bytes);
+    }
+
+    private sealed class CachedTrackMetadata
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Artist { get; set; } = string.Empty;
+        public string Album { get; set; } = "_singles_";
+        public double DurationSeconds { get; set; }
+        public DateTime SourceLastWriteUtc { get; set; }
+    }
 }
+
+public sealed record ImportProgress(int TotalFiles, int ImportedFiles, int RemainingFiles, string CurrentFile, string StatusMessage);
