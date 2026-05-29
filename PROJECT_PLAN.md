@@ -114,6 +114,7 @@ Formats: JSON for metadata, binary files for audio and images.
 - [ ] **Settings Page**: Audio device selection, storage paths, supported extensions, P2P settings
 - [ ] **User Profile Page**: Display name, picture/avatar, rounded icon generation for comments
 - [ ] **Play Count Registration**: Register play after threshold % and sync play counts with community
+- [ ] **Flashy Home/Dashboard Page**: Replace simple welcome text with rich cards, highlights and quick actions
 
 Recommended libraries:
 - ✅ Audio playback: NAudio (implemented)

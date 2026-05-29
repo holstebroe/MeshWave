@@ -8,6 +8,7 @@ namespace MeshWave.ViewModels;
 /// </summary>
 public partial class LibraryViewModel : ViewModelBase
 {
+    private readonly ApplicationViewModel? _applicationViewModel;
     private string _searchQuery = string.Empty;
     private List<LibraryTrackItem> _tracks = [];
     private List<LibraryAlbumItem> _albums = [];
@@ -21,8 +22,9 @@ public partial class LibraryViewModel : ViewModelBase
     private int _importRemainingFiles;
     private int _importImportedFiles;
 
-    public LibraryViewModel(bool isMyMusicLibrary = false)
+    public LibraryViewModel(ApplicationViewModel? applicationViewModel = null, bool isMyMusicLibrary = false)
     {
+        _applicationViewModel = applicationViewModel;
         IsMyMusicLibrary = isMyMusicLibrary;
         CancelImportCommand = new RelayCommand(_ => CancelImport(), _ => IsImporting);
         LoadFromConfiguredBaseFolder();
@@ -128,6 +130,21 @@ public partial class LibraryViewModel : ViewModelBase
         : Math.Clamp((double)(ImportTotalFiles - ImportRemainingFiles) / ImportTotalFiles * 100.0, 0, 100);
 
     public bool CanCancelImport => IsImporting;
+
+    public void PlayTrackById(string trackId)
+    {
+        var track = GetTrackById(trackId);
+        if (track == null || string.IsNullOrWhiteSpace(track.FileHash))
+        {
+            return;
+        }
+
+        _applicationViewModel?.PlayTrack(
+            track.Title,
+            track.Description ?? "Unknown Artist",
+            track.Duration,
+            track.FileHash);
+    }
 
     public void Search()
     {

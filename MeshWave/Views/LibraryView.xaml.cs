@@ -35,21 +35,7 @@ namespace MeshWave.Views
             {
                 if (DataContext is MeshWave.ViewModels.LibraryViewModel vm)
                 {
-                    var track = vm.GetTrackById(trackItem.TrackId);
-                    if (track != null)
-                    {
-                        var mainWindow = System.Windows.Application.Current.MainWindow as MainWindow;
-                        if (mainWindow != null)
-                        {
-                            var appVm = mainWindow.DataContext as MeshWave.ViewModels.ApplicationViewModel;
-                            var playbackVm = new MeshWave.ViewModels.PlaybackViewModel();
-                            playbackVm.LoadTrack(track.Title, track.Description ?? "Unknown Artist", track.Duration, track.FileHash);
-                            if (appVm != null)
-                            {
-                                appVm.CurrentViewModel = playbackVm;
-                            }
-                        }
-                    }
+                    vm.PlayTrackById(trackItem.TrackId);
                 }
             }
         }

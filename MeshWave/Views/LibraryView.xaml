@@ -64,19 +64,30 @@
                 <ColumnDefinition Width="3*"/>
             </Grid.ColumnDefinitions>
 
-            <StackPanel Grid.Column="0" Margin="0,0,10,0">
-                <TextBlock Text="🎤 Artists" Style="{StaticResource SectionHeader}"/>
-                <ListBox ItemsSource="{Binding Artists}"
+            <Grid Grid.Column="0" Margin="0,0,10,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Text="🎤 Artists" Style="{StaticResource SectionHeader}"/>
+                <ListBox Grid.Row="1"
+                         ItemsSource="{Binding Artists}"
                          SelectedItem="{Binding SelectedArtist, Mode=TwoWay}"
                          DisplayMemberPath="Name"
-                         MinHeight="220"/>
-            </StackPanel>
+                         VerticalContentAlignment="Stretch"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+            </Grid>
 
-            <StackPanel Grid.Column="1" Margin="0,0,10,0">
-                <TextBlock Text="💿 Albums" Style="{StaticResource SectionHeader}"/>
-                <ListBox ItemsSource="{Binding Albums}"
+            <Grid Grid.Column="1" Margin="0,0,10,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Text="💿 Albums" Style="{StaticResource SectionHeader}"/>
+                <ListBox Grid.Row="1"
+                         ItemsSource="{Binding Albums}"
                          SelectedItem="{Binding SelectedAlbum, Mode=TwoWay}"
-                         MinHeight="220">
+                         ScrollViewer.VerticalScrollBarVisibility="Auto">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <StackPanel Orientation="Horizontal" Margin="0,2">
@@ -91,13 +102,18 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
-            </StackPanel>
+            </Grid>
 
-            <StackPanel Grid.Column="2">
-                <TextBlock Text="🎵 Tracks" Style="{StaticResource SectionHeader}"/>
-                <ListBox ItemsSource="{Binding Tracks}"
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Text="🎵 Tracks" Style="{StaticResource SectionHeader}"/>
+                <ListBox Grid.Row="1"
+                         ItemsSource="{Binding Tracks}"
                          MouseDoubleClick="OnTrackDoubleClick"
-                         MinHeight="220">
+                         ScrollViewer.VerticalScrollBarVisibility="Auto">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <StackPanel Orientation="Horizontal" Margin="0,2">
@@ -112,7 +128,7 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
-            </StackPanel>
+            </Grid>
         </Grid>
     </Grid>
 </UserControl>

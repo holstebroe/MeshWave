@@ -9,44 +9,82 @@ namespace MeshWave.Views
 {
     public partial class PlaybackView : UserControl
     {
+        private PlaybackViewModel? _boundViewModel;
+
         public PlaybackView()
         {
             InitializeComponent();
             Loaded += PlaybackView_Loaded;
+            DataContextChanged += PlaybackView_DataContextChanged;
+            SizeChanged += PlaybackView_SizeChanged;
+        }
+
+        private void PlaybackView_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            DrawWaveform();
+        }
+
+        private void PlaybackView_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+        {
+            if (_boundViewModel != null)
+            {
+                _boundViewModel.PropertyChanged -= ViewModelOnPropertyChanged;
+            }
+
+            _boundViewModel = DataContext as PlaybackViewModel;
+            if (_boundViewModel != null)
+            {
+                _boundViewModel.PropertyChanged += ViewModelOnPropertyChanged;
+            }
+
+            DrawWaveform();
         }
 
         private void PlaybackView_Loaded(object sender, RoutedEventArgs e)
         {
             DrawWaveform();
-            if (DataContext is PlaybackViewModel vm)
+        }
+
+        private void ViewModelOnPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
+        {
+            if (_boundViewModel == null)
             {
-                vm.PropertyChanged += (s, args) =>
-                {
-                    if (args.PropertyName == nameof(vm.CurrentPosition))
-                    {
-                        UpdatePlaybackCursor();
-                    }
-                };
+                return;
+            }
+
+            if (args.PropertyName == nameof(_boundViewModel.CurrentPosition))
+            {
+                UpdatePlaybackCursor();
+            }
+            else if (args.PropertyName == nameof(_boundViewModel.WaveformSamples) ||
+                     args.PropertyName == nameof(_boundViewModel.TimelineMarkers))
+            {
+                DrawWaveform();
             }
         }
 
         private void DrawWaveform()
         {
-            // TODO: Generate actual waveform from audio file
-            // For now, draw a placeholder waveform
             WaveformCanvas.Children.Clear();
-            var random = new Random();
             var width = WaveformCanvas.ActualWidth > 0 ? WaveformCanvas.ActualWidth : 800;
             var height = WaveformCanvas.Height;
             var barCount = 100;
-            var barWidth = width / barCount;
+            var samples = Array.Empty<float>();
 
+            if (DataContext is PlaybackViewModel vm && vm.WaveformSamples.Length > 0)
+            {
+                samples = vm.WaveformSamples;
+                barCount = samples.Length;
+            }
+
+            var barWidth = width / barCount;
             for (int i = 0; i < barCount; i++)
             {
-                var barHeight = random.Next(20, (int)height);
+                var amplitude = samples.Length > i ? Math.Clamp(samples[i], 0f, 1f) : 0.2f;
+                var barHeight = Math.Max(8, amplitude * (float)height);
                 var rect = new Rectangle
                 {
-                    Width = barWidth - 2,
+                    Width = Math.Max(1, barWidth - 1),
                     Height = barHeight,
                     Fill = new SolidColorBrush(Color.FromRgb(33, 150, 243))
                 };
@@ -55,8 +93,37 @@ namespace MeshWave.Views
                 WaveformCanvas.Children.Add(rect);
             }
 
-            // Re-add cursor on top
+            DrawTimelineMarkers(width, height);
             WaveformCanvas.Children.Add(PlaybackCursor);
+            UpdatePlaybackCursor();
+        }
+
+        private void DrawTimelineMarkers(double width, double height)
+        {
+            if (DataContext is not PlaybackViewModel vm || vm.Duration.TotalSeconds <= 0)
+            {
+                return;
+            }
+
+            foreach (var marker in vm.TimelineMarkers)
+            {
+                var progress = Math.Clamp(marker.TimestampSeconds / vm.Duration.TotalSeconds, 0.0, 1.0);
+                var x = progress * width;
+
+                var icon = new Ellipse
+                {
+                    Width = 12,
+                    Height = 12,
+                    Fill = Brushes.Orange,
+                    Stroke = Brushes.White,
+                    StrokeThickness = 1,
+                    ToolTip = $"{marker.UserDisplayName}: {marker.Label}"
+                };
+
+                Canvas.SetLeft(icon, x - 6);
+                Canvas.SetTop(icon, 4);
+                WaveformCanvas.Children.Add(icon);
+            }
         }
 
         private void UpdatePlaybackCursor()

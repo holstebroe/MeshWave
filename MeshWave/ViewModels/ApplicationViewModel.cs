@@ -10,10 +10,11 @@ public class ApplicationViewModel : ViewModelBase
 {
     private string _applicationTitle = "MeshWave";
     private ViewModelBase _currentViewModel;
+    private readonly PlaybackViewModel _playbackViewModel;
 
     public ApplicationViewModel()
     {
-        // Initialize with home view model
+        _playbackViewModel = new PlaybackViewModel();
         _currentViewModel = new HomeViewModel();
     }
 
@@ -36,16 +37,28 @@ public class ApplicationViewModel : ViewModelBase
 
     public void NavigateToLibrary()
     {
-        CurrentViewModel = new LibraryViewModel(isMyMusicLibrary: false);
+        CurrentViewModel = new LibraryViewModel(this, isMyMusicLibrary: false);
     }
 
     public void NavigateToMyMusic()
     {
-        CurrentViewModel = new LibraryViewModel(isMyMusicLibrary: true);
+        CurrentViewModel = new LibraryViewModel(this, isMyMusicLibrary: true);
     }
 
     public void NavigateToSettings()
     {
         CurrentViewModel = new SettingsViewModel();
+    }
+
+    public void NavigateToPlayback()
+    {
+        CurrentViewModel = _playbackViewModel;
+    }
+
+    public void PlayTrack(string trackTitle, string artist, TimeSpan duration, string filePath)
+    {
+        _playbackViewModel.Stop();
+        _playbackViewModel.LoadTrack(trackTitle, artist, duration, filePath);
+        CurrentViewModel = _playbackViewModel;
     }
 }

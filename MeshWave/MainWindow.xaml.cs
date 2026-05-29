@@ -41,7 +41,7 @@ namespace MeshWave
 
         private void PlaybackMenu_Click(object sender, RoutedEventArgs e)
         {
-            ViewModel.CurrentViewModel = new ViewModels.PlaybackViewModel();
+            ViewModel.NavigateToPlayback();
         }
 
         private void SettingsMenu_Click(object sender, RoutedEventArgs e)

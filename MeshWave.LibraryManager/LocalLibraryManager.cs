@@ -171,6 +171,31 @@ public class LocalLibraryManager
         return System.IO.File.Exists(cachePath) ? cachePath : string.Empty;
     }
 
+    public float[] GetTrackWaveform(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath) || !System.IO.File.Exists(filePath))
+        {
+            return [];
+        }
+
+        var waveformPath = GetWaveformCachePathForTrack(filePath);
+        if (!System.IO.File.Exists(waveformPath))
+        {
+            return [];
+        }
+
+        try
+        {
+            var json = System.IO.File.ReadAllText(waveformPath);
+            var waveform = JsonSerializer.Deserialize<float[]>(json);
+            return waveform ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
     private static IEnumerable<string> EnumerateSupportedFiles(string folder, HashSet<string> supportedExtensions)
     {
         return Directory.EnumerateFiles(folder, "*.*", SearchOption.AllDirectories)
@@ -265,6 +290,13 @@ public class LocalLibraryManager
         return Path.Combine(albumFolder, ".cache", $"{fileName}.cover.jpg");
     }
 
+    public static string GetWaveformCachePathForTrack(string filePath)
+    {
+        var fileName = NormalizeFolderName(Path.GetFileNameWithoutExtension(filePath));
+        var albumFolder = Path.GetDirectoryName(filePath) ?? string.Empty;
+        return Path.Combine(albumFolder, ".cache", $"{fileName}.waveform.json");
+    }
+
     private static void EnsureCoverCached(string filePath)
     {
         try
@@ -295,6 +327,7 @@ public class LocalLibraryManager
             // ignore cover extraction errors
         }
     }
+
 
     private static string NormalizeFolderName(string value)
     {
