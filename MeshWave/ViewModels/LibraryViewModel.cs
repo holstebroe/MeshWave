@@ -5,7 +5,7 @@ namespace MeshWave.ViewModels;
 /// <summary>
 /// View model for library browsing and playback.
 /// </summary>
-public class LibraryViewModel : ViewModelBase
+public partial class LibraryViewModel : ViewModelBase
 {
     private string _searchQuery = string.Empty;
     private List<string> _tracks = [];

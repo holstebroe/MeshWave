@@ -19,6 +19,29 @@ namespace MeshWave
         public MainWindow()
         {
             InitializeComponent();
+            DataContext = new ViewModels.ApplicationViewModel();
+        }
+
+        private ViewModels.ApplicationViewModel ViewModel => (ViewModels.ApplicationViewModel)DataContext;
+
+        private void HomeMenu_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel.NavigateToHome();
+        }
+
+        private void LibraryMenu_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel.NavigateToLibrary();
+        }
+
+        private void PlaybackMenu_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel.CurrentViewModel = new ViewModels.PlaybackViewModel();
+        }
+
+        private void SettingsMenu_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel.NavigateToSettings();
         }
     }
 }

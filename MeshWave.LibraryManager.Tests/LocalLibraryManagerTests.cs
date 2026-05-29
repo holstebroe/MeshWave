@@ -57,13 +57,5 @@ public class LocalLibraryManagerTests : IDisposable
         _libraryManager.IndexLibrary();
     }
 
-    [Fact]
-    public void ImportMusicFile_ReturnsFalse_WhenFileDoesNotExist()
-    {
-        // Act
-        var result = _libraryManager.ImportMusicFile("/nonexistent/file.mp3");
 
-        // Assert
-        Assert.False(result);
-    }
 }

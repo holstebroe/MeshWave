@@ -1,3 +1,10 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using MeshWave.Common.Core.Models;
+using TagLib;
+
 namespace MeshWave.LibraryManager;
 
 /// <summary>
@@ -6,6 +13,8 @@ namespace MeshWave.LibraryManager;
 public class LocalLibraryManager
 {
     private readonly string _basePath;
+    private readonly List<Track> _tracks = new();
+    private readonly List<Album> _albums = new();
 
     public LocalLibraryManager(string basePath)
     {
@@ -17,41 +26,57 @@ public class LocalLibraryManager
     /// </summary>
     public void IndexLibrary()
     {
-        // TODO: Implement library indexing with file watchers
-        // - Scan for audio files (mp3, flac, wav, etc.)
-        // - Compute file hashes
-        // - Read metadata (ID3, etc.)
-        // - Store in local database
+        _tracks.Clear();
+        _albums.Clear();
+        var albumDict = new Dictionary<string, Album>(StringComparer.OrdinalIgnoreCase);
+        var supported = new[] { ".mp3", ".flac", ".wav", ".ogg", ".m4a" };
+        foreach (var file in Directory.EnumerateFiles(_basePath, "*.*", SearchOption.AllDirectories)
+            .Where(f => supported.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                var tagFile = TagLib.File.Create(file);
+                var title = tagFile.Tag.Title ?? Path.GetFileNameWithoutExtension(file);
+                var albumTitle = tagFile.Tag.Album ?? "Unknown Album";
+                var artist = tagFile.Tag.FirstPerformer ?? "Unknown Artist";
+                var duration = tagFile.Properties.Duration;
+                var fileInfo = new FileInfo(file);
+                var trackId = fileInfo.FullName.GetHashCode().ToString();
+                var albumId = albumTitle.GetHashCode().ToString();
+                var track = new Track
+                {
+                    TrackId = trackId,
+                    AlbumId = albumId,
+                    OwnerUserId = "local", // TODO: set real user
+                    Title = title,
+                    Duration = duration,
+                    FileHash = fileInfo.FullName, // Temporarily store file path here
+                    FileSize = fileInfo.Length,
+                    CoverImageHash = null, // TODO: extract cover
+                    Description = artist,
+                    Signature = "local"
+                };
+                _tracks.Add(track);
+                if (!albumDict.TryGetValue(albumId, out var album))
+                {
+                    album = new Album
+                    {
+                        AlbumId = albumId,
+                        OwnerUserId = "local",
+                        Title = albumTitle,
+                        CoverImageHash = null,
+                        Description = null,
+                        Signature = "local"
+                    };
+                    albumDict[albumId] = album;
+                }
+                album.TrackIds.Add(trackId);
+            }
+            catch { /* skip unreadable files */ }
+        }
+        _albums.AddRange(albumDict.Values);
     }
 
-    /// <summary>
-    /// Gets all indexed tracks.
-    /// </summary>
-    public IEnumerable<string> GetAllTracks()
-    {
-        // TODO: Retrieve tracks from local index
-        return [];
-    }
-
-    /// <summary>
-    /// Gets all indexed albums.
-    /// </summary>
-    public IEnumerable<string> GetAllAlbums()
-    {
-        // TODO: Retrieve albums from local index
-        return [];
-    }
-
-    /// <summary>
-    /// Imports a music file into the local library.
-    /// </summary>
-    public bool ImportMusicFile(string sourcePath)
-    {
-        // TODO: Implement music file import
-        // - Validate file format
-        // - Copy to storage
-        // - Extract metadata
-        // - Add to index
-        return false;
-    }
+    public IEnumerable<Track> GetAllTracks() => _tracks;
+    public IEnumerable<Album> GetAllAlbums() => _albums;
 }

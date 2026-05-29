@@ -1,11 +1,15 @@
 using MeshWave.Mvvm;
+using MeshWave.Services;
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Windows.Input;
 
 namespace MeshWave.ViewModels;
 
 /// <summary>
 /// View model for music playback with waveform visualization.
 /// </summary>
-public class PlaybackViewModel : ViewModelBase
+public class PlaybackViewModel : ViewModelBase, IDisposable
 {
     private string _currentTrackTitle = string.Empty;
     private string _currentArtist = string.Empty;
@@ -13,7 +17,21 @@ public class PlaybackViewModel : ViewModelBase
     private TimeSpan _duration;
     private bool _isPlaying = false;
     private double _volume = 1.0;
-    private List<string> _comments = [];
+    private ObservableCollection<string> _comments = [];
+    private AudioPlaybackService? _audioService;
+    private string? _currentFilePath;
+    private bool _isUpdatingPosition = false;
+
+    public PlaybackViewModel()
+    {
+        PlayCommand = new RelayCommand(_ => Play());
+        PauseCommand = new RelayCommand(_ => Pause());
+        StopCommand = new RelayCommand(_ => Stop());
+    }
+
+    public ICommand PlayCommand { get; }
+    public ICommand PauseCommand { get; }
+    public ICommand StopCommand { get; }
 
     public string CurrentTrackTitle
     {
@@ -30,7 +48,15 @@ public class PlaybackViewModel : ViewModelBase
     public TimeSpan CurrentPosition
     {
         get => _currentPosition;
-        set => SetProperty(ref _currentPosition, value);
+        set
+        {
+            if (_isUpdatingPosition) return;
+
+            _isUpdatingPosition = true;
+            SetProperty(ref _currentPosition, value);
+            _audioService?.SetPosition(value);
+            _isUpdatingPosition = false;
+        }
     }
 
     public TimeSpan Duration
@@ -48,10 +74,14 @@ public class PlaybackViewModel : ViewModelBase
     public double Volume
     {
         get => _volume;
-        set => SetProperty(ref _volume, Math.Clamp(value, 0.0, 1.0));
+        set
+        {
+            SetProperty(ref _volume, Math.Clamp(value, 0.0, 1.0));
+            _audioService?.SetVolume((float)_volume);
+        }
     }
 
-    public List<string> Comments
+    public ObservableCollection<string> Comments
     {
         get => _comments;
         set => SetProperty(ref _comments, value);
@@ -59,24 +89,74 @@ public class PlaybackViewModel : ViewModelBase
 
     public void Play()
     {
-        // TODO: Implement audio playback
-        IsPlaying = true;
+        if (_audioService != null)
+        {
+            _audioService.Play();
+            IsPlaying = true;
+        }
     }
 
     public void Pause()
     {
-        // TODO: Implement audio pause
-        IsPlaying = false;
+        if (_audioService != null)
+        {
+            _audioService.Pause();
+            IsPlaying = false;
+        }
+    }
+
+    public void Stop()
+    {
+        if (_audioService != null)
+        {
+            _audioService.Stop();
+            IsPlaying = false;
+            CurrentPosition = TimeSpan.Zero;
+        }
     }
 
     public void Seek(TimeSpan position)
     {
-        // TODO: Implement seek
+        _audioService?.SetPosition(position);
         CurrentPosition = position;
     }
 
     public void AddComment(string text, double? timestampSeconds = null)
     {
-        // TODO: Implement comment addition
+        var timestamp = timestampSeconds.HasValue
+            ? TimeSpan.FromSeconds(timestampSeconds.Value)
+            : CurrentPosition;
+        var comment = $"[{timestamp:mm\\:ss}] {text}";
+        Comments.Add(comment);
+    }
+
+    public void LoadTrack(string trackTitle, string artist, TimeSpan duration, string? filePath = null)
+    {
+        CurrentTrackTitle = trackTitle;
+        CurrentArtist = artist;
+        Duration = duration;
+        CurrentPosition = TimeSpan.Zero;
+        _currentFilePath = filePath;
+
+        if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
+        {
+            _audioService?.Dispose();
+            _audioService = new AudioPlaybackService();
+            _audioService.PositionChanged += (s, pos) =>
+            {
+                _isUpdatingPosition = true;
+                SetProperty(ref _currentPosition, pos, nameof(CurrentPosition));
+                _isUpdatingPosition = false;
+            };
+            _audioService.PlaybackStopped += (s, e) => IsPlaying = false;
+            _audioService.LoadFile(filePath);
+            Duration = _audioService.Duration;
+            Play();
+        }
+    }
+
+    public void Dispose()
+    {
+        _audioService?.Dispose();
     }
 }

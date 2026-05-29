@@ -1,21 +1,30 @@
-
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
 VisualStudioVersion = 18.6.0.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MeshWave", "MeshWave\MeshWave.csproj", "{A1B2C3D4-E5F6-47G8-H9I0-J1K2L3M4N5O6}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MeshWave", "MeshWave\MeshWave.csproj", "{400FC615-9FE2-4CE1-85AB-488328F46A2C}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MeshWave.Common.Core", "MeshWave.Common.Core\MeshWave.Common.Core.csproj", "{B2C3D4E5-F6G7-48H9-I0J1-K2L3M4N5O6P7}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MeshWave.Common.Core", "MeshWave.Common.Core\MeshWave.Common.Core.csproj", "{4955D5CD-76A6-4072-A4F3-D6F8EDD8FC29}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MeshWave.LibraryManager", "MeshWave.LibraryManager\MeshWave.LibraryManager.csproj", "{C3D4E5F6-G7H8-49I0-J1K2-L3M4N5O6P7Q8}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MeshWave.LibraryManager", "MeshWave.LibraryManager\MeshWave.LibraryManager.csproj", "{C0D4EB3B-B284-4EEC-BBDF-05B20404210C}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MeshWave.Synchronizer", "MeshWave.Synchronizer\MeshWave.Synchronizer.csproj", "{D4E5F6G7-H8I9-40J1-K2L3-M4N5O6P7Q8R9}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MeshWave.Synchronizer", "MeshWave.Synchronizer\MeshWave.Synchronizer.csproj", "{4DCB9F66-9F85-495B-90F3-6B6B24BFC940}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MeshWave.Common.Core.Tests", "MeshWave.Common.Core.Tests\MeshWave.Common.Core.Tests.csproj", "{E5F6G7H8-I9J0-41K2-L3M4-N5O6P7Q8R9S0}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MeshWave.Common.Core.Tests", "MeshWave.Common.Core.Tests\MeshWave.Common.Core.Tests.csproj", "{E7778653-92DE-416A-BC3F-6FEE44C91C86}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MeshWave.LibraryManager.Tests", "MeshWave.LibraryManager.Tests\MeshWave.LibraryManager.Tests.csproj", "{F6G7H8I9-J0K1-42L3-M4N5-O6P7Q8R9S0T1}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MeshWave.LibraryManager.Tests", "MeshWave.LibraryManager.Tests\MeshWave.LibraryManager.Tests.csproj", "{46A4B2EE-A500-45A7-97F5-6719CADA5940}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MeshWave.Synchronizer.Tests", "MeshWave.Synchronizer.Tests\MeshWave.Synchronizer.Tests.csproj", "{G7H8I9J0-K1L2-43M4-N5O6-P7Q8R9S0T1U2}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MeshWave.Synchronizer.Tests", "MeshWave.Synchronizer.Tests\MeshWave.Synchronizer.Tests.csproj", "{1C722117-BA1A-4395-A75C-160CCB74886A}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentation", "Documentation", "{23C73E9A-2065-49DA-830F-9B85C544C619}"
+	ProjectSection(SolutionItems) = preProject
+		ARCHITECTURE.md = ARCHITECTURE.md
+		DEVELOPMENT_STATUS.md = DEVELOPMENT_STATUS.md
+		PROJECT_PLAN.md = PROJECT_PLAN.md
+		QUICK_REFERENCE.md = QUICK_REFERENCE.md
+		README.md = README.md
+		SUMMARY.md = SUMMARY.md
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -23,33 +32,39 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{A1B2C3D4-E5F6-47G8-H9I0-J1K2L3M4N5O6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{A1B2C3D4-E5F6-47G8-H9I0-J1K2L3M4N5O6}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{A1B2C3D4-E5F6-47G8-H9I0-J1K2L3M4N5O6}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{A1B2C3D4-E5F6-47G8-H9I0-J1K2L3M4N5O6}.Release|Any CPU.Build.0 = Release|Any CPU
-		{B2C3D4E5-F6G7-48H9-I0J1-K2L3M4N5O6P7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{B2C3D4E5-F6G7-48H9-I0J1-K2L3M4N5O6P7}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{B2C3D4E5-F6G7-48H9-I0J1-K2L3M4N5O6P7}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{B2C3D4E5-F6G7-48H9-I0J1-K2L3M4N5O6P7}.Release|Any CPU.Build.0 = Release|Any CPU
-		{C3D4E5F6-G7H8-49I0-J1K2-L3M4N5O6P7Q8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{C3D4E5F6-G7H8-49I0-J1K2-L3M4N5O6P7Q8}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{C3D4E5F6-G7H8-49I0-J1K2-L3M4N5O6P7Q8}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{C3D4E5F6-G7H8-49I0-J1K2-L3M4N5O6P7Q8}.Release|Any CPU.Build.0 = Release|Any CPU
-		{D4E5F6G7-H8I9-40J1-K2L3-M4N5O6P7Q8R9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{D4E5F6G7-H8I9-40J1-K2L3-M4N5O6P7Q8R9}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{D4E5F6G7-H8I9-40J1-K2L3-M4N5O6P7Q8R9}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{D4E5F6G7-H8I9-40J1-K2L3-M4N5O6P7Q8R9}.Release|Any CPU.Build.0 = Release|Any CPU
-		{E5F6G7H8-I9J0-41K2-L3M4-N5O6P7Q8R9S0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{E5F6G7H8-I9J0-41K2-L3M4-N5O6P7Q8R9S0}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{E5F6G7H8-I9J0-41K2-L3M4-N5O6P7Q8R9S0}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{E5F6G7H8-I9J0-41K2-L3M4-N5O6P7Q8R9S0}.Release|Any CPU.Build.0 = Release|Any CPU
-		{F6G7H8I9-J0K1-42L3-M4N5-O6P7Q8R9S0T1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{F6G7H8I9-J0K1-42L3-M4N5-O6P7Q8R9S0T1}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{F6G7H8I9-J0K1-42L3-M4N5-O6P7Q8R9S0T1}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{F6G7H8I9-J0K1-42L3-M4N5-O6P7Q8R9S0T1}.Release|Any CPU.Build.0 = Release|Any CPU
-		{G7H8I9J0-K1L2-43M4-N5O6-P7Q8R9S0T1U2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{G7H8I9J0-K1L2-43M4-N5O6-P7Q8R9S0T1U2}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{G7H8I9J0-K1L2-43M4-N5O6-P7Q8R9S0T1U2}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{G7H8I9J0-K1L2-43M4-N5O6-P7Q8R9S0T1U2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{400FC615-9FE2-4CE1-85AB-488328F46A2C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{400FC615-9FE2-4CE1-85AB-488328F46A2C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{400FC615-9FE2-4CE1-85AB-488328F46A2C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{400FC615-9FE2-4CE1-85AB-488328F46A2C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4955D5CD-76A6-4072-A4F3-D6F8EDD8FC29}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4955D5CD-76A6-4072-A4F3-D6F8EDD8FC29}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4955D5CD-76A6-4072-A4F3-D6F8EDD8FC29}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4955D5CD-76A6-4072-A4F3-D6F8EDD8FC29}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C0D4EB3B-B284-4EEC-BBDF-05B20404210C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C0D4EB3B-B284-4EEC-BBDF-05B20404210C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C0D4EB3B-B284-4EEC-BBDF-05B20404210C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C0D4EB3B-B284-4EEC-BBDF-05B20404210C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4DCB9F66-9F85-495B-90F3-6B6B24BFC940}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4DCB9F66-9F85-495B-90F3-6B6B24BFC940}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4DCB9F66-9F85-495B-90F3-6B6B24BFC940}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4DCB9F66-9F85-495B-90F3-6B6B24BFC940}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E7778653-92DE-416A-BC3F-6FEE44C91C86}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E7778653-92DE-416A-BC3F-6FEE44C91C86}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E7778653-92DE-416A-BC3F-6FEE44C91C86}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E7778653-92DE-416A-BC3F-6FEE44C91C86}.Release|Any CPU.Build.0 = Release|Any CPU
+		{46A4B2EE-A500-45A7-97F5-6719CADA5940}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{46A4B2EE-A500-45A7-97F5-6719CADA5940}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{46A4B2EE-A500-45A7-97F5-6719CADA5940}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{46A4B2EE-A500-45A7-97F5-6719CADA5940}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1C722117-BA1A-4395-A75C-160CCB74886A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1C722117-BA1A-4395-A75C-160CCB74886A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1C722117-BA1A-4395-A75C-160CCB74886A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1C722117-BA1A-4395-A75C-160CCB74886A}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {E36EA7C1-2E12-41C4-A7F4-59FA0174DFD6}
 	EndGlobalSection
 EndGlobal

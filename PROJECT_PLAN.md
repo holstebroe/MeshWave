@@ -21,6 +21,12 @@ MeshWave is a server-less, peer-to-peer music-sharing app for hobby/community mu
 ## 3. High-level architecture
 - Frontend (WPF): playback UI, library browser, settings, user profile, comment UI, waveform visualization
 - Library Manager: local catalog, indexing, metadata editor, cover image management
+- Separate My Music (user-managed, direct file updates) and Community Music (app-managed, P2P sync only)
+- Scan and index My Music for metadata (ID3, cover, etc.) using TagLib#
+- Community music is updated only by the app manager, not by direct file changes
+- Planned: File watchers for incremental updates in My Music
+- Planned: Drag-and-drop import for My Music
+- Planned: Community music sync and update via P2P only
 - Synchronizer: P2P network layer, discovery, file transfer, manifest exchange, conflict/tombstone handling
 - Common core library: domain models (User, Community, Album, Track, Comment), crypto utilities, storage abstraction, sync protocol implementation
 - Optional helper services (bootstrap peers or relays) — not required but can improve connectivity
@@ -71,45 +77,84 @@ Formats: JSON for metadata, binary files for audio and images.
 ---
 
 ## 8. Frontend (WPF) features (MVP)
-- Setup wizard: choose storage folder, set DisplayName, generate keypair
-- Library browser: list communities, users, albums, tracks
-- Playback page:
-  - Audio playback with seek
-  - Waveform visualization and playback cursor
-  - Comments panel showing time-linked comments; click to seek
-- Library manager page: organize local albums/tracks, edit descriptions and covers, drag-and-drop import
-- Sync control: choose groups/users/albums/tracks to follow; sync status view
-- Notifications for incoming content and sync progress
+## 8. Frontend (WPF) features (MVP)
+
+### ✅ **Implemented Features**
+- **Modern Dark Theme UI**: Material Design colors, rounded buttons, hover effects
+- **Audio Playback (NAudio)**: Play/Pause/Stop, volume control, seek, position tracking
+- **Waveform Visualization**: Visual waveform canvas with playback cursor (placeholder data)
+- **Time-Linked Comments**: Add comments at current timestamp, scrollable panel
+- **Library Browser**: List tracks and albums from local folder
+- **Metadata Extraction (TagLib#)**: Title, album, artist, duration from ID3 tags
+- **File Watcher**: Auto-refresh library when files change
+- **Navigation**: Menu bar, double-click track to play
+
+### 📋 **Planned/TODO Features**
+- [ ] **Real Waveform Generation**: Generate actual waveform from audio data (currently placeholder bars)
+- [ ] **Album Cover Display**: Extract and show cover art in playback view
+- [ ] **Click Comment to Seek**: Click timestamp in comment to jump to that position
+- [ ] **Delete Comments**: Remove comments from the list
+- [ ] **Playlist Support**: Create, save, and load playlists
+- [ ] **Search/Filter**: Search tracks and albums in library view
+- [ ] **Drag-and-Drop Import**: Drag files/folders into library view to add
+- [ ] **Keyboard Shortcuts**: Space for play/pause, arrow keys for seek, etc.
+- [ ] **Setup Wizard**: Choose storage folder, set DisplayName, generate keypair
+- [ ] **Community Library View**: List communities, users, albums, tracks from P2P network
+- [ ] **Sync Control UI**: Choose groups/users/albums/tracks to follow; sync status view
+- [ ] **Notifications**: Incoming content and sync progress
+- [ ] **Persist Library Index**: Save/load library database to avoid re-scanning
+- [ ] **Edit Track Metadata**: Edit descriptions, covers, tags
+- [ ] **Settings Page**: Audio device selection, storage paths, P2P settings
+- [ ] **User Profile Page**: Display name, public key, bio, avatar
 
 Recommended libraries:
-- Audio playback: NAudio or managed wrappers (NAudio for decoding + WASAPI/DirectSound)
-- Waveform generation: precompute waveform downsampled data; render in WPF canvas
+- ✅ Audio playback: NAudio (implemented)
+- ✅ Metadata: TagLib# (implemented)
+- ⏳ Waveform generation: precompute waveform downsampled data; render in WPF canvas (placeholder implemented)
 
 ---
 
 ## 9. Library manager (MVP)
-- Index local files and metadata (incremental watchers)
-- Validate file hashes and manifest entries
-- Manage local artist folder: auto-create special user folder under main storage
-- Provide selective download queues and background sync tasks
+
+### ✅ **Implemented**
+- Index local files and metadata (incremental watchers with FileSystemWatcher)
+- Separate My Music (user-managed, direct file updates) and Community Music (app-managed, P2P sync only)
+- Scan and index My Music for metadata (ID3, cover, etc.) using TagLib#
+
+### 📋 **Planned/TODO**
+- [ ] Validate file hashes and manifest entries
+- [ ] Manage local artist folder: auto-create special user folder under main storage
+- [ ] Provide selective download queues and background sync tasks
+- [ ] Persist library index to database (e.g., SQLite, LiteDB)
+- [ ] Community music is updated only by the app manager, not by direct file changes
+- [ ] Drag-and-drop import for My Music
+- [ ] Compute and store file hashes (SHA-256) for content addressing
 
 ---
 
 ## 10. Testing & QA
-- Unit tests: domain models, manifest signing/verification, storage layer
-- Integration tests: simulated P2P exchange between multiple local instances
-- Network tests: NAT scenarios using test harness
-- UI tests: basic UI flows (playback, comment linking)
-- Performance: large library indexing, streaming while downloading
+
+### ✅ **Completed**
+- Manual testing: playback, library scanning, navigation, comments
+
+### 📋 **TODO**
+- [ ] Unit tests: domain models, manifest signing/verification, storage layer
+- [ ] Integration tests: simulated P2P exchange between multiple local instances
+- [ ] Network tests: NAT scenarios using test harness
+- [ ] UI tests: basic UI flows (playback, comment linking)
+- [ ] Performance: large library indexing, streaming while downloading
 
 ---
 
 ## 11. Milestones & suggested timeline (example)
 All milestones assume a small team or single developer. Estimate in 2-week sprints.
-- Sprint 1: Project setup, core libraries, identity & keypair, storage abstraction, basic models
-- Sprint 2: Local library manager (indexing, file hashing), WPF skeleton, setup wizard
-- Sprint 3: Playback (NAudio), waveform generation, basic UI for playback and comments
-- Sprint 4: Simple P2P discovery (LAN), manifest exchange, content request/resume
+
+- ✅ **Sprint 1**: Project setup, core libraries, identity & keypair, storage abstraction, basic models
+- ✅ **Sprint 2**: Local library manager (indexing, file hashing), WPF skeleton, setup wizard (partial)
+- ✅ **Sprint 3**: Playback (NAudio), waveform generation (placeholder), basic UI for playback and comments
+- ⏳ **Sprint 4**: Simple P2P discovery (LAN), manifest exchange, content request/resume
+
+
 - Sprint 5: Signed manifests, ownership enforcement, apply manifests to local catalog, selective download
 - Sprint 6: UI polish, sync manager UI, background sync, progress indicators
 - Sprint 7: Integration tests, network tests, CI setup, packaging installer

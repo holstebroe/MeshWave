@@ -2,8 +2,24 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:MeshWave"
+             xmlns:converters="clr-namespace:MeshWave.Converters"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-         
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Styles/SharedStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Shared Colors -->
+            <SolidColorBrush x:Key="BackgroundColor" Color="#FF1E1E1E"/>
+            <SolidColorBrush x:Key="SurfaceColor" Color="#FF2D2D30"/>
+            <SolidColorBrush x:Key="TextPrimaryColor" Color="#FFFFFFFF"/>
+            <SolidColorBrush x:Key="TextSecondaryColor" Color="#FFB3B3B3"/>
+            <SolidColorBrush x:Key="AccentColor" Color="#FF00BCD4"/>
+            <SolidColorBrush x:Key="PrimaryColor" Color="#FF2196F3"/>
+
+            <converters:ViewModelToViewConverter x:Key="ViewModelToViewConverter" />
+            <converters:TimeSpanToSecondsConverter x:Key="TimeSpanToSecondsConverter" />
+        </ResourceDictionary>
     </Application.Resources>
 </Application>
