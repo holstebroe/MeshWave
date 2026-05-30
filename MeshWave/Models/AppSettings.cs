@@ -21,6 +21,13 @@ namespace MeshWave.Models
         public int MaxPeers { get; set; } = 10;
         public int UploadLimit { get; set; } = 0; // 0 = unlimited
         public int DownloadLimit { get; set; } = 0; // 0 = unlimited
+
+        /// <summary>
+        /// Internet bootstrap nodes in "host:port" format.
+        /// These are the initial contact points for reaching peers outside the LAN,
+        /// similar to BitTorrent bootstrap/tracker nodes.
+        /// </summary>
+        public List<string> BootstrapNodes { get; set; } = [];
     }
 
     public class PlaybackSettings

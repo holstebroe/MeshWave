@@ -1,48 +1,219 @@
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Text.Json;
+
 namespace MeshWave.Synchronizer;
 
 /// <summary>
-/// PeerDiscovery handles discovery of peers on the local network.
+/// PeerDiscovery handles discovery of peers on the local network using UDP broadcast.
+/// Peers announce themselves with identity info; listeners maintain a live peer table.
 /// </summary>
-public class PeerDiscovery
+public class PeerDiscovery : IDisposable
 {
-    /// <summary>
-    /// Starts listening for peer announcements on the local network.
-    /// </summary>
-    public async Task StartDiscoveryAsync()
+    public const int DefaultDiscoveryPort = 39876;
+    private const int AnnouncePeriodMs = 10_000;
+    private const int PeerTimeoutMs = 60_000;
+
+    private readonly int _listenPort;
+    private readonly Dictionary<string, PeerInfo> _peers = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Lock _peersLock = new();
+    private UdpClient? _udpClient;
+    private CancellationTokenSource? _cts;
+    private Task? _listenTask;
+    private Task? _announceTask;
+    private LocalPeerIdentity? _identity;
+
+    public PeerDiscovery(int listenPort = DefaultDiscoveryPort)
     {
-        // TODO: Implement peer discovery
-        // - Use mDNS or UDP broadcast for LAN discovery
-        // - Optional: Connect to bootstrap peers for internet discovery
+        _listenPort = listenPort;
+    }
+
+    public event EventHandler<PeerInfo>? PeerDiscovered;
+    public event EventHandler<string>? PeerLost;
+
+    /// <summary>
+    /// Starts listening for peer announcements and broadcasting this peer's own presence.
+    /// </summary>
+    public async Task StartDiscoveryAsync(LocalPeerIdentity identity, CancellationToken cancellationToken = default)
+    {
+        _identity = identity;
+        _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        _udpClient = new UdpClient();
+        _udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+        _udpClient.Client.Bind(new IPEndPoint(IPAddress.Any, _listenPort));
+        _udpClient.EnableBroadcast = true;
+
+        _listenTask = ListenLoopAsync(_cts.Token);
+        _announceTask = AnnounceLoopAsync(_cts.Token);
+
         await Task.CompletedTask;
     }
 
     /// <summary>
-    /// Stops listening for peer announcements.
+    /// Stops discovery and announcement.
     /// </summary>
     public async Task StopDiscoveryAsync()
     {
-        // TODO: Cleanup discovery resources
-        await Task.CompletedTask;
+        _cts?.Cancel();
+        _udpClient?.Close();
+
+        if (_listenTask != null)
+        {
+            try { await _listenTask; } catch { }
+        }
+        if (_announceTask != null)
+        {
+            try { await _announceTask; } catch { }
+        }
+
+        _udpClient?.Dispose();
+        _udpClient = null;
     }
 
     /// <summary>
-    /// Gets list of currently discovered peers.
+    /// Gets currently known live peers (seen within the timeout window).
     /// </summary>
     public IEnumerable<PeerInfo> GetDiscoveredPeers()
     {
-        // TODO: Return discovered peers
-        return [];
+        var cutoff = DateTime.UtcNow.AddMilliseconds(-PeerTimeoutMs);
+        lock (_peersLock)
+        {
+            return _peers.Values
+                .Where(p => p.LastSeen >= cutoff)
+                .OrderBy(p => p.DisplayName)
+                .ToList();
+        }
+    }
+
+    private async Task AnnounceLoopAsync(CancellationToken ct)
+    {
+        if (_identity == null || _udpClient == null) return;
+
+        var announcement = BuildAnnouncement(_identity);
+        var endpoint = new IPEndPoint(IPAddress.Broadcast, _listenPort);
+
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                var payload = Encoding.UTF8.GetBytes(announcement);
+                await _udpClient.SendAsync(payload, endpoint, ct);
+            }
+            catch (OperationCanceledException) { break; }
+            catch { /* ignore transient send errors */ }
+
+            try
+            {
+                await Task.Delay(AnnouncePeriodMs, ct);
+            }
+            catch (OperationCanceledException) { break; }
+        }
+    }
+
+    private async Task ListenLoopAsync(CancellationToken ct)
+    {
+        if (_udpClient == null) return;
+
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                var result = await _udpClient.ReceiveAsync(ct);
+                var json = Encoding.UTF8.GetString(result.Buffer);
+                ProcessAnnouncement(json, result.RemoteEndPoint.Address.ToString());
+            }
+            catch (OperationCanceledException) { break; }
+            catch { /* ignore malformed packets */ }
+        }
+    }
+
+    private void ProcessAnnouncement(string json, string sourceAddress)
+    {
+        try
+        {
+            var announcement = JsonSerializer.Deserialize<PeerAnnouncement>(json);
+            if (announcement == null || string.IsNullOrWhiteSpace(announcement.UserId))
+            {
+                return;
+            }
+
+            if (string.Equals(announcement.UserId, _identity?.UserId, StringComparison.OrdinalIgnoreCase))
+            {
+                return; // ignore own announcements
+            }
+
+            lock (_peersLock)
+            {
+                if (!_peers.TryGetValue(announcement.UserId, out var existing))
+                {
+                    existing = new PeerInfo
+                    {
+                        UserId = announcement.UserId,
+                        DisplayName = announcement.DisplayName,
+                        Address = sourceAddress,
+                        Port = announcement.ManifestPort,
+                        PublicKeyPem = announcement.PublicKeyPem,
+                        Capabilities = announcement.Capabilities,
+                        LastSeen = DateTime.UtcNow
+                    };
+                    _peers[announcement.UserId] = existing;
+                    PeerDiscovered?.Invoke(this, existing);
+                }
+                else
+                {
+                    existing.LastSeen = DateTime.UtcNow;
+                    existing.Address = sourceAddress;
+                    existing.Port = announcement.ManifestPort;
+                    existing.DisplayName = announcement.DisplayName;
+                }
+            }
+        }
+        catch { /* ignore parse errors */ }
+    }
+
+    private static string BuildAnnouncement(LocalPeerIdentity identity)
+    {
+        var announcement = new PeerAnnouncement
+        {
+            UserId = identity.UserId,
+            DisplayName = identity.DisplayName,
+            ManifestPort = identity.ManifestPort,
+            PublicKeyPem = identity.PublicKeyPem,
+            Capabilities = ["manifest-exchange", "content-exchange"]
+        };
+        return JsonSerializer.Serialize(announcement);
+    }
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _udpClient?.Dispose();
+        _cts?.Dispose();
     }
 }
 
 /// <summary>
-/// Represents information about a discovered peer.
+/// Identifies this local peer for announcements.
 /// </summary>
-public class PeerInfo
+public class LocalPeerIdentity
 {
     public required string UserId { get; set; }
     public required string DisplayName { get; set; }
-    public required string Address { get; set; }
-    public int Port { get; set; }
-    public DateTime LastSeen { get; set; }
+    public required string PublicKeyPem { get; set; }
+    public required string PrivateKeyPem { get; set; }
+    public int ManifestPort { get; set; } = ManifestExchangeServer.DefaultPort;
+}
+
+/// <summary>
+/// UDP discovery announcement payload.
+/// </summary>
+internal class PeerAnnouncement
+{
+    public string UserId { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+    public int ManifestPort { get; set; }
+    public string PublicKeyPem { get; set; } = string.Empty;
+    public List<string> Capabilities { get; set; } = [];
 }

@@ -52,6 +52,16 @@
 
 ### Milestone D: Community Sync
 
-- Community library ingestion flow (`Other Music`)
-- Play count sync strategy
-- P2P comment/profile metadata exchange
+- [x] P2P foundation: `PeerDiscovery` (UDP broadcast), `ManifestExchangeServer/Client` (TCP), `SyncOrchestrator`
+- [x] Manifest signing + verification using RSA (`ManifestManager.AppendSignedOperation`, `VerifyManifest`, `MergeManifest`)
+- [x] `SecurityLimits` — central constants enforced at TCP layer and manifest merge
+- [x] `P2PIdentityService` — persistent RSA keypair, UserId derived from public key fingerprint
+- [x] `PeerRouter` — unified routing table: LAN UDP + bootstrap nodes + PEX maintenance loop
+- [x] PEX wire protocol (`GetPeers` request/response), capped at `SecurityLimits.MaxPeersPerExchange`
+- [x] `AppSettings.P2PSettings.BootstrapNodes` — configurable internet bootstrap nodes
+- [x] Wire `SyncOrchestrator` into `ApplicationViewModel` (auto-start when P2P enabled, graceful shutdown via `App.OnExit`)
+- [ ] Per-peer manifest disk persistence
+- [ ] Community library ingestion flow (`Other Music`) driven by peer manifests
+- [ ] Play count sync strategy (manifest operations)
+- [ ] Comment sync via manifest operations
+- [ ] Content exchange: TCP file transfer by content hash

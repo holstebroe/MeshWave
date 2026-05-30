@@ -1,0 +1,185 @@
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Text.Json;
+using MeshWave.Common.Core.Models;
+
+namespace MeshWave.Synchronizer;
+
+/// <summary>
+/// Listens for incoming manifest exchange requests over TCP.
+/// Handles: GetManifest, PushManifest, GetPeers (Peer Exchange / PEX).
+/// All message sizes are enforced against SecurityLimits.
+/// </summary>
+public class ManifestExchangeServer : IDisposable
+{
+    public const int DefaultPort = 39877;
+
+    private readonly int _port;
+    private TcpListener? _listener;
+    private CancellationTokenSource? _cts;
+    private Task? _serverTask;
+
+    private Func<Manifest?>? _localManifestProvider;
+    private Func<IReadOnlyList<PeerInfo>>? _peersProvider;
+
+    public ManifestExchangeServer(int port = DefaultPort)
+    {
+        _port = port;
+    }
+
+    public event EventHandler<ManifestReceivedEventArgs>? ManifestReceived;
+
+    /// <summary>
+    /// Starts the TCP server.
+    /// </summary>
+    /// <param name="localManifestProvider">Returns this peer's current manifest on demand.</param>
+    /// <param name="peersProvider">Returns known peers for PEX responses. May be null to disable PEX serving.</param>
+    public async Task StartAsync(Func<Manifest?> localManifestProvider, Func<IReadOnlyList<PeerInfo>>? peersProvider = null, CancellationToken cancellationToken = default)
+    {
+        _localManifestProvider = localManifestProvider;
+        _peersProvider = peersProvider;
+        _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        _listener = new TcpListener(IPAddress.Any, _port);
+        _listener.Start();
+
+        _serverTask = AcceptLoopAsync(_cts.Token);
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Stops the server.
+    /// </summary>
+    public async Task StopAsync()
+    {
+        _cts?.Cancel();
+        _listener?.Stop();
+
+        if (_serverTask != null)
+        {
+            try { await _serverTask; } catch { }
+        }
+    }
+
+    private async Task AcceptLoopAsync(CancellationToken ct)
+    {
+        if (_listener == null) return;
+
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                var client = await _listener.AcceptTcpClientAsync(ct);
+                _ = Task.Run(() => HandleClientAsync(client, ct), ct);
+            }
+            catch (OperationCanceledException) { break; }
+            catch { break; }
+        }
+    }
+
+    private async Task HandleClientAsync(TcpClient client, CancellationToken ct)
+    {
+        using (client)
+        {
+            client.ReceiveTimeout = SecurityLimits.ReadTimeoutMs;
+            client.SendTimeout = SecurityLimits.ReadTimeoutMs;
+
+            try
+            {
+                var stream = client.GetStream();
+                var requestJson = await ReadMessageAsync(stream, ct);
+                var request = JsonSerializer.Deserialize<ManifestRequest>(requestJson);
+                if (request == null) return;
+
+                switch (request.Type)
+                {
+                    case ManifestRequestType.GetManifest:
+                    {
+                        var manifest = _localManifestProvider?.Invoke();
+                        var response = new ManifestResponse { Manifest = manifest };
+                        await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
+                        break;
+                    }
+                    case ManifestRequestType.PushManifest when request.Manifest != null:
+                    {
+                        if (request.Manifest.Operations.Count <= SecurityLimits.MaxManifestOperations)
+                        {
+                            var peerEndpoint = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString() ?? "unknown";
+                            ManifestReceived?.Invoke(this, new ManifestReceivedEventArgs(request.Manifest, peerEndpoint));
+                        }
+                        var ack = new ManifestResponse { Acknowledged = true };
+                        await WriteMessageAsync(stream, JsonSerializer.Serialize(ack), ct);
+                        break;
+                    }
+                    case ManifestRequestType.GetPeers:
+                    {
+                        var peers = _peersProvider?.Invoke()
+                            .Take(SecurityLimits.MaxPeersPerExchange)
+                            .ToList() ?? [];
+                        var response = new ManifestResponse { Peers = peers };
+                        await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
+                        break;
+                    }
+                }
+            }
+            catch { /* ignore per-client errors */ }
+        }
+    }
+
+    internal static async Task WriteMessageAsync(Stream stream, string json, CancellationToken ct)
+    {
+        var body = Encoding.UTF8.GetBytes(json);
+        var lengthBytes = BitConverter.GetBytes(body.Length);
+        await stream.WriteAsync(lengthBytes, ct);
+        await stream.WriteAsync(body, ct);
+        await stream.FlushAsync(ct);
+    }
+
+    internal static async Task<string> ReadMessageAsync(Stream stream, CancellationToken ct)
+    {
+        var lengthBytes = new byte[4];
+        await stream.ReadExactlyAsync(lengthBytes, ct);
+        var length = BitConverter.ToInt32(lengthBytes);
+
+        if (length <= 0 || length > SecurityLimits.MaxMessageBytes)
+            throw new InvalidDataException($"Rejected message: length {length} exceeds limit.");
+
+        var body = new byte[length];
+        await stream.ReadExactlyAsync(body, ct);
+        return Encoding.UTF8.GetString(body);
+    }
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _listener?.Stop();
+        _cts?.Dispose();
+    }
+}
+
+public class ManifestReceivedEventArgs(Manifest manifest, string peerAddress) : EventArgs
+{
+    public Manifest Manifest { get; } = manifest;
+    public string PeerAddress { get; } = peerAddress;
+}
+
+internal enum ManifestRequestType
+{
+    GetManifest,
+    PushManifest,
+    GetPeers
+}
+
+internal class ManifestRequest
+{
+    public ManifestRequestType Type { get; set; }
+    public Manifest? Manifest { get; set; }
+}
+
+internal class ManifestResponse
+{
+    public Manifest? Manifest { get; set; }
+    public bool Acknowledged { get; set; }
+    public List<PeerInfo> Peers { get; set; } = [];
+}
