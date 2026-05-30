@@ -40,10 +40,12 @@ public class SettingsViewModel : ViewModelBase
     private string _p2pBootstrapNodesText = string.Empty;
     private string _p2pIdentityInfo = string.Empty;
     private WaveformStyle _waveformStyle = WaveformStyle.Filled;
+    private readonly SyncOrchestrator? _sync;
 
-    public SettingsViewModel(Action<WaveformStyle>? onWaveformStyleSaved = null)
+    public SettingsViewModel(Action<WaveformStyle>? onWaveformStyleSaved = null, SyncOrchestrator? sync = null)
     {
         _onWaveformStyleSaved = onWaveformStyleSaved;
+        _sync = sync;
         _settingsService = new SettingsService();
         _profileService = new UserProfileService();
         LoadSettings();
@@ -340,5 +342,13 @@ public class SettingsViewModel : ViewModelBase
         _onWaveformStyleSaved?.Invoke(WaveformStyle);
 
         IsInitialized = true;
+
+        // Broadcast the updated profile to the P2P network as a signed Profile op.
+        _sync?.BroadcastProfile(
+            displayName: string.IsNullOrWhiteSpace(Username) ? "You" : Username,
+            isArtist: IsArtist,
+            bio: Bio.Length > 1000 ? Bio[..1000] : Bio,
+            website: Website,
+            bannerImageHash: null);   // TODO: compute hash when content exchange is implemented
     }
 }

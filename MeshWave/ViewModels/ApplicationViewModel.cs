@@ -46,6 +46,13 @@ public class ApplicationViewModel : ViewModelBase
             P2PStatusText = $"Connected · {P2PPeerCount} peer{(P2PPeerCount == 1 ? "" : "s")}";
         };
 
+        _syncOrchestrator.ManifestMerged += (_, _) =>
+        {
+            // If the user isn't currently on the Community view, light up the badge.
+            if (CurrentViewModel is not CommunityViewModel)
+                HasCommunityNotification = true;
+        };
+
         // Record a signed Play operation the first time each track starts playing.
         _playbackViewModel.PropertyChanged += (_, e) =>
         {
@@ -114,7 +121,7 @@ public class ApplicationViewModel : ViewModelBase
 
     public void NavigateToSettings()
     {
-        CurrentViewModel = new SettingsViewModel(style => _playbackViewModel.WaveformStyle = style);
+        CurrentViewModel = new SettingsViewModel(style => _playbackViewModel.WaveformStyle = style, _syncOrchestrator);
     }
 
     public void NavigateToBrowse()
@@ -122,9 +129,25 @@ public class ApplicationViewModel : ViewModelBase
         CurrentViewModel = new BrowseViewModel();
     }
 
+    private bool _hasCommunityNotification;
+
+    public bool HasCommunityNotification
+    {
+        get => _hasCommunityNotification;
+        private set => SetProperty(ref _hasCommunityNotification, value);
+    }
+
     public void NavigateToCommunity()
     {
-        CurrentViewModel = new CommunityViewModel();
+        var vm = new CommunityViewModel(_syncOrchestrator);
+        // Forward badge state to the shell so the nav button can show the dot.
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(CommunityViewModel.HasNewReleases))
+                HasCommunityNotification = vm.HasNewReleases;
+        };
+        HasCommunityNotification = false;   // clear on open
+        CurrentViewModel = vm;
     }
 
     public void NavigateToPlayback()

@@ -116,9 +116,41 @@ Example groups: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone Col
 - [ ] Clear waveform cache button (future use)
 - [ ] Configurable storage quota warning threshold (default 10 GB)
 
----
+## Milestone I: Mesh Resilience and Background Mode  <-- NEXT
 
-## Architecture Notes
+### Bootstrap Re-contact
+- [x] MaintenanceLoopAsync in PeerRouter does periodic PEX (every 2 min)
+- [ ] PeerRouter: add periodic bootstrap re-contact inside MaintenanceLoopAsync (every 5 min)
+      so that if a bootstrap node restarts new users can still join without app restart
+- [ ] SecurityLimits.BootstrapRetryIntervalMinutes constant (default 5)
+
+### System Tray and Background Mode
+- [ ] App.xaml.cs: intercept window close event -- hide window instead of exit
+- [ ] Add NotifyIcon (System.Windows.Forms) in App.xaml.cs with MeshWave icon
+- [ ] Tray context menu: "Open MeshWave", "Now Playing", "Quit"
+- [ ] Windows balloon/toast notification on first minimize-to-tray to inform user
+- [ ] Add UseWindowsForms to MeshWave.csproj (required for NotifyIcon)
+- [ ] Quit action: stop P2P cleanly then call Application.Current.Shutdown()
+- [ ] MainWindow: override OnClosing to redirect to hide when tray is active
+
+## Milestone J: Mesh Integration Tests
+
+### Goals
+- Spin up a real bootstrap node in-process, connect multiple SyncOrchestrator instances,
+  verify peer discovery, manifest exchange, and play count sync across peers.
+
+### Tests
+- [ ] MeshIntegration_BootstrapRestart_PeersReconnect
+      -- verify clients reconnect after bootstrap is cycled
+- [ ] MeshIntegration_TwoPeers_ExchangeManifests
+      -- two orchestrators on loopback ports discover each other via bootstrap and exchange manifests
+- [ ] MeshIntegration_PlayCountSync_AggregatesAcrossPeers
+      -- peer A records 2 plays, peer B records 2 plays; after sync both see aggregate 4
+- [ ] MeshIntegration_ProfileBroadcast_ReceivedByPeer
+      -- peer A calls BroadcastProfile; peer B receives and can read the Profile op
+- [ ] New project: MeshWave.Integration.Tests (xUnit, references Synchronizer + Common.Core)
+
+---
 
 ### User-owned data principle
 All user-generated content (tracks, play counts, comments, likes, profile, posts) is

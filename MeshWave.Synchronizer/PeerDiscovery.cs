@@ -35,7 +35,7 @@ public class PeerDiscovery : IDisposable
     /// <summary>
     /// Starts listening for peer announcements and broadcasting this peer's own presence.
     /// </summary>
-    public async Task StartDiscoveryAsync(LocalPeerIdentity identity, CancellationToken cancellationToken = default)
+    public virtual async Task StartDiscoveryAsync(LocalPeerIdentity identity, CancellationToken cancellationToken = default)
     {
         _identity = identity;
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -54,7 +54,7 @@ public class PeerDiscovery : IDisposable
     /// <summary>
     /// Stops discovery and announcement.
     /// </summary>
-    public async Task StopDiscoveryAsync()
+    public virtual async Task StopDiscoveryAsync()
     {
         _cts?.Cancel();
         _udpClient?.Close();

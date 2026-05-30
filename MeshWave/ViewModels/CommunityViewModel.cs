@@ -1,15 +1,18 @@
 using MeshWave.Mvvm;
+using MeshWave.Synchronizer;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Windows.Input;
 
 namespace MeshWave.ViewModels;
 
 /// <summary>
 /// View model for the Community view — user/group discovery, follows, friends and group membership.
-/// Actual P2P search will be wired in Milestone D; for now the data model and UI scaffolding is in place.
 /// </summary>
 public class CommunityViewModel : ViewModelBase
 {
+    private readonly SyncOrchestrator? _sync;
+
     private string _searchQuery = string.Empty;
     private string _searchStatus = string.Empty;
     private bool _isSearching;
@@ -20,9 +23,12 @@ public class CommunityViewModel : ViewModelBase
     private ObservableCollection<CommunityUserItem> _following = [];
     private ObservableCollection<CommunityGroupItem> _myGroups = [];
     private ObservableCollection<ReleaseFeedItem> _releaseFeed = [];
+    private int _newReleaseCount;
 
-    public CommunityViewModel()
+    public CommunityViewModel(SyncOrchestrator? sync = null)
     {
+        _sync = sync;
+
         SearchCommand = new RelayCommand(_ => Search(), _ => !IsSearching && !string.IsNullOrWhiteSpace(SearchQuery));
         FollowUserCommand = new RelayCommand<CommunityUserItem>(FollowUser, u => u != null && !u.IsFollowing);
         UnfollowUserCommand = new RelayCommand<CommunityUserItem>(UnfollowUser, u => u != null && u.IsFollowing);
@@ -30,8 +36,17 @@ public class CommunityViewModel : ViewModelBase
         RemoveFriendCommand = new RelayCommand<CommunityUserItem>(RemoveFriend, u => u != null && u.IsFriend);
         JoinGroupCommand = new RelayCommand<CommunityGroupItem>(JoinGroup, g => g != null && !g.IsMember);
         LeaveGroupCommand = new RelayCommand<CommunityGroupItem>(LeaveGroup, g => g != null && g.IsMember);
-        SetTabCommand = new RelayCommand<string>(tab => ActiveTab = Enum.Parse<CommunityTab>(tab));
+        SetTabCommand = new RelayCommand<string>(tab =>
+        {
+            ActiveTab = Enum.Parse<CommunityTab>(tab);
+            if (ActiveTab == CommunityTab.Feed)
+                NewReleaseCount = 0;   // clear badge when user opens the Feed tab
+        });
         RefreshFeedCommand = new RelayCommand(_ => RefreshFeed());
+        AddToLibraryCommand = new RelayCommand<ReleaseFeedItem>(AddToLibrary, r => r != null);
+
+        if (_sync != null)
+            _sync.ManifestMerged += OnManifestMerged;
     }
 
     public ICommand SearchCommand { get; }
@@ -43,6 +58,21 @@ public class CommunityViewModel : ViewModelBase
     public ICommand LeaveGroupCommand { get; }
     public ICommand SetTabCommand { get; }
     public ICommand RefreshFeedCommand { get; }
+    public ICommand AddToLibraryCommand { get; }
+
+    /// <summary>Count of new releases from followed peers since the Feed tab was last viewed.</summary>
+    public int NewReleaseCount
+    {
+        get => _newReleaseCount;
+        private set
+        {
+            SetProperty(ref _newReleaseCount, value);
+            OnPropertyChanged(nameof(HasNewReleases));
+        }
+    }
+
+    /// <summary>True when there is at least one unseen release — drives the badge dot in the nav.</summary>
+    public bool HasNewReleases => _newReleaseCount > 0;
 
     public string SearchQuery
     {
@@ -184,7 +214,7 @@ public class CommunityViewModel : ViewModelBase
         user.IsFollowing = true;
         if (!Following.Contains(user))
             Following.Add(user);
-        // TODO (Milestone D): append signed "follow" manifest op
+        _sync?.RecordFollow(user.UserId);
     }
 
     private void UnfollowUser(CommunityUserItem? user)
@@ -192,7 +222,7 @@ public class CommunityViewModel : ViewModelBase
         if (user == null) return;
         user.IsFollowing = false;
         Following.Remove(user);
-        // TODO (Milestone D): append signed "unfollow" manifest op
+        _sync?.RecordUnfollow(user.UserId);
     }
 
     private void AddFriend(CommunityUserItem? user)
@@ -227,6 +257,45 @@ public class CommunityViewModel : ViewModelBase
         group.IsMember = false;
         MyGroups.Remove(group);
         // TODO (Milestone D): append signed "leave-group" manifest op
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Follow notifications
+    // ──────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Called when a peer manifest is merged. Checks for new Create ops from followed peers
+    /// and increments the badge counter when the Feed tab is not currently visible.
+    /// </summary>
+    private void OnManifestMerged(object? sender, ManifestMergedEventArgs e)
+    {
+        if (_sync == null) return;
+        var followedIds = Following.Select(u => u.UserId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (!followedIds.Contains(e.UserId)) return;
+
+        var manifest = _sync.GetPeerManifest(e.UserId);
+        if (manifest == null) return;
+
+        bool hasNewCreate = manifest.Operations
+            .Any(op => op.OperationType == MeshWave.Common.Core.Models.ManifestOperationType.Create);
+
+        if (hasNewCreate && ActiveTab != CommunityTab.Feed)
+        {
+            System.Windows.Application.Current.Dispatcher.Invoke(() => NewReleaseCount++);
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Add to Library
+    // ──────────────────────────────────────────────────────────────────────
+
+    private void AddToLibrary(ReleaseFeedItem? item)
+    {
+        if (item == null) return;
+        // TODO (Milestone D): request content exchange from the peer at item.ArtistUserId
+        // for item.TargetId; on success place the file in AppSettings.OtherMusicFolder.
+        // For now show a status hint.
+        SearchStatus = $"Add to Library: content exchange for \"{item.Title}\" will be available once file-transfer (Milestone D) is implemented.";
     }
 }
 

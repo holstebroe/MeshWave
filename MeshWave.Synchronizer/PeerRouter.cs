@@ -19,6 +19,7 @@ public class PeerRouter : IDisposable
     private readonly ManifestExchangeClient _exchangeClient;
     private readonly Lock _bootstrapLock = new();
 
+    private IReadOnlyList<string> _bootstrapNodes = [];
     private CancellationTokenSource? _cts;
     private Task? _bootstrapTask;
     private Task? _maintenanceTask;
@@ -38,6 +39,8 @@ public class PeerRouter : IDisposable
     public async Task StartAsync(LocalPeerIdentity identity, IReadOnlyList<string> bootstrapNodes, CancellationToken cancellationToken = default)
     {
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        _bootstrapNodes = bootstrapNodes;   // remember for periodic re-contact
 
         _lanDiscovery.PeerDiscovered += OnLanPeerDiscovered;
         await _lanDiscovery.StartDiscoveryAsync(identity, _cts.Token);
@@ -163,12 +166,19 @@ public class PeerRouter : IDisposable
 
     private async Task MaintenanceLoopAsync(CancellationToken ct)
     {
-        // Periodically re-bootstrap and do PEX with random known peers
+        // Periodically re-bootstrap and do PEX with random known peers.
+        // Two independent counters track PEX and bootstrap intervals so
+        // neither blocks the other.
+        int cyclesSinceBootstrap = 0;
+        const int pexIntervalMinutes = 2;
+        const int bootstrapEveryNCycles = SecurityLimits.BootstrapRetryIntervalMinutes / pexIntervalMinutes;
+
         while (!ct.IsCancellationRequested)
         {
             try
             {
-                await Task.Delay(TimeSpan.FromMinutes(2), ct);
+                await Task.Delay(TimeSpan.FromMinutes(pexIntervalMinutes), ct);
+                cyclesSinceBootstrap++;
 
                 // PEX: ask a sample of known peers for their peer lists
                 var sample = GetPeers()
@@ -185,6 +195,14 @@ public class PeerRouter : IDisposable
                         LearnPeers(discovered);
                     }
                     catch { }
+                }
+
+                // Periodic bootstrap re-contact — ensures peers can find the network
+                // even if a bootstrap node was restarted since the last connection.
+                if (cyclesSinceBootstrap >= bootstrapEveryNCycles && _bootstrapNodes.Count > 0)
+                {
+                    cyclesSinceBootstrap = 0;
+                    await BootstrapAsync(_bootstrapNodes, ct);
                 }
             }
             catch (OperationCanceledException) { break; }

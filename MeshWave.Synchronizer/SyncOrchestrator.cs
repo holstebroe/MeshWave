@@ -217,6 +217,68 @@ public class SyncOrchestrator : IDisposable
             _identity.PrivateKeyPem);
     }
 
+    /// <summary>
+    /// Appends a signed Follow op for <paramref name="targetUserId"/> to the local manifest.
+    /// Safe to call multiple times — duplicate ops are ignored during merge.
+    /// </summary>
+    public void RecordFollow(string targetUserId)
+    {
+        if (_localManifest == null || _identity == null) return;
+        if (string.IsNullOrWhiteSpace(targetUserId)) return;
+        _manifestManager.AppendSignedOperation(
+            _localManifest,
+            ManifestOperationType.Follow,
+            SecurityLimits.Truncate(targetUserId, SecurityLimits.MaxTargetIdLength),
+            "User",
+            contentHash: null,
+            metadata: null,
+            _identity.PrivateKeyPem);
+    }
+
+    /// <summary>
+    /// Appends a signed Unfollow op for <paramref name="targetUserId"/> to the local manifest.
+    /// </summary>
+    public void RecordUnfollow(string targetUserId)
+    {
+        if (_localManifest == null || _identity == null) return;
+        if (string.IsNullOrWhiteSpace(targetUserId)) return;
+        _manifestManager.AppendSignedOperation(
+            _localManifest,
+            ManifestOperationType.Unfollow,
+            SecurityLimits.Truncate(targetUserId, SecurityLimits.MaxTargetIdLength),
+            "User",
+            contentHash: null,
+            metadata: null,
+            _identity.PrivateKeyPem);
+    }
+
+    /// <summary>
+    /// Broadcasts the user's current profile as a signed Profile op.
+    /// Peers receiving this op can update their local view of the user's identity.
+    /// </summary>
+    public void BroadcastProfile(string displayName, bool isArtist, string bio, string website, string? bannerImageHash)
+    {
+        if (_localManifest == null || _identity == null) return;
+        var meta = new Dictionary<string, string>
+        {
+            ["displayName"] = SecurityLimits.Truncate(displayName, SecurityLimits.MaxArtistNameLength),
+            ["isArtist"]    = isArtist.ToString(),
+            ["bio"]         = SecurityLimits.Truncate(bio, 1000),
+            ["website"]     = SecurityLimits.Truncate(website, 256),
+        };
+        if (!string.IsNullOrWhiteSpace(bannerImageHash))
+            meta["bannerImageHash"] = bannerImageHash;
+
+        _manifestManager.AppendSignedOperation(
+            _localManifest,
+            ManifestOperationType.Profile,
+            _identity.UserId,
+            "User",
+            contentHash: bannerImageHash,
+            meta,
+            _identity.PrivateKeyPem);
+    }
+
     private void TryMerge(Manifest remote, string publicKeyPem)
     {
         if (remote.UserId == _identity?.UserId) return;

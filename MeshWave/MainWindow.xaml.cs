@@ -16,6 +16,28 @@ namespace MeshWave
 
         private ViewModels.ApplicationViewModel ViewModel => (ViewModels.ApplicationViewModel)DataContext;
 
+        protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+        {
+            // Intercept close: minimise to tray unless the app is explicitly quitting.
+            if (Application.Current is App app && !app._IsExiting)
+            {
+                e.Cancel = true;
+                Hide();
+
+                if (!app._TrayNotificationShown)
+                {
+                    app._TrayNotificationShown = true;
+                    app.ShowTrayNotification(
+                        "MeshWave is still running",
+                        "The mesh network stays active in the background.\nDouble-click the tray icon to reopen.",
+                        System.Windows.Forms.ToolTipIcon.Info);
+                }
+                return;
+            }
+
+            base.OnClosing(e);
+        }
+
         protected override void OnKeyDown(KeyEventArgs e)
         {
             base.OnKeyDown(e);

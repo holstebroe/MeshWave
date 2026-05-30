@@ -54,6 +54,12 @@ public static class SecurityLimits
     /// </summary>
     public const int MaxPlaysPerUserPerTrackPerDay = 3;
 
+    /// <summary>
+    /// How often (in minutes) the router re-contacts bootstrap nodes during the maintenance loop.
+    /// Ensures peers can rejoin after a bootstrap node restart without restarting the app.
+    /// </summary>
+    public const int BootstrapRetryIntervalMinutes = 5;
+
     // --- Connection timeouts ---
 
     public const int ConnectTimeoutMs = 8_000;

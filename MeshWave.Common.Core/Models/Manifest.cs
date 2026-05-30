@@ -23,7 +23,13 @@ public enum ManifestOperationType
     Update,
     Delete,
     /// <summary>Records that the user played a track. Rate-capped during manifest merge.</summary>
-    Play
+    Play,
+    /// <summary>Records that the local user follows a peer (TargetId = peer UserId).</summary>
+    Follow,
+    /// <summary>Records that the local user unfollowed a peer (TargetId = peer UserId).</summary>
+    Unfollow,
+    /// <summary>Broadcasts the user's profile fields (IsArtist, Bio, BannerImageHash, Website, DisplayName).</summary>
+    Profile
 }
 
 /// <summary>

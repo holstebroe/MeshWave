@@ -5,12 +5,87 @@ namespace MeshWave
 {
     public partial class App : Application
     {
+        private System.Windows.Forms.NotifyIcon? _trayIcon;
+        private bool _isExiting;
+        private bool _trayNotificationShown;
+
+        // Accessed by MainWindow.OnClosing
+        internal bool _IsExiting => _isExiting;
+        internal bool _TrayNotificationShown
+        {
+            get => _trayNotificationShown;
+            set => _trayNotificationShown = value;
+        }
+
+        internal void ShowTrayNotification(string title, string text, System.Windows.Forms.ToolTipIcon icon)
+        {
+            _trayIcon?.ShowBalloonTip(4000, title, text, icon);
+        }
+
+        protected override void OnStartup(StartupEventArgs e)
+        {
+            base.OnStartup(e);
+            InitializeTrayIcon();
+        }
+
+        private void InitializeTrayIcon()
+        {
+            // Load tray icon from the embedded ICO file.
+            var iconStream = GetResourceStream(new Uri("pack://application:,,,/MeshWaveIcon128.ico"))?.Stream
+                          ?? GetResourceStream(new Uri("pack://application:,,,/Assets/MeshWaveIcon128.png"))?.Stream;
+
+            _trayIcon = new System.Windows.Forms.NotifyIcon
+            {
+                Text = "MeshWave — Mesh is running",
+                Visible = true,
+                Icon = iconStream != null
+                    ? new System.Drawing.Icon(iconStream)
+                    : System.Drawing.SystemIcons.Application
+            };
+
+            var menu = new System.Windows.Forms.ContextMenuStrip();
+            menu.Items.Add("Open MeshWave", null, (_, _) => ShowMainWindow());
+            menu.Items.Add("-");
+
+            var nowPlayingItem = new System.Windows.Forms.ToolStripMenuItem("Now Playing");
+            nowPlayingItem.Click += (_, _) =>
+            {
+                ShowMainWindow();
+                if (MainWindow?.DataContext is ApplicationViewModel vm)
+                    vm.NavigateToPlayback();
+            };
+            menu.Items.Add(nowPlayingItem);
+
+            menu.Items.Add("-");
+            menu.Items.Add("Quit", null, (_, _) => ExitApplication());
+
+            _trayIcon.ContextMenuStrip = menu;
+            _trayIcon.DoubleClick += (_, _) => ShowMainWindow();
+        }
+
+        private void ShowMainWindow()
+        {
+            if (MainWindow == null) return;
+            MainWindow.Show();
+            MainWindow.WindowState = WindowState.Normal;
+            MainWindow.Activate();
+        }
+
+        internal void ExitApplication()
+        {
+            _isExiting = true;
+            _trayIcon?.Dispose();
+            _trayIcon = null;
+
+            if (MainWindow?.DataContext is ApplicationViewModel vm)
+                vm.ShutdownAsync().GetAwaiter().GetResult();
+
+            Shutdown();
+        }
+
         protected override void OnExit(ExitEventArgs e)
         {
-            if (MainWindow?.DataContext is ApplicationViewModel vm)
-            {
-                vm.ShutdownAsync().GetAwaiter().GetResult();
-            }
+            _trayIcon?.Dispose();
             base.OnExit(e);
         }
     }
