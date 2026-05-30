@@ -21,6 +21,7 @@ Completed in latest session:
 - Comment sync now uses signed manifest ops with ReplyToId threading and peer merge into playback timeline
 - Social graph actions now publish signed FriendAdd/FriendRemove and GroupJoin/GroupLeave ops
 - Likes sync now uses signed Like/Unlike ops and shows aggregate like counts in feed
+- NAT traversal helper added: UDP hole-punch probes/acks attempted before direct peer content transfer
 
 Milestone I -- Mesh Resilience and Background Mode (COMPLETE)
 Milestone J -- Mesh Integration Tests (COMPLETE)

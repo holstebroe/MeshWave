@@ -86,7 +86,7 @@ Example use cases: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone 
 - [x] Likes sync
 - [x] User profile sync (display name, avatar hash, IsArtist flag via signed Profile op)
 - [x] Add to Library flow (content exchange)
-- Content exchange: TCP file transfer by content hash
+- [x] Content exchange: direct TCP transfer by content hash with UDP hole-punch attempt before connect
 - [x] Follow notifications badge on Community nav for followed artists with new Create ops
 - [x] Release feed now hydrated from followed peers' persisted manifests (ordered newest-first)
 

@@ -15,6 +15,7 @@ public class SyncOrchestrator : IDisposable
     private readonly ManifestManager _manifestManager;
     private readonly PeerManifestStore _peerStore;
     private readonly ContentExchange _contentExchange;
+    private readonly NatTraversalService _natTraversal;
 
     private LocalPeerIdentity? _identity;
     private Manifest? _localManifest;
@@ -50,7 +51,8 @@ public class SyncOrchestrator : IDisposable
         ManifestExchangeClient? client = null,
         ManifestManager? manifestManager = null,
         PeerManifestStore? peerManifestStore = null,
-        ContentExchange? contentExchange = null)
+        ContentExchange? contentExchange = null,
+        NatTraversalService? natTraversal = null)
     {
         _router = router ?? new PeerRouter();
         _server = server ?? new ManifestExchangeServer();
@@ -58,6 +60,7 @@ public class SyncOrchestrator : IDisposable
         _manifestManager = manifestManager ?? new ManifestManager();
         _peerStore = peerManifestStore ?? new PeerManifestStore();
         _contentExchange = contentExchange ?? new ContentExchange();
+        _natTraversal = natTraversal ?? new NatTraversalService();
         _peerStore.LoadAll();
     }
 
@@ -84,6 +87,7 @@ public class SyncOrchestrator : IDisposable
             _cts.Token);
 
         await _router.StartAsync(identity, bootstrapNodes ?? [], _cts.Token);
+        await _natTraversal.StartAsync(identity.ManifestPort, _cts.Token);
     }
 
     /// <summary>
@@ -97,6 +101,7 @@ public class SyncOrchestrator : IDisposable
 
         await _router.StopAsync();
         await _server.StopAsync();
+        await _natTraversal.StopAsync();
         _cts?.Cancel();
     }
 
@@ -137,6 +142,12 @@ public class SyncOrchestrator : IDisposable
 
         if (peer == null)
             return null;
+
+        var punched = await _natTraversal.TryPunchAsync(peer.Address, peer.Port);
+        if (!punched)
+        {
+            // Continue anyway: many peers are directly reachable without NAT punching.
+        }
 
         return await _contentExchange.RequestContentAsync(peer.Address, peer.Port, contentHash);
     }
@@ -473,6 +484,7 @@ public class SyncOrchestrator : IDisposable
     {
         _router.Dispose();
         _server.Dispose();
+        _natTraversal.Dispose();
         _cts?.Dispose();
     }
 }

@@ -36,7 +36,7 @@
 - [ ] Comment permission enforcement across peers
 - [x] Likes sync via manifest operations (one like per user per track, signed)
 - [x] User profile sync (display name, avatar hash, IsArtist flag as signed Profile op)
-- [ ] Content exchange: TCP file transfer by content hash
+- [x] Content exchange: TCP file transfer by content hash (NAT hole-punch prep via UDP probes before direct transfer attempts)
 
 ## Milestone E: Trust and Aggregate Integrity
 - [ ] Sybil-resistance research spike (proof-of-work UserId or web-of-trust score)
