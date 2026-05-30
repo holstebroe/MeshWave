@@ -60,7 +60,9 @@
                 <Canvas x:Name="WaveformCanvas"
                         Height="120"
                         Background="#FF0F0F0F"
-                        MouseLeftButtonDown="WaveformCanvas_MouseLeftButtonDown">
+                        MouseLeftButtonDown="WaveformCanvas_MouseLeftButtonDown"
+                        MouseMove="WaveformCanvas_MouseMove"
+                        MouseLeave="WaveformCanvas_MouseLeave">
                     <!-- Waveform bars, markers and cursor drawn in code-behind -->
                     <!-- Played-region dim overlay (drawn over waveform, under cursor) -->
                     <Rectangle x:Name="PlayedOverlay"
@@ -69,6 +71,15 @@
                                Canvas.Left="0"
                                Canvas.Top="0"
                                Fill="#66000000"
+                               IsHitTestVisible="False"/>
+                    <!-- Seek-preview bright overlay: cursor → mouse position -->
+                    <Rectangle x:Name="SeekPreviewOverlay"
+                               Height="120"
+                               Width="0"
+                               Canvas.Left="0"
+                               Canvas.Top="0"
+                               Fill="#331DB954"
+                               Visibility="Collapsed"
                                IsHitTestVisible="False"/>
                     <!-- Playback cursor line -->
                     <Rectangle x:Name="PlaybackCursor"

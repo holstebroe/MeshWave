@@ -91,8 +91,9 @@ namespace MeshWave.Views
             // Timeline markers on top of bars (but below overlay/cursor)
             DrawTimelineMarkers(width, height);
 
-            // Overlay first, cursor on top
+            // Overlay first, seek preview above it, cursor on top
             WaveformCanvas.Children.Add(PlayedOverlay);
+            WaveformCanvas.Children.Add(SeekPreviewOverlay);
             WaveformCanvas.Children.Add(PlaybackCursor);
             UpdatePlaybackCursor();
         }
@@ -185,7 +186,38 @@ namespace MeshWave.Views
 
                 // Update the played-region semi-transparent overlay
                 PlayedOverlay.Width = Math.Max(0, cursorX);
+
+                // Keep the seek-preview anchored to the current cursor if it is visible
+                if (SeekPreviewOverlay.Visibility == Visibility.Visible)
+                    UpdateSeekPreview(cursorX, Canvas.GetLeft(SeekPreviewOverlay) + SeekPreviewOverlay.Width);
             }
+        }
+
+        private void UpdateSeekPreview(double cursorX, double mouseX)
+        {
+            var left  = Math.Min(cursorX, mouseX);
+            var right = Math.Max(cursorX, mouseX);
+            Canvas.SetLeft(SeekPreviewOverlay, left);
+            SeekPreviewOverlay.Width = right - left;
+        }
+
+        private void WaveformCanvas_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (DataContext is not PlaybackViewModel vm || vm.Duration.TotalSeconds <= 0)
+                return;
+
+            var mouseX   = e.GetPosition(WaveformCanvas).X;
+            var canvasW  = WaveformCanvas.ActualWidth > 0 ? WaveformCanvas.ActualWidth : 800;
+            var cursorX  = (vm.CurrentPosition.TotalSeconds / vm.Duration.TotalSeconds) * canvasW;
+
+            SeekPreviewOverlay.Visibility = Visibility.Visible;
+            UpdateSeekPreview(cursorX, mouseX);
+        }
+
+        private void WaveformCanvas_MouseLeave(object sender, MouseEventArgs e)
+        {
+            SeekPreviewOverlay.Visibility = Visibility.Collapsed;
+            SeekPreviewOverlay.Width = 0;
         }
 
         private void WaveformCanvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
