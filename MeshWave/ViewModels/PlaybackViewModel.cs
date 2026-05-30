@@ -27,8 +27,11 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     private AudioPlaybackService? _audioService;
     private string? _currentFilePath;
     private bool _isUpdatingPosition = false;
+    private readonly UserProfileService _profileService = new();
+    private readonly MyMusicMetadataService _myMusicMetadataService = new();
     private string _coverImagePath = string.Empty;
     private float[] _waveformSamples = [];
+    private string _trackDescription = string.Empty;
 
     public PlaybackViewModel()
     {
@@ -109,6 +112,12 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         set => SetProperty(ref _coverImagePath, value);
     }
 
+    public string TrackDescription
+    {
+        get => _trackDescription;
+        set => SetProperty(ref _trackDescription, value);
+    }
+
     public float[] WaveformSamples
     {
         get => _waveformSamples;
@@ -169,12 +178,13 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         var comment = $"[{timestamp:mm\\:ss}] {text}";
         Comments.Add(comment);
 
+        var profile = _profileService.LoadProfile();
         var marker = new TimelineCommentMarker
         {
             TimestampSeconds = timestamp.TotalSeconds,
             Label = text,
-            UserDisplayName = "You",
-            UserIconPath = CoverImagePath
+            UserDisplayName = string.IsNullOrWhiteSpace(profile.DisplayName) ? "You" : profile.DisplayName,
+            UserIconPath = profile.AvatarImagePath
         };
         TimelineMarkers.Add(marker);
         OnPropertyChanged(nameof(TimelineMarkers));
@@ -195,6 +205,12 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             var coverResolver = new LocalLibraryManager(Path.GetDirectoryName(filePath) ?? string.Empty);
             CoverImagePath = coverResolver.GetTrackCoverPath(filePath);
             WaveformSamples = coverResolver.GetTrackWaveform(filePath);
+
+            var myMusicMeta = _myMusicMetadataService.LoadForTrack(filePath);
+            TrackDescription = string.IsNullOrWhiteSpace(myMusicMeta.Description)
+                ? string.Empty
+                : myMusicMeta.Description;
+
             LoadTimelineMarkers();
 
             _audioService?.Dispose();
@@ -220,6 +236,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             CoverImagePath = string.Empty;
             WaveformSamples = [];
             TimelineMarkers.Clear();
+            TrackDescription = string.Empty;
         }
     }
 

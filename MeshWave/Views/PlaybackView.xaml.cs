@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -110,19 +111,68 @@ namespace MeshWave.Views
                 var progress = Math.Clamp(marker.TimestampSeconds / vm.Duration.TotalSeconds, 0.0, 1.0);
                 var x = progress * width;
 
-                var icon = new Ellipse
+                var markerIcon = new Ellipse
                 {
-                    Width = 12,
-                    Height = 12,
-                    Fill = Brushes.Orange,
+                    Width = 14,
+                    Height = 14,
                     Stroke = Brushes.White,
                     StrokeThickness = 1,
-                    ToolTip = $"{marker.UserDisplayName}: {marker.Label}"
+                    Cursor = Cursors.Hand,
+                    Tag = marker.TimestampSeconds
                 };
 
-                Canvas.SetLeft(icon, x - 6);
-                Canvas.SetTop(icon, 4);
-                WaveformCanvas.Children.Add(icon);
+                if (!string.IsNullOrWhiteSpace(marker.UserIconPath) && File.Exists(marker.UserIconPath))
+                {
+                    try
+                    {
+                        markerIcon.Fill = new ImageBrush(new System.Windows.Media.Imaging.BitmapImage(new Uri(marker.UserIconPath, UriKind.Absolute)))
+                        {
+                            Stretch = Stretch.UniformToFill
+                        };
+                    }
+                    catch
+                    {
+                        markerIcon.Fill = Brushes.Orange;
+                    }
+                }
+                else
+                {
+                    markerIcon.Fill = Brushes.Orange;
+                }
+
+                markerIcon.MouseLeftButtonDown += TimelineMarker_MouseLeftButtonDown;
+
+                var tooltipBorder = new Border
+                {
+                    Background = new SolidColorBrush(Color.FromRgb(32, 32, 32)),
+                    BorderBrush = Brushes.White,
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(4),
+                    Padding = new Thickness(8)
+                };
+                tooltipBorder.Child = new TextBlock
+                {
+                    Text = $"[{TimeSpan.FromSeconds(marker.TimestampSeconds):mm\\:ss}] {marker.UserDisplayName}: {marker.Label}",
+                    Foreground = Brushes.White,
+                    TextWrapping = TextWrapping.Wrap,
+                    MaxWidth = 280
+                };
+                markerIcon.ToolTip = tooltipBorder;
+
+                Canvas.SetLeft(markerIcon, x - 7);
+                Canvas.SetTop(markerIcon, 3);
+                WaveformCanvas.Children.Add(markerIcon);
+            }
+        }
+
+        private void TimelineMarker_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement element &&
+                element.Tag is double timestampSeconds &&
+                DataContext is PlaybackViewModel vm)
+            {
+                vm.Seek(TimeSpan.FromSeconds(timestampSeconds));
+                e.Handled = true;
             }
         }
 

@@ -16,4 +16,8 @@ This repository now uses:
 
 1. Timeline marker UX (rounded user icons, seek interaction)
 2. Profile persistence and icon generation
-3. Play count registration + future community sync
+3. Play count registration  for future community sync
+
+
+## For later
+Networking and P2P sync

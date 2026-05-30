@@ -12,24 +12,29 @@ namespace MeshWave.ViewModels;
 public class SettingsViewModel : ViewModelBase
 {
     private readonly SettingsService _settingsService;
+    private readonly UserProfileService _profileService;
     private string _baseFolder = string.Empty;
     private string _username = string.Empty;
     private bool _isInitialized = false;
     private string _theme = "Dark";
     private double _volume = 0.8;
     private string _supportedExtensionsText = string.Empty;
+    private string _avatarImagePath = string.Empty;
 
     public SettingsViewModel()
     {
         _settingsService = new SettingsService();
+        _profileService = new UserProfileService();
         LoadSettings();
 
         SaveCommand = new RelayCommand(_ => SaveSettings());
         BrowseBaseFolderCommand = new RelayCommand(_ => BrowseStorageFolder());
+        BrowseAvatarCommand = new RelayCommand(_ => BrowseAvatarImage());
     }
 
     public ICommand SaveCommand { get; }
     public ICommand BrowseBaseFolderCommand { get; }
+    public ICommand BrowseAvatarCommand { get; }
 
     public string BaseFolder
     {
@@ -41,6 +46,12 @@ public class SettingsViewModel : ViewModelBase
     {
         get => _username;
         set => SetProperty(ref _username, value);
+    }
+
+    public string AvatarImagePath
+    {
+        get => _avatarImagePath;
+        set => SetProperty(ref _avatarImagePath, value);
     }
 
     public string Theme
@@ -79,6 +90,10 @@ public class SettingsViewModel : ViewModelBase
             : LocalLibraryManager.SupportedExtensions;
         SupportedExtensionsText = string.Join(", ", extensions);
 
+        var profile = _profileService.LoadProfile();
+        Username = profile.DisplayName;
+        AvatarImagePath = profile.AvatarImagePath;
+
         IsInitialized = !string.IsNullOrEmpty(settings.BaseFolder);
     }
 
@@ -107,6 +122,21 @@ public class SettingsViewModel : ViewModelBase
         // TODO: Implement keypair generation
     }
 
+    public void BrowseAvatarImage()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = "Image Files|*.png;*.jpg;*.jpeg;*.bmp",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            AvatarImagePath = dialog.FileName;
+        }
+    }
+
     public void SaveSettings()
     {
         var settings = new AppSettings
@@ -128,6 +158,13 @@ public class SettingsViewModel : ViewModelBase
 
         _settingsService.SaveSettings(settings);
         _settingsService.EnsureFoldersExist();
+
+        _profileService.SaveProfile(new UserProfile
+        {
+            DisplayName = string.IsNullOrWhiteSpace(Username) ? "You" : Username,
+            AvatarImagePath = AvatarImagePath
+        });
+
         IsInitialized = true;
 
         // TODO: Show success message

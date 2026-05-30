@@ -114,7 +114,8 @@ namespace MeshWave.ViewModels
                     Title = t.Title,
                     Artist = string.IsNullOrWhiteSpace(t.Description) ? "Unknown Artist" : t.Description!,
                     AlbumId = t.AlbumId ?? string.Empty,
-                    CoverPath = coverPath
+                    CoverPath = coverPath,
+                    FilePath = t.FileHash
                 };
             }).ToList();
 

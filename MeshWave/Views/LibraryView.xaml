@@ -24,31 +24,12 @@
                     FontSize="16"
                     Padding="20,12"/>
 
-            <Border Background="{StaticResource SurfaceColor}" CornerRadius="6" Padding="12" Margin="0,10,0,10"
-                    Visibility="{Binding CanImportMyMusic, Converter={StaticResource BoolToVisibilityConverter}}">
-                <StackPanel>
-                    <TextBlock Text="Import status" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
-                    <TextBlock Text="{Binding ImportStatusMessage}"/>
-                    <TextBlock Text="{Binding ImportCurrentFile}" TextTrimming="CharacterEllipsis"/>
-                    <TextBlock>
-                        <Run Text="Imported: "/>
-                        <Run Text="{Binding ImportImportedFiles}"/>
-                        <Run Text="  |  Remaining: "/>
-                        <Run Text="{Binding ImportRemainingFiles}"/>
-                        <Run Text="  |  Total: "/>
-                        <Run Text="{Binding ImportTotalFiles}"/>
-                    </TextBlock>
-                    <ProgressBar Minimum="0" Maximum="100" Value="{Binding ImportProgressPercent, Mode=OneWay}" Height="10" Margin="0,8,0,8"/>
-                    <Button Content="Cancel Import"
-                            Command="{Binding CancelImportCommand}"
-                            IsEnabled="{Binding CanCancelImport}"
-                            Style="{StaticResource PrimaryButton}"
-                            Width="130"/>
-                </StackPanel>
-            </Border>
-
+            <TextBlock Text="Search tracks/albums (filtering coming soon)"
+                       Margin="0,12,0,4"
+                       Foreground="{StaticResource TextSecondaryColor}"
+                       FontStyle="Italic"/>
             <TextBox Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
-                    Margin="0,10,0,12"/>
+                    Margin="0,0,0,12"/>
         </StackPanel>
 
         <TextBlock Grid.Row="1"
@@ -114,6 +95,13 @@
                          ItemsSource="{Binding Tracks}"
                          MouseDoubleClick="OnTrackDoubleClick"
                          ScrollViewer.VerticalScrollBarVisibility="Auto">
+                    <ListBox.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Edit Metadata"
+                                      Click="EditMetadata_Click"
+                                      Visibility="{Binding PlacementTarget.DataContext.CanImportMyMusic, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                        </ContextMenu>
+                    </ListBox.ContextMenu>
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <StackPanel Orientation="Horizontal" Margin="0,2">

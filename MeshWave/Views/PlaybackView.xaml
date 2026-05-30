@@ -39,6 +39,11 @@
                 <TextBlock Text="{Binding CurrentArtist}" 
                            FontSize="16" 
                            Foreground="{StaticResource TextSecondaryColor}"/>
+                <TextBlock Text="{Binding TrackDescription}"
+                           FontSize="13"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource TextSecondaryColor}"
+                           Margin="0,6,0,0"/>
             </StackPanel>
         </Grid>
 
@@ -90,20 +95,22 @@
             <StackPanel Orientation="Horizontal" 
                        HorizontalAlignment="Center"
                        Margin="0,20,0,0">
-                <Button Content="▶"
-                       Command="{Binding PlayCommand}" 
-                       Style="{StaticResource PrimaryButton}"
-                       Width="44"
-                       Height="44"
-                       FontSize="18"
-                       Margin="0,0,8,10"/>
-                <Button Content="⏸"
-                       Command="{Binding PauseCommand}" 
-                       Style="{StaticResource PrimaryButton}"
-                       Width="44"
-                       Height="44"
-                       FontSize="18"
-                       Margin="0,0,8,10"/>
+                <Button Command="{Binding PlayPauseToggleCommand}" 
+                        Width="54"
+                        Height="44"
+                        FontSize="18"
+                        Margin="0,0,8,10">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                            <Setter Property="Content" Value="▶"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsPlaying}" Value="True">
+                                    <Setter Property="Content" Value="⏸"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
                 <Button Content="⏹" 
                        Command="{Binding StopCommand}" 
                        Style="{StaticResource PrimaryButton}"

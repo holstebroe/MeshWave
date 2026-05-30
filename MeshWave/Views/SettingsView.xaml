@@ -43,6 +43,34 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Profile -->
+                <Border Background="{StaticResource SurfaceColor}" 
+                       CornerRadius="8" 
+                       Padding="20"
+                       Margin="0,0,0,20">
+                    <StackPanel>
+                        <TextBlock Text="👤 Profile"
+                                  Style="{StaticResource SectionHeader}"
+                                  Margin="0,0,0,10"/>
+
+                        <TextBlock Text="Display Name" Margin="0,0,0,5"/>
+                        <TextBox Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,10"/>
+
+                        <TextBlock Text="Avatar Image" Margin="0,0,0,5"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{Binding AvatarImagePath, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0"/>
+                            <Button Grid.Column="1"
+                                    Content="Browse Avatar..."
+                                    Command="{Binding BrowseAvatarCommand}"
+                                    Style="{StaticResource PrimaryButton}"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
                 <!-- Playback Settings -->
                 <Border Background="{StaticResource SurfaceColor}" 
                        CornerRadius="8" 

@@ -23,9 +23,7 @@
 
 ### In Progress
 
-- Timeline markers with rounded user icons
 - Profile model/editing (name, avatar, generated icon)
-- Better comment interactions (jump to marker, preview)
 - Play-count registration + sync preparation
 
 ## Next Milestones

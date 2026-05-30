@@ -146,6 +146,18 @@ public partial class LibraryViewModel : ViewModelBase
             track.FileHash);
     }
 
+    public event EventHandler<string>? OpenMetadataEditorRequested;
+
+    public void RequestOpenMetadataEditor(string trackFilePath)
+    {
+        if (!CanImportMyMusic || string.IsNullOrWhiteSpace(trackFilePath))
+        {
+            return;
+        }
+
+        OpenMetadataEditorRequested?.Invoke(this, trackFilePath);
+    }
+
     public void Search()
     {
         // TODO: Implement library search
@@ -183,5 +195,6 @@ public sealed class LibraryTrackItem
     public required string Artist { get; set; }
     public required string AlbumId { get; set; }
     public required string CoverPath { get; set; }
+    public required string FilePath { get; set; }
     public override string ToString() => Title;
 }
