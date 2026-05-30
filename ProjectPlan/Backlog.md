@@ -32,10 +32,10 @@
 - [x] Community library ingestion flow (Other Music) driven by peer manifests
 - [x] Comment sync via manifest operations (signed, author-owned; ReplyToId threading)
 - [ ] Comment moderation sync (owner soft-delete ops)
-- [ ] Social graph sync (friends, groups, follows as signed manifest ops)
+- [x] Social graph sync (friends, groups, follows as signed manifest ops)
 - [ ] Comment permission enforcement across peers
-- [ ] Likes sync via manifest operations (one like per user per track, signed)
-- [ ] User profile sync (display name, avatar hash, IsArtist flag as signed Profile op)
+- [x] Likes sync via manifest operations (one like per user per track, signed)
+- [x] User profile sync (display name, avatar hash, IsArtist flag as signed Profile op)
 - [ ] Content exchange: TCP file transfer by content hash
 
 ## Milestone E: Trust and Aggregate Integrity

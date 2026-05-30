@@ -82,8 +82,9 @@ Example use cases: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone 
 - [x] Community library ingestion (Other Music from peer manifests)
 - [x] Comment sync via signed manifest ops (ReplyToId threading + peer merge into timeline)
 - Comment moderation via manifest ops
-- Social graph sync (friends, follows, groups)
-- Likes sync
+- [x] Social graph sync (friends, follows, groups)
+- [x] Likes sync
+- [x] User profile sync (display name, avatar hash, IsArtist flag via signed Profile op)
 - [x] Add to Library flow (content exchange)
 - Content exchange: TCP file transfer by content hash
 - [x] Follow notifications badge on Community nav for followed artists with new Create ops

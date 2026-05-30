@@ -31,6 +31,7 @@ public class CommunityViewModel : ViewModelBase
     private ObservableCollection<ReleaseFeedItem> _releaseFeed = [];
     private int _newReleaseCount;
     private readonly Dictionary<string, int> _lastFeedReleaseSequenceByPeer = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _trackLikes = new(StringComparer.OrdinalIgnoreCase);
 
     public CommunityViewModel(SyncOrchestrator? sync = null)
     {
@@ -51,6 +52,7 @@ public class CommunityViewModel : ViewModelBase
         });
         RefreshFeedCommand = new RelayCommand(_ => RefreshFeed());
         AddToLibraryCommand = new RelayCommand<ReleaseFeedItem>(AddToLibrary, r => r != null && !string.IsNullOrWhiteSpace(r.ContentHash));
+        ToggleLikeCommand = new RelayCommand<ReleaseFeedItem>(ToggleLike, item => item != null);
 
         if (_sync != null)
         {
@@ -69,6 +71,7 @@ public class CommunityViewModel : ViewModelBase
     public ICommand SetTabCommand { get; }
     public ICommand RefreshFeedCommand { get; }
     public ICommand AddToLibraryCommand { get; }
+    public ICommand ToggleLikeCommand { get; }
 
     /// <summary>Count of new releases from followed peers since the Feed tab was last viewed.</summary>
     public int NewReleaseCount
@@ -181,6 +184,8 @@ public class CommunityViewModel : ViewModelBase
             return;
         }
 
+        RebuildLikesIndex();
+
         var followedIds = Following.Select(u => u.UserId).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (followedIds.Count == 0)
         {
@@ -218,7 +223,9 @@ public class CommunityViewModel : ViewModelBase
                 ReleasedAt = op.Metadata.TryGetValue("releasedAt", out var releasedAt)
                     && DateTime.TryParse(releasedAt, out var parsedRelease)
                     ? parsedRelease
-                    : op.Timestamp
+                    : op.Timestamp,
+                LikeCount = _trackLikes.GetValueOrDefault(op.TargetId, 0),
+                IsLikedByMe = IsLocallyLiked(op.TargetId)
             }));
         }
 
@@ -284,7 +291,7 @@ public class CommunityViewModel : ViewModelBase
         user.IsFriend = true;
         if (!Friends.Contains(user))
             Friends.Add(user);
-        // TODO (Milestone D): append signed bilateral "friend-request" manifest op
+        _sync?.RecordFriendAdd(user.UserId);
     }
 
     private void RemoveFriend(CommunityUserItem? user)
@@ -292,7 +299,7 @@ public class CommunityViewModel : ViewModelBase
         if (user == null) return;
         user.IsFriend = false;
         Friends.Remove(user);
-        // TODO (Milestone D): append signed "unfriend" manifest op
+        _sync?.RecordFriendRemove(user.UserId);
     }
 
     private void JoinGroup(CommunityGroupItem? group)
@@ -301,7 +308,7 @@ public class CommunityViewModel : ViewModelBase
         group.IsMember = true;
         if (!MyGroups.Contains(group))
             MyGroups.Add(group);
-        // TODO (Milestone D): append signed "join-group" manifest op
+        _sync?.RecordGroupJoin(group.GroupId);
     }
 
     private void LeaveGroup(CommunityGroupItem? group)
@@ -309,7 +316,7 @@ public class CommunityViewModel : ViewModelBase
         if (group == null) return;
         group.IsMember = false;
         MyGroups.Remove(group);
-        // TODO (Milestone D): append signed "leave-group" manifest op
+        _sync?.RecordGroupLeave(group.GroupId);
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -419,6 +426,63 @@ public class CommunityViewModel : ViewModelBase
         }
     }
 
+    private void ToggleLike(ReleaseFeedItem? item)
+    {
+        if (item == null || _sync == null)
+            return;
+
+        if (item.IsLikedByMe)
+        {
+            _sync.RecordUnlike(item.TargetId);
+            item.IsLikedByMe = false;
+            item.LikeCount = Math.Max(0, item.LikeCount - 1);
+            SearchStatus = $"Removed like from \"{item.Title}\".";
+        }
+        else
+        {
+            _sync.RecordLike(item.TargetId);
+            item.IsLikedByMe = true;
+            item.LikeCount++;
+            SearchStatus = $"Liked \"{item.Title}\".";
+        }
+
+        _trackLikes[item.TargetId] = item.LikeCount;
+    }
+
+    private void RebuildLikesIndex()
+    {
+        _trackLikes.Clear();
+
+        foreach (var manifest in _sync?.PeerManifests ?? [])
+        {
+            var latestByTrack = manifest.Operations
+                .Where(op => op.OperationType == ManifestOperationType.Like || op.OperationType == ManifestOperationType.Unlike)
+                .GroupBy(op => op.TargetId)
+                .Select(g => g.OrderByDescending(op => op.SequenceNumber).First());
+
+            foreach (var op in latestByTrack)
+            {
+                if (op.OperationType == ManifestOperationType.Like)
+                    _trackLikes[op.TargetId] = _trackLikes.GetValueOrDefault(op.TargetId, 0) + 1;
+            }
+        }
+    }
+
+    private bool IsLocallyLiked(string targetId)
+    {
+        var local = _sync?.LocalManifest;
+        if (local == null)
+            return false;
+
+        var last = local.Operations
+            .Where(op => string.Equals(op.TargetId, targetId, StringComparison.OrdinalIgnoreCase)
+                      && (op.OperationType == ManifestOperationType.Like || op.OperationType == ManifestOperationType.Unlike))
+            .OrderByDescending(op => op.SequenceNumber)
+            .FirstOrDefault();
+
+        return last?.OperationType == ManifestOperationType.Like;
+    }
+
     private static string ResolveFileExtension(byte[] bytes, string title)
     {
         if (bytes.Length >= 12)
@@ -496,8 +560,11 @@ public class CommunityUserItem : ViewModelBase
 }
 
 /// <summary>A single item in the release feed — a Create op from a followed/discovered peer.</summary>
-public class ReleaseFeedItem
+public class ReleaseFeedItem : ViewModelBase
 {
+    private int _likeCount;
+    private bool _isLikedByMe;
+
     public string ArtistUserId { get; set; } = string.Empty;
     public string ArtistDisplayName { get; set; } = string.Empty;
     public string ArtistAvatarIconPath { get; set; } = string.Empty;
@@ -507,6 +574,18 @@ public class ReleaseFeedItem
     public string? ContentHash { get; set; }
     public DateTime ReleasedAt { get; set; }
     public string ReleasedAtDisplay => ReleasedAt.ToLocalTime().ToString("MMM d, yyyy");
+
+    public int LikeCount
+    {
+        get => _likeCount;
+        set => SetProperty(ref _likeCount, value);
+    }
+
+    public bool IsLikedByMe
+    {
+        get => _isLikedByMe;
+        set => SetProperty(ref _isLikedByMe, value);
+    }
 }
 
 public class CommunityGroupItem : ViewModelBase

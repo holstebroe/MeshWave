@@ -224,20 +224,42 @@
                                                 </TextBlock>
                                             </StackPanel>
 
-                                            <!-- Add to Library button -->
-                                            <Button Grid.Column="2"
-                                                    Content="+ Library"
-                                                    Command="{Binding DataContext.AddToLibraryCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                    CommandParameter="{Binding}"
-                                                    VerticalAlignment="Center"
-                                                    Padding="8,4">
-                                                <Button.Style>
-                                                    <Style TargetType="Button" BasedOn="{StaticResource SuccessButton}">
-                                                        <Setter Property="FontSize" Value="12"/>
-                                                        <Setter Property="Margin" Value="0"/>
-                                                    </Style>
-                                                </Button.Style>
-                                            </Button>
+                                            <!-- Feed actions -->
+                                            <StackPanel Grid.Column="2" Orientation="Vertical" VerticalAlignment="Center">
+                                                <Button Content="+ Library"
+                                                        Command="{Binding DataContext.AddToLibraryCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        Margin="0,0,0,6"
+                                                        Padding="8,4">
+                                                    <Button.Style>
+                                                        <Style TargetType="Button" BasedOn="{StaticResource SuccessButton}">
+                                                            <Setter Property="FontSize" Value="12"/>
+                                                            <Setter Property="Margin" Value="0,0,0,6"/>
+                                                        </Style>
+                                                    </Button.Style>
+                                                </Button>
+                                                <Button Command="{Binding DataContext.ToggleLikeCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        Padding="8,4">
+                                                    <Button.Style>
+                                                        <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                                            <Setter Property="FontSize" Value="12"/>
+                                                            <Setter Property="Margin" Value="0"/>
+                                                            <Setter Property="Content" Value="♡ Like"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsLikedByMe}" Value="True">
+                                                                    <Setter Property="Content" Value="♥ Liked"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Button.Style>
+                                                </Button>
+                                                <TextBlock Text="{Binding LikeCount, StringFormat={}{0} likes}"
+                                                           FontSize="11"
+                                                           HorizontalAlignment="Center"
+                                                           Foreground="{StaticResource TextSecondaryColor}"
+                                                           Margin="0,4,0,0"/>
+                                            </StackPanel>
                                         </Grid>
                                     </Border>
                                 </DataTemplate>

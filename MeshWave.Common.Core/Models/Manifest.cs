@@ -33,7 +33,19 @@ public enum ManifestOperationType
     /// <summary>Signed user-authored comment operation on a track (supports ReplyToId threading).</summary>
     Comment,
     /// <summary>Signed soft-delete for a previously authored comment operation.</summary>
-    CommentDelete
+    CommentDelete,
+    /// <summary>Signed social graph operation: add friend relation to another user.</summary>
+    FriendAdd,
+    /// <summary>Signed social graph operation: remove friend relation from another user.</summary>
+    FriendRemove,
+    /// <summary>Signed social graph operation: join a group.</summary>
+    GroupJoin,
+    /// <summary>Signed social graph operation: leave a group.</summary>
+    GroupLeave,
+    /// <summary>Signed user reaction operation: like a track.</summary>
+    Like,
+    /// <summary>Signed user reaction operation: remove like from a track.</summary>
+    Unlike
 }
 
 /// <summary>

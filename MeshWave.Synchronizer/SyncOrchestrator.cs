@@ -35,6 +35,9 @@ public class SyncOrchestrator : IDisposable
     /// <summary>The local identity in use (set after StartAsync).</summary>
     public LocalPeerIdentity? Identity => _identity;
 
+    /// <summary>Current local manifest containing this node's signed operations.</summary>
+    public Manifest? LocalManifest => _localManifest;
+
     /// <summary>Read-only view of all peer manifests received and persisted so far.</summary>
     public IReadOnlyCollection<Manifest> PeerManifests => _peerStore.GetAll();
 
@@ -264,6 +267,74 @@ public class SyncOrchestrator : IDisposable
     }
 
     /// <summary>
+    /// Appends a signed FriendAdd op for <paramref name="targetUserId"/>.
+    /// </summary>
+    public void RecordFriendAdd(string targetUserId)
+    {
+        if (_localManifest == null || _identity == null) return;
+        if (string.IsNullOrWhiteSpace(targetUserId)) return;
+        _manifestManager.AppendSignedOperation(
+            _localManifest,
+            ManifestOperationType.FriendAdd,
+            SecurityLimits.Truncate(targetUserId, SecurityLimits.MaxTargetIdLength),
+            "User",
+            contentHash: null,
+            metadata: null,
+            _identity.PrivateKeyPem);
+    }
+
+    /// <summary>
+    /// Appends a signed FriendRemove op for <paramref name="targetUserId"/>.
+    /// </summary>
+    public void RecordFriendRemove(string targetUserId)
+    {
+        if (_localManifest == null || _identity == null) return;
+        if (string.IsNullOrWhiteSpace(targetUserId)) return;
+        _manifestManager.AppendSignedOperation(
+            _localManifest,
+            ManifestOperationType.FriendRemove,
+            SecurityLimits.Truncate(targetUserId, SecurityLimits.MaxTargetIdLength),
+            "User",
+            contentHash: null,
+            metadata: null,
+            _identity.PrivateKeyPem);
+    }
+
+    /// <summary>
+    /// Appends a signed GroupJoin op for <paramref name="groupId"/>.
+    /// </summary>
+    public void RecordGroupJoin(string groupId)
+    {
+        if (_localManifest == null || _identity == null) return;
+        if (string.IsNullOrWhiteSpace(groupId)) return;
+        _manifestManager.AppendSignedOperation(
+            _localManifest,
+            ManifestOperationType.GroupJoin,
+            SecurityLimits.Truncate(groupId, SecurityLimits.MaxTargetIdLength),
+            "Group",
+            contentHash: null,
+            metadata: null,
+            _identity.PrivateKeyPem);
+    }
+
+    /// <summary>
+    /// Appends a signed GroupLeave op for <paramref name="groupId"/>.
+    /// </summary>
+    public void RecordGroupLeave(string groupId)
+    {
+        if (_localManifest == null || _identity == null) return;
+        if (string.IsNullOrWhiteSpace(groupId)) return;
+        _manifestManager.AppendSignedOperation(
+            _localManifest,
+            ManifestOperationType.GroupLeave,
+            SecurityLimits.Truncate(groupId, SecurityLimits.MaxTargetIdLength),
+            "Group",
+            contentHash: null,
+            metadata: null,
+            _identity.PrivateKeyPem);
+    }
+
+    /// <summary>
     /// Appends a signed Unfollow op for <paramref name="targetUserId"/> to the local manifest.
     /// </summary>
     public void RecordUnfollow(string targetUserId)
@@ -323,6 +394,42 @@ public class SyncOrchestrator : IDisposable
             {
                 ["commentOperationId"] = SecurityLimits.Truncate(commentOperationId, SecurityLimits.MaxOperationIdLength)
             },
+            _identity.PrivateKeyPem);
+    }
+
+    /// <summary>
+    /// Appends a signed Like op for a track.
+    /// </summary>
+    public void RecordLike(string trackId)
+    {
+        if (_localManifest == null || _identity == null) return;
+        if (string.IsNullOrWhiteSpace(trackId)) return;
+
+        _manifestManager.AppendSignedOperation(
+            _localManifest,
+            ManifestOperationType.Like,
+            SecurityLimits.Truncate(trackId, SecurityLimits.MaxTargetIdLength),
+            "Track",
+            contentHash: null,
+            metadata: null,
+            _identity.PrivateKeyPem);
+    }
+
+    /// <summary>
+    /// Appends a signed Unlike op for a track.
+    /// </summary>
+    public void RecordUnlike(string trackId)
+    {
+        if (_localManifest == null || _identity == null) return;
+        if (string.IsNullOrWhiteSpace(trackId)) return;
+
+        _manifestManager.AppendSignedOperation(
+            _localManifest,
+            ManifestOperationType.Unlike,
+            SecurityLimits.Truncate(trackId, SecurityLimits.MaxTargetIdLength),
+            "Track",
+            contentHash: null,
+            metadata: null,
             _identity.PrivateKeyPem);
     }
 

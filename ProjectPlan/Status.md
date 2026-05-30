@@ -19,6 +19,8 @@ Completed in latest session:
 - Add to Library now requests peer content by hash and stores files in Other Music
 - Community ingestion path now writes downloaded tracks into library structure with safe fallback
 - Comment sync now uses signed manifest ops with ReplyToId threading and peer merge into playback timeline
+- Social graph actions now publish signed FriendAdd/FriendRemove and GroupJoin/GroupLeave ops
+- Likes sync now uses signed Like/Unlike ops and shows aggregate like counts in feed
 
 Milestone I -- Mesh Resilience and Background Mode (COMPLETE)
 Milestone J -- Mesh Integration Tests (COMPLETE)
@@ -51,6 +53,8 @@ Milestone H -- Settings Storage and Housekeeping Tab (COMPLETE)
 - Add-to-library flow includes type-based extension resolution and raw-file fallback placement
 - Playback comments now publish signed Comment ops and ingest peer Comment/CommentDelete ops per track
 - Reply threading is preserved via replyToId metadata and rendered through timeline marker hierarchy
+- Friends and group actions now publish signed social graph operations (FriendAdd/FriendRemove/GroupJoin/GroupLeave)
+- Feed cards now support signed Like/Unlike operations with local toggle state and aggregate like counts
 
 ### Milestone H: Settings Storage and Housekeeping Tab
 - Settings Storage tab now shows used/free/total disk space for selected drive
