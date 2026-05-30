@@ -18,12 +18,17 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MeshWave.Synchronizer.Tests
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentation", "Documentation", "{23C73E9A-2065-49DA-830F-9B85C544C619}"
 	ProjectSection(SolutionItems) = preProject
-		ARCHITECTURE.md = ARCHITECTURE.md
-		DEVELOPMENT_STATUS.md = DEVELOPMENT_STATUS.md
-		PROJECT_PLAN.md = PROJECT_PLAN.md
-		QUICK_REFERENCE.md = QUICK_REFERENCE.md
+		Documentation\Architecture.md = Documentation\Architecture.md
+		Documentation\LibraryManagement.md = Documentation\LibraryManagement.md
 		README.md = README.md
-		SUMMARY.md = SUMMARY.md
+		Documentation\UserGuide.md = Documentation\UserGuide.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ProjectPlan", "ProjectPlan", "{6B1E945E-80ED-4DBA-A0C2-01340A99899A}"
+	ProjectSection(SolutionItems) = preProject
+		ProjectPlan\Backlog.md = ProjectPlan\Backlog.md
+		ProjectPlan\Roadmap.md = ProjectPlan\Roadmap.md
+		ProjectPlan\Status.md = ProjectPlan\Status.md
 	EndProjectSection
 EndProject
 Global
