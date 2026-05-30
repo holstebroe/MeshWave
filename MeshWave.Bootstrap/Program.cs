@@ -1,5 +1,4 @@
-using System.Collections.Concurrent;
-using System.Net;
+using MeshWave.Bootstrap.Core;
 using MeshWave.Synchronizer;
 
 namespace MeshWave.Bootstrap;
@@ -22,9 +21,7 @@ namespace MeshWave.Bootstrap;
 /// </summary>
 internal class Program
 {
-    private static readonly ConcurrentDictionary<string, BootstrapPeerEntry> _peers = new(StringComparer.OrdinalIgnoreCase);
-    private static int _requestCount;
-    private static int _peerCount;
+    private static BootstrapCoordinator? _coordinator;
 
     static async Task Main(string[] args)
     {
@@ -45,22 +42,14 @@ internal class Program
             cts.Cancel();
         };
 
-        // The bootstrap server re-uses ManifestExchangeServer from the Synchronizer.
-        // We pass a null manifest provider (no manifest data served) and supply our
-        // routing table as the PEX peers provider.
-        var server = new ManifestExchangeServer(port);
-        server.ManifestReceived += OnManifestReceived;
-
-        await server.StartAsync(
-            localManifestProvider: () => null,          // no manifest — pure bootstrap
-            peersProvider: GetLivePeers,
-            cancellationToken: cts.Token);
+        _coordinator = new BootstrapCoordinator(port);
+        await _coordinator.StartAsync(cts.Token);
 
         Console.WriteLine($"Listening on port {port}. Press Ctrl+C to stop.\n");
 
         // Bootstrap: seed our own table from any configured seeds
         if (seeds.Count > 0)
-            await SeedFromNodesAsync(seeds, port, cts.Token);
+            await _coordinator.SeedFromNodesAsync(seeds, cts.Token);
 
         // Status loop — low-cost console heartbeat every 60 s
         var statusTask = StatusLoopAsync(cts.Token);
@@ -69,107 +58,9 @@ internal class Program
             Task.Delay(Timeout.Infinite, cts.Token),
             statusTask);
 
-        await server.StopAsync();
+        await _coordinator.StopAsync();
+        _coordinator.Dispose();
         Console.WriteLine("Bootstrap node stopped.");
-    }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Peer table helpers
-    // ──────────────────────────────────────────────────────────────────────
-
-    private static IReadOnlyList<PeerInfo> GetLivePeers()
-    {
-        var cutoff = DateTime.UtcNow.AddMinutes(-10);
-        return _peers.Values
-            .Where(e => e.LastSeen >= cutoff)
-            .OrderByDescending(e => e.LastSeen)
-            .Take(SecurityLimits.MaxPeersPerExchange)
-            .Select(e => e.Peer)
-            .ToList();
-    }
-
-    private static void RegisterPeer(PeerInfo peer)
-    {
-        if (!SecurityLimits.IsValidUserId(peer.UserId)) return;
-        if (!SecurityLimits.IsValidDisplayName(peer.DisplayName)) return;
-
-        if (_peers.TryGetValue(peer.UserId, out var existing))
-        {
-            existing.LastSeen = DateTime.UtcNow;
-        }
-        else
-        {
-            // Evict stale entries if at cap
-            if (_peers.Count >= SecurityLimits.MaxRoutingTableSize)
-                EvictStalest();
-
-            var entry = new BootstrapPeerEntry { Peer = peer, LastSeen = DateTime.UtcNow };
-            if (_peers.TryAdd(peer.UserId, entry))
-            {
-                Interlocked.Increment(ref _peerCount);
-                Console.WriteLine($"[+] Peer registered: {peer.DisplayName,-24} {peer.Address}:{peer.Port}  (total {_peers.Count})");
-            }
-        }
-    }
-
-    private static void EvictStalest()
-    {
-        var stalest = _peers.Values.OrderBy(e => e.LastSeen).FirstOrDefault();
-        if (stalest != null)
-            _peers.TryRemove(stalest.Peer.UserId, out _);
-    }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Incoming manifest — extract peer info but discard the manifest content
-    // ──────────────────────────────────────────────────────────────────────
-
-    private static void OnManifestReceived(object? sender, ManifestReceivedEventArgs e)
-    {
-        Interlocked.Increment(ref _requestCount);
-
-        // A peer pushed its manifest so we know it's alive and reachable.
-        // We only learn UserId + DisplayName + address from it; we never store the ops.
-        var manifest = e.Manifest;
-        if (manifest == null) return;
-
-        // Parse the remote address into a PeerInfo so it can be shared via PEX
-        if (!IPAddress.TryParse(e.PeerAddress, out _)) return;
-
-        var peer = new PeerInfo
-        {
-            UserId      = manifest.UserId,
-            DisplayName = SecurityLimits.Truncate(manifest.UserId, SecurityLimits.MaxDisplayNameLength),
-            Address     = e.PeerAddress,
-            Port        = ManifestExchangeServer.DefaultPort,
-            LastSeen    = DateTime.UtcNow
-        };
-
-        RegisterPeer(peer);
-    }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // Seed from other known bootstrap nodes
-    // ──────────────────────────────────────────────────────────────────────
-
-    private static async Task SeedFromNodesAsync(List<string> seeds, int localPort, CancellationToken ct)
-    {
-        var client = new ManifestExchangeClient(timeoutMs: 5_000);
-        foreach (var seed in seeds.Take(SecurityLimits.MaxBootstrapNodes))
-        {
-            try
-            {
-                var (host, port) = ParseEndpoint(seed, localPort);
-                var peers = await client.FetchPeersAsync(host, port, ct);
-                foreach (var p in peers)
-                    RegisterPeer(p);
-
-                Console.WriteLine($"[seed] Learned {peers.Count} peers from {seed}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[seed] Could not reach {seed}: {ex.Message}");
-            }
-        }
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -183,8 +74,11 @@ internal class Program
             try
             {
                 await Task.Delay(TimeSpan.FromMinutes(1), ct);
-                int live = GetLivePeers().Count;
-                Console.WriteLine($"[status] {DateTime.UtcNow:HH:mm:ss}  live={live}/{_peers.Count}  total-requests={_requestCount}  total-registered={_peerCount}");
+                var coordinator = _coordinator;
+                var live = coordinator?.GetLivePeers().Count ?? 0;
+                var total = coordinator?.RegisteredPeerCount ?? 0;
+                var requests = coordinator?.RequestCount ?? 0;
+                Console.WriteLine($"[status] {DateTime.UtcNow:HH:mm:ss}  live={live}/{total}  total-requests={requests}");
             }
             catch (OperationCanceledException) { break; }
         }
@@ -219,8 +113,3 @@ internal class Program
     }
 }
 
-internal class BootstrapPeerEntry
-{
-    public required PeerInfo Peer { get; set; }
-    public DateTime LastSeen { get; set; }
-}

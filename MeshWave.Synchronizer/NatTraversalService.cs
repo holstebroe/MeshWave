@@ -29,10 +29,22 @@ public sealed class NatTraversalService : IDisposable
 
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-        _udp = new UdpClient(localPort)
+        try
         {
-            EnableBroadcast = false
-        };
+            _udp = new UdpClient(localPort)
+            {
+                EnableBroadcast = false
+            };
+        }
+        catch (SocketException)
+        {
+            // Do not fail overall mesh startup if UDP bind on the preferred port is unavailable.
+            // Fall back to an ephemeral UDP port so NAT probing remains best-effort.
+            _udp = new UdpClient(0)
+            {
+                EnableBroadcast = false
+            };
+        }
 
         _receiveTask = ReceiveLoopAsync(_cts.Token);
         await Task.CompletedTask;

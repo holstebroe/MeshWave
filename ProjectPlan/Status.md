@@ -6,8 +6,8 @@
 - Common.Core tests: passing (32/32)
 - LibraryManager tests: passing (4/4)
 - Synchronizer tests: passing (34/34, includes 8 PlayCountTests)
-- Integration.Tests: passing (7/7)
-- **Total: 77 tests passing**
+- Integration.Tests: passing (10/10)
+- **Total: 80 tests passing**
 
 ## Active Sprint
 
@@ -21,7 +21,9 @@ Completed in latest session:
 - Comment sync now uses signed manifest ops with ReplyToId threading and peer merge into playback timeline
 - Social graph actions now publish signed FriendAdd/FriendRemove and GroupJoin/GroupLeave ops
 - Likes sync now uses signed Like/Unlike ops and shows aggregate like counts in feed
-- NAT traversal helper added: UDP hole-punch probes/acks attempted before direct peer content transfer
+- Bootstrap runtime split completed: `MeshWave.Bootstrap` console host + reusable `MeshWave.Bootstrap.Core` coordinator library
+- NAT traversal pipeline expanded with ordered attempts (routing lookup -> bootstrap refresh -> direct TCP probe -> UDP punch -> content request -> concrete NAT guidance)
+- Added detailed handshake documentation: `Documentation/P2P-Handshake.md`
 
 Milestone I -- Mesh Resilience and Background Mode (COMPLETE)
 Milestone J -- Mesh Integration Tests (COMPLETE)
@@ -32,8 +34,8 @@ Milestone H -- Settings Storage and Housekeeping Tab (COMPLETE)
 ### Milestone J: Integration Tests
 - Created MeshWave.Integration.Tests project (xUnit)
 - NullPeerDiscovery stub for isolated test environments
-- 7 integration tests: Bootstrap discovery, operations signing, profile broadcast, follow/unfollow, merge events, signature verification
-- All tests passing in 6.1 seconds
+- 10 integration tests now cover bootstrap discovery, coordinator registration, fixed-port bootstrap compatibility, operations signing, profile broadcast, follow/unfollow, merge events, signature verification, and connection-attempt NAT guidance fallback
+- All tests passing
 - Tests use dynamic ports and temp directories, no network conflicts
 
 ### Milestone I: Resilience and Background Mode

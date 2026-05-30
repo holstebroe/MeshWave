@@ -149,6 +149,12 @@ Example groups: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone Col
       -- verify late-joining peer can bootstrap via an existing node
 - [x] Bootstrap_PeriodicRetry_IntervalIsConfigured
       -- verify bootstrap retry interval is configured in SecurityLimits
+- [x] Bootstrap_CanRunOn39877_WhileClientListensOnDifferentConfiguredPort
+      -- verify canonical bootstrap port and custom peer listen ports coexist
+- [x] BootstrapCoordinator_RegistersConnectedClients_AndSharesViaPex
+      -- verify extracted bootstrap coordinator library registers peers and serves PEX
+- [x] RequestContentAsync_RecordsAttempts_AndProducesNatGuidance_WhenTransferFails
+      -- verify ordered connection attempts and concrete NAT guidance fallback
 - [x] ManifestExchange_SignedOperation_IsVerifiable
       -- verify track announcements are signed and verifiable
 - [x] ManifestExchange_ProfileBroadcast_IsRecorded
@@ -159,7 +165,7 @@ Example groups: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone Col
       -- verify ManifestMerged event mechanism is wired
 - [x] ManifestExchange_TamperedOperation_FailsSignatureCheck
       -- verify tampering is detectable by signature mismatch
-- [x] All 7 tests passing (6.1 sec total)
+- [x] All 10 tests passing
 
 ---
 

@@ -383,7 +383,15 @@ public class CommunityViewModel : ViewModelBase
             var bytes = await _sync.RequestContentAsync(item.ArtistUserId, item.ContentHash);
             if (bytes == null || bytes.Length == 0)
             {
-                SearchStatus = $"Add to Library failed for \"{item.Title}\": peer did not return content.";
+                var report = _sync.LastConnectionAttemptReport;
+                if (report != null)
+                {
+                    SearchStatus = $"Add to Library failed for \"{item.Title}\". {report.BuildUserFacingSummary()}";
+                }
+                else
+                {
+                    SearchStatus = $"Add to Library failed for \"{item.Title}\": peer did not return content.";
+                }
                 return;
             }
 

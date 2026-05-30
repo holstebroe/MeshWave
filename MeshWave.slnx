@@ -6,6 +6,7 @@
   <Project Path="MeshWave.LibraryManager/MeshWave.LibraryManager.csproj" />
   <Project Path="MeshWave.Synchronizer/MeshWave.Synchronizer.csproj" />
   <Project Path="MeshWave.Bootstrap/MeshWave.Bootstrap.csproj" />
+  <Project Path="MeshWave.Bootstrap.Core/MeshWave.Bootstrap.Core.csproj" />
 
   <!-- Test Projects -->
   <Project Path="MeshWave.Common.Core.Tests/MeshWave.Common.Core.Tests.csproj" />

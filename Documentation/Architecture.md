@@ -53,6 +53,34 @@ Inside each album folder:
 - Waveform data is loaded from cache when available.
 - If waveform cache is missing, waveform is generated in the background during playback and then cached.
 
+## P2P Handshake and Connection Establishment
+
+MeshWave uses an ordered, bandwidth-light connection strategy for peer-to-peer exchanges:
+
+1. **Routing table lookup**
+   - Resolve target peer from `PeerRouter` (LAN discovery + bootstrap + PEX cache).
+2. **Bootstrap-assisted refresh (low bandwidth)**
+   - If peer is missing, query configured bootstrap nodes for updated PEX entries.
+   - Bootstrap remains metadata-only: no content relay, only peer endpoint exchange.
+3. **Direct TCP reachability probe**
+   - Fast probe to peer manifest endpoint to detect immediate reachability.
+4. **UDP hole-punch attempt**
+   - Both peers send/ack short UDP punch packets (`meshwave:punch`, `meshwave:ack`) to open NAT mappings.
+5. **Direct content request**
+   - Attempt content retrieval over peer endpoint after probe/punch.
+6. **NAT fallback guidance**
+   - On failure, emit concrete user instructions with detected local IP and manifest port,
+     plus the remote endpoint details used during attempts.
+
+### "Crossing hands" via bootstrap (rendezvous-style)
+
+A known NAT traversal trick is a rendezvous handshake where a public coordinator helps two peers
+coordinate simultaneous outbound attempts (sometimes called "crossing hands").
+
+Current MeshWave behavior already includes bootstrap-assisted endpoint refresh and UDP punch attempts.
+A future extension can add explicit rendezvous session messages via bootstrap while still keeping
+bootstrap bandwidth minimal and content transfer strictly peer-to-peer.
+
 ## In Progress
 
 - Rounded user icons for timeline markers/comments

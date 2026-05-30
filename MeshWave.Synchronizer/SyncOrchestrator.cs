@@ -1,3 +1,6 @@
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using MeshWave.Common.Core.Models;
 
 namespace MeshWave.Synchronizer;
@@ -10,7 +13,7 @@ namespace MeshWave.Synchronizer;
 public class SyncOrchestrator : IDisposable
 {
     private readonly PeerRouter _router;
-    private readonly ManifestExchangeServer _server;
+    private ManifestExchangeServer? _server;
     private readonly ManifestExchangeClient _client;
     private readonly ManifestManager _manifestManager;
     private readonly PeerManifestStore _peerStore;
@@ -20,6 +23,8 @@ public class SyncOrchestrator : IDisposable
     private LocalPeerIdentity? _identity;
     private Manifest? _localManifest;
     private CancellationTokenSource? _cts;
+    private IReadOnlyList<string> _bootstrapNodes = [];
+    private PeerConnectionAttemptReport? _lastConnectionReport;
 
     // Tracks which trackIds have already had a Play op recorded in this process session.
     private readonly HashSet<string> _playedThisSession = new(StringComparer.OrdinalIgnoreCase);
@@ -42,6 +47,9 @@ public class SyncOrchestrator : IDisposable
     /// <summary>Read-only view of all peer manifests received and persisted so far.</summary>
     public IReadOnlyCollection<Manifest> PeerManifests => _peerStore.GetAll();
 
+    /// <summary>Last peer connection attempt report from RequestContentAsync, if any.</summary>
+    public PeerConnectionAttemptReport? LastConnectionAttemptReport => _lastConnectionReport;
+
     /// <summary>Returns the persisted manifest for a specific peer, or null if not yet received.</summary>
     public Manifest? GetPeerManifest(string userId) => _peerStore.Get(userId);
 
@@ -55,7 +63,7 @@ public class SyncOrchestrator : IDisposable
         NatTraversalService? natTraversal = null)
     {
         _router = router ?? new PeerRouter();
-        _server = server ?? new ManifestExchangeServer();
+        _server = server;
         _client = client ?? new ManifestExchangeClient(timeoutMs: SecurityLimits.ConnectTimeoutMs);
         _manifestManager = manifestManager ?? new ManifestManager();
         _peerStore = peerManifestStore ?? new PeerManifestStore();
@@ -79,6 +87,9 @@ public class SyncOrchestrator : IDisposable
 
         _router.PeerAdded += OnPeerAdded;
         _router.PeerRemoved += OnPeerRemoved;
+        _bootstrapNodes = bootstrapNodes ?? [];
+
+        _server ??= new ManifestExchangeServer(identity.ManifestPort);
         _server.ManifestReceived += OnManifestReceived;
 
         await _server.StartAsync(
@@ -86,7 +97,7 @@ public class SyncOrchestrator : IDisposable
             () => _router.GetPeersForExchange(),
             _cts.Token);
 
-        await _router.StartAsync(identity, bootstrapNodes ?? [], _cts.Token);
+        await _router.StartAsync(identity, _bootstrapNodes, _cts.Token);
         await _natTraversal.StartAsync(identity.ManifestPort, _cts.Token);
     }
 
@@ -97,10 +108,12 @@ public class SyncOrchestrator : IDisposable
     {
         _router.PeerAdded -= OnPeerAdded;
         _router.PeerRemoved -= OnPeerRemoved;
-        _server.ManifestReceived -= OnManifestReceived;
+        if (_server != null)
+            _server.ManifestReceived -= OnManifestReceived;
 
         await _router.StopAsync();
-        await _server.StopAsync();
+        if (_server != null)
+            await _server.StopAsync();
         await _natTraversal.StopAsync();
         _cts?.Cancel();
     }
@@ -137,19 +150,77 @@ public class SyncOrchestrator : IDisposable
         if (string.IsNullOrWhiteSpace(peerUserId) || string.IsNullOrWhiteSpace(contentHash))
             return null;
 
+        var report = new PeerConnectionAttemptReport
+        {
+            PeerUserId = peerUserId,
+            RequestedContentHash = contentHash,
+            LocalManifestPort = _identity?.ManifestPort ?? 0,
+            SuggestedLocalIp = GetPrimaryLocalIpv4()
+        };
+        _lastConnectionReport = report;
+
         var peer = _router.GetPeers().FirstOrDefault(p =>
             string.Equals(p.UserId, peerUserId, StringComparison.OrdinalIgnoreCase));
 
         if (peer == null)
-            return null;
-
-        var punched = await _natTraversal.TryPunchAsync(peer.Address, peer.Port);
-        if (!punched)
         {
-            // Continue anyway: many peers are directly reachable without NAT punching.
+            report.Attempts.Add(new PeerConnectionAttemptResult(
+                "routing-table-lookup",
+                false,
+                "Peer not present in routing table. Triggered bootstrap refresh before giving up."));
+
+            await RefreshBootstrapAsync(report);
+
+            peer = _router.GetPeers().FirstOrDefault(p =>
+                string.Equals(p.UserId, peerUserId, StringComparison.OrdinalIgnoreCase));
+
+            if (peer == null)
+            {
+                report.Attempts.Add(new PeerConnectionAttemptResult(
+                    "routing-table-retry",
+                    false,
+                    "Peer still not discoverable after bootstrap refresh."));
+                return null;
+            }
         }
 
-        return await _contentExchange.RequestContentAsync(peer.Address, peer.Port, contentHash);
+        report.TargetAddress = peer.Address;
+        report.TargetPort = peer.Port;
+
+        var directTcpReachable = await CanConnectTcpAsync(peer.Address, peer.Port, timeoutMs: 1_500);
+        report.Attempts.Add(new PeerConnectionAttemptResult(
+            "direct-tcp-probe",
+            directTcpReachable,
+            directTcpReachable
+                ? "TCP reachability confirmed on peer manifest port."
+                : "TCP probe timed out or was refused."));
+
+        var punched = await _natTraversal.TryPunchAsync(peer.Address, peer.Port);
+        report.Attempts.Add(new PeerConnectionAttemptResult(
+            "udp-hole-punch",
+            punched,
+            punched
+                ? "UDP punch ACK received from peer."
+                : "No UDP punch ACK observed; continuing with direct TCP attempt."));
+
+        var bytes = await _contentExchange.RequestContentAsync(peer.Address, peer.Port, contentHash);
+        var succeeded = bytes != null && bytes.Length > 0;
+        report.Attempts.Add(new PeerConnectionAttemptResult(
+            "content-request",
+            succeeded,
+            succeeded
+                ? $"Received {bytes!.Length} bytes from peer."
+                : "Peer did not return content bytes."));
+
+        if (!succeeded)
+        {
+            report.Attempts.Add(new PeerConnectionAttemptResult(
+                "nat-guidance",
+                false,
+                BuildNatGuidance(peer.Address, peer.Port, _identity?.ManifestPort ?? 0, report.SuggestedLocalIp ?? "127.0.0.1")));
+        }
+
+        return bytes;
     }
 
     private void OnPeerAdded(object? sender, PeerInfo peer)
@@ -186,6 +257,120 @@ public class SyncOrchestrator : IDisposable
             TryMerge(remoteManifest, peer.PublicKeyPem);
         }
         catch { /* peer unreachable – will retry on next cycle */ }
+    }
+
+    private async Task RefreshBootstrapAsync(PeerConnectionAttemptReport report)
+    {
+        if (_bootstrapNodes.Count == 0)
+        {
+            report.Attempts.Add(new PeerConnectionAttemptResult(
+                "bootstrap-refresh",
+                false,
+                "No bootstrap nodes configured."));
+            return;
+        }
+
+        var refreshed = false;
+        foreach (var endpoint in _bootstrapNodes.Take(SecurityLimits.MaxBootstrapNodes))
+        {
+            if (!TryParseEndpoint(endpoint, out var host, out var port))
+            {
+                report.Attempts.Add(new PeerConnectionAttemptResult(
+                    "bootstrap-refresh",
+                    false,
+                    $"Skipped invalid bootstrap endpoint '{endpoint}'."));
+                continue;
+            }
+
+            try
+            {
+                var peers = await _client.FetchPeersAsync(host, port);
+                _router.LearnPeers(peers);
+                refreshed = true;
+                report.Attempts.Add(new PeerConnectionAttemptResult(
+                    "bootstrap-refresh",
+                    true,
+                    $"Fetched {peers.Count} peers from bootstrap {host}:{port}."));
+            }
+            catch (Exception ex)
+            {
+                report.Attempts.Add(new PeerConnectionAttemptResult(
+                    "bootstrap-refresh",
+                    false,
+                    $"Bootstrap {host}:{port} failed: {ex.Message}"));
+            }
+        }
+
+        if (!refreshed)
+        {
+            report.Attempts.Add(new PeerConnectionAttemptResult(
+                "bootstrap-refresh",
+                false,
+                "Bootstrap refresh completed without usable peer data."));
+        }
+    }
+
+    private static bool TryParseEndpoint(string endpoint, out string host, out int port)
+    {
+        host = string.Empty;
+        port = 0;
+
+        var lastColon = endpoint.LastIndexOf(':');
+        if (lastColon <= 0)
+            return false;
+
+        host = endpoint[..lastColon];
+        return int.TryParse(endpoint[(lastColon + 1)..], out port) && port > 0 && port < 65536;
+    }
+
+    private static async Task<bool> CanConnectTcpAsync(string address, int port, int timeoutMs)
+    {
+        if (string.IsNullOrWhiteSpace(address) || port <= 0)
+            return false;
+
+        try
+        {
+            using var client = new TcpClient();
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
+            await client.ConnectAsync(address, port, cts.Token);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string BuildNatGuidance(string peerAddress, int peerPort, int localPort, string localIp)
+    {
+        var local = localPort > 0 ? localPort : ManifestExchangeServer.DefaultPort;
+        return $"Could not establish a direct peer content connection after all automatic attempts. Suggested router/NAT mapping: forward TCP+UDP {local} to {localIp}:{local}. Ask remote peer owner to forward TCP+UDP {peerPort} to {peerAddress}:{peerPort}. If both peers are behind symmetric NAT, run one peer with a public IP or use a relay-capable bootstrap in future.";
+    }
+
+    private static string? GetPrimaryLocalIpv4()
+    {
+        try
+        {
+            var interfaces = NetworkInterface.GetAllNetworkInterfaces()
+                .Where(n => n.OperationalStatus == OperationalStatus.Up && n.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+                .OrderByDescending(n => n.Speed);
+
+            foreach (var nic in interfaces)
+            {
+                var ip = nic.GetIPProperties().UnicastAddresses
+                    .Select(a => a.Address)
+                    .FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(a));
+
+                if (ip != null)
+                    return ip.ToString();
+            }
+        }
+        catch
+        {
+            // best-effort diagnostics only
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -483,7 +668,7 @@ public class SyncOrchestrator : IDisposable
     public void Dispose()
     {
         _router.Dispose();
-        _server.Dispose();
+        _server?.Dispose();
         _natTraversal.Dispose();
         _cts?.Dispose();
     }
@@ -494,3 +679,26 @@ public class ManifestMergedEventArgs(string userId, int operationsAdded) : Event
     public string UserId { get; } = userId;
     public int OperationsAdded { get; } = operationsAdded;
 }
+
+public sealed class PeerConnectionAttemptReport
+{
+    public required string PeerUserId { get; init; }
+    public required string RequestedContentHash { get; init; }
+    public string? TargetAddress { get; set; }
+    public int TargetPort { get; set; }
+    public int LocalManifestPort { get; init; }
+    public string? SuggestedLocalIp { get; init; }
+    public DateTime CreatedAtUtc { get; } = DateTime.UtcNow;
+    public List<PeerConnectionAttemptResult> Attempts { get; } = [];
+
+    public string BuildUserFacingSummary()
+    {
+        var attemptSummary = string.Join(" | ", Attempts.Select(a => $"{a.Method}: {(a.Success ? "ok" : "fail")}"));
+        var finalGuidance = Attempts.LastOrDefault(a => string.Equals(a.Method, "nat-guidance", StringComparison.OrdinalIgnoreCase))?.Details;
+        return string.IsNullOrWhiteSpace(finalGuidance)
+            ? attemptSummary
+            : $"{attemptSummary}{Environment.NewLine}{finalGuidance}";
+    }
+}
+
+public sealed record PeerConnectionAttemptResult(string Method, bool Success, string Details);

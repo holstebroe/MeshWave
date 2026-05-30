@@ -46,12 +46,15 @@ Verify mesh stability protocol with in-process bootstrap node and multiple orche
 ### Completed
 1. Bootstrap discovery test
 2. Bootstrap retry interval configuration test
-3. Signed operation verification test
-4. Profile broadcast recording test
-5. Follow/Unfollow operation recording test
-6. ManifestMerged event test
-7. Signature verification test
-8. All 7 tests passing (6.1 sec total)
+3. Fixed-port bootstrap compatibility test (39877 + custom peer ports)
+4. Bootstrap coordinator library registration/PEX test
+5. Connection-attempt NAT guidance fallback test
+6. Signed operation verification test
+7. Profile broadcast recording test
+8. Follow/Unfollow operation recording test
+9. ManifestMerged event test
+10. Signature verification test
+11. All 10 tests passing
 
 ## Milestone H -- Settings Storage and Housekeeping Tab (COMPLETE)
 
@@ -86,7 +89,7 @@ Example use cases: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone 
 - [x] Likes sync
 - [x] User profile sync (display name, avatar hash, IsArtist flag via signed Profile op)
 - [x] Add to Library flow (content exchange)
-- [x] Content exchange: direct TCP transfer by content hash with UDP hole-punch attempt before connect
+- [x] Content exchange: direct TCP transfer by content hash with ordered attempts (routing lookup, bootstrap refresh, direct TCP probe, UDP hole-punch) and explicit NAT fallback guidance
 - [x] Follow notifications badge on Community nav for followed artists with new Create ops
 - [x] Release feed now hydrated from followed peers' persisted manifests (ordered newest-first)
 

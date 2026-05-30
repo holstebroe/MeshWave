@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using MeshWave.Bootstrap.Core;
 using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
 using MeshWave.Synchronizer;
@@ -136,6 +137,42 @@ public class MeshIntegrationTests : IAsyncLifetime
         Assert.True(interval <= 60, "Bootstrap retry interval should be reasonable (≤ 60 min).");
     }
 
+    [Fact]
+    public async Task Bootstrap_CanRunOn39877_WhileClientListensOnDifferentConfiguredPort()
+    {
+        // Arrange: bootstrap endpoint is fixed at 39877; client peer listens on a different port.
+        const int bootstrapPort = 39877;
+
+        ManifestExchangeServer? bootstrapServer = null;
+        var externalBootstrapDetected = await CanConnectAsync("127.0.0.1", bootstrapPort);
+
+        if (!externalBootstrapDetected)
+        {
+            // No external bootstrap is running: start an in-process bootstrap for this test.
+            bootstrapServer = new ManifestExchangeServer(bootstrapPort);
+            await bootstrapServer.StartAsync(() => null, () => []);
+        }
+
+        try
+        {
+            var (peer, identity, manifest, _) = CreatePeer("Client");
+            identity.ManifestPort = FindFreePort(); // explicitly non-bootstrap port
+
+            await peer.StartAsync(identity, manifest, bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
+
+            Assert.True(peer.IsRunning, "Client should start even when bootstrap uses 39877.");
+            Assert.NotEqual(bootstrapPort, identity.ManifestPort);
+        }
+        finally
+        {
+            if (bootstrapServer != null)
+            {
+                await bootstrapServer.StopAsync();
+                bootstrapServer.Dispose();
+            }
+        }
+    }
+
     // ---------------------------------------------------------------------------
     // Test 3: Manifest creation and signing works
     // ---------------------------------------------------------------------------
@@ -245,6 +282,96 @@ public class MeshIntegrationTests : IAsyncLifetime
     // ---------------------------------------------------------------------------
 
     [Fact]
+    public async Task BootstrapCoordinator_RegistersConnectedClients_AndSharesViaPex()
+    {
+        const int bootstrapPort = 39877;
+
+        if (await CanConnectAsync("127.0.0.1", bootstrapPort))
+        {
+            // External bootstrap already running on the canonical port; skip in-process binding.
+            return;
+        }
+
+        using var bootstrap = new BootstrapCoordinator(bootstrapPort);
+        await bootstrap.StartAsync();
+
+        var (peerA, identityA, manifestA, _) = CreatePeer("Alice");
+        var (peerB, identityB, manifestB, _) = CreatePeer("Bob");
+
+        identityA.ManifestPort = FindFreePort();
+        identityB.ManifestPort = FindFreePort();
+
+        await peerA.StartAsync(identityA, manifestA, bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
+        await peerB.StartAsync(identityB, manifestB, bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
+
+        // Push any signed op to force bootstrap registration via PushManifest callback.
+        peerA.RecordFollow("bootstrap-probe-user");
+        peerB.RecordFollow("bootstrap-probe-user");
+
+        var pushClient = new ManifestExchangeClient(timeoutMs: 5_000);
+        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, manifestA);
+        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, manifestB);
+
+        await WaitUntilAsync(() => bootstrap.RegisteredPeerCount >= 2, timeoutMs: 5_000);
+
+        var peers = bootstrap.GetLivePeers();
+        Assert.True(bootstrap.RegisteredPeerCount >= 2, "Bootstrap should register both peers.");
+        Assert.Contains(peers, p => p.UserId == identityA.UserId);
+        Assert.Contains(peers, p => p.UserId == identityB.UserId);
+
+        await bootstrap.StopAsync();
+    }
+
+    [Fact]
+    public async Task RequestContentAsync_RecordsAttempts_AndProducesNatGuidance_WhenTransferFails()
+    {
+        const int bootstrapPort = 39877;
+
+        if (await CanConnectAsync("127.0.0.1", bootstrapPort))
+        {
+            // Canonical bootstrap port already occupied by an external process; avoid interference.
+            return;
+        }
+
+        using var bootstrap = new BootstrapCoordinator(bootstrapPort);
+        await bootstrap.StartAsync();
+
+        var (peerA, identityA, manifestA, _) = CreatePeer("Alice");
+        var (peerB, identityB, manifestB, _) = CreatePeer("Bob");
+
+        identityA.ManifestPort = FindFreePort();
+        identityB.ManifestPort = FindFreePort();
+
+        await peerA.StartAsync(identityA, manifestA, bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
+        await peerB.StartAsync(identityB, manifestB, bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
+
+        peerA.RecordFollow("diagnostic-probe");
+        peerB.RecordFollow("diagnostic-probe");
+
+        var pushClient = new ManifestExchangeClient(timeoutMs: 5_000);
+        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, manifestA);
+        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, manifestB);
+
+        // Ensure peerA learns about peerB to execute the full attempt pipeline.
+        await peerA.SyncAllPeersAsync();
+
+        var content = await peerA.RequestContentAsync(identityB.UserId, "missing-content-hash");
+
+        Assert.Null(content);
+
+        var report = peerA.LastConnectionAttemptReport;
+        Assert.NotNull(report);
+        Assert.Equal(identityB.UserId, report!.PeerUserId);
+        Assert.Contains(report.Attempts, a => a.Method == "direct-tcp-probe");
+        Assert.Contains(report.Attempts, a => a.Method == "udp-hole-punch");
+        Assert.Contains(report.Attempts, a => a.Method == "content-request");
+        Assert.Contains(report.Attempts, a => a.Method == "nat-guidance");
+        Assert.Contains("forward TCP+UDP", report.BuildUserFacingSummary(), StringComparison.OrdinalIgnoreCase);
+
+        await bootstrap.StopAsync();
+    }
+
+    [Fact]
     public async Task ManifestExchange_TamperedOperation_FailsSignatureCheck()
     {
         var (peerA, identityA, manifestA, portA) = CreatePeer("Alice");
@@ -278,5 +405,20 @@ public class MeshIntegrationTests : IAsyncLifetime
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
         while (!condition() && DateTime.UtcNow < deadline)
             await Task.Delay(100);
+    }
+
+    private static async Task<bool> CanConnectAsync(string host, int port)
+    {
+        try
+        {
+            using var client = new TcpClient();
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+            await client.ConnectAsync(host, port, cts.Token);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

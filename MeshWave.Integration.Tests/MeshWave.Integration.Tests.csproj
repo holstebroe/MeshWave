@@ -16,6 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="../MeshWave.Synchronizer/MeshWave.Synchronizer.csproj" />
     <ProjectReference Include="../MeshWave.Common.Core/MeshWave.Common.Core.csproj" />
+    <ProjectReference Include="../MeshWave.Bootstrap.Core/MeshWave.Bootstrap.Core.csproj" />
   </ItemGroup>
 
 </Project>
