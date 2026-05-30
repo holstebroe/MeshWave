@@ -60,6 +60,7 @@ public class JsonSerializerTests
             Title = "Test Song",
             Duration = TimeSpan.FromSeconds(180),
             FileHash = "abc123",
+            FilePath = @"C:\\Music\\Test Song.mp3",
             FileSize = 1024000,
             Signature = "sig123"
         };
@@ -84,6 +85,7 @@ public class JsonSerializerTests
             Title = "Test Song",
             Duration = TimeSpan.FromSeconds(180),
             FileHash = "abc123",
+            FilePath = @"C:\\Music\\Test Song.mp3",
             FileSize = 1024000,
             Signature = "sig123"
         };

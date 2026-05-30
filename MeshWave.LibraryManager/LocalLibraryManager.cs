@@ -56,7 +56,8 @@ public class LocalLibraryManager
                     OwnerUserId = "local",
                     Title = metadata.Title,
                     Duration = TimeSpan.FromSeconds(metadata.DurationSeconds),
-                    FileHash = fileInfo.FullName,
+                    FileHash = ComputeStableId(fileInfo.FullName),
+                    FilePath = fileInfo.FullName,
                     FileSize = fileInfo.Length,
                     CoverImageHash = null,
                     Description = metadata.Artist,
@@ -118,25 +119,10 @@ public class LocalLibraryManager
 
             try
             {
-                var metadata = ExtractMetadata(file);
-                var extension = Path.GetExtension(file);
-                var albumFolder = Path.Combine(myMusicBaseFolder, metadata.Artist, metadata.Album);
-                var cacheFolder = Path.Combine(albumFolder, ".cache");
-                var commentsFolder = Path.Combine(albumFolder, ".comments");
-
-                Directory.CreateDirectory(albumFolder);
-                Directory.CreateDirectory(cacheFolder);
-                Directory.CreateDirectory(commentsFolder);
-
-                var destinationFile = Path.Combine(albumFolder, $"{metadata.Title}{extension}");
-                if (!System.IO.File.Exists(destinationFile))
+                if (TryImportSingleFile(file, myMusicBaseFolder, normalizedExtensions))
                 {
-                    System.IO.File.Copy(file, destinationFile, overwrite: false);
                     imported++;
                 }
-
-                WriteMetadataCache(destinationFile, metadata);
-                EnsureCoverCached(destinationFile);
             }
             catch
             {
@@ -150,6 +136,97 @@ public class LocalLibraryManager
         }
 
         progressCallback?.Invoke(new ImportProgress(total, imported, 0, string.Empty, "Import completed."));
+    }
+
+    public static bool ImportSingleFileToOrganizedStructure(
+        string sourceFile,
+        string myMusicBaseFolder,
+        IEnumerable<string>? supportedExtensions = null)
+    {
+        if (string.IsNullOrWhiteSpace(sourceFile) || !File.Exists(sourceFile))
+        {
+            return false;
+        }
+
+        Directory.CreateDirectory(myMusicBaseFolder);
+        var normalizedExtensions = NormalizeExtensions(supportedExtensions);
+
+        try
+        {
+            return TryImportSingleFile(sourceFile, myMusicBaseFolder, normalizedExtensions);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public static bool UpdateImportedTrackFile(
+        string sourceFile,
+        string existingTrackFilePath,
+        bool preserveExistingMetadata = true)
+    {
+        if (string.IsNullOrWhiteSpace(sourceFile) || string.IsNullOrWhiteSpace(existingTrackFilePath))
+        {
+            return false;
+        }
+
+        if (!File.Exists(sourceFile) || !File.Exists(existingTrackFilePath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var backupPath = existingTrackFilePath + ".bak";
+            if (File.Exists(backupPath))
+            {
+                File.Delete(backupPath);
+            }
+
+            File.Copy(existingTrackFilePath, backupPath, overwrite: true);
+            File.Copy(sourceFile, existingTrackFilePath, overwrite: true);
+
+            var metadata = ExtractMetadata(existingTrackFilePath);
+            WriteMetadataCache(existingTrackFilePath, metadata);
+            EnsureCoverCached(existingTrackFilePath);
+
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryImportSingleFile(string sourceFile, string myMusicBaseFolder, HashSet<string> normalizedExtensions)
+    {
+        var extension = Path.GetExtension(sourceFile);
+        if (!normalizedExtensions.Contains(extension))
+        {
+            return false;
+        }
+
+        var metadata = ExtractMetadata(sourceFile);
+        var albumFolder = Path.Combine(myMusicBaseFolder, metadata.Artist, metadata.Album);
+        var cacheFolder = Path.Combine(albumFolder, ".cache");
+        var commentsFolder = Path.Combine(albumFolder, ".comments");
+
+        Directory.CreateDirectory(albumFolder);
+        Directory.CreateDirectory(cacheFolder);
+        Directory.CreateDirectory(commentsFolder);
+
+        var destinationFile = Path.Combine(albumFolder, $"{metadata.Title}{extension}");
+        var imported = false;
+        if (!System.IO.File.Exists(destinationFile))
+        {
+            System.IO.File.Copy(sourceFile, destinationFile, overwrite: false);
+            imported = true;
+        }
+
+        WriteMetadataCache(destinationFile, metadata);
+        EnsureCoverCached(destinationFile);
+        return imported;
     }
 
     public IEnumerable<Track> GetAllTracks() => _tracks;

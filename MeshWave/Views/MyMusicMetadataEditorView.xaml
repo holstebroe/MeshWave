@@ -7,7 +7,7 @@
              Background="{StaticResource BackgroundColor}">
     <Border Background="{StaticResource SurfaceColor}" CornerRadius="8" Padding="16">
         <StackPanel>
-            <TextBlock Text="✏️ My Music Metadata Editor" Style="{StaticResource SectionHeader}" FontSize="20" Margin="0,0,0,12"/>
+            <TextBlock Text="{Binding EditorTitle}" Style="{StaticResource SectionHeader}" FontSize="20" Margin="0,0,0,12"/>
 
             <TextBlock Text="Title"/>
             <TextBox Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}"/>
@@ -27,7 +27,22 @@
             <TextBlock Text="Description"/>
             <TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" MinHeight="70" TextWrapping="Wrap"/>
 
-            <Button Content="Save Metadata" Command="{Binding SaveCommand}" Style="{StaticResource PrimaryButton}" Margin="0,10,0,0"/>
+            <TextBlock Text="Release Status" Margin="0,10,0,4"/>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                <TextBlock Text="Current:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBlock Text="{Binding IsReleased, StringFormat=Released: {0}}" VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryColor}"/>
+            </StackPanel>
+
+            <TextBlock Text="Version"/>
+            <StackPanel Orientation="Horizontal">
+                <TextBox Width="80" Text="{Binding Version, UpdateSourceTrigger=PropertyChanged}"/>
+                <Button Content="Bump Version" Command="{Binding IncrementVersionCommand}" Style="{StaticResource PrimaryButton}" Margin="8,0,0,0" Padding="10,6"/>
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                <Button Content="{Binding ReleaseButtonText}" Command="{Binding ToggleReleaseCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
+                <Button Content="Save Metadata" Command="{Binding SaveCommand}" Style="{StaticResource PrimaryButton}"/>
+            </StackPanel>
         </StackPanel>
     </Border>
 </UserControl>

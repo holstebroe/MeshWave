@@ -17,12 +17,26 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0">
-            <Button Content="Import My Music" 
-                    Click="ImportMyMusic_Click"
-                    Visibility="{Binding CanImportMyMusic, Converter={StaticResource BoolToVisibilityConverter}}"
-                    Style="{StaticResource PrimaryButton}"
-                    FontSize="16"
-                    Padding="20,12"/>
+            <StackPanel Orientation="Horizontal">
+                <Button Content="Import My Music Folder" 
+                        Click="ImportMyMusic_Click"
+                        Visibility="{Binding CanImportMyMusic, Converter={StaticResource BoolToVisibilityConverter}}"
+                        Style="{StaticResource PrimaryButton}"
+                        FontSize="16"
+                        Padding="20,12"
+                        Margin="0,0,10,0"/>
+                <Button Content="Import Single File"
+                        Click="ImportMyMusicFile_Click"
+                        Visibility="{Binding CanImportMyMusic, Converter={StaticResource BoolToVisibilityConverter}}"
+                        Style="{StaticResource PrimaryButton}"
+                        FontSize="16"
+                        Padding="20,12"/>
+            </StackPanel>
+
+            <TextBlock Text="{Binding ImportSingleFileStatus}"
+                       Margin="0,8,0,0"
+                       Foreground="{StaticResource TextSecondaryColor}"
+                       Visibility="{Binding CanImportMyMusic, Converter={StaticResource BoolToVisibilityConverter}}"/>
 
             <TextBlock Text="Search tracks/albums (filtering coming soon)"
                        Margin="0,12,0,4"
@@ -68,6 +82,7 @@
                 <ListBox Grid.Row="1"
                          ItemsSource="{Binding Albums}"
                          SelectedItem="{Binding SelectedAlbum, Mode=TwoWay}"
+                         MouseDoubleClick="OnAlbumDoubleClick"
                          ScrollViewer.VerticalScrollBarVisibility="Auto">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
@@ -77,7 +92,11 @@
                                 </Border>
                                 <StackPanel>
                                     <TextBlock Text="{Binding Name}"/>
-                                    <TextBlock Text="{Binding TrackCount, StringFormat={}{0} tracks}" FontSize="11" Foreground="{StaticResource TextSecondaryColor}"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding TrackCount, StringFormat={}{0} tracks}" FontSize="11" Foreground="{StaticResource TextSecondaryColor}" Margin="0,0,8,0"/>
+                                        <TextBlock Text="{Binding ReleaseBadge}" FontSize="11" Foreground="{StaticResource TextSecondaryColor}" Margin="0,0,8,0"/>
+                                        <TextBlock Text="{Binding Version, StringFormat=v{0}}" FontSize="11" Foreground="{StaticResource TextSecondaryColor}"/>
+                                    </StackPanel>
                                 </StackPanel>
                             </StackPanel>
                         </DataTemplate>
@@ -110,7 +129,11 @@
                                 </Border>
                                 <StackPanel>
                                     <TextBlock Text="{Binding Title}"/>
-                                    <TextBlock Text="{Binding Artist}" FontSize="11" Foreground="{StaticResource TextSecondaryColor}"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Artist}" FontSize="11" Foreground="{StaticResource TextSecondaryColor}" Margin="0,0,8,0"/>
+                                        <TextBlock Text="{Binding ReleaseBadge}" FontSize="11" Foreground="{StaticResource TextSecondaryColor}" Margin="0,0,8,0"/>
+                                        <TextBlock Text="{Binding Version, StringFormat=v{0}}" FontSize="11" Foreground="{StaticResource TextSecondaryColor}"/>
+                                    </StackPanel>
                                 </StackPanel>
                             </StackPanel>
                         </DataTemplate>

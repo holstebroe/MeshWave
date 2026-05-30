@@ -156,7 +156,7 @@ namespace MeshWave.Views
                 };
                 tooltipBorder.Child = new TextBlock
                 {
-                    Text = $"[{TimeSpan.FromSeconds(marker.TimestampSeconds):mm\\:ss}] {marker.UserDisplayName}: {marker.Label}",
+                    Text = $"[{TimeSpan.FromSeconds(marker.TimestampSeconds):mm\\:ss}] (v{(marker.TrackVersion <= 0 ? 1 : marker.TrackVersion)}) {marker.UserDisplayName}: {marker.Label}",
                     Foreground = Brushes.White,
                     TextWrapping = TextWrapping.Wrap,
                     MaxWidth = 280

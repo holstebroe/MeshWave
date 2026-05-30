@@ -21,6 +21,7 @@ public partial class LibraryViewModel : ViewModelBase
     private int _importTotalFiles;
     private int _importRemainingFiles;
     private int _importImportedFiles;
+    private string _importSingleFileStatus = string.Empty;
 
     public LibraryViewModel(ApplicationViewModel? applicationViewModel = null, bool isMyMusicLibrary = false)
     {
@@ -131,10 +132,17 @@ public partial class LibraryViewModel : ViewModelBase
 
     public bool CanCancelImport => IsImporting;
 
+    public string ImportSingleFileStatus
+    {
+        get => _importSingleFileStatus;
+        set => SetProperty(ref _importSingleFileStatus, value);
+    }
+
     public void PlayTrackById(string trackId)
     {
         var track = GetTrackById(trackId);
-        if (track == null || string.IsNullOrWhiteSpace(track.FileHash))
+        var playbackPath = track?.FilePath;
+        if (string.IsNullOrWhiteSpace(playbackPath))
         {
             return;
         }
@@ -143,7 +151,7 @@ public partial class LibraryViewModel : ViewModelBase
             track.Title,
             track.Description ?? "Unknown Artist",
             track.Duration,
-            track.FileHash);
+            playbackPath);
     }
 
     public event EventHandler<string>? OpenMetadataEditorRequested;
@@ -185,6 +193,9 @@ public sealed class LibraryAlbumItem
     public required string Name { get; set; }
     public required string CoverPath { get; set; }
     public int TrackCount { get; set; }
+    public bool IsReleased { get; set; }
+    public int Version { get; set; } = 1;
+    public string ReleaseBadge => IsReleased ? "Released" : "Draft";
     public override string ToString() => Name;
 }
 
@@ -196,5 +207,8 @@ public sealed class LibraryTrackItem
     public required string AlbumId { get; set; }
     public required string CoverPath { get; set; }
     public required string FilePath { get; set; }
+    public bool IsReleased { get; set; }
+    public int Version { get; set; } = 1;
+    public string ReleaseBadge => IsReleased ? "Released" : "Draft";
     public override string ToString() => Title;
 }

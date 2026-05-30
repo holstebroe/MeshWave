@@ -13,6 +13,7 @@ namespace MeshWave.ViewModels
     public partial class LibraryViewModel : ViewModelBase, IDisposable
     {
         private readonly SettingsService _settingsService = new();
+        private readonly MyMusicMetadataService _myMusicMetadataService = new();
         private LocalLibraryManager? _libraryManager;
         private MusicFolderWatcher? _folderWatcher;
         private List<Track> _trackObjects = new();
@@ -35,6 +36,8 @@ namespace MeshWave.ViewModels
             {
                 return;
             }
+
+            ImportSingleFileStatus = string.Empty;
 
             _settingsService.EnsureFoldersExist();
             var settings = _settingsService.LoadSettings();
@@ -96,6 +99,25 @@ namespace MeshWave.ViewModels
             _importCancellation?.Cancel();
         }
 
+        public void ImportMyMusicFile(string sourceFile)
+        {
+            if (!IsMyMusicLibrary)
+            {
+                return;
+            }
+
+            _settingsService.EnsureFoldersExist();
+            var settings = _settingsService.LoadSettings();
+            var myMusicFolder = _settingsService.GetMyMusicFolder();
+
+            var imported = LocalLibraryManager.ImportSingleFileToOrganizedStructure(sourceFile, myMusicFolder, settings.SupportedExtensions);
+            ImportSingleFileStatus = imported
+                ? "File imported successfully."
+                : "File already exists or is unsupported.";
+
+            LoadFromConfiguredBaseFolder();
+        }
+
         public void LoadLibrary(string folderPath, IEnumerable<string>? supportedExtensions = null)
         {
             _folderWatcher?.Dispose();
@@ -107,7 +129,9 @@ namespace MeshWave.ViewModels
             var trackItems = _trackObjects.Select(t =>
             {
                 var album = _albumObjects.FirstOrDefault(a => a.AlbumId == t.AlbumId);
-                var coverPath = _libraryManager.GetTrackCoverPath(t.FileHash);
+                var resolvedPath = string.IsNullOrWhiteSpace(t.FilePath) ? t.FileHash : t.FilePath;
+                var coverPath = _libraryManager.GetTrackCoverPath(resolvedPath);
+                var trackMeta = _myMusicMetadataService.LoadForTrack(resolvedPath);
                 return new LibraryTrackItem
                 {
                     TrackId = t.TrackId,
@@ -115,7 +139,9 @@ namespace MeshWave.ViewModels
                     Artist = string.IsNullOrWhiteSpace(t.Description) ? "Unknown Artist" : t.Description!,
                     AlbumId = t.AlbumId ?? string.Empty,
                     CoverPath = coverPath,
-                    FilePath = t.FileHash
+                    FilePath = resolvedPath,
+                    IsReleased = trackMeta.IsReleased,
+                    Version = trackMeta.Version <= 0 ? 1 : trackMeta.Version
                 };
             }).ToList();
 
@@ -123,13 +149,18 @@ namespace MeshWave.ViewModels
             {
                 var tracksInAlbum = trackItems.Where(t => t.AlbumId == a.AlbumId).ToList();
                 var coverPath = tracksInAlbum.Select(t => t.CoverPath).FirstOrDefault(p => !string.IsNullOrWhiteSpace(p)) ?? string.Empty;
+                var firstTrackPath = tracksInAlbum.Select(t => t.FilePath).FirstOrDefault(p => !string.IsNullOrWhiteSpace(p));
+                var albumFolder = string.IsNullOrWhiteSpace(firstTrackPath) ? string.Empty : Path.GetDirectoryName(firstTrackPath) ?? string.Empty;
+                var albumMeta = _myMusicMetadataService.LoadForAlbum(albumFolder);
                 return new LibraryAlbumItem
                 {
                     AlbumId = a.AlbumId,
                     Artist = tracksInAlbum.FirstOrDefault()?.Artist ?? "Unknown Artist",
                     Name = a.Title,
                     CoverPath = coverPath,
-                    TrackCount = tracksInAlbum.Count
+                    TrackCount = tracksInAlbum.Count,
+                    IsReleased = albumMeta.IsReleased,
+                    Version = albumMeta.Version <= 0 ? 1 : albumMeta.Version
                 };
             }).ToList();
 

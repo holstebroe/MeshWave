@@ -11,6 +11,7 @@ public class Track
     public required string Title { get; set; }
     public TimeSpan Duration { get; set; }
     public required string FileHash { get; set; }
+    public string? FilePath { get; set; }
     public long FileSize { get; set; }
     public string? CoverImageHash { get; set; }
     public string? Description { get; set; }

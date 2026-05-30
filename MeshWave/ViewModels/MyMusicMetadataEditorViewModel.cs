@@ -9,25 +9,47 @@ namespace MeshWave.ViewModels
     {
         private readonly MyMusicMetadataService _metadataService = new();
         private string _trackFilePath = string.Empty;
+        private string _albumFolderPath = string.Empty;
+        private bool _isAlbumEditor;
         private string _title = string.Empty;
         private string _artist = string.Empty;
         private string _album = string.Empty;
         private string _description = string.Empty;
         private string _genre = string.Empty;
         private int _year;
+        private bool _isReleased;
+        private int _version = 1;
 
         public MyMusicMetadataEditorViewModel()
         {
-            SaveCommand = new RelayCommand(_ => Save(), _ => !string.IsNullOrWhiteSpace(TrackFilePath));
+            SaveCommand = new RelayCommand(_ => Save(), _ => IsAlbumEditor ? !string.IsNullOrWhiteSpace(AlbumFolderPath) : !string.IsNullOrWhiteSpace(TrackFilePath));
+            ToggleReleaseCommand = new RelayCommand(_ => ToggleRelease());
+            IncrementVersionCommand = new RelayCommand(_ => IncrementVersion());
         }
 
         public ICommand SaveCommand { get; }
+        public ICommand ToggleReleaseCommand { get; }
+        public ICommand IncrementVersionCommand { get; }
 
         public string TrackFilePath
         {
             get => _trackFilePath;
             set => SetProperty(ref _trackFilePath, value);
         }
+
+        public string AlbumFolderPath
+        {
+            get => _albumFolderPath;
+            set => SetProperty(ref _albumFolderPath, value);
+        }
+
+        public bool IsAlbumEditor
+        {
+            get => _isAlbumEditor;
+            set => SetProperty(ref _isAlbumEditor, value);
+        }
+
+        public string EditorTitle => IsAlbumEditor ? "✏️ My Music Album Metadata Editor" : "✏️ My Music Track Metadata Editor";
 
         public string Title
         {
@@ -65,9 +87,33 @@ namespace MeshWave.ViewModels
             set => SetProperty(ref _year, value);
         }
 
+        public bool IsReleased
+        {
+            get => _isReleased;
+            set
+            {
+                if (SetProperty(ref _isReleased, value))
+                {
+                    OnPropertyChanged(nameof(ReleaseButtonText));
+                }
+            }
+        }
+
+        public int Version
+        {
+            get => _version;
+            set => SetProperty(ref _version, value < 1 ? 1 : value);
+        }
+
+        public string ReleaseButtonText => IsReleased ? "Unrelease" : "Release";
+
         public void LoadTrack(string trackFilePath)
         {
+            IsAlbumEditor = false;
             TrackFilePath = trackFilePath;
+            AlbumFolderPath = string.Empty;
+            OnPropertyChanged(nameof(EditorTitle));
+
             var metadata = _metadataService.LoadForTrack(trackFilePath);
             Title = metadata.Title;
             Artist = metadata.Artist;
@@ -75,6 +121,26 @@ namespace MeshWave.ViewModels
             Description = metadata.Description;
             Genre = metadata.Genre;
             Year = metadata.Year;
+            IsReleased = metadata.IsReleased;
+            Version = metadata.Version <= 0 ? 1 : metadata.Version;
+        }
+
+        public void LoadAlbum(string albumFolderPath)
+        {
+            IsAlbumEditor = true;
+            AlbumFolderPath = albumFolderPath;
+            TrackFilePath = string.Empty;
+            OnPropertyChanged(nameof(EditorTitle));
+
+            var metadata = _metadataService.LoadForAlbum(albumFolderPath);
+            Title = metadata.Title;
+            Artist = metadata.Artist;
+            Album = metadata.Album;
+            Description = metadata.Description;
+            Genre = metadata.Genre;
+            Year = metadata.Year;
+            IsReleased = metadata.IsReleased;
+            Version = metadata.Version <= 0 ? 1 : metadata.Version;
         }
 
         private void Save()
@@ -86,10 +152,31 @@ namespace MeshWave.ViewModels
                 Album = Album,
                 Description = Description,
                 Genre = Genre,
-                Year = Year
+                Year = Year,
+                IsReleased = IsReleased,
+                Version = Version
             };
 
-            _metadataService.SaveForTrack(TrackFilePath, metadata);
+            if (IsAlbumEditor)
+            {
+                _metadataService.SaveForAlbum(AlbumFolderPath, metadata);
+            }
+            else
+            {
+                _metadataService.SaveForTrack(TrackFilePath, metadata);
+            }
+        }
+
+        private void ToggleRelease()
+        {
+            IsReleased = !IsReleased;
+            Save();
+        }
+
+        private void IncrementVersion()
+        {
+            Version += 1;
+            Save();
         }
     }
 }

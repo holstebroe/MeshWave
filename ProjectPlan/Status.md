@@ -3,6 +3,7 @@
 ## Build/Test
 
 - Build: passing
+- Common.Core tests: passing (32/32)
 - LibraryManager tests: passing (4/4)
 
 ## Documentation Structure
@@ -14,9 +15,11 @@ This repository now uses:
 
 ## Active Focus
 
-1. Timeline marker UX (rounded user icons, seek interaction)
-2. Profile persistence and icon generation
-3. Play count registration  for future community sync
+1. Profile persistence and icon generation
+2. Play count registration for future community sync
+3. Library/community data model progression (stats and persistence)
+4. My Music release/version lifecycle UX (draft vs released, update track preserving metadata)
+5. Album/playlist playback UX redesign and tracklist panel
 
 
 ## For later

@@ -16,6 +16,8 @@
 
 ### Playback
 
+- [x] Comment filter options by current track version (show all vs current only)
+- [x] Persist track version on timeline comments for future filtering
 - [x] Stop->Play reliability fixed
 - [x] Avoid multiple simultaneous tracks when selecting new track
 - [x] Keep playback active while switching tabs
@@ -30,8 +32,11 @@
 
 ### Library (MyMusic)
 - [x] Metadata editor baseline for Track (title, artist, album, year, genre, description)
-- [ ] Metadata editor expansion for Artist/Album/Cover image management
-- [ ] Single file import.
+- [x] Metadata editor expansion for Artist/Album/Cover image management
+- [x] Single file import.
+- [x] Release/unrelease toggle and version field in My Music metadata editor (album + track)
+- [x] Show release status/version badges in My Music album and track lists
+- [x] Baseline API for updating imported track file while preserving metadata sidecars
 
 
 ### Library (community)
@@ -54,7 +59,7 @@
 
 ### Technical / Quality
 
-- [ ] Replace Track.FileHash file-path workaround with dedicated FilePath field
+- [x] Replace Track.FileHash file-path workaround with dedicated FilePath field
 - [ ] Add more automated tests for WPF viewmodels/services
 - [ ] Better structured logging + error UI
 - [ ] Performance pass for large libraries

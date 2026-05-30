@@ -32,6 +32,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     private string _coverImagePath = string.Empty;
     private float[] _waveformSamples = [];
     private string _trackDescription = string.Empty;
+    private int _currentTrackVersion = 1;
 
     public PlaybackViewModel()
     {
@@ -124,6 +125,31 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         set => SetProperty(ref _waveformSamples, value);
     }
 
+    public int CurrentTrackVersion
+    {
+        get => _currentTrackVersion;
+        set
+        {
+            if (SetProperty(ref _currentTrackVersion, value))
+            {
+                RebuildComments();
+            }
+        }
+    }
+
+    private bool _showOnlyCurrentVersionComments;
+    public bool ShowOnlyCurrentVersionComments
+    {
+        get => _showOnlyCurrentVersionComments;
+        set
+        {
+            if (SetProperty(ref _showOnlyCurrentVersionComments, value))
+            {
+                RebuildComments();
+            }
+        }
+    }
+
     public void Play()
     {
         if (_audioService != null)
@@ -175,19 +201,18 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         var timestamp = timestampSeconds.HasValue
             ? TimeSpan.FromSeconds(timestampSeconds.Value)
             : CurrentPosition;
-        var comment = $"[{timestamp:mm\\:ss}] {text}";
-        Comments.Add(comment);
-
         var profile = _profileService.LoadProfile();
         var marker = new TimelineCommentMarker
         {
             TimestampSeconds = timestamp.TotalSeconds,
             Label = text,
             UserDisplayName = string.IsNullOrWhiteSpace(profile.DisplayName) ? "You" : profile.DisplayName,
-            UserIconPath = string.IsNullOrWhiteSpace(profile.AvatarIconPath) ? profile.AvatarImagePath : profile.AvatarIconPath
+            UserIconPath = string.IsNullOrWhiteSpace(profile.AvatarIconPath) ? profile.AvatarImagePath : profile.AvatarIconPath,
+            TrackVersion = CurrentTrackVersion
         };
         TimelineMarkers.Add(marker);
         OnPropertyChanged(nameof(TimelineMarkers));
+        RebuildComments();
         SaveTimelineMarkers();
     }
 
@@ -210,6 +235,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             TrackDescription = string.IsNullOrWhiteSpace(myMusicMeta.Description)
                 ? string.Empty
                 : myMusicMeta.Description;
+            CurrentTrackVersion = myMusicMeta.Version <= 0 ? 1 : myMusicMeta.Version;
 
             LoadTimelineMarkers();
 
@@ -237,6 +263,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             WaveformSamples = [];
             TimelineMarkers.Clear();
             TrackDescription = string.Empty;
+            CurrentTrackVersion = 1;
         }
     }
 
@@ -305,11 +332,22 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             }
 
             OnPropertyChanged(nameof(TimelineMarkers));
+            RebuildComments();
         }
         catch
         {
             // ignore marker load failures
         }
+    }
+
+    private void RebuildComments()
+    {
+        var visibleMarkers = ShowOnlyCurrentVersionComments
+            ? TimelineMarkers.Where(m => (m.TrackVersion <= 0 ? 1 : m.TrackVersion) == CurrentTrackVersion)
+            : TimelineMarkers;
+
+        Comments = new ObservableCollection<string>(visibleMarkers.Select(m =>
+            $"[{TimeSpan.FromSeconds(m.TimestampSeconds):mm\\:ss}] (v{(m.TrackVersion <= 0 ? 1 : m.TrackVersion)}) {m.UserDisplayName}: {m.Label}"));
     }
 
     private void SaveTimelineMarkers()
@@ -349,4 +387,5 @@ public sealed class TimelineCommentMarker
     public string Label { get; set; } = string.Empty;
     public string UserDisplayName { get; set; } = string.Empty;
     public string UserIconPath { get; set; } = string.Empty;
+    public int TrackVersion { get; set; } = 1;
 }

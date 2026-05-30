@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -142,17 +143,45 @@ namespace MeshWave.Views
 
         private void OnAlbumDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            if (sender is ListBox listBox && listBox.SelectedItem is MeshWave.ViewModels.LibraryAlbumItem albumItem)
+            if (sender is not ListBox listBox || listBox.SelectedItem is not MeshWave.ViewModels.LibraryAlbumItem albumItem)
             {
-                if (DataContext is MeshWave.ViewModels.LibraryViewModel vm)
-                {
-                    var album = vm.GetAlbumById(albumItem.AlbumId);
-                    if (album != null)
-                    {
-                        // TODO: optionally play first track in selected album
-                    }
-                }
+                return;
             }
+
+            if (DataContext is not MeshWave.ViewModels.LibraryViewModel vm || !vm.CanImportMyMusic)
+            {
+                return;
+            }
+
+            var trackInAlbum = vm.Tracks.FirstOrDefault();
+            if (trackInAlbum == null || string.IsNullOrWhiteSpace(trackInAlbum.FilePath))
+            {
+                return;
+            }
+
+            var albumFolder = Path.GetDirectoryName(trackInAlbum.FilePath) ?? string.Empty;
+            var editorVm = new MeshWave.ViewModels.MyMusicMetadataEditorViewModel();
+            editorVm.LoadAlbum(albumFolder);
+
+            var view = new MyMusicMetadataEditorView
+            {
+                DataContext = editorVm,
+                Margin = new Thickness(8)
+            };
+
+            var window = new Window
+            {
+                Title = $"Edit Album Metadata - {albumItem.Name}",
+                Width = 520,
+                Height = 680,
+                Content = view,
+                Owner = Application.Current.MainWindow,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner
+            };
+
+            window.ShowDialog();
+
+            vm.LoadFromConfiguredBaseFolder();
         }
 
         private void EditMetadata_Click(object sender, RoutedEventArgs e)
@@ -168,6 +197,21 @@ namespace MeshWave.Views
                 {
                     vm.RequestOpenMetadataEditor(trackItem.FilePath);
                 }
+            }
+        }
+
+        private void ImportMyMusicFile_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Filter = "Audio Files|*.mp3;*.flac;*.wav;*.ogg;*.m4a|All Files|*.*",
+                CheckFileExists = true,
+                Multiselect = false
+            };
+
+            if (dialog.ShowDialog() == true && DataContext is MeshWave.ViewModels.LibraryViewModel vm)
+            {
+                vm.ImportMyMusicFile(dialog.FileName);
             }
         }
     }
