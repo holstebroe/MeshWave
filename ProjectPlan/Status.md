@@ -18,8 +18,9 @@ This repository now uses:
 1. Profile persistence and icon generation
 2. Play count registration — local increment persisted in `.mymusic.json` sidecar; P2P broadcast and consensus designed (see Backlog Architecture Notes)
 3. Social graph model — Friends / Groups / Follows; comment permission policy per album/track
-4. Library/community data model progression (stats and persistence)
-5. My Music release/version lifecycle UX (draft vs released, update track preserving metadata)
+4. Community mesh menu implemented (scaffold); next: wire real PeerManifestStore data into search/display
+5. Per-peer manifest store complete (disk-persisted, signature-verified, 8 tests); SyncOrchestrator now stores remote manifests separately from own manifest
+6. Bootstrap console node (MeshWave.Bootstrap) created — PEX-only, bandwidth-minimal, --port/--seeds args
 
 ## Architecture Decisions
 

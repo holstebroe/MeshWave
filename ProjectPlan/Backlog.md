@@ -73,14 +73,17 @@
 - [ ] Artist stats polish (albums/tracks/plays/comments from persisted stats)
 - [ ] Community data loading model for Other Music
 - [x] P2P: integrate SyncOrchestrator into ApplicationViewModel (start/stop on app launch)
-- [ ] P2P: per-peer manifest store (disk persistence, one manifest file per peer UserId)
+- [x] P2P: per-peer manifest store (disk persistence, one manifest file per peer UserId)
 - [x] P2P: SecurityLimits enforcement (message size, field lengths, manifest op count, routing table cap)
 - [x] P2P: P2PIdentityService (persistent RSA keypair in AppData)
 - [x] P2P: PeerRouter (LAN UDP + bootstrap nodes + PEX maintenance loop)
 - [x] P2P: PEX GetPeers protocol (server + client, rate-capped)
 - [x] P2P: BootstrapNodes config added to AppSettings.P2PSettings
 - [ ] P2P: content exchange (request/serve audio files by content hash over TCP)
-- [ ] P2P: display discovered peers and their released tracks in the Community Library view
+- [x] Community mesh menu (search users/groups, follow, add friend, join group) — CommunityView + CommunityViewModel scaffold wired into navigation
+- [x] Bootstrap console application (MeshWave.Bootstrap) — minimal PEX-only node; no manifest data stored or served; configurable port + seed list
+- [ ] Community view: wire real peer data into search results from PeerManifestStore / PeerRouter
+- [ ] Community view: persist social graph (friends/follows/groups) as manifest operations
 - [ ] P2P: likes sync (push/pull as manifest operations; one like per user per track, signed)
 - [ ] P2P: user profile sync (broadcast own profile — display name, avatar hash — as manifest operations; only owner can update)
 - [ ] P2P: play count sync (record local counts, broadcast as manifest operations)

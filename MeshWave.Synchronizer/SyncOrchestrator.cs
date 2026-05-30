@@ -13,6 +13,7 @@ public class SyncOrchestrator : IDisposable
     private readonly ManifestExchangeServer _server;
     private readonly ManifestExchangeClient _client;
     private readonly ManifestManager _manifestManager;
+    private readonly PeerManifestStore _peerStore;
 
     private LocalPeerIdentity? _identity;
     private Manifest? _localManifest;
@@ -30,16 +31,25 @@ public class SyncOrchestrator : IDisposable
     /// <summary>The local identity in use (set after StartAsync).</summary>
     public LocalPeerIdentity? Identity => _identity;
 
+    /// <summary>Read-only view of all peer manifests received and persisted so far.</summary>
+    public IReadOnlyCollection<Manifest> PeerManifests => _peerStore.GetAll();
+
+    /// <summary>Returns the persisted manifest for a specific peer, or null if not yet received.</summary>
+    public Manifest? GetPeerManifest(string userId) => _peerStore.Get(userId);
+
     public SyncOrchestrator(
         PeerRouter? router = null,
         ManifestExchangeServer? server = null,
         ManifestExchangeClient? client = null,
-        ManifestManager? manifestManager = null)
+        ManifestManager? manifestManager = null,
+        PeerManifestStore? peerManifestStore = null)
     {
         _router = router ?? new PeerRouter();
         _server = server ?? new ManifestExchangeServer();
         _client = client ?? new ManifestExchangeClient(timeoutMs: SecurityLimits.ConnectTimeoutMs);
         _manifestManager = manifestManager ?? new ManifestManager();
+        _peerStore = peerManifestStore ?? new PeerManifestStore();
+        _peerStore.LoadAll();
     }
 
     /// <summary>
@@ -110,7 +120,8 @@ public class SyncOrchestrator : IDisposable
 
     private void OnManifestReceived(object? sender, ManifestReceivedEventArgs e)
     {
-        if (_localManifest == null) return;
+        // Ignore pushes from ourselves
+        if (e.Manifest.UserId == _identity?.UserId) return;
 
         var peer = _router.GetPeers().FirstOrDefault(p => p.UserId == e.Manifest.UserId);
         if (peer == null || string.IsNullOrWhiteSpace(peer.PublicKeyPem)) return;
@@ -121,6 +132,7 @@ public class SyncOrchestrator : IDisposable
     private async Task TryFetchAndMergeAsync(PeerInfo peer, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(peer.PublicKeyPem)) return;
+        if (peer.UserId == _identity?.UserId) return;
 
         try
         {
@@ -166,15 +178,11 @@ public class SyncOrchestrator : IDisposable
 
     private void TryMerge(Manifest remote, string publicKeyPem)
     {
-        if (_localManifest == null || remote.UserId == _identity?.UserId) return;
+        if (remote.UserId == _identity?.UserId) return;
 
-        try
-        {
-            var added = _manifestManager.MergeManifest(_localManifest, remote, publicKeyPem);
-            if (added > 0)
-                ManifestMerged?.Invoke(this, new ManifestMergedEventArgs(remote.UserId, added));
-        }
-        catch { /* reject invalid/oversized manifests */ }
+        var added = _peerStore.MergeAndSave(remote, publicKeyPem, _manifestManager);
+        if (added > 0)
+            ManifestMerged?.Invoke(this, new ManifestMergedEventArgs(remote.UserId, added));
     }
 
     public void Dispose()

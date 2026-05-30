@@ -53,7 +53,7 @@ namespace MeshWave.Services
             }
 
             // Scale to 1.1f
-            var scale = maxValue > 0 ? 1.1f / maxValue : 1f;
+            var scale = maxValue > 0 ? 1f / maxValue : 1f;
 
 
             for (var i = 0; i < points; i++)
