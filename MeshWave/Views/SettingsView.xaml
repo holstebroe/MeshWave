@@ -3,9 +3,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:converters="clr-namespace:MeshWave.Converters"
              mc:Ignorable="d"
              Height="Auto" Width="Auto"
              Background="{StaticResource BackgroundColor}">
+    <UserControl.Resources>
+        <converters:PathToBitmapConverter x:Key="PathToBitmap"/>
+    </UserControl.Resources>
     <Grid Margin="20">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel MaxWidth="600">
@@ -72,12 +76,12 @@
                         <TextBlock Text="Avatar Preview" Margin="0,10,0,6"/>
                         <StackPanel Orientation="Horizontal">
                             <Border Width="64" Height="64" CornerRadius="12" ClipToBounds="True" Background="{StaticResource BackgroundColor}" Margin="0,0,12,0">
-                                <Image Source="{Binding AvatarImagePath}" Stretch="UniformToFill"/>
+                                <Image Source="{Binding AvatarImagePath, Converter={StaticResource PathToBitmap}}" Stretch="UniformToFill"/>
                             </Border>
                             <StackPanel>
                                 <TextBlock Text="Generated Icon" Margin="0,0,0,4" Foreground="{StaticResource TextSecondaryColor}"/>
                                 <Border Width="40" Height="40" CornerRadius="8" ClipToBounds="True" Background="{StaticResource BackgroundColor}">
-                                    <Image Source="{Binding AvatarIconPath}" Stretch="UniformToFill"/>
+                                    <Image Source="{Binding AvatarIconPath, Converter={StaticResource PathToBitmap}}" Stretch="UniformToFill"/>
                                 </Border>
                             </StackPanel>
                         </StackPanel>
@@ -137,7 +141,7 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Theme Settings (Future) -->
+                <!-- Theme / Appearance Settings -->
                 <Border Background="{StaticResource SurfaceColor}" 
                        CornerRadius="8" 
                        Padding="20"
@@ -147,7 +151,31 @@
                                   Style="{StaticResource SectionHeader}"
                                   Margin="0,0,0,10"/>
                         <TextBlock Text="Theme: Dark (Light theme coming soon)"
-                                  Foreground="{StaticResource TextSecondaryColor}"/>
+                                  Foreground="{StaticResource TextSecondaryColor}"
+                                  Margin="0,0,0,16"/>
+
+                        <TextBlock Text="Waveform Style"
+                                   Foreground="{StaticResource TextPrimaryColor}"
+                                   Margin="0,0,0,6"/>
+                        <TextBlock Foreground="{StaticResource TextSecondaryColor}"
+                                   FontSize="12" TextWrapping="Wrap"
+                                   Margin="0,0,0,8">
+                            <Run Text="Filled"/>
+                            <Run Text=" — solid bars. "/>
+                            <Run Text="Cloudy"/>
+                            <Run Text=" — spaced bars with a tinted reflection. "/>
+                            <Run Text="Mirror"/>
+                            <Run Text=" — symmetric vertical reflection. "/>
+                            <Run Text="Neon"/>
+                            <Run Text=" — thin glowing bars. "/>
+                            <Run Text="Smooth"/>
+                            <Run Text=" — Hann-envelope curve with gradient fill."/>
+                        </TextBlock>
+                        <ComboBox ItemsSource="{Binding AvailableWaveformStyles}"
+                                  SelectedItem="{Binding WaveformStyle, Mode=TwoWay}"
+                                  Padding="8,5"
+                                  MinWidth="160"
+                                  HorizontalAlignment="Left"/>
                     </StackPanel>
                 </Border>
 

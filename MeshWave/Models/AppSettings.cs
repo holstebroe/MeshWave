@@ -35,5 +35,6 @@ namespace MeshWave.Models
         public double RegisterPlayAt { get; set; } = 0.5; // 50%
         public double Volume { get; set; } = 0.8;
         public double CrossfadeDuration { get; set; } = 2.0; // seconds
+        public string WaveformStyle { get; set; } = "Filled";
     }
 }

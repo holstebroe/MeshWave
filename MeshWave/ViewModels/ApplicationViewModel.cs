@@ -1,6 +1,7 @@
 using MeshWave.Mvvm;
 using MeshWave.Services;
 using MeshWave.Synchronizer;
+using System.Collections.Generic;
 using System.Windows.Input;
 
 namespace MeshWave.ViewModels;
@@ -30,6 +31,11 @@ public class ApplicationViewModel : ViewModelBase
     {
         _playbackViewModel = new PlaybackViewModel();
         _currentViewModel = new HomeViewModel();
+
+        // Apply persisted waveform style immediately
+        var savedSettings = _settingsService.LoadSettings();
+        if (Enum.TryParse<WaveformStyle>(savedSettings.Playback.WaveformStyle, out var savedStyle))
+            _playbackViewModel.WaveformStyle = savedStyle;
 
         ConnectP2PCommand = new RelayCommand(_ => _ = ConnectP2PAsync(), _ => !P2PIsConnected);
         DisconnectP2PCommand = new RelayCommand(_ => _ = DisconnectP2PAsync(), _ => P2PIsConnected);
@@ -96,7 +102,7 @@ public class ApplicationViewModel : ViewModelBase
 
     public void NavigateToSettings()
     {
-        CurrentViewModel = new SettingsViewModel();
+        CurrentViewModel = new SettingsViewModel(style => _playbackViewModel.WaveformStyle = style);
     }
 
     public void NavigateToBrowse()

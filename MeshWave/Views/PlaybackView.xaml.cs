@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using MeshWave.Services;
 using MeshWave.ViewModels;
 
 namespace MeshWave.Views
@@ -60,7 +61,8 @@ namespace MeshWave.Views
                 UpdatePlaybackCursor();
             }
             else if (args.PropertyName == nameof(_boundViewModel.WaveformSamples) ||
-                     args.PropertyName == nameof(_boundViewModel.TimelineMarkers))
+                     args.PropertyName == nameof(_boundViewModel.TimelineMarkers) ||
+                     args.PropertyName == nameof(_boundViewModel.WaveformStyle))
             {
                 DrawWaveform();
             }
@@ -69,39 +71,27 @@ namespace MeshWave.Views
         private void DrawWaveform()
         {
             WaveformCanvas.Children.Clear();
-            var width = WaveformCanvas.ActualWidth > 0 ? WaveformCanvas.ActualWidth : 800;
+
+            var width  = WaveformCanvas.ActualWidth > 0 ? WaveformCanvas.ActualWidth : 800;
             var height = WaveformCanvas.Height;
-            var barCount = 100;
+
             var samples = Array.Empty<float>();
+            var style   = WaveformStyle.Filled;
 
             if (DataContext is PlaybackViewModel vm && vm.WaveformSamples.Length > 0)
             {
                 samples = vm.WaveformSamples;
-                barCount = samples.Length;
+                style   = vm.WaveformStyle;
             }
 
-            var barWidth = width / barCount;
-            for (int i = 0; i < barCount; i++)
-            {
-                var amplitude = samples.Length > i ? Math.Clamp(samples[i], 0f, 1f) : 0.2f;
-                var barHeight = Math.Max(8, amplitude * (float)height);
-                var left = i * barWidth;
-                var right = (i + 1) * barWidth;
-                var rect = new Rectangle
-                {
-                    Width = Math.Max(1, Math.Ceiling(right) - Math.Floor(left)),
-                    Height = barHeight,
-                    Fill = new SolidColorBrush(Color.FromRgb(33, 150, 243)),
-                    SnapsToDevicePixels = true
-                };
-                RenderOptions.SetEdgeMode(rect, EdgeMode.Aliased);
-                Canvas.SetLeft(rect, Math.Floor(left));
-                Canvas.SetTop(rect, (height - barHeight) / 2);
-                WaveformCanvas.Children.Add(rect);
-            }
+            // Add waveform bars from renderer
+            foreach (var element in WaveformRenderer.Render(samples, width, height, style))
+                WaveformCanvas.Children.Add(element);
 
+            // Timeline markers on top of bars (but below overlay/cursor)
             DrawTimelineMarkers(width, height);
-            // Overlay first (behind cursor), then cursor on top
+
+            // Overlay first, cursor on top
             WaveformCanvas.Children.Add(PlayedOverlay);
             WaveformCanvas.Children.Add(PlaybackCursor);
             UpdatePlaybackCursor();

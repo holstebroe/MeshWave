@@ -3,8 +3,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:converters="clr-namespace:MeshWave.Converters"
              mc:Ignorable="d"
              Background="{StaticResource BackgroundColor}">
+    <UserControl.Resources>
+        <converters:PathToBitmapConverter x:Key="PathToBitmap"/>
+    </UserControl.Resources>
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -156,7 +160,7 @@
                                         <Border Grid.Column="0" Width="36" Height="36"
                                                 CornerRadius="18" ClipToBounds="True"
                                                 Background="{StaticResource SurfaceLightColor}">
-                                            <Image Source="{Binding AvatarIconPath}" Stretch="UniformToFill"/>
+                                            <Image Source="{Binding AvatarIconPath, Converter={StaticResource PathToBitmap}}" Stretch="UniformToFill"/>
                                         </Border>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0">
                                             <TextBlock Text="{Binding DisplayName}"
@@ -323,7 +327,7 @@
                                         <Border Grid.Column="0" Width="36" Height="36"
                                                 CornerRadius="18" ClipToBounds="True"
                                                 Background="{StaticResource SurfaceLightColor}">
-                                            <Image Source="{Binding AvatarIconPath}" Stretch="UniformToFill"/>
+                                            <Image Source="{Binding AvatarIconPath, Converter={StaticResource PathToBitmap}}" Stretch="UniformToFill"/>
                                         </Border>
                                         <TextBlock Grid.Column="1"
                                                    Text="{Binding DisplayName}"
@@ -373,7 +377,7 @@
                                         <Border Grid.Column="0" Width="36" Height="36"
                                                 CornerRadius="18" ClipToBounds="True"
                                                 Background="{StaticResource SurfaceLightColor}">
-                                            <Image Source="{Binding AvatarIconPath}" Stretch="UniformToFill"/>
+                                            <Image Source="{Binding AvatarIconPath, Converter={StaticResource PathToBitmap}}" Stretch="UniformToFill"/>
                                         </Border>
                                         <TextBlock Grid.Column="1"
                                                    Text="{Binding DisplayName}"

@@ -60,6 +60,7 @@ namespace MeshWave.Services
         private string GenerateRoundedIcon(string sourceImagePath)
         {
             var iconPath = Path.Combine(AppDataFolder, "user_icon.png");
+            var tempPath = iconPath + ".tmp";
 
             var bitmap = new BitmapImage();
             bitmap.BeginInit();
@@ -86,8 +87,13 @@ namespace MeshWave.Services
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(rtb));
 
-            using var stream = File.Create(iconPath);
-            encoder.Save(stream);
+            // Write to a temp file first so we never overwrite a file
+            // that is currently held open by a WPF BitmapImage binding.
+            using (var stream = File.Create(tempPath))
+                encoder.Save(stream);
+
+            // Atomically replace the final file.
+            File.Move(tempPath, iconPath, overwrite: true);
 
             return iconPath;
         }

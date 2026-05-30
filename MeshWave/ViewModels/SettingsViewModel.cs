@@ -1,4 +1,5 @@
 using MeshWave.LibraryManager;
+using System.Collections.Generic;
 using System.Windows.Input;
 using MeshWave.Models;
 using MeshWave.Mvvm;
@@ -15,6 +16,7 @@ public class SettingsViewModel : ViewModelBase
     private readonly SettingsService _settingsService;
     private readonly UserProfileService _profileService;
     private readonly P2PIdentityService _identityService = new();
+    private readonly Action<WaveformStyle>? _onWaveformStyleSaved;
     private string _baseFolder = string.Empty;
     private string _username = string.Empty;
     private bool _isInitialized = false;
@@ -30,9 +32,11 @@ public class SettingsViewModel : ViewModelBase
     private int _p2pMaxPeers = 50;
     private string _p2pBootstrapNodesText = string.Empty;
     private string _p2pIdentityInfo = string.Empty;
+    private WaveformStyle _waveformStyle = WaveformStyle.Filled;
 
-    public SettingsViewModel()
+    public SettingsViewModel(Action<WaveformStyle>? onWaveformStyleSaved = null)
     {
+        _onWaveformStyleSaved = onWaveformStyleSaved;
         _settingsService = new SettingsService();
         _profileService = new UserProfileService();
         LoadSettings();
@@ -130,6 +134,14 @@ public class SettingsViewModel : ViewModelBase
         set => SetProperty(ref _p2pIdentityInfo, value);
     }
 
+    public WaveformStyle WaveformStyle
+    {
+        get => _waveformStyle;
+        set => SetProperty(ref _waveformStyle, value);
+    }
+
+    public IEnumerable<WaveformStyle> AvailableWaveformStyles => Enum.GetValues<WaveformStyle>();
+
     private void LoadSettings()
     {
         var settings = _settingsService.LoadSettings();
@@ -151,6 +163,9 @@ public class SettingsViewModel : ViewModelBase
         P2PPort = settings.P2P.Port;
         P2PMaxPeers = Math.Min(settings.P2P.MaxPeers, SecurityLimits.MaxRoutingTableSize);
         P2PBootstrapNodesText = string.Join(Environment.NewLine, settings.P2P.BootstrapNodes);
+
+        if (Enum.TryParse<WaveformStyle>(settings.Playback.WaveformStyle, out var parsedStyle))
+            WaveformStyle = parsedStyle;
 
         RefreshIdentityInfo();
 
@@ -232,7 +247,8 @@ public class SettingsViewModel : ViewModelBase
             Playback = new PlaybackSettings
             {
                 Volume = Volume,
-                RegisterPlayAt = 0.5
+                RegisterPlayAt = 0.5,
+                WaveformStyle = WaveformStyle.ToString()
             },
             P2P = new P2PSettings
             {
@@ -255,6 +271,8 @@ public class SettingsViewModel : ViewModelBase
 
         var savedProfile = _profileService.LoadProfile();
         AvatarIconPath = savedProfile.AvatarIconPath;
+
+        _onWaveformStyleSaved?.Invoke(WaveformStyle);
 
         IsInitialized = true;
     }

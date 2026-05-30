@@ -1,6 +1,7 @@
 using MeshWave.LibraryManager;
 using MeshWave.Mvvm;
 using MeshWave.Services;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
@@ -39,6 +40,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     private PlaybackTrackListItem? _selectedAlbumTrack;
     private string _trackContextTitle = "Current Album / Playlist";
     private string _trackContextIconPath = string.Empty;
+    private WaveformStyle _waveformStyle = WaveformStyle.Filled;
 
     public PlaybackViewModel()
     {
@@ -62,6 +64,12 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     public ICommand ToggleMuteCommand { get; }
 
     public string PlayPauseIcon => IsPlaying ? "⏸" : "▶";
+
+    public WaveformStyle WaveformStyle
+    {
+        get => _waveformStyle;
+        set => SetProperty(ref _waveformStyle, value);
+    }
 
     public bool IsMuted
     {
