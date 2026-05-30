@@ -79,6 +79,7 @@ public class SyncOrchestrator : IDisposable
         LocalPeerIdentity identity,
         Manifest localManifest,
         IReadOnlyList<string>? bootstrapNodes = null,
+        bool actAsListener = true,
         CancellationToken cancellationToken = default)
     {
         _identity = identity;
@@ -89,16 +90,20 @@ public class SyncOrchestrator : IDisposable
         _router.PeerRemoved += OnPeerRemoved;
         _bootstrapNodes = bootstrapNodes ?? [];
 
-        _server ??= new ManifestExchangeServer(identity.ManifestPort);
-        _server.ManifestReceived += OnManifestReceived;
+        if (actAsListener)
+        {
+            _server ??= new ManifestExchangeServer(identity.ManifestPort);
+            _server.ManifestReceived += OnManifestReceived;
 
-        await _server.StartAsync(
-            () => _localManifest,
-            () => _router.GetPeersForExchange(),
-            _cts.Token);
+            await _server.StartAsync(
+                () => _localManifest,
+                () => _router.GetPeersForExchange(),
+                _cts.Token);
+
+            await _natTraversal.StartAsync(identity.ManifestPort, _cts.Token);
+        }
 
         await _router.StartAsync(identity, _bootstrapNodes, _cts.Token);
-        await _natTraversal.StartAsync(identity.ManifestPort, _cts.Token);
     }
 
     /// <summary>

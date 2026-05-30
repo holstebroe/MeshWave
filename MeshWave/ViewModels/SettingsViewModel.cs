@@ -38,6 +38,7 @@ public class SettingsViewModel : ViewModelBase
 
     // P2P settings
     private bool _p2pEnabled;
+    private bool _p2pActAsListener = true;
     private int _p2pPort = 39877;
     private int _p2pMaxPeers = 50;
     private string _p2pBootstrapNodesText = string.Empty;
@@ -168,6 +169,12 @@ public class SettingsViewModel : ViewModelBase
         set => SetProperty(ref _p2pEnabled, value);
     }
 
+    public bool P2PActAsListener
+    {
+        get => _p2pActAsListener;
+        set => SetProperty(ref _p2pActAsListener, value);
+    }
+
     public int P2PPort
     {
         get => _p2pPort;
@@ -267,6 +274,7 @@ public class SettingsViewModel : ViewModelBase
         BannerImagePath = profile.BannerImagePath;
 
         P2PEnabled = settings.P2P.Enabled;
+        P2PActAsListener = settings.P2P.ActAsListener;
         P2PPort = settings.P2P.Port;
         P2PMaxPeers = Math.Min(settings.P2P.MaxPeers, SecurityLimits.MaxRoutingTableSize);
         P2PBootstrapNodesText = string.Join(Environment.NewLine, settings.P2P.BootstrapNodes);
@@ -378,6 +386,7 @@ public class SettingsViewModel : ViewModelBase
             P2P = new P2PSettings
             {
                 Enabled = P2PEnabled,
+                ActAsListener = P2PActAsListener,
                 Port = P2PPort,
                 MaxPeers = Math.Clamp(P2PMaxPeers, 1, SecurityLimits.MaxRoutingTableSize),
                 BootstrapNodes = bootstrapNodes

@@ -296,6 +296,15 @@
                                       Content="Enable P2P on startup"
                                       Margin="0,0,0,14"/>
 
+                            <CheckBox IsChecked="{Binding P2PActAsListener, Mode=TwoWay}"
+                                      Content="Act as listener (accept inbound peer connections)"
+                                      Margin="0,0,0,6"/>
+                            <TextBlock Text="When disabled, MeshWave runs in outbound-only mode and must reach at least one bootstrap node."
+                                       Foreground="{StaticResource TextSecondaryColor}"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,14"/>
+
                             <TextBlock Text="Listen Port" Margin="0,0,0,4"/>
                             <Grid Margin="0,0,0,14">
                                 <Grid.ColumnDefinitions>
@@ -305,7 +314,7 @@
                                 <TextBox Grid.Column="0"
                                          Text="{Binding P2PPort, UpdateSourceTrigger=PropertyChanged}"/>
                                 <TextBlock Grid.Column="1"
-                                           Text="TCP port this node listens on."
+                                           Text="TCP port this node listens on when listener mode is enabled."
                                            Foreground="{StaticResource TextSecondaryColor}"
                                            FontSize="12"
                                            VerticalAlignment="Center"

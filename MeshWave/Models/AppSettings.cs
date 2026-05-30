@@ -24,6 +24,12 @@ namespace MeshWave.Models
         public int DownloadLimit { get; set; } = 0; // 0 = unlimited
 
         /// <summary>
+        /// When true, this app listens for inbound peer connections and announces itself on LAN.
+        /// When false, it behaves as an outbound-only bootstrap client.
+        /// </summary>
+        public bool ActAsListener { get; set; } = true;
+
+        /// <summary>
         /// Internet bootstrap nodes in "host:port" format.
         /// These are the initial contact points for reaching peers outside the LAN,
         /// similar to BitTorrent bootstrap/tracker nodes.

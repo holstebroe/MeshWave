@@ -1,3 +1,4 @@
+using System.Net.Sockets;
 using MeshWave.Mvvm;
 using MeshWave.Common.Core.Models;
 using MeshWave.Services;
@@ -27,6 +28,7 @@ public class ApplicationViewModel : ViewModelBase
     private bool _p2pIsConnected;
     private string _p2pStatusText = "Disconnected";
     private int _p2pPeerCount;
+    private bool _p2pActAsListener = true;
     private readonly Dictionary<string, int> _lastKnownReleaseSequenceByPeer = new(StringComparer.OrdinalIgnoreCase);
 
     public ApplicationViewModel()
@@ -45,7 +47,7 @@ public class ApplicationViewModel : ViewModelBase
         _syncOrchestrator.PeerCountChanged += (_, _) =>
         {
             P2PPeerCount = _syncOrchestrator.ConnectedPeerCount;
-            P2PStatusText = $"Connected · {P2PPeerCount} peer{(P2PPeerCount == 1 ? "" : "s")}";
+            UpdateP2PStatusText();
         };
 
         _syncOrchestrator.ManifestMerged += (_, e) =>
@@ -212,15 +214,39 @@ public class ApplicationViewModel : ViewModelBase
         {
             P2PStatusText = "Connecting…";
             var settings = _settingsService.LoadSettings();
+            _p2pActAsListener = settings.P2P.ActAsListener;
             var profile = _profileService.LoadProfile();
             var identity = _identityService.LoadOrCreate(profile.DisplayName);
             identity.ManifestPort = settings.P2P.Port;
 
+            var bootstrapNodes = settings.P2P.BootstrapNodes
+                .Where(static n => !string.IsNullOrWhiteSpace(n))
+                .ToList();
+
+            if (!_p2pActAsListener)
+            {
+                if (bootstrapNodes.Count == 0)
+                {
+                    P2PStatusText = "Error: Outbound-only mode requires at least one bootstrap node.";
+                    P2PIsConnected = false;
+                    return;
+                }
+
+                var bootstrapReachable = await CanReachAnyBootstrapAsync(bootstrapNodes);
+                if (!bootstrapReachable)
+                {
+                    P2PStatusText = "Error: Cannot reach configured bootstrap node(s). Check host/port and firewall.";
+                    P2PIsConnected = false;
+                    return;
+                }
+            }
+
             _localManifest ??= _manifestManager.CreateManifest(identity.UserId);
 
-            await _syncOrchestrator.StartAsync(identity, _localManifest, settings.P2P.BootstrapNodes);
+            await _syncOrchestrator.StartAsync(identity, _localManifest, bootstrapNodes, actAsListener: _p2pActAsListener);
             P2PIsConnected = true;
-            P2PStatusText = "Connected · 0 peers";
+            P2PPeerCount = _syncOrchestrator.ConnectedPeerCount;
+            UpdateP2PStatusText();
         }
         catch (Exception ex)
         {
@@ -292,5 +318,52 @@ public class ApplicationViewModel : ViewModelBase
             .LastOrDefault(op => op.OperationType == ManifestOperationType.Follow || op.OperationType == ManifestOperationType.Unfollow);
 
         return latestFollowState?.OperationType == ManifestOperationType.Follow;
+    }
+
+    private void UpdateP2PStatusText()
+    {
+        var peers = _syncOrchestrator.GetPeers().ToList();
+        var bootstrapPeers = peers.Count(static p => p.UserId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase));
+        var meshPeers = Math.Max(0, peers.Count - bootstrapPeers);
+
+        var mode = _p2pActAsListener ? "listener" : "outbound-only";
+        var bootstrapPart = bootstrapPeers > 0 ? $", {bootstrapPeers} bootstrap" : string.Empty;
+        P2PStatusText = $"Connected ({mode}) · {meshPeers} mesh peer{(meshPeers == 1 ? "" : "s")}{bootstrapPart}";
+    }
+
+    private static bool TryParseEndpoint(string endpoint, out string host, out int port)
+    {
+        host = string.Empty;
+        port = 0;
+
+        var separator = endpoint.LastIndexOf(':');
+        if (separator <= 0)
+            return false;
+
+        host = endpoint[..separator];
+        return int.TryParse(endpoint[(separator + 1)..], out port) && port > 0 && port < 65536;
+    }
+
+    private static async Task<bool> CanReachAnyBootstrapAsync(IEnumerable<string> endpoints)
+    {
+        foreach (var endpoint in endpoints)
+        {
+            if (!TryParseEndpoint(endpoint, out var host, out var port))
+                continue;
+
+            try
+            {
+                using var client = new TcpClient();
+                using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(1500));
+                await client.ConnectAsync(host, port, cts.Token);
+                return true;
+            }
+            catch
+            {
+                // try next bootstrap endpoint
+            }
+        }
+
+        return false;
     }
 }
