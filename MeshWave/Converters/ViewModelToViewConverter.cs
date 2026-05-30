@@ -41,6 +41,12 @@ namespace MeshWave.Converters
                 view.DataContext = vm5;
                 return view;
             }
+            if (value is CommunityViewModel vm6)
+            {
+                var view = new CommunityView();
+                view.DataContext = vm6;
+                return view;
+            }
             return null;
         }
 

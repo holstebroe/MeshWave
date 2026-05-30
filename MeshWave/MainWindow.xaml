@@ -61,6 +61,9 @@
                     <Button Content="🌐  Browse"
                             Style="{StaticResource SidebarNavButton}"
                             Click="BrowseMenu_Click"/>
+                    <Button Content="👥  Community"
+                            Style="{StaticResource SidebarNavButton}"
+                            Click="CommunityMenu_Click"/>
                 </StackPanel>
 
                 <!-- Settings just above the P2P panel, pushed to bottom -->

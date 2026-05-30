@@ -104,6 +104,11 @@ public class ApplicationViewModel : ViewModelBase
         CurrentViewModel = new BrowseViewModel();
     }
 
+    public void NavigateToCommunity()
+    {
+        CurrentViewModel = new CommunityViewModel();
+    }
+
     public void NavigateToPlayback()
     {
         CurrentViewModel = _playbackViewModel;

@@ -70,5 +70,10 @@ namespace MeshWave
         {
             ViewModel.NavigateToBrowse();
         }
+
+        private void CommunityMenu_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel.NavigateToCommunity();
+        }
     }
 }

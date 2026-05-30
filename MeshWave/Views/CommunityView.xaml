@@ -1,0 +1,453 @@
+<UserControl x:Class="MeshWave.Views.CommunityView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             Background="{StaticResource BackgroundColor}">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ===== Header ===== -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,20">
+            <TextBlock Text="Community Mesh"
+                       FontSize="28" FontWeight="Bold"
+                       Foreground="{StaticResource TextPrimaryColor}"/>
+            <TextBlock Text="Discover users and groups, follow artists, and manage your social connections."
+                       FontSize="13"
+                       Foreground="{StaticResource TextSecondaryColor}"
+                       Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <!-- ===== Search bar ===== -->
+        <Grid Grid.Row="1" Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBox Grid.Column="0"
+                     Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                     Margin="0,0,10,0"
+                     FontSize="14"
+                     Background="{StaticResource SurfaceColor}"
+                     Foreground="{StaticResource TextPrimaryColor}"
+                     BorderBrush="{StaticResource PrimaryColor}">
+                <TextBox.InputBindings>
+                    <KeyBinding Key="Return" Command="{Binding SearchCommand}"/>
+                </TextBox.InputBindings>
+            </TextBox>
+            <Button Grid.Column="1"
+                    Content="🔍  Search"
+                    Command="{Binding SearchCommand}">
+                <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                        <Setter Property="Margin" Value="0"/>
+                    </Style>
+                </Button.Style>
+            </Button>
+        </Grid>
+
+        <!-- ===== Status line ===== -->
+        <TextBlock Grid.Row="2"
+                   Text="{Binding SearchStatus}"
+                   FontSize="12" FontStyle="Italic"
+                   Foreground="{StaticResource TextSecondaryColor}"
+                   Margin="0,0,0,12"/>
+
+        <!-- ===== Tab strip + content ===== -->
+        <Grid Grid.Row="3">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Tab strip -->
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
+                <Button Content="Discover"
+                        Command="{Binding SetTabCommand}"
+                        CommandParameter="Discover">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource SidebarNavButton}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsTabDiscover}" Value="True">
+                                    <Setter Property="Foreground" Value="{DynamicResource AccentColor}"/>
+                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <Button Content="Friends"
+                        Command="{Binding SetTabCommand}"
+                        CommandParameter="Friends">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource SidebarNavButton}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsTabFriends}" Value="True">
+                                    <Setter Property="Foreground" Value="{DynamicResource AccentColor}"/>
+                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <Button Content="Following"
+                        Command="{Binding SetTabCommand}"
+                        CommandParameter="Following">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource SidebarNavButton}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsTabFollowing}" Value="True">
+                                    <Setter Property="Foreground" Value="{DynamicResource AccentColor}"/>
+                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <Button Content="Groups"
+                        Command="{Binding SetTabCommand}"
+                        CommandParameter="Groups">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource SidebarNavButton}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsTabGroups}" Value="True">
+                                    <Setter Property="Foreground" Value="{DynamicResource AccentColor}"/>
+                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+            </StackPanel>
+
+            <!-- ===== Tab content ===== -->
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+
+                    <!-- ─── Discover: user results ─── -->
+                    <ItemsControl ItemsSource="{Binding SearchResults}">
+                        <ItemsControl.Style>
+                            <Style TargetType="ItemsControl">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsTabDiscover}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ItemsControl.Style>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{StaticResource SurfaceColor}"
+                                        CornerRadius="8" Padding="14,10" Margin="0,0,0,8">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="40"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" Width="36" Height="36"
+                                                CornerRadius="18" ClipToBounds="True"
+                                                Background="{StaticResource SurfaceLightColor}">
+                                            <Image Source="{Binding AvatarIconPath}" Stretch="UniformToFill"/>
+                                        </Border>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0">
+                                            <TextBlock Text="{Binding DisplayName}"
+                                                       FontWeight="SemiBold" FontSize="14"
+                                                       Foreground="{StaticResource TextPrimaryColor}"/>
+                                            <TextBlock FontSize="12"
+                                                       Foreground="{StaticResource TextSecondaryColor}">
+                                                <Run Text="{Binding TrackCount}"/>
+                                                <Run Text=" tracks · "/>
+                                                <Run Text="{Binding FollowerCount}"/>
+                                                <Run Text=" followers"/>
+                                            </TextBlock>
+                                        </StackPanel>
+                                        <Button Grid.Column="2"
+                                                Content="+ Friend"
+                                                Command="{Binding DataContext.AddFriendCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                Margin="0,0,6,0" Padding="8,4">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                                    <Setter Property="FontSize" Value="12"/>
+                                                    <Setter Property="Margin" Value="0,0,6,0"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsFriend}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                        <Button Grid.Column="3"
+                                                Content="Follow"
+                                                Command="{Binding DataContext.FollowUserCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                Padding="8,4">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource SuccessButton}">
+                                                    <Setter Property="FontSize" Value="12"/>
+                                                    <Setter Property="Margin" Value="0"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsFollowing}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- ─── Discover: group results ─── -->
+                    <ItemsControl ItemsSource="{Binding GroupResults}">
+                        <ItemsControl.Style>
+                            <Style TargetType="ItemsControl">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsTabDiscover}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ItemsControl.Style>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{StaticResource SurfaceColor}"
+                                        CornerRadius="8" Padding="14,10" Margin="0,0,0,8">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}"
+                                                       FontWeight="SemiBold" FontSize="14"
+                                                       Foreground="{StaticResource TextPrimaryColor}"/>
+                                            <TextBlock Text="{Binding Description}"
+                                                       FontSize="12"
+                                                       Foreground="{StaticResource TextSecondaryColor}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock FontSize="11"
+                                                       Foreground="{StaticResource TextSecondaryColor}"
+                                                       Margin="0,2,0,0">
+                                                <Run Text="{Binding MemberCount}"/>
+                                                <Run Text=" members"/>
+                                            </TextBlock>
+                                        </StackPanel>
+                                        <Button Grid.Column="1"
+                                                Content="Join"
+                                                Command="{Binding DataContext.JoinGroupCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                Padding="10,4">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource SuccessButton}">
+                                                    <Setter Property="FontSize" Value="12"/>
+                                                    <Setter Property="Margin" Value="0"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsMember}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- ─── Discover: empty state placeholder ─── -->
+                    <Border CornerRadius="8" Padding="24" Margin="0,0,0,8">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Setter Property="Background" Value="{StaticResource SurfaceColor}"/>
+                                <Style.Triggers>
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding IsTabDiscover}" Value="True"/>
+                                            <Condition Binding="{Binding IsSearching}" Value="False"/>
+                                        </MultiDataTrigger.Conditions>
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </MultiDataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="🌐" FontSize="36" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                            <TextBlock Text="Search for users or groups by name or UserId."
+                                       FontSize="14" HorizontalAlignment="Center"
+                                       Foreground="{StaticResource TextSecondaryColor}"/>
+                            <TextBlock Text="Connect to the mesh first to enable live peer discovery."
+                                       FontSize="12" HorizontalAlignment="Center"
+                                       Foreground="{StaticResource TextDimColor}"
+                                       Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ─── Friends tab ─── -->
+                    <ItemsControl ItemsSource="{Binding Friends}">
+                        <ItemsControl.Style>
+                            <Style TargetType="ItemsControl">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsTabFriends}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ItemsControl.Style>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{StaticResource SurfaceColor}"
+                                        CornerRadius="8" Padding="14,10" Margin="0,0,0,8">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="40"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" Width="36" Height="36"
+                                                CornerRadius="18" ClipToBounds="True"
+                                                Background="{StaticResource SurfaceLightColor}">
+                                            <Image Source="{Binding AvatarIconPath}" Stretch="UniformToFill"/>
+                                        </Border>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding DisplayName}"
+                                                   FontWeight="SemiBold" FontSize="14"
+                                                   Foreground="{StaticResource TextPrimaryColor}"
+                                                   VerticalAlignment="Center" Margin="10,0"/>
+                                        <Button Grid.Column="2"
+                                                Content="Remove"
+                                                Command="{Binding DataContext.RemoveFriendCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                Padding="8,4">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource DangerButton}">
+                                                    <Setter Property="FontSize" Value="12"/>
+                                                    <Setter Property="Margin" Value="0"/>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- ─── Following tab ─── -->
+                    <ItemsControl ItemsSource="{Binding Following}">
+                        <ItemsControl.Style>
+                            <Style TargetType="ItemsControl">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsTabFollowing}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ItemsControl.Style>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{StaticResource SurfaceColor}"
+                                        CornerRadius="8" Padding="14,10" Margin="0,0,0,8">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="40"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" Width="36" Height="36"
+                                                CornerRadius="18" ClipToBounds="True"
+                                                Background="{StaticResource SurfaceLightColor}">
+                                            <Image Source="{Binding AvatarIconPath}" Stretch="UniformToFill"/>
+                                        </Border>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding DisplayName}"
+                                                   FontWeight="SemiBold" FontSize="14"
+                                                   Foreground="{StaticResource TextPrimaryColor}"
+                                                   VerticalAlignment="Center" Margin="10,0"/>
+                                        <Button Grid.Column="2"
+                                                Content="Unfollow"
+                                                Command="{Binding DataContext.UnfollowUserCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                Padding="8,4">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource DangerButton}">
+                                                    <Setter Property="FontSize" Value="12"/>
+                                                    <Setter Property="Margin" Value="0"/>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- ─── My Groups tab ─── -->
+                    <ItemsControl ItemsSource="{Binding MyGroups}">
+                        <ItemsControl.Style>
+                            <Style TargetType="ItemsControl">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsTabGroups}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ItemsControl.Style>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{StaticResource SurfaceColor}"
+                                        CornerRadius="8" Padding="14,10" Margin="0,0,0,8">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="{Binding Name}"
+                                                       FontWeight="SemiBold" FontSize="14"
+                                                       Foreground="{StaticResource TextPrimaryColor}"/>
+                                            <TextBlock Text="{Binding Description}"
+                                                       FontSize="12"
+                                                       Foreground="{StaticResource TextSecondaryColor}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1"
+                                                Content="Leave"
+                                                Command="{Binding DataContext.LeaveGroupCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                Padding="8,4">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource DangerButton}">
+                                                    <Setter Property="FontSize" Value="12"/>
+                                                    <Setter Property="Margin" Value="0"/>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</UserControl>
