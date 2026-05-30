@@ -34,13 +34,30 @@ namespace MeshWave
             var iconStream = GetResourceStream(new Uri("pack://application:,,,/MeshWaveIcon128.ico"))?.Stream
                           ?? GetResourceStream(new Uri("pack://application:,,,/Assets/MeshWaveIcon128.png"))?.Stream;
 
+            System.Drawing.Icon? icon = null;
+            if (iconStream != null)
+            {
+                try
+                {
+                    iconStream.Position = 0;
+                    icon = new System.Drawing.Icon(iconStream);
+                }
+                catch
+                {
+                    // Fall back to system icon if embedded resource is invalid.
+                    icon = System.Drawing.SystemIcons.Application;
+                }
+            }
+            else
+            {
+                icon = System.Drawing.SystemIcons.Application;
+            }
+
             _trayIcon = new System.Windows.Forms.NotifyIcon
             {
                 Text = "MeshWave — Mesh is running",
                 Visible = true,
-                Icon = iconStream != null
-                    ? new System.Drawing.Icon(iconStream)
-                    : System.Drawing.SystemIcons.Application
+                Icon = icon
             };
 
             var menu = new System.Windows.Forms.ContextMenuStrip();

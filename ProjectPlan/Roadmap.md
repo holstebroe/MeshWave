@@ -23,22 +23,41 @@
 - Dark-theme ComboBox style
 - PathToBitmapConverter (OnLoad) to prevent file-lock on avatar images
 
-## Active Sprint: Milestone F -- Artist and Fan Profiles
+## Active Sprint: Milestone I -- Mesh Resilience and Background Mode (COMPLETE)
 
-### Goal
-Differentiate artist and fan accounts. Give artists a richer profile (bio, banner image,
-website). Restructure Settings into tabs to avoid clutter. Add a release feed so followers
-can discover and quickly import new material.
+### Goals
+- Ensure the app continues P2P sync even when minimized to system tray
+- Allow late-joining users to discover the network even if bootstrap nodes were restarted
+- Provide a smooth UX when hiding to tray (one-time notification)
+- Comprehensive integration tests to verify mesh stability
 
-### Tasks
-1. Add IsArtist flag and extended fields to UserProfile model
-2. Restructure SettingsView into tabs: General | Profile | Artist | Appearance | Network | Storage
-3. Artist tab: Bio text box, Website field, Banner image picker and preview
-4. Artist profile card component for CommunityView
-5. ReleasedAt timestamp on track/album sidecar; set on AnnounceTrack/AnnounceAlbum
-6. Release feed panel in CommunityView (recent Create ops from followed peers)
-7. Add to Library one-click flow (stub -- full content exchange in Milestone D)
-8. Follow notifications badge on Community nav item
+### Completed
+1. PeerRouter periodic bootstrap re-contact (every 5 min, configurable)
+2. System tray icon with context menu (Open, Now Playing, Quit)
+3. Window close -> hide to tray with one-time notification
+4. App continues running in background (OnExplicitShutdown mode)
+5. MeshWave.Integration.Tests project (7 tests, all passing)
+
+## Active Sprint: Milestone J -- Mesh Integration Tests (COMPLETE)
+
+### Goals
+Verify mesh stability protocol with in-process bootstrap node and multiple orchestrators.
+
+### Completed
+1. Bootstrap discovery test
+2. Bootstrap retry interval configuration test
+3. Signed operation verification test
+4. Profile broadcast recording test
+5. Follow/Unfollow operation recording test
+6. ManifestMerged event test
+7. Signature verification test
+8. All 7 tests passing (6.1 sec total)
+
+## Upcoming: Milestone H -- Settings Storage and Housekeeping Tab
+
+- Storage tab in Settings: used/free disk space, per-category breakdown
+- Visual progress bars with colour coding
+- Clear cached manifests / clear waveform cache buttons
 
 ## Upcoming: Milestone G -- Community Groups and Distributed Chat
 
@@ -54,21 +73,13 @@ Key design points:
 
 Example use cases: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone Collective.
 
-See Backlog Milestone G for full implementation task list.
-
-## Upcoming: Milestone H -- Settings Storage and Housekeeping Tab
-
-- Storage tab in Settings: used/free disk space, per-category breakdown
-- Visual progress bars with colour coding
-- Clear cached manifests / clear waveform cache buttons
-
 ## Upcoming: Milestone D remainder
 
 - Community library ingestion (Other Music from peer manifests)
 - Comment sync and moderation via manifest ops
 - Social graph sync (friends, follows, groups)
 - Likes sync
-- User profile sync op (broadcast Profile update as signed manifest op)
+- Add to Library flow (content exchange)
 - Content exchange: TCP file transfer by content hash
 
 ## Upcoming: Milestone E -- Trust and Aggregate Integrity
@@ -76,6 +87,38 @@ See Backlog Milestone G for full implementation task list.
 - Sybil-resistance research spike
 - Audit log / replay verification for play count
 - Per-user contribution cap UI
+
+## Completed Milestones
+
+### Milestone A: Core Playback
+- NAudio integration with play/pause/stop/seek
+- 5 waveform visualization styles (Filled, Cloudy, Mirror, Neon, Smooth)
+- Timeline comment markers with hover preview
+
+### Milestone B: Library Management
+- File scanner (My Music / Other Music folders)
+- Album/track hierarchical browsing
+- Cover extraction and caching
+
+### Milestone C: Persistence
+- Settings saved to AppData (display name, waveform style, folder paths)
+
+### Milestone D: Community Sync (partial)
+- P2P foundation: UDP LAN discovery + TCP bootstrap + PEX
+- RSA signing/verification with SecurityLimits protocol enforcement
+- PeerRouter unified routing table (LAN + bootstrap + PEX)
+- Manifest exchange and per-peer disk persistence
+- Play count sync with session rate cap and daily consensus
+- Bootstrap console node
+
+### Milestone F: Artist and Fan Profiles
+- IsArtist flag + extended fields (Bio, Website, BannerImagePath)
+- 6-tab Settings layout (General | Profile | Artist | Appearance | Network | Storage)
+- ReleasedAt timestamp on tracks/albums
+- Release feed panel with RefreshFeedCommand
+- Artist profile cards with ARTIST badge
+- Follow/Unfollow signed manifest ops
+- Profile broadcast (signed Profile op)
 
 ## Current Phase Summary
 

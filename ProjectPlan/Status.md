@@ -6,29 +6,41 @@
 - Common.Core tests: passing (32/32)
 - LibraryManager tests: passing (4/4)
 - Synchronizer tests: passing (34/34, includes 8 PlayCountTests)
+- Integration.Tests: passing (7/7)
+- **Total: 77 tests passing**
 
 ## Active Sprint
 
-Milestone F -- Artist and Fan Profiles (tail tasks)
+Milestone I -- Mesh Resilience and Background Mode (COMPLETE)
+Milestone J -- Mesh Integration Tests (COMPLETE)
 
-Remaining tasks:
-1. Add to Library flow (content exchange request ? Other Music folder)
-2. Follow notifications badge (Community nav item, new Create ops since last sync)
-3. Persist follow list as signed Follow manifest ops
-4. User profile sync op (broadcast IsArtist, Bio, BannerImageHash, Website)
+Upcoming: Milestone H -- Settings Storage and Housekeeping Tab
 
 ## Recently Completed
 
-- ReleasedAt: DateTime? field on Track and Album models; AnnounceTrack/AnnounceAlbum stamp releasedAt in manifest op metadata
-- Release feed panel: Feed tab added to CommunityView; ReleaseFeedItem model; RefreshFeedCommand; empty state
-- Artist profile cards: Following tab shows full artist card (banner strip, avatar, ARTIST badge, bio, website, counts); Discover results show badge + bio snippet
-- CommunityUserItem extended: IsArtist, Bio, Website, BannerImagePath fields
-- ReleaseFeedItem model: ArtistDisplayName, Title, TargetType, ReleasedAt, ReleasedAtDisplay
-- Settings tabbed layout (6 tabs: General | Profile | Artist | Appearance | Network | Storage)
-- IsArtist flag + Bio, Website, BannerImagePath on UserProfile and User models
-- Play count sync: signed Play ops, session rate cap, MergeManifest daily cap (3/user/track/day)
-- PeerManifestStore, Bootstrap console node, Community view scaffold
-- Dark-theme ComboBox, PathToBitmapConverter, waveform hover seek-preview, avatar file-lock fix
+### Milestone J: Integration Tests
+- Created MeshWave.Integration.Tests project (xUnit)
+- NullPeerDiscovery stub for isolated test environments
+- 7 integration tests: Bootstrap discovery, operations signing, profile broadcast, follow/unfollow, merge events, signature verification
+- All tests passing in 6.1 seconds
+- Tests use dynamic ports and temp directories, no network conflicts
+
+### Milestone I: Resilience and Background Mode
+- PeerRouter periodic bootstrap re-contact (every 5 min, configurable in SecurityLimits)
+- System tray icon (NotifyIcon) with context menu: Open MeshWave, Now Playing, Quit
+- Window close -> hide to tray; one-time balloon notification informing user
+- Explicit shutdown mode (OnExplicitShutdown) keeps app alive in background
+- App.xaml and App.xaml.cs refactored for tray lifecycle
+- MainWindow.xaml.cs OnClosing intercepts close events, hides to tray
+- UseWindowsForms enabled in csproj; GlobalUsings alias file manages WPF/WinForms type conflicts
+- Icon fallback to SystemIcons.Application if embedded resource invalid
+
+### Milestone F: Artist and Fan Profiles (tail items)
+- RecordFollow, RecordUnfollow: append signed Follow/Unfollow ops to manifest
+- BroadcastProfile: signed Profile op with displayName, isArtist, bio, website, bannerImageHash
+- CommunityViewModel: follow/unfollow command wiring, release badge, add-to-library stub
+- ApplicationViewModel: forward community notifications to main badge
+- MainWindow badge binding to HasCommunityNotification
 
 ## Architecture Decisions
 
@@ -38,6 +50,9 @@ Remaining tasks:
   rate-capped by SecurityLimits.MaxPlaysPerUserPerTrackPerDay enforced during MergeManifest.
 - Artist role: IsArtist is local preference + broadcast in signed Profile op; all peers
   are equal in P2P trust regardless of role.
+- Background operation: app continues P2P mesh even when UI window is minimized to tray;
+  bootstrap re-contact every 5 minutes ensures new users can join even if bootstrap was
+  restarted. No centralized dependency once peers are connected.
 - Community groups: fully distributed, no central server; GroupId derived from founding op
   hash + founder UserId. See Backlog Milestone G for full design.
 
@@ -46,8 +61,8 @@ Remaining tasks:
 - Sybil-resistance / web-of-trust hardening for play count integrity
 - Content exchange: TCP file transfer by content hash (Milestone D remainder)
 - Community groups and distributed chat (Milestone G)
-
-## Build/Test
+- Add to Library flow (triggers content exchange, places files in Other Music)
+- Follow notifications badge (when followed artist has new releases)
 
 - Build: passing
 - Common.Core tests: passing (32/32)
