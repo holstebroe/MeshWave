@@ -11,6 +11,8 @@
 
   <ItemGroup>
     <Content Include="MeshWaveIcon128.ico" />
+    <Resource Include="Assets\MeshWaveIcon128.png" />
+    <Resource Include="Assets\LargeSplashLogo.png" />
   </ItemGroup>
 
   <ItemGroup>

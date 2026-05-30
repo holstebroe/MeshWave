@@ -12,14 +12,33 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <Border Background="{StaticResource SurfaceColor}" CornerRadius="16" Padding="24" Margin="0,0,0,16">
-            <StackPanel>
-                <TextBlock Text="🎵 MeshWave" FontSize="38" FontWeight="Bold"/>
-                <TextBlock Text="Decentralized music sharing with a modern local-first workflow"
-                           FontSize="16"
-                           Foreground="{StaticResource TextSecondaryColor}"
-                           Margin="0,8,0,0"/>
-            </StackPanel>
+        <Border Background="{StaticResource SurfaceColor}" CornerRadius="16" Padding="0" Margin="0,0,0,16" ClipToBounds="True">
+            <Grid>
+                <!-- Splash logo as background, scales to fill width -->
+                <Image Source="/Assets/LargeSplashLogo.png"
+                       Stretch="UniformToFill"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       MaxHeight="200"
+                       Opacity="0.55"/>
+                <!-- Text overlay on top -->
+                <StackPanel Margin="24" VerticalAlignment="Bottom">
+                    <TextBlock Text="MeshWave" FontSize="38" FontWeight="Bold"
+                               Foreground="White">
+                        <TextBlock.Effect>
+                            <DropShadowEffect Color="Black" BlurRadius="10" ShadowDepth="2" Opacity="0.8"/>
+                        </TextBlock.Effect>
+                    </TextBlock>
+                    <TextBlock Text="Decentralized music sharing with a modern local-first workflow"
+                               FontSize="16"
+                               Foreground="#DDDDDD"
+                               Margin="0,8,0,0">
+                        <TextBlock.Effect>
+                            <DropShadowEffect Color="Black" BlurRadius="8" ShadowDepth="1" Opacity="0.9"/>
+                        </TextBlock.Effect>
+                    </TextBlock>
+                </StackPanel>
+            </Grid>
         </Border>
 
         <Grid Grid.Row="1" Margin="0,0,0,16">

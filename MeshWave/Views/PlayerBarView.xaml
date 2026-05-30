@@ -19,7 +19,6 @@
 
         <!-- ===== Left: Track Info ===== -->
         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-            <!-- Album art thumbnail -->
             <Border Width="56" Height="56" CornerRadius="4"
                     Background="{StaticResource SurfaceLightColor}"
                     ClipToBounds="True" Margin="0,0,12,0">
@@ -30,7 +29,6 @@
                     <Image Source="{Binding CoverImagePath}" Stretch="UniformToFill"/>
                 </Grid>
             </Border>
-            <!-- Title + artist -->
             <StackPanel VerticalAlignment="Center" MaxWidth="190">
                 <TextBlock Text="{Binding CurrentTrackTitle, FallbackValue='—'}"
                            FontWeight="SemiBold" FontSize="14"
@@ -92,12 +90,29 @@
             </Grid>
         </StackPanel>
 
-        <!-- ===== Right: Volume ===== -->
+        <!-- ===== Right: Mute button + Volume ===== -->
         <StackPanel Grid.Column="2" Orientation="Horizontal"
                     HorizontalAlignment="Right" VerticalAlignment="Center">
-            <TextBlock Text="🔊" FontSize="14"
-                       VerticalAlignment="Center" Margin="0,0,8,0"
-                       Foreground="{StaticResource TextSecondaryColor}"/>
+            <!-- Clickable speaker / mute toggle -->
+            <Button Command="{Binding ToggleMuteCommand}"
+                    Style="{StaticResource PlayerIconButton}"
+                    FontSize="16" Padding="4" Margin="0,0,6,0">
+                <Button.Content>
+                    <TextBlock>
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Text" Value="🔊"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsMuted}" Value="True">
+                                        <Setter Property="Text" Value="🔇"/>
+                                        <Setter Property="Opacity" Value="0.5"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Button.Content>
+            </Button>
             <Slider Width="90" Minimum="0" Maximum="1"
                     Value="{Binding Volume, Mode=TwoWay}"
                     VerticalAlignment="Center"/>

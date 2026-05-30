@@ -143,7 +143,8 @@ namespace MeshWave.ViewModels
                     IsReleased = trackMeta.IsReleased,
                     Version = trackMeta.Version <= 0 ? 1 : trackMeta.Version,
                     TrackNumber = trackMeta.TrackNumber,
-                    Duration = t.Duration
+                    Duration = t.Duration,
+                    PlayCount = trackMeta.PlayCount
                 };
             }).ToList();
 
@@ -208,7 +209,12 @@ namespace MeshWave.ViewModels
 
             var filteredTracks = SelectedAlbum == null
                 ? []
-                : _allTrackItems.Where(t => t.AlbumId == SelectedAlbum.AlbumId).ToList();
+                : _allTrackItems
+                    .Where(t => t.AlbumId == SelectedAlbum.AlbumId)
+                    .OrderBy(t => t.TrackNumber <= 0 ? 1 : 0)
+                    .ThenBy(t => t.TrackNumber <= 0 ? int.MaxValue : t.TrackNumber)
+                    .ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
             Tracks = filteredTracks;
         }
 
@@ -229,7 +235,8 @@ namespace MeshWave.ViewModels
                     Artist = string.IsNullOrWhiteSpace(t.Description) ? "Unknown Artist" : t.Description!,
                     Duration = t.Duration,
                     FilePath = path,
-                    TrackNumber = meta?.TrackNumber ?? 0
+                    TrackNumber = meta?.TrackNumber ?? 0,
+                    PlayCount = meta?.PlayCount ?? 0
                 };
             }).Where(t => !string.IsNullOrWhiteSpace(t.FilePath));
 

@@ -146,6 +146,8 @@
                                 <GridViewColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding TrackNumber}" FontSize="12"
+                                                   TextAlignment="Right"
+                                                   HorizontalAlignment="Right"
                                                    Foreground="{StaticResource TextSecondaryColor}"
                                                    VerticalAlignment="Center"/>
                                     </DataTemplate>
@@ -194,11 +196,23 @@
                                     </DataTemplate>
                                 </GridViewColumn.CellTemplate>
                             </GridViewColumn>
-                            <GridViewColumn Header="Duration" Width="65">
+                            <GridViewColumn Header="Duration" Width="70">
                                 <GridViewColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Duration, StringFormat=mm\\:ss}"
                                                    FontSize="12"
+                                                   Foreground="{StaticResource TextSecondaryColor}"
+                                                   VerticalAlignment="Center"/>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="Plays" Width="46">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding PlayCount}"
+                                                   FontSize="12"
+                                                   TextAlignment="Right"
+                                                   HorizontalAlignment="Right"
                                                    Foreground="{StaticResource TextSecondaryColor}"
                                                    VerticalAlignment="Center"/>
                                     </DataTemplate>

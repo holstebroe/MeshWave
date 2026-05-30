@@ -269,6 +269,7 @@ public sealed class LibraryTrackItem
     public int Version { get; set; } = 1;
     public int TrackNumber { get; set; }
     public TimeSpan Duration { get; set; }
+    public int PlayCount { get; set; }
     public string ReleaseBadge => IsReleased ? "Released" : "Draft";
     public override string ToString() => Title;
 }

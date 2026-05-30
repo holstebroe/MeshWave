@@ -1,13 +1,5 @@
-﻿using System.Text;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
+﻿using System.Windows;
 using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 
 namespace MeshWave
 {
@@ -23,6 +15,31 @@ namespace MeshWave
         }
 
         private ViewModels.ApplicationViewModel ViewModel => (ViewModels.ApplicationViewModel)DataContext;
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+            var playback = ViewModel.Playback;
+            switch (e.Key)
+            {
+                case Key.MediaPlayPause:
+                    playback.PlayPauseToggleCommand.Execute(null);
+                    e.Handled = true;
+                    break;
+                case Key.MediaStop:
+                    playback.StopCommand.Execute(null);
+                    e.Handled = true;
+                    break;
+                case Key.MediaNextTrack:
+                    playback.NextTrackCommand.Execute(null);
+                    e.Handled = true;
+                    break;
+                case Key.MediaPreviousTrack:
+                    playback.PreviousTrackCommand.Execute(null);
+                    e.Handled = true;
+                    break;
+            }
+        }
 
         private void HomeMenu_Click(object sender, RoutedEventArgs e)
         {

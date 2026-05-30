@@ -23,12 +23,17 @@
         <!-- ===== Left Sidebar ===== -->
         <Border Grid.Row="0" Grid.Column="0" Background="{StaticResource SidebarBgColor}">
             <DockPanel>
-                <!-- App branding -->
-                <StackPanel DockPanel.Dock="Top" Margin="15,20,15,30">
+                <!-- App branding with icon -->
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="15,20,15,30">
+                    <Image Source="Assets/MeshWaveIcon128.png"
+                           Width="28" Height="28"
+                           RenderOptions.BitmapScalingMode="HighQuality"
+                           Margin="0,0,8,0"
+                           VerticalAlignment="Center"/>
                     <TextBlock Text="MeshWave"
                                FontSize="22" FontWeight="Bold"
                                Foreground="{StaticResource AccentColor}"
-                               Margin="8,0,0,0"/>
+                               VerticalAlignment="Center"/>
                 </StackPanel>
 
                 <!-- Navigation section -->
@@ -44,7 +49,7 @@
                             Click="MyMusicMenu_Click"/>
                 </StackPanel>
 
-                <!-- Divider + Mesh section label -->
+                <!-- YOUR MESH section -->
                 <StackPanel DockPanel.Dock="Top" Margin="0,20,0,0">
                     <TextBlock Text="YOUR MESH"
                                FontSize="11" FontWeight="SemiBold"
@@ -56,18 +61,10 @@
                     <Button Content="🌐  Browse"
                             Style="{StaticResource SidebarNavButton}"
                             Click="BrowseMenu_Click"/>
-                    <Button Content="⚙️  Settings"
-                            Style="{StaticResource SidebarNavButton}"
-                            Click="SettingsMenu_Click"/>
                 </StackPanel>
 
-                <!-- P2P status at bottom of sidebar -->
-                <StackPanel VerticalAlignment="Bottom" Margin="15,20">
-                    <StackPanel.Style>
-                        <Style TargetType="StackPanel">
-                            <Setter Property="VerticalAlignment" Value="Bottom"/>
-                        </Style>
-                    </StackPanel.Style>
+                <!-- Settings just above the P2P panel, pushed to bottom -->
+                <StackPanel DockPanel.Dock="Bottom" Margin="15,0,15,8">
                     <Border Background="{StaticResource SurfaceLightColor}" CornerRadius="8" Padding="12,10">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
@@ -120,7 +117,14 @@
                             </Button>
                         </StackPanel>
                     </Border>
+                    <Button Content="⚙️  Settings"
+                            Style="{StaticResource SidebarNavButton}"
+                            Click="SettingsMenu_Click"
+                            Margin="0,4,0,0"/>
                 </StackPanel>
+
+                <!-- Filler -->
+                <Grid/>
             </DockPanel>
         </Border>
 

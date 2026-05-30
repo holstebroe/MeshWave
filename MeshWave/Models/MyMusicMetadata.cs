@@ -11,5 +11,6 @@ namespace MeshWave.Models
         public int TrackNumber { get; set; }
         public bool IsReleased { get; set; }
         public int Version { get; set; } = 1;
+        public int PlayCount { get; set; }
     }
 }

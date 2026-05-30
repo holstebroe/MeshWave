@@ -27,6 +27,13 @@ namespace MeshWave.Services
             }
         }
 
+        public void IncrementPlayCount(string filePath)
+        {
+            var meta = LoadForTrack(filePath);
+            meta.PlayCount++;
+            SaveForTrack(filePath, meta);
+        }
+
         public void SaveForTrack(string filePath, MyMusicMetadata metadata)
         {
             var metaPath = GetTrackMetaPath(filePath);
@@ -139,7 +146,8 @@ namespace MeshWave.Services
                 Year = cached.Year > 0 ? cached.Year : fallback.Year,
                 TrackNumber = cached.TrackNumber > 0 ? cached.TrackNumber : fallback.TrackNumber,
                 IsReleased = cached.IsReleased,
-                Version = cached.Version <= 0 ? 1 : cached.Version
+                Version = cached.Version <= 0 ? 1 : cached.Version,
+                PlayCount = cached.PlayCount
             };
         }
 

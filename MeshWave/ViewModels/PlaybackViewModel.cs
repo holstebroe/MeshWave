@@ -33,6 +33,8 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     private float[] _waveformSamples = [];
     private string _trackDescription = string.Empty;
     private int _currentTrackVersion = 1;
+    private bool _isMuted = false;
+    private double _preMuteVolume = 1.0;
     private ObservableCollection<PlaybackTrackListItem> _albumTracks = [];
     private PlaybackTrackListItem? _selectedAlbumTrack;
     private string _trackContextTitle = "Current Album / Playlist";
@@ -47,6 +49,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         PlayAlbumTrackCommand = new RelayCommand(param => PlayAlbumTrack(param as PlaybackTrackListItem));
         PreviousTrackCommand = new RelayCommand(_ => PlayPreviousTrack(), _ => CanGoToPreviousTrack);
         NextTrackCommand = new RelayCommand(_ => PlayNextTrack(), _ => CanGoToNextTrack);
+        ToggleMuteCommand = new RelayCommand(_ => ToggleMute());
     }
 
     public ICommand PlayCommand { get; }
@@ -56,8 +59,15 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     public ICommand PlayAlbumTrackCommand { get; }
     public ICommand PreviousTrackCommand { get; }
     public ICommand NextTrackCommand { get; }
+    public ICommand ToggleMuteCommand { get; }
 
     public string PlayPauseIcon => IsPlaying ? "⏸" : "▶";
+
+    public bool IsMuted
+    {
+        get => _isMuted;
+        private set => SetProperty(ref _isMuted, value);
+    }
 
     public string CurrentTrackTitle
     {
@@ -108,8 +118,25 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         get => _volume;
         set
         {
-            SetProperty(ref _volume, Math.Clamp(value, 0.0, 1.0));
+            var clamped = Math.Clamp(value, 0.0, 1.0);
+            SetProperty(ref _volume, clamped);
+            if (!IsMuted)
+                _audioService?.SetVolume((float)clamped);
+        }
+    }
+
+    private void ToggleMute()
+    {
+        if (IsMuted)
+        {
+            IsMuted = false;
             _audioService?.SetVolume((float)_volume);
+        }
+        else
+        {
+            _preMuteVolume = _volume;
+            IsMuted = true;
+            _audioService?.SetVolume(0f);
         }
     }
 
@@ -290,6 +317,8 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
                 ? string.Empty
                 : myMusicMeta.Description;
             CurrentTrackVersion = myMusicMeta.Version <= 0 ? 1 : myMusicMeta.Version;
+
+            _myMusicMetadataService.IncrementPlayCount(filePath);
 
             LoadTimelineMarkers();
 
@@ -495,6 +524,7 @@ public sealed class PlaybackTrackListItem
     public TimeSpan Duration { get; set; }
     public string FilePath { get; set; } = string.Empty;
     public int TrackNumber { get; set; }
-    public string TrackNumberLabel => TrackNumber > 0 ? $"{TrackNumber}." : "-";
+    public string TrackNumberLabel => TrackNumber > 0 ? $"{TrackNumber}" : "-";
     public bool IsNowPlaying { get; set; }
+    public int PlayCount { get; set; }
 }

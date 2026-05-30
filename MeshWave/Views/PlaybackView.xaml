@@ -105,15 +105,24 @@
                 <ScrollViewer Grid.Row="1"
                               VerticalScrollBarVisibility="Auto"
                               MaxHeight="200">
-                    <ItemsControl ItemsSource="{Binding Comments}">
+                    <ItemsControl ItemsSource="{Binding Comments}"
+                                  VirtualizingPanel.IsVirtualizing="False">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Vertical"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Border Background="#FF252525"
                                         CornerRadius="4" Padding="10"
-                                        Margin="0,0,0,8">
+                                        Margin="0,0,0,8"
+                                        HorizontalAlignment="Stretch">
                                     <TextBlock Text="{Binding}"
                                                Foreground="{StaticResource TextPrimaryColor}"
-                                               TextWrapping="Wrap"/>
+                                               TextWrapping="Wrap"
+                                               HorizontalAlignment="Left"
+                                               VerticalAlignment="Top"/>
                                 </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
@@ -180,6 +189,8 @@
                                     <DataTemplate>
                                         <TextBlock FontSize="12"
                                                    Foreground="{StaticResource TextSecondaryColor}"
+                                                   TextAlignment="Right"
+                                                   HorizontalAlignment="Right"
                                                    VerticalAlignment="Center">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
@@ -222,11 +233,23 @@
                                     </DataTemplate>
                                 </GridViewColumn.CellTemplate>
                             </GridViewColumn>
-                            <GridViewColumn Header="Duration" Width="60">
+                            <GridViewColumn Header="Duration" Width="70">
                                 <GridViewColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Duration, StringFormat=mm\\:ss}"
                                                    FontSize="12"
+                                                   Foreground="{StaticResource TextSecondaryColor}"
+                                                   VerticalAlignment="Center"/>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="Plays" Width="46">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding PlayCount}"
+                                                   FontSize="12"
+                                                   TextAlignment="Right"
+                                                   HorizontalAlignment="Right"
                                                    Foreground="{StaticResource TextSecondaryColor}"
                                                    VerticalAlignment="Center"/>
                                     </DataTemplate>
