@@ -48,5 +48,10 @@ namespace MeshWave
         {
             ViewModel.NavigateToSettings();
         }
+
+        private void BrowseMenu_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel.NavigateToBrowse();
+        }
     }
 }

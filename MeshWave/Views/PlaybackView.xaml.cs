@@ -99,6 +99,8 @@ namespace MeshWave.Views
             }
 
             DrawTimelineMarkers(width, height);
+            // Overlay first (behind cursor), then cursor on top
+            WaveformCanvas.Children.Add(PlayedOverlay);
             WaveformCanvas.Children.Add(PlaybackCursor);
             UpdatePlaybackCursor();
         }
@@ -186,7 +188,11 @@ namespace MeshWave.Views
             {
                 var progress = vm.CurrentPosition.TotalSeconds / vm.Duration.TotalSeconds;
                 var width = WaveformCanvas.ActualWidth > 0 ? WaveformCanvas.ActualWidth : 800;
-                Canvas.SetLeft(PlaybackCursor, progress * width);
+                var cursorX = progress * width;
+                Canvas.SetLeft(PlaybackCursor, cursorX);
+
+                // Update the played-region semi-transparent overlay
+                PlayedOverlay.Width = Math.Max(0, cursorX);
             }
         }
 
@@ -213,7 +219,7 @@ namespace MeshWave.Views
 
         private void AlbumTrackListBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
-            if (sender is ListBox listBox && listBox.SelectedItem is PlaybackTrackListItem item && DataContext is PlaybackViewModel vm)
+            if (sender is ListView listView && listView.SelectedItem is PlaybackTrackListItem item && DataContext is PlaybackViewModel vm)
             {
                 vm.PlayAlbumTrackCommand.Execute(item);
                 e.Handled = true;

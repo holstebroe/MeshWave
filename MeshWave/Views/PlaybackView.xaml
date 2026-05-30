@@ -14,7 +14,6 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -26,8 +25,7 @@
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0"
-                    Width="64"
-                    Height="64"
+                    Width="64" Height="64"
                     CornerRadius="8"
                     Background="{StaticResource SurfaceColor}"
                     ClipToBounds="True"
@@ -36,16 +34,14 @@
             </Border>
 
             <StackPanel Grid.Column="1">
-                <TextBlock Text="{Binding CurrentTrackTitle}" 
+                <TextBlock Text="{Binding CurrentTrackTitle}"
                            Style="{StaticResource SectionHeader}"
-                           FontSize="24"
-                           Margin="0,0,0,4"/>
-                <TextBlock Text="{Binding CurrentArtist}" 
-                           FontSize="16" 
+                           FontSize="24" Margin="0,0,0,4"/>
+                <TextBlock Text="{Binding CurrentArtist}"
+                           FontSize="16"
                            Foreground="{StaticResource TextSecondaryColor}"/>
                 <TextBlock Text="{Binding TrackDescription}"
-                           FontSize="13"
-                           TextWrapping="Wrap"
+                           FontSize="13" TextWrapping="Wrap"
                            Foreground="{StaticResource TextSecondaryColor}"
                            Margin="0,6,0,0"/>
                 <TextBlock Text="{Binding CurrentTrackVersion, StringFormat=Version: v{0}}"
@@ -55,99 +51,40 @@
             </StackPanel>
         </Grid>
 
-        <!-- Waveform Visualization -->
-        <Border Grid.Row="1" Grid.Column="0" 
-                Background="{StaticResource SurfaceColor}" 
-                CornerRadius="8" 
-                Padding="10"
-                Margin="0,0,0,20">
-            <Canvas x:Name="WaveformCanvas" 
-                    Height="120" 
-                    Background="#FF0F0F0F"
-                    MouseLeftButtonDown="WaveformCanvas_MouseLeftButtonDown">
-                <!-- Waveform will be drawn here -->
-                <Rectangle x:Name="PlaybackCursor" 
-                          Fill="{StaticResource AccentColor}" 
-                          Width="2" 
-                          Height="120"
-                          Canvas.Left="0"/>
-            </Canvas>
+        <!-- Waveform with played-region overlay + cursor -->
+        <Border Grid.Row="1" Grid.Column="0"
+                Background="{StaticResource SurfaceColor}"
+                CornerRadius="8" Padding="10"
+                Margin="0,0,0,16">
+            <Grid>
+                <Canvas x:Name="WaveformCanvas"
+                        Height="120"
+                        Background="#FF0F0F0F"
+                        MouseLeftButtonDown="WaveformCanvas_MouseLeftButtonDown">
+                    <!-- Waveform bars, markers and cursor drawn in code-behind -->
+                    <!-- Played-region dim overlay (drawn over waveform, under cursor) -->
+                    <Rectangle x:Name="PlayedOverlay"
+                               Height="120"
+                               Width="0"
+                               Canvas.Left="0"
+                               Canvas.Top="0"
+                               Fill="#66000000"
+                               IsHitTestVisible="False"/>
+                    <!-- Playback cursor line -->
+                    <Rectangle x:Name="PlaybackCursor"
+                               Fill="{StaticResource AccentColor}"
+                               Width="2" Height="120"
+                               Canvas.Left="0"
+                               IsHitTestVisible="False"/>
+                </Canvas>
+            </Grid>
         </Border>
 
-        <!-- Position Slider and Controls -->
-        <StackPanel Grid.Row="2" Grid.Column="0">
-            <Grid Margin="0,0,0,10">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" 
-                          Text="{Binding CurrentPosition, StringFormat=mm\\:ss}"
-                          Foreground="{StaticResource TextSecondaryColor}"
-                          VerticalAlignment="Center"
-                          Margin="0,0,10,0"/>
-                <Slider Grid.Column="1"
-                        Minimum="0"
-                        Maximum="{Binding Duration, Converter={StaticResource TimeSpanToSecondsConverter}}"
-                        Value="{Binding CurrentPosition, Mode=TwoWay, Converter={StaticResource TimeSpanToSecondsConverter}}"
-                        VerticalAlignment="Center"/>
-                <TextBlock Grid.Column="2" 
-                          Text="{Binding Duration, StringFormat=mm\\:ss}"
-                          Foreground="{StaticResource TextSecondaryColor}"
-                          VerticalAlignment="Center"
-                          Margin="10,0,0,0"/>
-            </Grid>
-
-            <!-- Playback Controls -->
-            <StackPanel Orientation="Horizontal" 
-                       HorizontalAlignment="Center"
-                       Margin="0,20,0,0">
-                <Button Command="{Binding PlayPauseToggleCommand}" 
-                        Width="54"
-                        Height="44"
-                        FontSize="18"
-                        Margin="0,0,8,10">
-                    <Button.Style>
-                        <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
-                            <Setter Property="Content" Value="▶"/>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsPlaying}" Value="True">
-                                    <Setter Property="Content" Value="⏸"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                </Button>
-                <Button Content="⏹" 
-                       Command="{Binding StopCommand}" 
-                       Style="{StaticResource PrimaryButton}"
-                       Width="44"
-                       Height="44"
-                       FontSize="18"
-                       Margin="0,0,8,10"/>
-
-                <!-- Volume Control -->
-                <StackPanel Orientation="Horizontal" Margin="20,0,0,0">
-                    <TextBlock Text="🔊" 
-                              FontSize="16"
-                              VerticalAlignment="Center"
-                              Margin="0,0,10,0"/>
-                    <Slider Width="120" 
-                           Minimum="0" 
-                           Maximum="1" 
-                           Value="{Binding Volume, Mode=TwoWay}"
-                           VerticalAlignment="Center"/>
-                </StackPanel>
-            </StackPanel>
-        </StackPanel>
-
         <!-- Comments Panel -->
-        <Border Grid.Row="3" Grid.Column="0" 
-                Background="{StaticResource SurfaceColor}" 
-                CornerRadius="8" 
-                Padding="15"
-                Margin="0,20,0,0">
+        <Border Grid.Row="2" Grid.Column="0"
+                Background="{StaticResource SurfaceColor}"
+                CornerRadius="8" Padding="15"
+                Margin="0,0,0,0">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -156,28 +93,27 @@
                 </Grid.RowDefinitions>
 
                 <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
-                    <TextBlock Text="Comments" 
-                              Style="{StaticResource SectionHeader}"
-                              Margin="0,0,10,0"/>
+                    <TextBlock Text="Comments"
+                               Style="{StaticResource SectionHeader}"
+                               Margin="0,0,10,0"/>
                     <CheckBox Content="Current version only"
                               IsChecked="{Binding ShowOnlyCurrentVersionComments, Mode=TwoWay}"
                               Foreground="{StaticResource TextSecondaryColor}"
                               VerticalAlignment="Center"/>
                 </StackPanel>
 
-                <ScrollViewer Grid.Row="1" 
-                             VerticalScrollBarVisibility="Auto"
-                             MaxHeight="200">
+                <ScrollViewer Grid.Row="1"
+                              VerticalScrollBarVisibility="Auto"
+                              MaxHeight="200">
                     <ItemsControl ItemsSource="{Binding Comments}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border Background="#FF252525" 
-                                       CornerRadius="4" 
-                                       Padding="10" 
-                                       Margin="0,0,0,8">
-                                    <TextBlock Text="{Binding}" 
-                                              Foreground="{StaticResource TextPrimaryColor}"
-                                              TextWrapping="Wrap"/>
+                                <Border Background="#FF252525"
+                                        CornerRadius="4" Padding="10"
+                                        Margin="0,0,0,8">
+                                    <TextBlock Text="{Binding}"
+                                               Foreground="{StaticResource TextPrimaryColor}"
+                                               TextWrapping="Wrap"/>
                                 </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
@@ -189,24 +125,24 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBox Grid.Column="0" 
-                            x:Name="CommentTextBox"
-                            Background="#FF252525"
-                            Foreground="{StaticResource TextPrimaryColor}"
-                            BorderBrush="{StaticResource PrimaryColor}"
-                            Margin="0,0,10,0"/>
-                    <Button Grid.Column="1" 
-                           Content="Add Comment" 
-                           Click="AddComment_Click"
-                           Style="{StaticResource PrimaryButton}"/>
+                    <TextBox Grid.Column="0"
+                             x:Name="CommentTextBox"
+                             Background="#FF252525"
+                             Foreground="{StaticResource TextPrimaryColor}"
+                             BorderBrush="{StaticResource PrimaryColor}"
+                             Margin="0,0,10,0"/>
+                    <Button Grid.Column="1"
+                            Content="Add Comment"
+                            Click="AddComment_Click"
+                            Style="{StaticResource PrimaryButton}"/>
                 </Grid>
             </Grid>
         </Border>
 
-        <Border Grid.Row="0" Grid.RowSpan="4" Grid.Column="1"
+        <!-- Right panel: album/context track list as GridView -->
+        <Border Grid.Row="0" Grid.RowSpan="3" Grid.Column="1"
                 Background="{StaticResource SurfaceColor}"
-                CornerRadius="8"
-                Padding="12"
+                CornerRadius="8" Padding="12"
                 Margin="16,0,0,0">
             <Grid>
                 <Grid.RowDefinitions>
@@ -219,7 +155,9 @@
                         <ColumnDefinition Width="28"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Border Grid.Column="0" Width="22" Height="22" CornerRadius="4" ClipToBounds="True" Background="{StaticResource BackgroundColor}" Margin="0,0,8,0">
+                    <Border Grid.Column="0" Width="22" Height="22" CornerRadius="4"
+                            ClipToBounds="True" Background="{StaticResource BackgroundColor}"
+                            Margin="0,0,8,0">
                         <Image Source="{Binding TrackContextIconPath}" Stretch="UniformToFill"/>
                     </Border>
                     <TextBlock Grid.Column="1"
@@ -229,69 +167,74 @@
                                Margin="0"/>
                 </Grid>
 
-                <ListBox x:Name="AlbumTrackListBox"
-                         Grid.Row="1"
-                         ItemsSource="{Binding AlbumTracks}"
-                         SelectedItem="{Binding SelectedAlbumTrack, Mode=TwoWay}"
-                         MouseDoubleClick="AlbumTrackListBox_MouseDoubleClick"
-                         ScrollViewer.VerticalScrollBarVisibility="Auto">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <Border CornerRadius="4" Padding="8" Margin="0,0,0,6" Background="#FF252525">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Setter Property="Background" Value="#FF252525"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsNowPlaying}" Value="True">
-                                                <Setter Property="Background" Value="#FF2A3A2A"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <TextBlock Grid.Column="0"
-                                               Text="{Binding TrackNumberLabel}"
-                                               Foreground="{StaticResource TextSecondaryColor}"
-                                               Margin="0,0,8,0"
-                                               VerticalAlignment="Center"/>
-
-                                    <StackPanel Grid.Column="1" Margin="0,0,12,0">
-                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
-                                        <TextBlock Text="{Binding Artist}" FontSize="11" Foreground="{StaticResource TextSecondaryColor}"/>
-                                    </StackPanel>
-
-                                    <TextBlock Grid.Column="2"
-                                               Text="{Binding Duration, StringFormat=mm\\:ss}"
-                                               Foreground="{StaticResource TextSecondaryColor}"
-                                               Margin="0,0,14,0"
-                                               VerticalAlignment="Center"/>
-
-                                    <Button Grid.Column="3"
-                                            Content="▶"
-                                            Command="{Binding DataContext.PlayAlbumTrackCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                            CommandParameter="{Binding}"
-                                            Width="18"
-                                            Height="18"
-                                            Padding="0"
-                                            Margin="0"
-                                            Foreground="{StaticResource TextSecondaryColor}"
-                                            Background="Transparent"
-                                            BorderThickness="0"
-                                            FontSize="12"
-                                            VerticalAlignment="Center"
-                                            Cursor="Hand"/>
-                                </Grid>
-                            </Border>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
+                <ListView x:Name="AlbumTrackListBox"
+                          Grid.Row="1"
+                          ItemsSource="{Binding AlbumTracks}"
+                          SelectedItem="{Binding SelectedAlbumTrack, Mode=TwoWay}"
+                          MouseDoubleClick="AlbumTrackListBox_MouseDoubleClick"
+                          ScrollViewer.VerticalScrollBarVisibility="Auto">
+                    <ListView.View>
+                        <GridView>
+                            <GridViewColumn Header="#" Width="36">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock FontSize="12"
+                                                   Foreground="{StaticResource TextSecondaryColor}"
+                                                   VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="{Binding TrackNumberLabel}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsNowPlaying}" Value="True">
+                                                            <Setter Property="Text" Value="▶"/>
+                                                            <Setter Property="Foreground" Value="{DynamicResource AccentColor}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="Title" Width="160">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Title}"
+                                                       FontWeight="SemiBold" FontSize="13"
+                                                       TextTrimming="CharacterEllipsis" MaxWidth="150">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryColor}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsNowPlaying}" Value="True">
+                                                                <Setter Property="Foreground" Value="{DynamicResource AccentColor}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Text="{Binding Artist}"
+                                                       FontSize="11"
+                                                       Foreground="{StaticResource TextSecondaryColor}"
+                                                       TextTrimming="CharacterEllipsis" MaxWidth="150"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="Duration" Width="60">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Duration, StringFormat=mm\\:ss}"
+                                                   FontSize="12"
+                                                   Foreground="{StaticResource TextSecondaryColor}"
+                                                   VerticalAlignment="Center"/>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                        </GridView>
+                    </ListView.View>
+                </ListView>
             </Grid>
         </Border>
     </Grid>

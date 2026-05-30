@@ -45,6 +45,8 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         StopCommand = new RelayCommand(_ => Stop());
         PlayPauseToggleCommand = new RelayCommand(_ => PlayPauseToggle());
         PlayAlbumTrackCommand = new RelayCommand(param => PlayAlbumTrack(param as PlaybackTrackListItem));
+        PreviousTrackCommand = new RelayCommand(_ => PlayPreviousTrack(), _ => CanGoToPreviousTrack);
+        NextTrackCommand = new RelayCommand(_ => PlayNextTrack(), _ => CanGoToNextTrack);
     }
 
     public ICommand PlayCommand { get; }
@@ -52,6 +54,10 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     public ICommand StopCommand { get; }
     public ICommand PlayPauseToggleCommand { get; }
     public ICommand PlayAlbumTrackCommand { get; }
+    public ICommand PreviousTrackCommand { get; }
+    public ICommand NextTrackCommand { get; }
+
+    public string PlayPauseIcon => IsPlaying ? "⏸" : "▶";
 
     public string CurrentTrackTitle
     {
@@ -88,7 +94,13 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     public bool IsPlaying
     {
         get => _isPlaying;
-        set => SetProperty(ref _isPlaying, value);
+        set
+        {
+            if (SetProperty(ref _isPlaying, value))
+            {
+                OnPropertyChanged(nameof(PlayPauseIcon));
+            }
+        }
     }
 
     public double Volume
@@ -403,6 +415,26 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         }
 
         LoadTrack(item.Title, item.Artist, item.Duration, item.FilePath);
+    }
+
+    public bool CanGoToPreviousTrack => AlbumTracks.Count > 1 && CurrentTrackIndex > 0;
+    public bool CanGoToNextTrack => AlbumTracks.Count > 1 && CurrentTrackIndex < AlbumTracks.Count - 1;
+
+    private int CurrentTrackIndex =>
+        SelectedAlbumTrack is null ? -1 : AlbumTracks.IndexOf(SelectedAlbumTrack);
+
+    private void PlayPreviousTrack()
+    {
+        var idx = CurrentTrackIndex;
+        if (idx > 0)
+            PlayAlbumTrack(AlbumTracks[idx - 1]);
+    }
+
+    private void PlayNextTrack()
+    {
+        var idx = CurrentTrackIndex;
+        if (idx >= 0 && idx < AlbumTracks.Count - 1)
+            PlayAlbumTrack(AlbumTracks[idx + 1]);
     }
 
     private void RebuildComments()

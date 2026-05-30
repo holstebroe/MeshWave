@@ -1,0 +1,43 @@
+<UserControl x:Class="MeshWave.Views.BrowseView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             Background="{StaticResource BackgroundColor}">
+    <Grid Margin="30">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Browse Community Music"
+                   FontSize="28" FontWeight="Bold"
+                   Foreground="{StaticResource TextPrimaryColor}"
+                   Margin="0,0,0,6"/>
+
+        <TextBlock Grid.Row="1" Text="{Binding StatusText}"
+                   FontSize="14"
+                   Foreground="{StaticResource TextSecondaryColor}"
+                   Margin="0,0,0,30"/>
+
+        <!-- Placeholder for community track list once P2P browse is implemented -->
+        <Border Grid.Row="2" Background="{StaticResource SurfaceColor}"
+                CornerRadius="8" Padding="24">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="🌐" FontSize="48" HorizontalAlignment="Center" Margin="0,0,0,16"/>
+                <TextBlock Text="Community browsing is coming soon."
+                           FontSize="16" FontWeight="SemiBold"
+                           HorizontalAlignment="Center"
+                           Foreground="{StaticResource TextPrimaryColor}"/>
+                <TextBlock Text="Once connected to the Mesh, community-shared music will appear here."
+                           FontSize="13"
+                           Foreground="{StaticResource TextSecondaryColor}"
+                           HorizontalAlignment="Center"
+                           TextAlignment="Center"
+                           Margin="0,8,0,0"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

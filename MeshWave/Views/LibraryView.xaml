@@ -125,11 +125,11 @@
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
                 <TextBlock Grid.Row="0" Text="🎵 Tracks" Style="{StaticResource SectionHeader}"/>
-                <ListBox Grid.Row="1"
-                         ItemsSource="{Binding Tracks}"
-                         MouseDoubleClick="OnTrackDoubleClick"
-                         ScrollViewer.VerticalScrollBarVisibility="Auto">
-                    <ListBox.ContextMenu>
+                <ListView Grid.Row="1"
+                          ItemsSource="{Binding Tracks}"
+                          MouseDoubleClick="OnTrackDoubleClick"
+                          ScrollViewer.VerticalScrollBarVisibility="Auto">
+                    <ListView.ContextMenu>
                         <ContextMenu>
                             <MenuItem Header="Edit Metadata"
                                       Click="EditMetadata_Click"
@@ -139,25 +139,74 @@
                                       CommandParameter="{Binding}"
                                       Visibility="{Binding PlacementTarget.DataContext.CanImportMyMusic, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVisibilityConverter}}"/>
                         </ContextMenu>
-                    </ListBox.ContextMenu>
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal" Margin="0,2">
-                                <Border Width="36" Height="36" CornerRadius="4" ClipToBounds="True" Background="{StaticResource SurfaceColor}" Margin="0,0,8,0">
-                                    <Image Source="{Binding CoverPath}" Stretch="UniformToFill"/>
-                                </Border>
-                                <StackPanel>
-                                    <TextBlock Text="{Binding Title}"/>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding Artist}" FontSize="11" Foreground="{StaticResource TextSecondaryColor}" Margin="0,0,8,0"/>
-                                        <TextBlock Text="{Binding ReleaseBadge}" FontSize="11" Foreground="{StaticResource TextSecondaryColor}" Margin="0,0,8,0"/>
-                                        <TextBlock Text="{Binding Version, StringFormat=v{0}}" FontSize="11" Foreground="{StaticResource TextSecondaryColor}"/>
-                                    </StackPanel>
-                                </StackPanel>
-                            </StackPanel>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
+                    </ListView.ContextMenu>
+                    <ListView.View>
+                        <GridView>
+                            <GridViewColumn Header="#" Width="36">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding TrackNumber}" FontSize="12"
+                                                   Foreground="{StaticResource TextSecondaryColor}"
+                                                   VerticalAlignment="Center"/>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="Title" Width="200">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Border Width="36" Height="36" CornerRadius="3"
+                                                    ClipToBounds="True"
+                                                    Background="{StaticResource SurfaceLightColor}"
+                                                    Margin="0,0,10,0">
+                                                <Image Source="{Binding CoverPath}" Stretch="UniformToFill"/>
+                                            </Border>
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Title}"
+                                                           FontWeight="SemiBold" FontSize="13"
+                                                           TextTrimming="CharacterEllipsis" MaxWidth="130"/>
+                                                <TextBlock Text="{Binding ReleaseBadge}"
+                                                           FontSize="11"
+                                                           Foreground="{StaticResource AccentColor}"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="Artist" Width="130">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Artist}"
+                                                   FontSize="12"
+                                                   Foreground="{StaticResource TextSecondaryColor}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   VerticalAlignment="Center"/>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="Version" Width="60">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Version, StringFormat=v{0}}"
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource TextSecondaryColor}"
+                                                   VerticalAlignment="Center"/>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="Duration" Width="65">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Duration, StringFormat=mm\\:ss}"
+                                                   FontSize="12"
+                                                   Foreground="{StaticResource TextSecondaryColor}"
+                                                   VerticalAlignment="Center"/>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                        </GridView>
+                    </ListView.View>
+                </ListView>
             </Grid>
         </Grid>
     </Grid>

@@ -141,7 +141,9 @@ namespace MeshWave.ViewModels
                     CoverPath = coverPath,
                     FilePath = resolvedPath,
                     IsReleased = trackMeta.IsReleased,
-                    Version = trackMeta.Version <= 0 ? 1 : trackMeta.Version
+                    Version = trackMeta.Version <= 0 ? 1 : trackMeta.Version,
+                    TrackNumber = trackMeta.TrackNumber,
+                    Duration = t.Duration
                 };
             }).ToList();
 

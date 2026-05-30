@@ -77,6 +77,7 @@ public class ApplicationViewModel : ViewModelBase
     public ICommand DisconnectP2PCommand { get; }
 
     public SyncOrchestrator SyncOrchestrator => _syncOrchestrator;
+    public PlaybackViewModel Playback => _playbackViewModel;
 
     public void NavigateToHome()
     {
@@ -96,6 +97,11 @@ public class ApplicationViewModel : ViewModelBase
     public void NavigateToSettings()
     {
         CurrentViewModel = new SettingsViewModel();
+    }
+
+    public void NavigateToBrowse()
+    {
+        CurrentViewModel = new BrowseViewModel();
     }
 
     public void NavigateToPlayback()

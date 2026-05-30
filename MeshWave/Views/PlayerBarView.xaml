@@ -1,0 +1,106 @@
+<UserControl x:Class="MeshWave.Views.PlayerBarView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="90" d:DesignWidth="1200">
+    <!-- Bind to ApplicationViewModel.Playback -->
+    <UserControl.DataContext>
+        <Binding RelativeSource="{RelativeSource AncestorType=Window}" Path="DataContext.Playback"/>
+    </UserControl.DataContext>
+
+    <Grid Margin="15,0">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="280"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="280"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ===== Left: Track Info ===== -->
+        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+            <!-- Album art thumbnail -->
+            <Border Width="56" Height="56" CornerRadius="4"
+                    Background="{StaticResource SurfaceLightColor}"
+                    ClipToBounds="True" Margin="0,0,12,0">
+                <Grid>
+                    <TextBlock Text="♪" FontSize="22"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Foreground="{StaticResource TextSecondaryColor}"/>
+                    <Image Source="{Binding CoverImagePath}" Stretch="UniformToFill"/>
+                </Grid>
+            </Border>
+            <!-- Title + artist -->
+            <StackPanel VerticalAlignment="Center" MaxWidth="190">
+                <TextBlock Text="{Binding CurrentTrackTitle, FallbackValue='—'}"
+                           FontWeight="SemiBold" FontSize="14"
+                           TextTrimming="CharacterEllipsis"/>
+                <TextBlock Text="{Binding CurrentArtist, FallbackValue=''}"
+                           FontSize="12"
+                           Foreground="{StaticResource TextSecondaryColor}"
+                           TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+        </StackPanel>
+
+        <!-- ===== Centre: Controls + progress ===== -->
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center" MinWidth="400" MaxWidth="600">
+            <!-- Transport buttons -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,6">
+                <Button Content="⏮"
+                        Style="{StaticResource PlayerIconButton}"
+                        Command="{Binding PreviousTrackCommand}"
+                        FontSize="18" Margin="0,0,4,0"/>
+                <Button Command="{Binding PlayPauseToggleCommand}"
+                        Width="36" Height="36" Margin="8,0">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource PlayerCircleButton}">
+                            <Setter Property="Content" Value="▶"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsPlaying}" Value="True">
+                                    <Setter Property="Content" Value="⏸"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <Button Content="⏭"
+                        Style="{StaticResource PlayerIconButton}"
+                        Command="{Binding NextTrackCommand}"
+                        FontSize="18" Margin="4,0,0,0"/>
+            </StackPanel>
+
+            <!-- Progress row -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0"
+                           Text="{Binding CurrentPosition, StringFormat=mm\\:ss}"
+                           FontSize="11" Foreground="{StaticResource TextSecondaryColor}"
+                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <Slider Grid.Column="1"
+                        Minimum="0"
+                        Maximum="{Binding Duration, Converter={StaticResource TimeSpanToSecondsConverter}}"
+                        Value="{Binding CurrentPosition, Mode=TwoWay, Converter={StaticResource TimeSpanToSecondsConverter}}"
+                        VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="2"
+                           Text="{Binding Duration, StringFormat=mm\\:ss}"
+                           FontSize="11" Foreground="{StaticResource TextSecondaryColor}"
+                           VerticalAlignment="Center" Margin="10,0,0,0"/>
+            </Grid>
+        </StackPanel>
+
+        <!-- ===== Right: Volume ===== -->
+        <StackPanel Grid.Column="2" Orientation="Horizontal"
+                    HorizontalAlignment="Right" VerticalAlignment="Center">
+            <TextBlock Text="🔊" FontSize="14"
+                       VerticalAlignment="Center" Margin="0,0,8,0"
+                       Foreground="{StaticResource TextSecondaryColor}"/>
+            <Slider Width="90" Minimum="0" Maximum="1"
+                    Value="{Binding Volume, Mode=TwoWay}"
+                    VerticalAlignment="Center"/>
+        </StackPanel>
+    </Grid>
+</UserControl>

@@ -4,83 +4,141 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:MeshWave"
+        xmlns:views="clr-namespace:MeshWave.Views"
         mc:Ignorable="d"
         Title="MeshWave - Decentralized Music Sharing" 
-        Height="700" Width="1200"
+        Height="760" Width="1240"
+        MinHeight="600" MinWidth="900"
         Background="{StaticResource BackgroundColor}">
     <Grid>
-        <DockPanel>
-            <!-- Top bar: nav menu + P2P status strip -->
-            <Grid DockPanel.Dock="Top" Background="{StaticResource SurfaceColor}">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="90"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="240"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
 
-                <Menu Grid.Column="0"
-                      Background="Transparent"
-                      Foreground="{StaticResource TextPrimaryColor}">
-                    <MenuItem Header="Home" Click="HomeMenu_Click"/>
-                    <MenuItem Header="Library" Click="LibraryMenu_Click"/>
-                    <MenuItem Header="My Music" Click="MyMusicMenu_Click"/>
-                    <MenuItem Header="Playback" Click="PlaybackMenu_Click"/>
-                    <MenuItem Header="Settings" Click="SettingsMenu_Click"/>
-                </Menu>
-
-                <!-- P2P status strip (right side of title bar) -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" 
-                            VerticalAlignment="Center" Margin="8,0">
-                    <Ellipse Width="8" Height="8" Margin="0,0,6,0" VerticalAlignment="Center">
-                        <Ellipse.Style>
-                            <Style TargetType="Ellipse">
-                                <Setter Property="Fill" Value="#555555"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding P2PIsConnected}" Value="True">
-                                        <Setter Property="Fill" Value="#27AE60"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Ellipse.Style>
-                    </Ellipse>
-                    <TextBlock Text="{Binding P2PStatusText}"
-                               Foreground="{StaticResource TextSecondaryColor}"
-                               VerticalAlignment="Center"
-                               FontSize="12"
-                               Margin="0,0,10,0"/>
-                    <Button Content="Connect"
-                            Command="{Binding ConnectP2PCommand}"
-                            Padding="8,3" Margin="0,2,4,2" FontSize="12">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource SuccessButton}">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding P2PIsConnected}" Value="True">
-                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                    </Button>
-                    <Button Content="Disconnect"
-                            Command="{Binding DisconnectP2PCommand}"
-                            Padding="8,3" Margin="0,2,4,2" FontSize="12">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource DangerButton}">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding P2PIsConnected}" Value="False">
-                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                    </Button>
+        <!-- ===== Left Sidebar ===== -->
+        <Border Grid.Row="0" Grid.Column="0" Background="{StaticResource SidebarBgColor}">
+            <DockPanel>
+                <!-- App branding -->
+                <StackPanel DockPanel.Dock="Top" Margin="15,20,15,30">
+                    <TextBlock Text="MeshWave"
+                               FontSize="22" FontWeight="Bold"
+                               Foreground="{StaticResource AccentColor}"
+                               Margin="8,0,0,0"/>
                 </StackPanel>
-            </Grid>
 
+                <!-- Navigation section -->
+                <StackPanel DockPanel.Dock="Top">
+                    <Button Content="🏠  Home" 
+                            Style="{StaticResource SidebarNavButton}"
+                            Click="HomeMenu_Click"/>
+                    <Button Content="🎵  Now Playing" 
+                            Style="{StaticResource SidebarNavButton}"
+                            Click="PlaybackMenu_Click"/>
+                    <Button Content="🎙  My Music"
+                            Style="{StaticResource SidebarNavButton}"
+                            Click="MyMusicMenu_Click"/>
+                </StackPanel>
+
+                <!-- Divider + Mesh section label -->
+                <StackPanel DockPanel.Dock="Top" Margin="0,20,0,0">
+                    <TextBlock Text="YOUR MESH"
+                               FontSize="11" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextDimColor}"
+                               Margin="22,0,0,8"/>
+                    <Button Content="📚  Library"
+                            Style="{StaticResource SidebarNavButton}"
+                            Click="LibraryMenu_Click"/>
+                    <Button Content="🌐  Browse"
+                            Style="{StaticResource SidebarNavButton}"
+                            Click="BrowseMenu_Click"/>
+                    <Button Content="⚙️  Settings"
+                            Style="{StaticResource SidebarNavButton}"
+                            Click="SettingsMenu_Click"/>
+                </StackPanel>
+
+                <!-- P2P status at bottom of sidebar -->
+                <StackPanel VerticalAlignment="Bottom" Margin="15,20">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="VerticalAlignment" Value="Bottom"/>
+                        </Style>
+                    </StackPanel.Style>
+                    <Border Background="{StaticResource SurfaceLightColor}" CornerRadius="8" Padding="12,10">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <Ellipse Width="8" Height="8" Margin="0,0,6,0" VerticalAlignment="Center">
+                                    <Ellipse.Style>
+                                        <Style TargetType="Ellipse">
+                                            <Setter Property="Fill" Value="#555555"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding P2PIsConnected}" Value="True">
+                                                    <Setter Property="Fill" Value="#1DB954"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Ellipse.Style>
+                                </Ellipse>
+                                <TextBlock Text="{Binding P2PStatusText}"
+                                           Foreground="{StaticResource TextSecondaryColor}"
+                                           FontSize="12"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"
+                                           MaxWidth="160"/>
+                            </StackPanel>
+                            <Button Content="Connect to Mesh"
+                                    Command="{Binding ConnectP2PCommand}"
+                                    Padding="0,5" FontSize="12" FontWeight="SemiBold">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource SuccessButton}">
+                                        <Setter Property="Margin" Value="0"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding P2PIsConnected}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                            <Button Content="Disconnect"
+                                    Command="{Binding DisconnectP2PCommand}"
+                                    Padding="0,5" FontSize="12" FontWeight="SemiBold">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource DangerButton}">
+                                        <Setter Property="Margin" Value="0"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding P2PIsConnected}" Value="False">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- ===== Main Content Area ===== -->
+        <Border Grid.Row="0" Grid.Column="1" Background="{StaticResource BackgroundColor}">
             <ContentControl x:Name="MainContent" Background="{StaticResource BackgroundColor}">
                 <ContentControl.Content>
                     <Binding Path="CurrentViewModel" Converter="{StaticResource ViewModelToViewConverter}"/>
                 </ContentControl.Content>
             </ContentControl>
-        </DockPanel>
+        </Border>
+
+        <!-- ===== Persistent Bottom Player Bar ===== -->
+        <Border Grid.Row="1" Grid.ColumnSpan="2"
+                Background="{StaticResource PlayerBarBgColor}"
+                BorderBrush="{StaticResource PlayerBarBorderColor}"
+                BorderThickness="0,1,0,0">
+            <views:PlayerBarView/>
+        </Border>
     </Grid>
 </Window>

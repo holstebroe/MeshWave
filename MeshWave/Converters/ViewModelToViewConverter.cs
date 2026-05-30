@@ -35,6 +35,12 @@ namespace MeshWave.Converters
                 view.DataContext = vm4;
                 return view;
             }
+            if (value is BrowseViewModel vm5)
+            {
+                var view = new BrowseView();
+                view.DataContext = vm5;
+                return view;
+            }
             return null;
         }
 

@@ -267,6 +267,8 @@ public sealed class LibraryTrackItem
     public required string FilePath { get; set; }
     public bool IsReleased { get; set; }
     public int Version { get; set; } = 1;
+    public int TrackNumber { get; set; }
+    public TimeSpan Duration { get; set; }
     public string ReleaseBadge => IsReleased ? "Released" : "Draft";
     public override string ToString() => Title;
 }
