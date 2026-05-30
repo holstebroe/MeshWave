@@ -15,4 +15,6 @@ public class Album
     public required string Signature { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    /// <summary>UTC timestamp when this album was first announced to the network. Null = not yet released.</summary>
+    public DateTime? ReleasedAt { get; set; }
 }

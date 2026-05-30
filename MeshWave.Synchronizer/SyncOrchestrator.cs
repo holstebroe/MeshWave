@@ -180,34 +180,40 @@ public class SyncOrchestrator : IDisposable
 
     /// <summary>
     /// Announces a track release to the network by appending a signed Create operation to the local manifest.
+    /// Automatically stamps <c>releasedAt</c> (ISO-8601 UTC) into the metadata dictionary if not already set.
     /// Call this when the user marks a track as released and wants peers to discover it.
     /// </summary>
     public void AnnounceTrack(string trackId, string contentHash, Dictionary<string, string>? metadata = null)
     {
         if (_localManifest == null || _identity == null) return;
+        var meta = metadata != null ? new Dictionary<string, string>(metadata) : [];
+        meta.TryAdd("releasedAt", DateTime.UtcNow.ToString("O"));
         _manifestManager.AppendSignedOperation(
             _localManifest,
             ManifestOperationType.Create,
             trackId,
             "Track",
             contentHash,
-            metadata,
+            meta,
             _identity.PrivateKeyPem);
     }
 
     /// <summary>
     /// Announces an album release to the network.
+    /// Automatically stamps <c>releasedAt</c> (ISO-8601 UTC) into the metadata dictionary if not already set.
     /// </summary>
     public void AnnounceAlbum(string albumId, string? contentHash, Dictionary<string, string>? metadata = null)
     {
         if (_localManifest == null || _identity == null) return;
+        var meta = metadata != null ? new Dictionary<string, string>(metadata) : [];
+        meta.TryAdd("releasedAt", DateTime.UtcNow.ToString("O"));
         _manifestManager.AppendSignedOperation(
             _localManifest,
             ManifestOperationType.Create,
             albumId,
             "Album",
             contentHash,
-            metadata,
+            meta,
             _identity.PrivateKeyPem);
     }
 

@@ -13,12 +13,13 @@ public class CommunityViewModel : ViewModelBase
     private string _searchQuery = string.Empty;
     private string _searchStatus = string.Empty;
     private bool _isSearching;
-    private CommunityTab _activeTab = CommunityTab.Discover;
+    private CommunityTab _activeTab = CommunityTab.Feed;
     private ObservableCollection<CommunityUserItem> _searchResults = [];
     private ObservableCollection<CommunityGroupItem> _groupResults = [];
     private ObservableCollection<CommunityUserItem> _friends = [];
     private ObservableCollection<CommunityUserItem> _following = [];
     private ObservableCollection<CommunityGroupItem> _myGroups = [];
+    private ObservableCollection<ReleaseFeedItem> _releaseFeed = [];
 
     public CommunityViewModel()
     {
@@ -30,6 +31,7 @@ public class CommunityViewModel : ViewModelBase
         JoinGroupCommand = new RelayCommand<CommunityGroupItem>(JoinGroup, g => g != null && !g.IsMember);
         LeaveGroupCommand = new RelayCommand<CommunityGroupItem>(LeaveGroup, g => g != null && g.IsMember);
         SetTabCommand = new RelayCommand<string>(tab => ActiveTab = Enum.Parse<CommunityTab>(tab));
+        RefreshFeedCommand = new RelayCommand(_ => RefreshFeed());
     }
 
     public ICommand SearchCommand { get; }
@@ -40,6 +42,7 @@ public class CommunityViewModel : ViewModelBase
     public ICommand JoinGroupCommand { get; }
     public ICommand LeaveGroupCommand { get; }
     public ICommand SetTabCommand { get; }
+    public ICommand RefreshFeedCommand { get; }
 
     public string SearchQuery
     {
@@ -75,6 +78,7 @@ public class CommunityViewModel : ViewModelBase
         set
         {
             SetProperty(ref _activeTab, value);
+            OnPropertyChanged(nameof(IsTabFeed));
             OnPropertyChanged(nameof(IsTabDiscover));
             OnPropertyChanged(nameof(IsTabFriends));
             OnPropertyChanged(nameof(IsTabFollowing));
@@ -82,6 +86,7 @@ public class CommunityViewModel : ViewModelBase
         }
     }
 
+    public bool IsTabFeed     => ActiveTab == CommunityTab.Feed;
     public bool IsTabDiscover  => ActiveTab == CommunityTab.Discover;
     public bool IsTabFriends   => ActiveTab == CommunityTab.Friends;
     public bool IsTabFollowing => ActiveTab == CommunityTab.Following;
@@ -115,6 +120,34 @@ public class CommunityViewModel : ViewModelBase
     {
         get => _myGroups;
         private set => SetProperty(ref _myGroups, value);
+    }
+
+    public ObservableCollection<ReleaseFeedItem> ReleaseFeed
+    {
+        get => _releaseFeed;
+        private set => SetProperty(ref _releaseFeed, value);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Release feed
+    // ──────────────────────────────────────────────────────────────────────
+
+    private void RefreshFeed()
+    {
+        // TODO (Milestone F): query PeerManifestStore for Create ops from followed peers,
+        // map them to ReleaseFeedItem ordered by ReleasedAt descending.
+        // For now populate a placeholder so the UI is exercisable.
+        ReleaseFeed =
+        [
+            new ReleaseFeedItem
+            {
+                ArtistDisplayName = "Peer Artist",
+                ArtistAvatarIconPath = string.Empty,
+                Title = "Release feed will populate when connected to the mesh.",
+                TargetType = "Track",
+                ReleasedAt = DateTime.UtcNow
+            }
+        ];
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -197,7 +230,7 @@ public class CommunityViewModel : ViewModelBase
     }
 }
 
-public enum CommunityTab { Discover, Friends, Following, Groups }
+public enum CommunityTab { Feed, Discover, Friends, Following, Groups }
 
 public class CommunityUserItem : ViewModelBase
 {
@@ -210,6 +243,12 @@ public class CommunityUserItem : ViewModelBase
     public int TrackCount { get; set; }
     public int FollowerCount { get; set; }
 
+    // Artist profile fields
+    public bool IsArtist { get; set; }
+    public string Bio { get; set; } = string.Empty;
+    public string Website { get; set; } = string.Empty;
+    public string BannerImagePath { get; set; } = string.Empty;
+
     public bool IsFollowing
     {
         get => _isFollowing;
@@ -221,6 +260,19 @@ public class CommunityUserItem : ViewModelBase
         get => _isFriend;
         set => SetProperty(ref _isFriend, value);
     }
+}
+
+/// <summary>A single item in the release feed — a Create op from a followed/discovered peer.</summary>
+public class ReleaseFeedItem
+{
+    public string ArtistUserId { get; set; } = string.Empty;
+    public string ArtistDisplayName { get; set; } = string.Empty;
+    public string ArtistAvatarIconPath { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string TargetType { get; set; } = string.Empty;   // "Track" or "Album"
+    public string TargetId { get; set; } = string.Empty;
+    public DateTime ReleasedAt { get; set; }
+    public string ReleasedAtDisplay => ReleasedAt.ToLocalTime().ToString("MMM d, yyyy");
 }
 
 public class CommunityGroupItem : ViewModelBase

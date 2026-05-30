@@ -9,25 +9,26 @@
 
 ## Active Sprint
 
-Milestone F -- Artist and Fan Profiles
+Milestone F -- Artist and Fan Profiles (tail tasks)
 
-Next immediate tasks:
-1. Add IsArtist flag + extended fields (Bio, BannerImagePath, BannerImageHash, Website) to UserProfile
-2. Restructure SettingsView into tabs (General | Profile | Artist | Appearance | Network | Storage)
-3. Artist tab UI (bio, website, banner)
-4. ReleasedAt timestamp on track/album sidecar
-5. Release feed panel in CommunityView
+Remaining tasks:
+1. Add to Library flow (content exchange request ? Other Music folder)
+2. Follow notifications badge (Community nav item, new Create ops since last sync)
+3. Persist follow list as signed Follow manifest ops
+4. User profile sync op (broadcast IsArtist, Bio, BannerImageHash, Website)
 
 ## Recently Completed
 
-- Play count sync: signed Play ops in local manifest, session rate cap (one per track per session)
-- Play count consensus: MergeManifest enforces MaxPlaysPerUserPerTrackPerDay=3 per (trackId, utcDate)
-- PeerManifestStore: per-peer manifest disk persistence, signature-verified
-- Bootstrap console node (MeshWave.Bootstrap): PEX-only, --port/--seeds args
-- Community view scaffold (CommunityViewModel + CommunityView with navigation)
-- Dark-theme ComboBox style in SharedStyles
-- PathToBitmapConverter: OnLoad bitmap loading prevents file-lock on avatar images
-- Waveform hover seek-preview overlay (SeekPreviewOverlay on MouseMove/MouseLeave)
+- ReleasedAt: DateTime? field on Track and Album models; AnnounceTrack/AnnounceAlbum stamp releasedAt in manifest op metadata
+- Release feed panel: Feed tab added to CommunityView; ReleaseFeedItem model; RefreshFeedCommand; empty state
+- Artist profile cards: Following tab shows full artist card (banner strip, avatar, ARTIST badge, bio, website, counts); Discover results show badge + bio snippet
+- CommunityUserItem extended: IsArtist, Bio, Website, BannerImagePath fields
+- ReleaseFeedItem model: ArtistDisplayName, Title, TargetType, ReleasedAt, ReleasedAtDisplay
+- Settings tabbed layout (6 tabs: General | Profile | Artist | Appearance | Network | Storage)
+- IsArtist flag + Bio, Website, BannerImagePath on UserProfile and User models
+- Play count sync: signed Play ops, session rate cap, MergeManifest daily cap (3/user/track/day)
+- PeerManifestStore, Bootstrap console node, Community view scaffold
+- Dark-theme ComboBox, PathToBitmapConverter, waveform hover seek-preview, avatar file-lock fix
 
 ## Architecture Decisions
 

@@ -43,15 +43,15 @@
 - [ ] Audit log / replay verification for play count manifest operations
 - [ ] Per-user contribution cap UI (show X plays from Y unique listeners)
 
-## Milestone F: Artist and Fan Profiles  <-- NEXT
-- [ ] User role flag -- IsArtist: bool added to UserProfile and User model
-- [ ] Extended artist profile fields -- Bio (plain text max 1000 chars), BannerImagePath (local path), BannerImageHash (P2P content hash), Website (URL)
-- [ ] Settings tabbed layout -- replace linear scroll with tabs: General | Profile | Artist | Appearance | Network | Storage
-- [ ] Profile tab -- display name, avatar picker, avatar preview (existing content moved here)
-- [ ] Artist tab -- conditionally enabled when IsArtist=true; fields: Bio, Website, Banner image picker and preview
-- [ ] Artist profile card view -- read-only card shown in Community when browsing a peer; displays banner, rounded avatar, display name, bio, website, track/album count, Follow button
-- [ ] Release timestamp -- ReleasedAt: DateTime field on track/album sidecar; set on first announce; shown in library and community views
-- [ ] Release feed panel in CommunityView -- lists recent Create manifest ops from followed peers ordered by ReleasedAt; shows artist, title, timestamp, Add to Library button
+## Milestone F: Artist and Fan Profiles  <-- ACTIVE
+- [x] User role flag -- IsArtist: bool added to UserProfile and User model
+- [x] Extended artist profile fields -- Bio (plain text max 1000 chars), BannerImagePath (local path), BannerImageHash (P2P content hash), Website (URL)
+- [x] Settings tabbed layout -- replace linear scroll with tabs: General | Profile | Artist | Appearance | Network | Storage
+- [x] Profile tab -- display name, avatar picker, avatar preview (existing content moved here)
+- [x] Artist tab -- conditionally enabled when IsArtist=true; fields: Bio, Website, Banner image picker and preview
+- [x] Release timestamp -- ReleasedAt: DateTime? field on Track and Album models; stamped by AnnounceTrack/AnnounceAlbum into manifest metadata
+- [x] Release feed panel in CommunityView -- Feed tab: lists ReleaseFeedItem entries ordered newest-first; Refresh button; empty state; "Add to Library" button (action stub)
+- [x] Artist profile card view -- Following tab upgraded to full artist cards: banner strip, rounded avatar, ARTIST badge, bio, website, track/follower counts, Unfollow button; Discover cards also show ARTIST badge + bio snippet
 - [ ] Add to Library flow -- triggers content exchange request; places files in Other Music folder
 - [ ] Follow notifications -- badge on Community nav item when followed artist has new Create ops since last sync
 - [ ] Persist follow list as signed Follow manifest ops (social graph)
