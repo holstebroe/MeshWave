@@ -3,7 +3,7 @@
 ## Build/Test
 
 - Build: passing
-- LibraryManager tests: passing
+- LibraryManager tests: passing (4/4)
 
 ## Documentation Structure
 

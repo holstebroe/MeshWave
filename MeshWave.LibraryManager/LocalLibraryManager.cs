@@ -302,13 +302,17 @@ public class LocalLibraryManager
         try
         {
             var coverPath = GetCoverCachePath(filePath);
-            if (System.IO.File.Exists(coverPath))
+            if (File.Exists(coverPath))
             {
                 return;
             }
 
             using var tagFile = TagLib.File.Create(filePath);
-            var picture = tagFile.Tag.Pictures?.FirstOrDefault();
+            var picture = tagFile.Tag.Pictures?
+                .FirstOrDefault(p => p.Type == TagLib.PictureType.FrontCover)
+                ?? tagFile.Tag.Pictures?.FirstOrDefault();
+
+            // TODO: consider resizing large cover images to save space and memory when loading.
             if (picture == null || picture.Data == null || picture.Data.Count == 0)
             {
                 return;
@@ -320,7 +324,9 @@ public class LocalLibraryManager
                 Directory.CreateDirectory(coverDir);
             }
 
-            System.IO.File.WriteAllBytes(coverPath, picture.Data.Data);
+            var cacheFileName = Path.GetFileNameWithoutExtension(coverPath) + ".jpg";
+            var normalizedCoverPath = Path.Combine(coverDir ?? string.Empty, cacheFileName);
+            File.WriteAllBytes(normalizedCoverPath, picture.Data.Data);
         }
         catch
         {

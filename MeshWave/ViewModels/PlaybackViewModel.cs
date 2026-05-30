@@ -184,7 +184,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             TimestampSeconds = timestamp.TotalSeconds,
             Label = text,
             UserDisplayName = string.IsNullOrWhiteSpace(profile.DisplayName) ? "You" : profile.DisplayName,
-            UserIconPath = profile.AvatarImagePath
+            UserIconPath = string.IsNullOrWhiteSpace(profile.AvatarIconPath) ? profile.AvatarImagePath : profile.AvatarIconPath
         };
         TimelineMarkers.Add(marker);
         OnPropertyChanged(nameof(TimelineMarkers));

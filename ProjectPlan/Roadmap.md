@@ -25,6 +25,7 @@
 
 - Profile model/editing (name, avatar, generated icon)
 - Play-count registration + sync preparation
+- Playback waveform rendering quality polish (alias/gap artifact fixes)
 
 ## Next Milestones
 

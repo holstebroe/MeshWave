@@ -83,13 +83,17 @@ namespace MeshWave.Views
             {
                 var amplitude = samples.Length > i ? Math.Clamp(samples[i], 0f, 1f) : 0.2f;
                 var barHeight = Math.Max(8, amplitude * (float)height);
+                var left = i * barWidth;
+                var right = (i + 1) * barWidth;
                 var rect = new Rectangle
                 {
-                    Width = Math.Max(1, barWidth - 1),
+                    Width = Math.Max(1, Math.Ceiling(right) - Math.Floor(left)),
                     Height = barHeight,
-                    Fill = new SolidColorBrush(Color.FromRgb(33, 150, 243))
+                    Fill = new SolidColorBrush(Color.FromRgb(33, 150, 243)),
+                    SnapsToDevicePixels = true
                 };
-                Canvas.SetLeft(rect, i * barWidth);
+                RenderOptions.SetEdgeMode(rect, EdgeMode.Aliased);
+                Canvas.SetLeft(rect, Math.Floor(left));
                 Canvas.SetTop(rect, (height - barHeight) / 2);
                 WaveformCanvas.Children.Add(rect);
             }

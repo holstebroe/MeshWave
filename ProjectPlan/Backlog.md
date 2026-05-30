@@ -4,11 +4,12 @@
 
 - [x] User profile editor (name, avatar) baseline in Settings
 - [ ] User profile editor (bio and advanced profile fields)
-- [ ] Rounded profile icon generation and use in timeline markers/comments
+- [x] Rounded profile icon generation and use in timeline markers/comments
+- [x] Profile/setup page shows avatar preview and generated icon preview
 - [ ] Community sync for tracks/comments/play counts
 - [ ] Play count registration threshold + sync
 - [ ] Rich home dashboard polish/flashy visuals
-- [ ] Home dashboard panel cards should navigate to respective tabs when clicked
+- [x] Home dashboard panel cards should navigate to respective tabs when clicked
 - [ ] Persistent library index database (optional simple file DB first)
 
 ## Detailed TODO / Bugs
@@ -57,5 +58,7 @@
 - [ ] Add more automated tests for WPF viewmodels/services
 - [ ] Better structured logging + error UI
 - [ ] Performance pass for large libraries
-- [ ] Move long-running import progress to popup-only UX (no inline panel)
-- [ ] Clarify or remove non-functional search/filter text box until filtering is implemented
+- [x] Move long-running import progress to popup-only UX (no inline panel)
+- [x] Clarify or remove non-functional search/filter text box until filtering is implemented
+- [x] Ensure cover cache writes standardized .jpg file output in LocalLibraryManager
+- [x] Remove waveform bar gap artifacts in playback waveform rendering

@@ -68,6 +68,19 @@
                                     Command="{Binding BrowseAvatarCommand}"
                                     Style="{StaticResource PrimaryButton}"/>
                         </Grid>
+
+                        <TextBlock Text="Avatar Preview" Margin="0,10,0,6"/>
+                        <StackPanel Orientation="Horizontal">
+                            <Border Width="64" Height="64" CornerRadius="12" ClipToBounds="True" Background="{StaticResource BackgroundColor}" Margin="0,0,12,0">
+                                <Image Source="{Binding AvatarImagePath}" Stretch="UniformToFill"/>
+                            </Border>
+                            <StackPanel>
+                                <TextBlock Text="Generated Icon" Margin="0,0,0,4" Foreground="{StaticResource TextSecondaryColor}"/>
+                                <Border Width="40" Height="40" CornerRadius="8" ClipToBounds="True" Background="{StaticResource BackgroundColor}">
+                                    <Image Source="{Binding AvatarIconPath}" Stretch="UniformToFill"/>
+                                </Border>
+                            </StackPanel>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 

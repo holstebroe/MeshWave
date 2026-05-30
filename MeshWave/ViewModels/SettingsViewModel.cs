@@ -20,6 +20,7 @@ public class SettingsViewModel : ViewModelBase
     private double _volume = 0.8;
     private string _supportedExtensionsText = string.Empty;
     private string _avatarImagePath = string.Empty;
+    private string _avatarIconPath = string.Empty;
 
     public SettingsViewModel()
     {
@@ -52,6 +53,12 @@ public class SettingsViewModel : ViewModelBase
     {
         get => _avatarImagePath;
         set => SetProperty(ref _avatarImagePath, value);
+    }
+
+    public string AvatarIconPath
+    {
+        get => _avatarIconPath;
+        set => SetProperty(ref _avatarIconPath, value);
     }
 
     public string Theme
@@ -93,6 +100,7 @@ public class SettingsViewModel : ViewModelBase
         var profile = _profileService.LoadProfile();
         Username = profile.DisplayName;
         AvatarImagePath = profile.AvatarImagePath;
+        AvatarIconPath = profile.AvatarIconPath;
 
         IsInitialized = !string.IsNullOrEmpty(settings.BaseFolder);
     }
@@ -162,8 +170,12 @@ public class SettingsViewModel : ViewModelBase
         _profileService.SaveProfile(new UserProfile
         {
             DisplayName = string.IsNullOrWhiteSpace(Username) ? "You" : Username,
-            AvatarImagePath = AvatarImagePath
+            AvatarImagePath = AvatarImagePath,
+            AvatarIconPath = AvatarIconPath
         });
+
+        var savedProfile = _profileService.LoadProfile();
+        AvatarIconPath = savedProfile.AvatarIconPath;
 
         IsInitialized = true;
 

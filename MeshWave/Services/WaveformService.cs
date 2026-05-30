@@ -45,10 +45,21 @@ namespace MeshWave.Services
                 frameOffset += framesRead;
             }
 
+            var maxValue = 0.0f;
+            for (var i = 0; i < points; i++)
+            {
+                var value = counts[i] > 0 ? accumulators[i] / counts[i] : 0f;
+                if (value > maxValue) maxValue = value;
+            }
+
+            // Scale to 1.1f
+            var scale = maxValue > 0 ? 1.1f / maxValue : 1f;
+
+
             for (var i = 0; i < points; i++)
             {
                 accumulators[i] = counts[i] > 0
-                    ? Math.Clamp(accumulators[i] / counts[i], 0f, 1f)
+                    ? Math.Clamp(scale * accumulators[i] / counts[i], 0f, 1f)
                     : 0f;
             }
 
