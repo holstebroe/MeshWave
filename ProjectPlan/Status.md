@@ -30,6 +30,7 @@ Completed in latest session:
 - Network settings now include diagnostics panel showing per-attempt outcomes, endpoints, and NAT forwarding guidance from latest connection report
 - SettingsService cache behavior fixed so saved network settings apply immediately without requiring app restart
 - Bootstrap project now includes ARM Linux runtime identifiers (`linux-arm`, `linux-arm64`) as deployment baseline
+- Added ARM publish helper script: `scripts/publish-bootstrap-arm.ps1` (supports linux-arm/linux-arm64 and framework-dependent/self-contained)
 
 Milestone I -- Mesh Resilience and Background Mode (COMPLETE)
 Milestone J -- Mesh Integration Tests (COMPLETE)

@@ -480,7 +480,7 @@
                                                            Margin="0,0,0,6"/>
                                                 <ProgressBar Minimum="0"
                                                              Maximum="100"
-                                                             Value="{Binding Percentage}"
+                                                             Value="{Binding Percentage, Mode=OneWay}"
                                                              Height="10"
                                                              Foreground="{Binding BarBrush}"/>
                                             </StackPanel>

@@ -108,7 +108,7 @@ Example use cases: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone 
 ## Platform Expansion (planned)
 
 - [x] Define bootstrap build/publish configuration baseline for ARM Linux targets (`linux-arm`, `linux-arm64`) in bootstrap project
-- [ ] Add publish profiles/scripts for ARM Linux deployment packaging (framework-dependent + self-contained variants)
+- [x] Add publish script for ARM Linux deployment packaging baseline (framework-dependent + self-contained variants): `scripts/publish-bootstrap-arm.ps1`
 - [ ] Mobile player-only app: playback of community files + community interactions; cache only most-recently-played files
 - [ ] Web frontend phase 1: playback-focused UI; future phase can add backend support for user-owned file storage
 
