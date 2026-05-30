@@ -366,15 +366,14 @@
                 <!-- ══════════════════ STORAGE ══════════════════ -->
                 <TabItem Header="Storage">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel MaxWidth="560">
+                        <StackPanel MaxWidth="720">
 
                             <TextBlock Text="💾 Storage"
                                        Style="{StaticResource SectionHeader}"
                                        Margin="0,0,0,12"/>
 
-                            <!-- Storage info placeholder — wired in next milestone -->
                             <Border Background="{StaticResource SurfaceLightColor}"
-                                    CornerRadius="6" Padding="16" Margin="0,0,0,16">
+                                    CornerRadius="6" Padding="16" Margin="0,0,0,12">
                                 <StackPanel>
                                     <TextBlock Text="Base Folder"
                                                Foreground="{StaticResource TextSecondaryColor}"
@@ -382,14 +381,101 @@
                                                Margin="0,0,0,4"/>
                                     <TextBlock Text="{Binding BaseFolder}"
                                                Foreground="{StaticResource TextPrimaryColor}"
-                                               TextWrapping="Wrap"/>
+                                               TextWrapping="Wrap"
+                                               Margin="0,0,0,8"/>
+
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="Used"
+                                                       Foreground="{StaticResource TextSecondaryColor}"
+                                                       FontSize="11"/>
+                                            <TextBlock Text="{Binding UsedDriveDisplay}" FontWeight="SemiBold"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="Free"
+                                                       Foreground="{StaticResource TextSecondaryColor}"
+                                                       FontSize="11"/>
+                                            <TextBlock Text="{Binding FreeDriveDisplay}" FontWeight="SemiBold"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="Total"
+                                                       Foreground="{StaticResource TextSecondaryColor}"
+                                                       FontSize="11"/>
+                                            <TextBlock Text="{Binding TotalDriveDisplay}" FontWeight="SemiBold"/>
+                                        </StackPanel>
+                                    </Grid>
                                 </StackPanel>
                             </Border>
 
-                            <TextBlock Text="Detailed storage breakdown and cleanup tools will be available here in an upcoming update."
+                            <TextBlock Text="Quota warning threshold (GB)"
+                                       Margin="0,0,0,4"/>
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="140"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0"
+                                         Text="{Binding StorageQuotaWarningGb, UpdateSourceTrigger=PropertyChanged}"/>
+                                <TextBlock Grid.Column="1"
+                                           Text="Progress bars are green under 70%, amber under 90%, red at 90%+ of this threshold."
+                                           Foreground="{StaticResource TextSecondaryColor}"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Margin="10,0,0,0"/>
+                            </Grid>
+
+                            <ItemsControl ItemsSource="{Binding StorageCategories}" Margin="0,0,0,14">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{StaticResource SurfaceLightColor}" CornerRadius="6" Padding="12" Margin="0,0,0,8">
+                                            <StackPanel>
+                                                <Grid Margin="0,0,0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0" Text="{Binding Category}" FontWeight="SemiBold"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding SizeDisplay}" Foreground="{StaticResource TextSecondaryColor}"/>
+                                                </Grid>
+                                                <TextBlock Text="{Binding Path}"
+                                                           Foreground="{StaticResource TextSecondaryColor}"
+                                                           FontSize="11"
+                                                           TextWrapping="Wrap"
+                                                           Margin="0,0,0,6"/>
+                                                <ProgressBar Minimum="0"
+                                                             Maximum="100"
+                                                             Value="{Binding Percentage}"
+                                                             Height="10"
+                                                             Foreground="{Binding BarBrush}"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <Button Content="🔄 Refresh"
+                                        Command="{Binding RefreshStorageCommand}"
+                                        Style="{StaticResource PrimaryButton}"
+                                        Margin="0,0,8,10"/>
+                                <Button Content="🧹 Clear peer manifests"
+                                        Command="{Binding ClearPeerManifestCacheCommand}"
+                                        Style="{StaticResource DangerButton}"
+                                        Margin="0,0,8,10"/>
+                                <Button Content="🧼 Clear waveform cache"
+                                        Command="{Binding ClearWaveformCacheCommand}"
+                                        Style="{StaticResource DangerButton}"/>
+                            </StackPanel>
+
+                            <TextBlock Text="{Binding StorageStatusMessage}"
                                        Foreground="{StaticResource TextSecondaryColor}"
-                                       TextWrapping="Wrap"
-                                       FontStyle="Italic"/>
+                                       FontStyle="Italic"
+                                       TextWrapping="Wrap"/>
 
                         </StackPanel>
                     </ScrollViewer>

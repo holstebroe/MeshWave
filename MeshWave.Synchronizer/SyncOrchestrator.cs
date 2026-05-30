@@ -100,6 +100,14 @@ public class SyncOrchestrator : IDisposable
     public IEnumerable<PeerInfo> GetPeers() => _router.GetPeers();
 
     /// <summary>
+    /// Clears all persisted peer manifests and in-memory cache.
+    /// </summary>
+    public void ClearPeerManifestCache()
+    {
+        _peerStore.ClearAll();
+    }
+
+    /// <summary>
     /// Manually triggers a manifest fetch from all known peers.
     /// </summary>
     public async Task SyncAllPeersAsync(CancellationToken cancellationToken = default)

@@ -53,11 +53,15 @@ Verify mesh stability protocol with in-process bootstrap node and multiple orche
 7. Signature verification test
 8. All 7 tests passing (6.1 sec total)
 
-## Upcoming: Milestone H -- Settings Storage and Housekeeping Tab
+## Milestone H -- Settings Storage and Housekeeping Tab (COMPLETE)
 
-- Storage tab in Settings: used/free disk space, per-category breakdown
-- Visual progress bars with colour coding
-- Clear cached manifests / clear waveform cache buttons
+### Completed
+1. Storage tab now shows used/free/total drive space
+2. Per-category breakdown for My Music, Other Music, Manifests, and Cache
+3. Progress bars color-coded by quota threshold (green/amber/red)
+4. Clear cached peer manifests action wired to clear store and disk cache
+5. Clear waveform cache action implemented
+6. Configurable storage quota warning threshold persisted in settings
 
 ## Upcoming: Milestone G -- Community Groups and Distributed Chat
 

@@ -12,6 +12,7 @@ namespace MeshWave.Models
         public List<string> SupportedExtensions { get; set; } = [".mp3", ".flac", ".wav", ".ogg", ".m4a"];
         public P2PSettings P2P { get; set; } = new();
         public PlaybackSettings Playback { get; set; } = new();
+        public StorageSettings Storage { get; set; } = new();
     }
 
     public class P2PSettings
@@ -36,5 +37,10 @@ namespace MeshWave.Models
         public double Volume { get; set; } = 0.8;
         public double CrossfadeDuration { get; set; } = 2.0; // seconds
         public string WaveformStyle { get; set; } = "Filled";
+    }
+
+    public class StorageSettings
+    {
+        public double QuotaWarningGb { get; set; } = 10;
     }
 }

@@ -99,6 +99,22 @@ public class PeerManifestStore
         }
     }
 
+    /// <summary>
+    /// Clears all cached peer manifests from memory and disk.
+    /// </summary>
+    public void ClearAll()
+    {
+        _manifests.Clear();
+
+        if (!Directory.Exists(_storeDirectory))
+            return;
+
+        foreach (var file in Directory.EnumerateFiles(_storeDirectory, "*.json", SearchOption.TopDirectoryOnly))
+        {
+            try { File.Delete(file); } catch { }
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────────────
     // Private helpers
     // ─────────────────────────────────────────────────────────────────────

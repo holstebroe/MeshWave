@@ -108,13 +108,13 @@ Example groups: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone Col
 - [ ] Group discovery panel -- search by name/tag; Join/Leave actions
 - [ ] Group creation flow -- name, description, tags, initial channel; broadcasts FoundGroup + CreateChannel ops
 
-## Milestone H: Settings Storage and Housekeeping Tab
-- [ ] Storage tab added to Settings (alongside General/Profile/Artist/Appearance/Network)
-- [ ] Show used/free disk space and per-category breakdown: My Music, Other Music, Manifests, Cache
-- [ ] Visual progress bar per category (green < 70%, amber < 90%, red >= 90%)
-- [ ] Clear cached peer manifests button -- deletes PeerManifests/ folder contents and reloads store
-- [ ] Clear waveform cache button (future use)
-- [ ] Configurable storage quota warning threshold (default 10 GB)
+## Milestone H: Settings Storage and Housekeeping Tab (DONE)
+- [x] Storage tab added to Settings (alongside General/Profile/Artist/Appearance/Network)
+- [x] Show used/free disk space and per-category breakdown: My Music, Other Music, Manifests, Cache
+- [x] Visual progress bar per category (green < 70%, amber < 90%, red >= 90%)
+- [x] Clear cached peer manifests button -- deletes PeerManifests/ folder contents and reloads store
+- [x] Clear waveform cache button (future use)
+- [x] Configurable storage quota warning threshold (default 10 GB)
 
 ## Milestone I: Mesh Resilience and Background Mode  <-- ACTIVE
 

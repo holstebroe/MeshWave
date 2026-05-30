@@ -14,7 +14,7 @@
 Milestone I -- Mesh Resilience and Background Mode (COMPLETE)
 Milestone J -- Mesh Integration Tests (COMPLETE)
 
-Upcoming: Milestone H -- Settings Storage and Housekeeping Tab
+Milestone H -- Settings Storage and Housekeeping Tab (COMPLETE)
 
 ## Recently Completed
 
@@ -34,6 +34,14 @@ Upcoming: Milestone H -- Settings Storage and Housekeeping Tab
 - MainWindow.xaml.cs OnClosing intercepts close events, hides to tray
 - UseWindowsForms enabled in csproj; GlobalUsings alias file manages WPF/WinForms type conflicts
 - Icon fallback to SystemIcons.Application if embedded resource invalid
+
+### Milestone H: Settings Storage and Housekeeping Tab
+- Settings Storage tab now shows used/free/total disk space for selected drive
+- Per-category storage breakdown implemented: My Music, Other Music, Manifests, Cache
+- Progress bars use quota threshold color coding (green <70%, amber <90%, red >=90%)
+- Clear peer manifest cache action clears both in-memory store and PeerManifests disk files
+- Clear waveform cache action deletes cached *.waveform.json files under library folders
+- Storage quota warning threshold is configurable and persisted in settings
 
 ### Milestone F: Artist and Fan Profiles (tail items)
 - RecordFollow, RecordUnfollow: append signed Follow/Unfollow ops to manifest

@@ -1,10 +1,13 @@
 using MeshWave.LibraryManager;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows.Input;
 using MeshWave.Models;
 using MeshWave.Mvvm;
 using MeshWave.Services;
 using MeshWave.Synchronizer;
+using SolidColorBrush = System.Windows.Media.SolidColorBrush;
 
 namespace MeshWave.ViewModels;
 
@@ -42,6 +45,13 @@ public class SettingsViewModel : ViewModelBase
     private WaveformStyle _waveformStyle = WaveformStyle.Filled;
     private readonly SyncOrchestrator? _sync;
 
+    private readonly ObservableCollection<StorageCategoryUsage> _storageCategories = [];
+    private string _storageStatusMessage = string.Empty;
+    private double _storageQuotaWarningGb = 10;
+    private long _totalDriveBytes;
+    private long _freeDriveBytes;
+    private long _usedDriveBytes;
+
     public SettingsViewModel(Action<WaveformStyle>? onWaveformStyleSaved = null, SyncOrchestrator? sync = null)
     {
         _onWaveformStyleSaved = onWaveformStyleSaved;
@@ -55,6 +65,9 @@ public class SettingsViewModel : ViewModelBase
         BrowseAvatarCommand = new RelayCommand(_ => BrowseAvatarImage());
         BrowseBannerCommand = new RelayCommand(_ => BrowseBannerImage());
         RegenerateIdentityCommand = new RelayCommand(_ => RegenerateIdentity());
+        RefreshStorageCommand = new RelayCommand(_ => RefreshStorageStats());
+        ClearPeerManifestCacheCommand = new RelayCommand(_ => ClearPeerManifestCache());
+        ClearWaveformCacheCommand = new RelayCommand(_ => ClearWaveformCache());
     }
 
     public ICommand SaveCommand { get; }
@@ -62,6 +75,9 @@ public class SettingsViewModel : ViewModelBase
     public ICommand BrowseAvatarCommand { get; }
     public ICommand BrowseBannerCommand { get; }
     public ICommand RegenerateIdentityCommand { get; }
+    public ICommand RefreshStorageCommand { get; }
+    public ICommand ClearPeerManifestCacheCommand { get; }
+    public ICommand ClearWaveformCacheCommand { get; }
 
     public string BaseFolder
     {
@@ -186,6 +202,49 @@ public class SettingsViewModel : ViewModelBase
 
     public IEnumerable<WaveformStyle> AvailableWaveformStyles => Enum.GetValues<WaveformStyle>();
 
+    public IReadOnlyList<StorageCategoryUsage> StorageCategories => _storageCategories;
+
+    public string StorageStatusMessage
+    {
+        get => _storageStatusMessage;
+        set => SetProperty(ref _storageStatusMessage, value);
+    }
+
+    public double StorageQuotaWarningGb
+    {
+        get => _storageQuotaWarningGb;
+        set
+        {
+            var normalized = Math.Clamp(value, 1, 5000);
+            if (SetProperty(ref _storageQuotaWarningGb, normalized))
+            {
+                RecalculateStoragePercentages();
+            }
+        }
+    }
+
+    public long TotalDriveBytes
+    {
+        get => _totalDriveBytes;
+        private set => SetProperty(ref _totalDriveBytes, value);
+    }
+
+    public long FreeDriveBytes
+    {
+        get => _freeDriveBytes;
+        private set => SetProperty(ref _freeDriveBytes, value);
+    }
+
+    public long UsedDriveBytes
+    {
+        get => _usedDriveBytes;
+        private set => SetProperty(ref _usedDriveBytes, value);
+    }
+
+    public string TotalDriveDisplay => FormatBytes(TotalDriveBytes);
+    public string FreeDriveDisplay => FormatBytes(FreeDriveBytes);
+    public string UsedDriveDisplay => FormatBytes(UsedDriveBytes);
+
     private void LoadSettings()
     {
         var settings = _settingsService.LoadSettings();
@@ -215,9 +274,12 @@ public class SettingsViewModel : ViewModelBase
         if (Enum.TryParse<WaveformStyle>(settings.Playback.WaveformStyle, out var parsedStyle))
             WaveformStyle = parsedStyle;
 
+        StorageQuotaWarningGb = Math.Clamp(settings.Storage.QuotaWarningGb, 1, 5000);
+
         RefreshIdentityInfo();
 
         IsInitialized = !string.IsNullOrEmpty(settings.BaseFolder);
+        RefreshStorageStats();
     }
 
     private void RefreshIdentityInfo()
@@ -319,6 +381,10 @@ public class SettingsViewModel : ViewModelBase
                 Port = P2PPort,
                 MaxPeers = Math.Clamp(P2PMaxPeers, 1, SecurityLimits.MaxRoutingTableSize),
                 BootstrapNodes = bootstrapNodes
+            },
+            Storage = new StorageSettings
+            {
+                QuotaWarningGb = Math.Clamp(StorageQuotaWarningGb, 1, 5000)
             }
         };
 
@@ -342,6 +408,7 @@ public class SettingsViewModel : ViewModelBase
         _onWaveformStyleSaved?.Invoke(WaveformStyle);
 
         IsInitialized = true;
+        RefreshStorageStats();
 
         // Broadcast the updated profile to the P2P network as a signed Profile op.
         _sync?.BroadcastProfile(
@@ -350,5 +417,252 @@ public class SettingsViewModel : ViewModelBase
             bio: Bio.Length > 1000 ? Bio[..1000] : Bio,
             website: Website,
             bannerImageHash: null);   // TODO: compute hash when content exchange is implemented
+    }
+
+    private void RefreshStorageStats()
+    {
+        try
+        {
+            var myMusic = _settingsService.GetMyMusicFolder();
+            var otherMusic = _settingsService.GetOtherMusicFolder();
+            var appDataRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MeshWave");
+            var peerManifestFolder = Path.Combine(appDataRoot, "PeerManifests");
+
+            var myMusicBytes = GetDirectorySizeSafe(myMusic);
+            var otherMusicBytes = GetDirectorySizeSafe(otherMusic);
+            var manifestsBytes = GetDirectorySizeSafe(peerManifestFolder);
+            var cacheBytes = GetWaveformCacheSize(myMusic) + GetWaveformCacheSize(otherMusic);
+
+            _storageCategories.Clear();
+            _storageCategories.Add(new StorageCategoryUsage("My Music", myMusic, myMusicBytes));
+            _storageCategories.Add(new StorageCategoryUsage("Other Music", otherMusic, otherMusicBytes));
+            _storageCategories.Add(new StorageCategoryUsage("Manifests", peerManifestFolder, manifestsBytes));
+            _storageCategories.Add(new StorageCategoryUsage("Cache", "Waveform .cache folders", cacheBytes));
+
+            var driveRoot = ResolveDriveRoot(BaseFolder, appDataRoot);
+            if (!string.IsNullOrWhiteSpace(driveRoot))
+            {
+                var drive = new DriveInfo(driveRoot);
+                TotalDriveBytes = drive.TotalSize;
+                FreeDriveBytes = drive.AvailableFreeSpace;
+                UsedDriveBytes = drive.TotalSize - drive.AvailableFreeSpace;
+            }
+            else
+            {
+                TotalDriveBytes = 0;
+                FreeDriveBytes = 0;
+                UsedDriveBytes = 0;
+            }
+
+            OnPropertyChanged(nameof(StorageCategories));
+            OnPropertyChanged(nameof(TotalDriveDisplay));
+            OnPropertyChanged(nameof(FreeDriveDisplay));
+            OnPropertyChanged(nameof(UsedDriveDisplay));
+
+            RecalculateStoragePercentages();
+            StorageStatusMessage = "Storage details refreshed.";
+        }
+        catch (Exception ex)
+        {
+            StorageStatusMessage = $"Storage refresh failed: {ex.Message}";
+        }
+    }
+
+    private void RecalculateStoragePercentages()
+    {
+        var quotaBytes = (long)(StorageQuotaWarningGb * 1024 * 1024 * 1024);
+        foreach (var category in _storageCategories)
+        {
+            category.UpdateThreshold(quotaBytes);
+        }
+    }
+
+    private void ClearPeerManifestCache()
+    {
+        try
+        {
+            _sync?.ClearPeerManifestCache();
+
+            var appDataRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MeshWave");
+            var peerManifestFolder = Path.Combine(appDataRoot, "PeerManifests");
+            if (Directory.Exists(peerManifestFolder))
+            {
+                foreach (var file in Directory.EnumerateFiles(peerManifestFolder, "*", SearchOption.TopDirectoryOnly))
+                {
+                    File.Delete(file);
+                }
+            }
+
+            RefreshStorageStats();
+            StorageStatusMessage = "Peer manifest cache cleared.";
+        }
+        catch (Exception ex)
+        {
+            StorageStatusMessage = $"Failed to clear peer manifest cache: {ex.Message}";
+        }
+    }
+
+    private void ClearWaveformCache()
+    {
+        try
+        {
+            DeleteWaveformCache(_settingsService.GetMyMusicFolder());
+            DeleteWaveformCache(_settingsService.GetOtherMusicFolder());
+            RefreshStorageStats();
+            StorageStatusMessage = "Waveform cache cleared.";
+        }
+        catch (Exception ex)
+        {
+            StorageStatusMessage = $"Failed to clear waveform cache: {ex.Message}";
+        }
+    }
+
+    private static void DeleteWaveformCache(string rootFolder)
+    {
+        if (!Directory.Exists(rootFolder))
+            return;
+
+        foreach (var file in Directory.EnumerateFiles(rootFolder, "*.waveform.json", SearchOption.AllDirectories))
+        {
+            File.Delete(file);
+        }
+    }
+
+    private static long GetWaveformCacheSize(string rootFolder)
+    {
+        if (!Directory.Exists(rootFolder))
+            return 0;
+
+        long total = 0;
+        foreach (var file in Directory.EnumerateFiles(rootFolder, "*.waveform.json", SearchOption.AllDirectories))
+        {
+            try
+            {
+                total += new FileInfo(file).Length;
+            }
+            catch
+            {
+                // ignore unreadable files
+            }
+        }
+
+        return total;
+    }
+
+    private static long GetDirectorySizeSafe(string folder)
+    {
+        if (!Directory.Exists(folder))
+            return 0;
+
+        long total = 0;
+        foreach (var file in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories))
+        {
+            try
+            {
+                total += new FileInfo(file).Length;
+            }
+            catch
+            {
+                // ignore inaccessible files
+            }
+        }
+
+        return total;
+    }
+
+    private static string ResolveDriveRoot(string primaryPath, string fallbackPath)
+    {
+        if (!string.IsNullOrWhiteSpace(primaryPath))
+        {
+            var root = Path.GetPathRoot(primaryPath);
+            if (!string.IsNullOrWhiteSpace(root))
+                return root;
+        }
+
+        var fallbackRoot = Path.GetPathRoot(fallbackPath);
+        return fallbackRoot ?? string.Empty;
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        double value = Math.Max(0, bytes);
+        var index = 0;
+        while (value >= 1024 && index < units.Length - 1)
+        {
+            value /= 1024;
+            index++;
+        }
+
+        return $"{value:0.##} {units[index]}";
+    }
+}
+
+public sealed class StorageCategoryUsage : ViewModelBase
+{
+    private const double GreenThreshold = 70;
+    private const double AmberThreshold = 90;
+
+    private double _percentage;
+    private Brush _barBrush = new SolidColorBrush((Color)System.Windows.Media.ColorConverter.ConvertFromString("#1DB954"));
+
+    public StorageCategoryUsage(string category, string path, long bytes)
+    {
+        Category = category;
+        Path = path;
+        Bytes = bytes;
+    }
+
+    public string Category { get; }
+    public string Path { get; }
+    public long Bytes { get; }
+
+    public string SizeDisplay => FormatBytes(Bytes);
+
+    public double Percentage
+    {
+        get => _percentage;
+        private set => SetProperty(ref _percentage, value);
+    }
+
+    public Brush BarBrush
+    {
+        get => _barBrush;
+        private set => SetProperty(ref _barBrush, value);
+    }
+
+    public void UpdateThreshold(long quotaBytes)
+    {
+        if (quotaBytes <= 0)
+        {
+            Percentage = 0;
+            BarBrush = CreateBrush("#1DB954");
+            return;
+        }
+
+        Percentage = Math.Clamp((Bytes / (double)quotaBytes) * 100.0, 0, 100);
+        BarBrush = Percentage switch
+        {
+            < GreenThreshold => CreateBrush("#1DB954"),
+            < AmberThreshold => CreateBrush("#E67E22"),
+            _ => CreateBrush("#C0392B")
+        };
+    }
+
+    private static SolidColorBrush CreateBrush(string hex)
+        => new((Color)System.Windows.Media.ColorConverter.ConvertFromString(hex));
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        double value = Math.Max(0, bytes);
+        var index = 0;
+        while (value >= 1024 && index < units.Length - 1)
+        {
+            value /= 1024;
+            index++;
+        }
+
+        return $"{value:0.##} {units[index]}";
     }
 }
