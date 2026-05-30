@@ -11,9 +11,17 @@
 
 ## Active Sprint
 
+Milestone D remainder -- Community Sync (IN PROGRESS)
+
+Completed in latest session:
+- Follow notifications badge on Community nav for followed artists with new releases
+- Release feed now hydrates from followed peers' persisted Create operations
+- Add to Library now requests peer content by hash and stores files in Other Music
+- Community ingestion path now writes downloaded tracks into library structure with safe fallback
+- Comment sync now uses signed manifest ops with ReplyToId threading and peer merge into playback timeline
+
 Milestone I -- Mesh Resilience and Background Mode (COMPLETE)
 Milestone J -- Mesh Integration Tests (COMPLETE)
-
 Milestone H -- Settings Storage and Housekeeping Tab (COMPLETE)
 
 ## Recently Completed
@@ -34,6 +42,15 @@ Milestone H -- Settings Storage and Housekeeping Tab (COMPLETE)
 - MainWindow.xaml.cs OnClosing intercepts close events, hides to tray
 - UseWindowsForms enabled in csproj; GlobalUsings alias file manages WPF/WinForms type conflicts
 - Icon fallback to SystemIcons.Application if embedded resource invalid
+
+### Milestone D remainder: Community Sync (latest)
+- Follow notification badge now only lights for followed peers with new Create operations
+- Community release feed now loads from persisted followed-peer manifests and refreshes on merge events
+- Feed refresh now updates status text and empty states from real manifest data
+- Release card '+ Library' now requests content by hash via SyncOrchestrator and stores into Other Music
+- Add-to-library flow includes type-based extension resolution and raw-file fallback placement
+- Playback comments now publish signed Comment ops and ingest peer Comment/CommentDelete ops per track
+- Reply threading is preserved via replyToId metadata and rendered through timeline marker hierarchy
 
 ### Milestone H: Settings Storage and Housekeeping Tab
 - Settings Storage tab now shows used/free/total disk space for selected drive

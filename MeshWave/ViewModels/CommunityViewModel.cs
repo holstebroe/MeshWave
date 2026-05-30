@@ -1,7 +1,12 @@
+using MeshWave.Common.Core.Models;
+using MeshWave.LibraryManager;
 using MeshWave.Mvvm;
+using MeshWave.Services;
 using MeshWave.Synchronizer;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Windows.Input;
 
 namespace MeshWave.ViewModels;
@@ -12,6 +17,7 @@ namespace MeshWave.ViewModels;
 public class CommunityViewModel : ViewModelBase
 {
     private readonly SyncOrchestrator? _sync;
+    private readonly SettingsService _settingsService = new();
 
     private string _searchQuery = string.Empty;
     private string _searchStatus = string.Empty;
@@ -24,6 +30,7 @@ public class CommunityViewModel : ViewModelBase
     private ObservableCollection<CommunityGroupItem> _myGroups = [];
     private ObservableCollection<ReleaseFeedItem> _releaseFeed = [];
     private int _newReleaseCount;
+    private readonly Dictionary<string, int> _lastFeedReleaseSequenceByPeer = new(StringComparer.OrdinalIgnoreCase);
 
     public CommunityViewModel(SyncOrchestrator? sync = null)
     {
@@ -43,10 +50,13 @@ public class CommunityViewModel : ViewModelBase
                 NewReleaseCount = 0;   // clear badge when user opens the Feed tab
         });
         RefreshFeedCommand = new RelayCommand(_ => RefreshFeed());
-        AddToLibraryCommand = new RelayCommand<ReleaseFeedItem>(AddToLibrary, r => r != null);
+        AddToLibraryCommand = new RelayCommand<ReleaseFeedItem>(AddToLibrary, r => r != null && !string.IsNullOrWhiteSpace(r.ContentHash));
 
         if (_sync != null)
+        {
             _sync.ManifestMerged += OnManifestMerged;
+            RefreshFeed();
+        }
     }
 
     public ICommand SearchCommand { get; }
@@ -164,20 +174,61 @@ public class CommunityViewModel : ViewModelBase
 
     private void RefreshFeed()
     {
-        // TODO (Milestone F): query PeerManifestStore for Create ops from followed peers,
-        // map them to ReleaseFeedItem ordered by ReleasedAt descending.
-        // For now populate a placeholder so the UI is exercisable.
-        ReleaseFeed =
-        [
-            new ReleaseFeedItem
+        if (_sync == null)
+        {
+            ReleaseFeed = [];
+            SearchStatus = "Connect to the mesh to load releases.";
+            return;
+        }
+
+        var followedIds = Following.Select(u => u.UserId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (followedIds.Count == 0)
+        {
+            ReleaseFeed = [];
+            SearchStatus = "Follow artists to see releases in your feed.";
+            return;
+        }
+
+        var releaseItems = new List<ReleaseFeedItem>();
+
+        foreach (var manifest in _sync.PeerManifests.Where(m => followedIds.Contains(m.UserId)))
+        {
+            var profile = Following.FirstOrDefault(u => string.Equals(u.UserId, manifest.UserId, StringComparison.OrdinalIgnoreCase));
+            var createOps = manifest.Operations
+                .Where(op => op.OperationType == ManifestOperationType.Create)
+                .OrderByDescending(op => op.SequenceNumber)
+                .ToList();
+
+            var maxSequence = createOps.Count > 0 ? createOps[0].SequenceNumber : 0;
+            _lastFeedReleaseSequenceByPeer[manifest.UserId] = Math.Max(_lastFeedReleaseSequenceByPeer.GetValueOrDefault(manifest.UserId, 0), maxSequence);
+
+            releaseItems.AddRange(createOps.Select(op => new ReleaseFeedItem
             {
-                ArtistDisplayName = "Peer Artist",
-                ArtistAvatarIconPath = string.Empty,
-                Title = "Release feed will populate when connected to the mesh.",
-                TargetType = "Track",
-                ReleasedAt = DateTime.UtcNow
-            }
-        ];
+                ArtistUserId = manifest.UserId,
+                ArtistDisplayName = profile?.DisplayName ?? manifest.UserId,
+                ArtistAvatarIconPath = profile?.AvatarIconPath ?? string.Empty,
+                Title = op.Metadata.TryGetValue("title", out var title)
+                    ? title
+                    : op.Metadata.TryGetValue("name", out var name)
+                        ? name
+                        : $"{op.TargetType} release",
+                TargetType = op.TargetType,
+                TargetId = op.TargetId,
+                ContentHash = op.ContentHash,
+                ReleasedAt = op.Metadata.TryGetValue("releasedAt", out var releasedAt)
+                    && DateTime.TryParse(releasedAt, out var parsedRelease)
+                    ? parsedRelease
+                    : op.Timestamp
+            }));
+        }
+
+        ReleaseFeed = new ObservableCollection<ReleaseFeedItem>(releaseItems
+            .OrderByDescending(r => r.ReleasedAt)
+            .ThenByDescending(r => r.Title, StringComparer.OrdinalIgnoreCase));
+
+        SearchStatus = ReleaseFeed.Count == 0
+            ? "No releases found yet from followed artists."
+            : $"Loaded {ReleaseFeed.Count} release{(ReleaseFeed.Count == 1 ? string.Empty : "s")} from followed artists.";
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -215,6 +266,7 @@ public class CommunityViewModel : ViewModelBase
         if (!Following.Contains(user))
             Following.Add(user);
         _sync?.RecordFollow(user.UserId);
+        RefreshFeed();
     }
 
     private void UnfollowUser(CommunityUserItem? user)
@@ -223,6 +275,7 @@ public class CommunityViewModel : ViewModelBase
         user.IsFollowing = false;
         Following.Remove(user);
         _sync?.RecordUnfollow(user.UserId);
+        RefreshFeed();
     }
 
     private void AddFriend(CommunityUserItem? user)
@@ -276,26 +329,137 @@ public class CommunityViewModel : ViewModelBase
         var manifest = _sync.GetPeerManifest(e.UserId);
         if (manifest == null) return;
 
-        bool hasNewCreate = manifest.Operations
-            .Any(op => op.OperationType == MeshWave.Common.Core.Models.ManifestOperationType.Create);
+        var latestCreateSequence = manifest.Operations
+            .Where(op => op.OperationType == ManifestOperationType.Create)
+            .Select(op => op.SequenceNumber)
+            .DefaultIfEmpty(0)
+            .Max();
 
-        if (hasNewCreate && ActiveTab != CommunityTab.Feed)
+        var lastKnown = _lastFeedReleaseSequenceByPeer.GetValueOrDefault(e.UserId, 0);
+        if (latestCreateSequence > lastKnown)
         {
-            System.Windows.Application.Current.Dispatcher.Invoke(() => NewReleaseCount++);
+            _lastFeedReleaseSequenceByPeer[e.UserId] = latestCreateSequence;
+            if (ActiveTab != CommunityTab.Feed)
+            {
+                System.Windows.Application.Current.Dispatcher.Invoke(() => NewReleaseCount++);
+            }
         }
+
+        System.Windows.Application.Current.Dispatcher.Invoke(RefreshFeed);
     }
 
     // ──────────────────────────────────────────────────────────────────────
     // Add to Library
     // ──────────────────────────────────────────────────────────────────────
 
-    private void AddToLibrary(ReleaseFeedItem? item)
+    private async void AddToLibrary(ReleaseFeedItem? item)
     {
-        if (item == null) return;
-        // TODO (Milestone D): request content exchange from the peer at item.ArtistUserId
-        // for item.TargetId; on success place the file in AppSettings.OtherMusicFolder.
-        // For now show a status hint.
-        SearchStatus = $"Add to Library: content exchange for \"{item.Title}\" will be available once file-transfer (Milestone D) is implemented.";
+        if (item == null)
+            return;
+
+        if (_sync == null)
+        {
+            SearchStatus = "Add to Library requires an active P2P session.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(item.ContentHash))
+        {
+            SearchStatus = $"Cannot add \"{item.Title}\" yet: no content hash is available from the announcing peer.";
+            return;
+        }
+
+        SearchStatus = $"Requesting \"{item.Title}\" from the mesh...";
+
+        try
+        {
+            var bytes = await _sync.RequestContentAsync(item.ArtistUserId, item.ContentHash);
+            if (bytes == null || bytes.Length == 0)
+            {
+                SearchStatus = $"Add to Library failed for \"{item.Title}\": peer did not return content.";
+                return;
+            }
+
+            _settingsService.EnsureFoldersExist();
+            var settings = _settingsService.LoadSettings();
+            var otherMusicFolder = _settingsService.GetOtherMusicFolder();
+            Directory.CreateDirectory(otherMusicFolder);
+
+            var safeArtist = SanitizeForPath(item.ArtistDisplayName, "Unknown Artist");
+            var safeAlbum = SanitizeForPath("Community", "Community");
+            var extension = ResolveFileExtension(bytes, item.Title);
+            var tempFile = Path.Combine(Path.GetTempPath(), $"MeshWave_{Guid.NewGuid():N}{extension}");
+            File.WriteAllBytes(tempFile, bytes);
+
+            var imported = LocalLibraryManager.ImportSingleFileToOrganizedStructure(tempFile, settings.BaseFolder != string.Empty
+                ? _settingsService.GetOtherMusicFolder()
+                : otherMusicFolder,
+                settings.SupportedExtensions);
+
+            if (!imported)
+            {
+                var fallbackName = SanitizeForPath(item.Title, "Imported Track");
+                var fallbackPath = Path.Combine(otherMusicFolder, safeArtist, safeAlbum, $"{fallbackName}{extension}");
+                var fallbackFolder = Path.GetDirectoryName(fallbackPath);
+                if (!string.IsNullOrWhiteSpace(fallbackFolder))
+                    Directory.CreateDirectory(fallbackFolder);
+                File.WriteAllBytes(fallbackPath, bytes);
+                SearchStatus = $"Added \"{item.Title}\" to Other Music (raw file fallback).";
+            }
+            else
+            {
+                SearchStatus = $"Added \"{item.Title}\" to Other Music.";
+            }
+
+            try { File.Delete(tempFile); } catch { }
+        }
+        catch (Exception ex)
+        {
+            SearchStatus = $"Add to Library failed for \"{item.Title}\": {ex.Message}";
+        }
+    }
+
+    private static string ResolveFileExtension(byte[] bytes, string title)
+    {
+        if (bytes.Length >= 12)
+        {
+            if (bytes[0] == 0x49 && bytes[1] == 0x44 && bytes[2] == 0x33)
+                return ".mp3";
+            if (bytes[0] == 0x66 && bytes[1] == 0x4C && bytes[2] == 0x61 && bytes[3] == 0x43)
+                return ".flac";
+            if (bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46)
+                return ".wav";
+            if (bytes[4] == 0x66 && bytes[5] == 0x74 && bytes[6] == 0x79 && bytes[7] == 0x70)
+                return ".m4a";
+            if (bytes[0] == 0x4F && bytes[1] == 0x67 && bytes[2] == 0x67 && bytes[3] == 0x53)
+                return ".ogg";
+        }
+
+        var normalized = title.ToLowerInvariant();
+        if (normalized.EndsWith(".mp3")) return ".mp3";
+        if (normalized.EndsWith(".flac")) return ".flac";
+        if (normalized.EndsWith(".wav")) return ".wav";
+        if (normalized.EndsWith(".ogg")) return ".ogg";
+        if (normalized.EndsWith(".m4a")) return ".m4a";
+
+        return ".mp3";
+    }
+
+    private static string SanitizeForPath(string value, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return fallback;
+
+        var invalid = Path.GetInvalidFileNameChars();
+        var sb = new StringBuilder(value.Length);
+        foreach (var c in value)
+        {
+            if (!invalid.Contains(c))
+                sb.Append(c);
+        }
+
+        var result = sb.ToString().Trim();
+        return string.IsNullOrWhiteSpace(result) ? fallback : result;
     }
 }
 
@@ -340,6 +504,7 @@ public class ReleaseFeedItem
     public string Title { get; set; } = string.Empty;
     public string TargetType { get; set; } = string.Empty;   // "Track" or "Album"
     public string TargetId { get; set; } = string.Empty;
+    public string? ContentHash { get; set; }
     public DateTime ReleasedAt { get; set; }
     public string ReleasedAtDisplay => ReleasedAt.ToLocalTime().ToString("MMM d, yyyy");
 }

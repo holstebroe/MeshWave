@@ -1,6 +1,8 @@
+using MeshWave.Common.Core.Models;
 using MeshWave.LibraryManager;
 using MeshWave.Mvvm;
 using MeshWave.Services;
+using MeshWave.Synchronizer;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -41,9 +43,13 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     private string _trackContextTitle = "Current Album / Playlist";
     private string _trackContextIconPath = string.Empty;
     private WaveformStyle _waveformStyle = WaveformStyle.Filled;
+    private readonly SyncOrchestrator? _sync;
+    private readonly Dictionary<string, HashSet<string>> _importedCommentOperationIdsByPeer = new(StringComparer.OrdinalIgnoreCase);
 
-    public PlaybackViewModel()
+    public PlaybackViewModel(SyncOrchestrator? sync = null)
     {
+        _sync = sync;
+
         PlayCommand = new RelayCommand(_ => Play());
         PauseCommand = new RelayCommand(_ => Pause());
         StopCommand = new RelayCommand(_ => Stop());
@@ -52,6 +58,9 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         PreviousTrackCommand = new RelayCommand(_ => PlayPreviousTrack(), _ => CanGoToPreviousTrack);
         NextTrackCommand = new RelayCommand(_ => PlayNextTrack(), _ => CanGoToNextTrack);
         ToggleMuteCommand = new RelayCommand(_ => ToggleMute());
+
+        if (_sync != null)
+            _sync.ManifestMerged += OnManifestMerged;
     }
 
     public ICommand PlayCommand { get; }
@@ -288,6 +297,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             ? TimeSpan.FromSeconds(timestampSeconds.Value)
             : CurrentPosition;
         var profile = _profileService.LoadProfile();
+
         var marker = new TimelineCommentMarker
         {
             Id = Guid.NewGuid().ToString("N"),
@@ -298,6 +308,22 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             TrackVersion = CurrentTrackVersion,
             ReplyToId = replyToId
         };
+
+        var syncedCommentOperationId = _sync?.RecordComment(
+            trackId: CurrentTrackId,
+            commentText: text,
+            replyToId: replyToId,
+            metadata: new Dictionary<string, string>
+            {
+                ["displayName"] = marker.UserDisplayName,
+                ["iconPath"] = marker.UserIconPath,
+                ["trackVersion"] = marker.TrackVersion.ToString(),
+                ["timestampSeconds"] = marker.TimestampSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            });
+
+        if (!string.IsNullOrWhiteSpace(syncedCommentOperationId))
+            marker.Id = syncedCommentOperationId;
+
         TimelineMarkers.Add(marker);
         OnPropertyChanged(nameof(TimelineMarkers));
         RebuildComments();
@@ -340,6 +366,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             _myMusicMetadataService.IncrementPlayCount(filePath);
 
             LoadTimelineMarkers();
+            SyncCommentsFromPeerManifests();
 
             _audioService?.Dispose();
             _audioService = new AudioPlaybackService();
@@ -530,8 +557,126 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         }
     }
 
+    private void OnManifestMerged(object? sender, ManifestMergedEventArgs e)
+    {
+        if (_sync == null || string.IsNullOrWhiteSpace(CurrentTrackId))
+            return;
+
+        var manifest = _sync.GetPeerManifest(e.UserId);
+        if (manifest == null)
+            return;
+
+        var changed = ApplyPeerComments(manifest);
+        if (!changed)
+            return;
+
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            OnPropertyChanged(nameof(TimelineMarkers));
+            RebuildComments();
+            SaveTimelineMarkers();
+        });
+    }
+
+    private void SyncCommentsFromPeerManifests()
+    {
+        if (_sync == null || string.IsNullOrWhiteSpace(CurrentTrackId))
+            return;
+
+        var changed = false;
+        foreach (var manifest in _sync.PeerManifests)
+            changed |= ApplyPeerComments(manifest);
+
+        if (!changed)
+            return;
+
+        OnPropertyChanged(nameof(TimelineMarkers));
+        RebuildComments();
+        SaveTimelineMarkers();
+    }
+
+    private bool ApplyPeerComments(Manifest manifest)
+    {
+        if (string.IsNullOrWhiteSpace(CurrentTrackId))
+            return false;
+
+        var imported = _importedCommentOperationIdsByPeer.GetValueOrDefault(manifest.UserId);
+        if (imported == null)
+        {
+            imported = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            _importedCommentOperationIdsByPeer[manifest.UserId] = imported;
+        }
+
+        var changed = false;
+        foreach (var op in manifest.Operations.OrderBy(o => o.SequenceNumber))
+        {
+            if (imported.Contains(op.OperationId))
+                continue;
+
+            if (!string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(op.TargetId, CurrentTrackId, StringComparison.OrdinalIgnoreCase))
+            {
+                imported.Add(op.OperationId);
+                continue;
+            }
+
+            if (op.OperationType == ManifestOperationType.Comment)
+            {
+                var text = op.Metadata.GetValueOrDefault("text");
+                if (!string.IsNullOrWhiteSpace(text) && TimelineMarkers.All(m => !string.Equals(m.Id, op.OperationId, StringComparison.OrdinalIgnoreCase)))
+                {
+                    var parsedVersion = int.TryParse(op.Metadata.GetValueOrDefault("trackVersion"), out var version)
+                        ? version
+                        : CurrentTrackVersion;
+
+                    var marker = new TimelineCommentMarker
+                    {
+                        Id = op.OperationId,
+                        TimestampSeconds = ParseDouble(op.Metadata.GetValueOrDefault("timestampSeconds"), op.Timestamp),
+                        Label = text,
+                        UserDisplayName = op.Metadata.GetValueOrDefault("displayName") ?? manifest.UserId,
+                        UserIconPath = op.Metadata.GetValueOrDefault("iconPath") ?? string.Empty,
+                        TrackVersion = parsedVersion <= 0 ? 1 : parsedVersion,
+                        ReplyToId = op.Metadata.GetValueOrDefault("replyToId")
+                    };
+
+                    TimelineMarkers.Add(marker);
+                    changed = true;
+                }
+            }
+            else if (op.OperationType == ManifestOperationType.CommentDelete)
+            {
+                var commentOperationId = op.Metadata.GetValueOrDefault("commentOperationId");
+                if (!string.IsNullOrWhiteSpace(commentOperationId))
+                {
+                    var existing = TimelineMarkers.FirstOrDefault(m => string.Equals(m.Id, commentOperationId, StringComparison.OrdinalIgnoreCase));
+                    if (existing != null)
+                    {
+                        TimelineMarkers.Remove(existing);
+                        changed = true;
+                    }
+                }
+            }
+
+            imported.Add(op.OperationId);
+        }
+
+        return changed;
+    }
+
+    private static double ParseDouble(string? value, DateTime timestamp)
+    {
+        if (double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+            return parsed;
+
+        return Math.Max(0, timestamp.ToUniversalTime().TimeOfDay.TotalSeconds);
+    }
+
     public void Dispose()
     {
+        if (_sync != null)
+            _sync.ManifestMerged -= OnManifestMerged;
+
         _audioService?.Dispose();
     }
 }

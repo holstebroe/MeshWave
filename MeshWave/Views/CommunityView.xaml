@@ -227,6 +227,8 @@
                                             <!-- Add to Library button -->
                                             <Button Grid.Column="2"
                                                     Content="+ Library"
+                                                    Command="{Binding DataContext.AddToLibraryCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}"
                                                     VerticalAlignment="Center"
                                                     Padding="8,4">
                                                 <Button.Style>

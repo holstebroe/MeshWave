@@ -14,6 +14,7 @@ public class SyncOrchestrator : IDisposable
     private readonly ManifestExchangeClient _client;
     private readonly ManifestManager _manifestManager;
     private readonly PeerManifestStore _peerStore;
+    private readonly ContentExchange _contentExchange;
 
     private LocalPeerIdentity? _identity;
     private Manifest? _localManifest;
@@ -45,13 +46,15 @@ public class SyncOrchestrator : IDisposable
         ManifestExchangeServer? server = null,
         ManifestExchangeClient? client = null,
         ManifestManager? manifestManager = null,
-        PeerManifestStore? peerManifestStore = null)
+        PeerManifestStore? peerManifestStore = null,
+        ContentExchange? contentExchange = null)
     {
         _router = router ?? new PeerRouter();
         _server = server ?? new ManifestExchangeServer();
         _client = client ?? new ManifestExchangeClient(timeoutMs: SecurityLimits.ConnectTimeoutMs);
         _manifestManager = manifestManager ?? new ManifestManager();
         _peerStore = peerManifestStore ?? new PeerManifestStore();
+        _contentExchange = contentExchange ?? new ContentExchange();
         _peerStore.LoadAll();
     }
 
@@ -116,6 +119,23 @@ public class SyncOrchestrator : IDisposable
         {
             await TryFetchAndMergeAsync(peer, cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Requests content bytes from a currently known peer by content hash.
+    /// </summary>
+    public async Task<byte[]?> RequestContentAsync(string peerUserId, string contentHash)
+    {
+        if (string.IsNullOrWhiteSpace(peerUserId) || string.IsNullOrWhiteSpace(contentHash))
+            return null;
+
+        var peer = _router.GetPeers().FirstOrDefault(p =>
+            string.Equals(p.UserId, peerUserId, StringComparison.OrdinalIgnoreCase));
+
+        if (peer == null)
+            return null;
+
+        return await _contentExchange.RequestContentAsync(peer.Address, peer.Port, contentHash);
     }
 
     private void OnPeerAdded(object? sender, PeerInfo peer)
@@ -257,6 +277,52 @@ public class SyncOrchestrator : IDisposable
             "User",
             contentHash: null,
             metadata: null,
+            _identity.PrivateKeyPem);
+    }
+
+    /// <summary>
+    /// Appends a signed Comment op for a track to the local manifest.
+    /// </summary>
+    public string? RecordComment(string trackId, string commentText, string? replyToId = null, Dictionary<string, string>? metadata = null)
+    {
+        if (_localManifest == null || _identity == null) return null;
+        if (string.IsNullOrWhiteSpace(trackId) || string.IsNullOrWhiteSpace(commentText)) return null;
+
+        var meta = metadata != null ? new Dictionary<string, string>(metadata) : [];
+        meta["text"] = SecurityLimits.Truncate(commentText, SecurityLimits.MaxCommentTextLength);
+        if (!string.IsNullOrWhiteSpace(replyToId))
+            meta["replyToId"] = SecurityLimits.Truncate(replyToId, SecurityLimits.MaxOperationIdLength);
+
+        var op = _manifestManager.AppendSignedOperation(
+            _localManifest,
+            ManifestOperationType.Comment,
+            SecurityLimits.Truncate(trackId, SecurityLimits.MaxTargetIdLength),
+            "Track",
+            contentHash: null,
+            metadata: meta,
+            _identity.PrivateKeyPem);
+
+        return op.OperationId;
+    }
+
+    /// <summary>
+    /// Appends a signed CommentDelete op for a previously authored comment operation.
+    /// </summary>
+    public void RecordCommentDelete(string trackId, string commentOperationId)
+    {
+        if (_localManifest == null || _identity == null) return;
+        if (string.IsNullOrWhiteSpace(trackId) || string.IsNullOrWhiteSpace(commentOperationId)) return;
+
+        _manifestManager.AppendSignedOperation(
+            _localManifest,
+            ManifestOperationType.CommentDelete,
+            SecurityLimits.Truncate(trackId, SecurityLimits.MaxTargetIdLength),
+            "Track",
+            contentHash: null,
+            metadata: new Dictionary<string, string>
+            {
+                ["commentOperationId"] = SecurityLimits.Truncate(commentOperationId, SecurityLimits.MaxOperationIdLength)
+            },
             _identity.PrivateKeyPem);
     }
 

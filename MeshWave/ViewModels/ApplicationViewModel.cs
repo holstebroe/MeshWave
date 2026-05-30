@@ -1,4 +1,5 @@
 using MeshWave.Mvvm;
+using MeshWave.Common.Core.Models;
 using MeshWave.Services;
 using MeshWave.Synchronizer;
 using System.Collections.Generic;
@@ -26,10 +27,11 @@ public class ApplicationViewModel : ViewModelBase
     private bool _p2pIsConnected;
     private string _p2pStatusText = "Disconnected";
     private int _p2pPeerCount;
+    private readonly Dictionary<string, int> _lastKnownReleaseSequenceByPeer = new(StringComparer.OrdinalIgnoreCase);
 
     public ApplicationViewModel()
     {
-        _playbackViewModel = new PlaybackViewModel();
+        _playbackViewModel = new PlaybackViewModel(_syncOrchestrator);
         _currentViewModel = new HomeViewModel();
 
         // Apply persisted waveform style immediately
@@ -46,10 +48,12 @@ public class ApplicationViewModel : ViewModelBase
             P2PStatusText = $"Connected · {P2PPeerCount} peer{(P2PPeerCount == 1 ? "" : "s")}";
         };
 
-        _syncOrchestrator.ManifestMerged += (_, _) =>
+        _syncOrchestrator.ManifestMerged += (_, e) =>
         {
-            // If the user isn't currently on the Community view, light up the badge.
-            if (CurrentViewModel is not CommunityViewModel)
+            if (CurrentViewModel is CommunityViewModel)
+                return;
+
+            if (HasNewReleaseFromFollowedPeer(e.UserId))
                 HasCommunityNotification = true;
         };
 
@@ -249,5 +253,44 @@ public class ApplicationViewModel : ViewModelBase
                 System.Diagnostics.Debug.WriteLine($"[P2P] Auto-start error: {ex.Message}");
             }
         });
+    }
+
+    private bool HasNewReleaseFromFollowedPeer(string peerUserId)
+    {
+        if (string.IsNullOrWhiteSpace(peerUserId))
+            return false;
+
+        if (!IsPeerFollowed(peerUserId))
+            return false;
+
+        var manifest = _syncOrchestrator.GetPeerManifest(peerUserId);
+        if (manifest == null)
+            return false;
+
+        var latestCreateSequence = manifest.Operations
+            .Where(op => op.OperationType == ManifestOperationType.Create)
+            .Select(op => op.SequenceNumber)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        if (latestCreateSequence <= 0)
+            return false;
+
+        var lastKnown = _lastKnownReleaseSequenceByPeer.GetValueOrDefault(peerUserId, 0);
+        _lastKnownReleaseSequenceByPeer[peerUserId] = latestCreateSequence;
+        return latestCreateSequence > lastKnown;
+    }
+
+    private bool IsPeerFollowed(string peerUserId)
+    {
+        if (_localManifest == null)
+            return false;
+
+        var latestFollowState = _localManifest.Operations
+            .Where(op => op.TargetType == "User" && string.Equals(op.TargetId, peerUserId, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(op => op.SequenceNumber)
+            .LastOrDefault(op => op.OperationType == ManifestOperationType.Follow || op.OperationType == ManifestOperationType.Unfollow);
+
+        return latestFollowState?.OperationType == ManifestOperationType.Follow;
     }
 }

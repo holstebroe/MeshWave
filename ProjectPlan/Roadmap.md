@@ -77,14 +77,17 @@ Key design points:
 
 Example use cases: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone Collective.
 
-## Upcoming: Milestone D remainder
+## Milestone D remainder (IN PROGRESS)
 
-- Community library ingestion (Other Music from peer manifests)
-- Comment sync and moderation via manifest ops
+- [x] Community library ingestion (Other Music from peer manifests)
+- [x] Comment sync via signed manifest ops (ReplyToId threading + peer merge into timeline)
+- Comment moderation via manifest ops
 - Social graph sync (friends, follows, groups)
 - Likes sync
-- Add to Library flow (content exchange)
+- [x] Add to Library flow (content exchange)
 - Content exchange: TCP file transfer by content hash
+- [x] Follow notifications badge on Community nav for followed artists with new Create ops
+- [x] Release feed now hydrated from followed peers' persisted manifests (ordered newest-first)
 
 ## Upcoming: Milestone E -- Trust and Aggregate Integrity
 

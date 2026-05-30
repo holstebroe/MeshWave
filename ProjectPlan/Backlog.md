@@ -29,8 +29,8 @@
 - [x] Per-peer manifest disk persistence (PeerManifestStore)
 - [x] Play count sync -- signed Play ops, session rate cap, RecordPlay on IsPlaying
 - [x] Play count consensus -- MergeManifest enforces MaxPlaysPerUserPerTrackPerDay=3
-- [ ] Community library ingestion flow (Other Music) driven by peer manifests
-- [ ] Comment sync via manifest operations (signed, author-owned; ReplyToId threading)
+- [x] Community library ingestion flow (Other Music) driven by peer manifests
+- [x] Comment sync via manifest operations (signed, author-owned; ReplyToId threading)
 - [ ] Comment moderation sync (owner soft-delete ops)
 - [ ] Social graph sync (friends, groups, follows as signed manifest ops)
 - [ ] Comment permission enforcement across peers
@@ -52,8 +52,8 @@
 - [x] Release timestamp -- ReleasedAt: DateTime? field on Track and Album models; stamped by AnnounceTrack/AnnounceAlbum into manifest metadata
 - [x] Release feed panel in CommunityView -- Feed tab: lists ReleaseFeedItem entries ordered newest-first; Refresh button; empty state; "Add to Library" button (action stub)
 - [x] Artist profile card view -- Following tab upgraded to full artist cards: banner strip, rounded avatar, ARTIST badge, bio, website, track/follower counts, Unfollow button; Discover cards also show ARTIST badge + bio snippet
-- [ ] Add to Library flow -- triggers content exchange request; places files in Other Music folder
-- [ ] Follow notifications -- badge on Community nav item when followed artist has new Create ops since last sync
+- [x] Add to Library flow -- triggers content exchange request; places files in Other Music folder
+- [x] Follow notifications -- badge on Community nav item when followed artist has new Create ops since last sync
 - [x] Persist follow list as signed Follow manifest ops (social graph)
 - [x] User profile sync op -- broadcast IsArtist, Bio, BannerImageHash, Website as signed Profile manifest op
 
@@ -116,7 +116,7 @@ Example groups: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone Col
 - [x] Clear waveform cache button (future use)
 - [x] Configurable storage quota warning threshold (default 10 GB)
 
-## Milestone I: Mesh Resilience and Background Mode  <-- ACTIVE
+## Milestone I: Mesh Resilience and Background Mode (COMPLETE)
 
 ### Bootstrap Re-contact
 - [x] MaintenanceLoopAsync in PeerRouter does periodic PEX (every 2 min)
@@ -135,6 +135,8 @@ Example groups: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone Col
 - [x] MainWindow: override OnClosing to redirect to hide when tray is active
 
 ## Milestone J: Mesh Integration Tests (DONE)
+
+## Milestone D (current focus): Community Sync remainder
 
 ### Goals
 - Spin up a real bootstrap node in-process, connect multiple SyncOrchestrator instances,

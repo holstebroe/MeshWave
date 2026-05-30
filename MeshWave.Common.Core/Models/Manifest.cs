@@ -29,7 +29,11 @@ public enum ManifestOperationType
     /// <summary>Records that the local user unfollowed a peer (TargetId = peer UserId).</summary>
     Unfollow,
     /// <summary>Broadcasts the user's profile fields (IsArtist, Bio, BannerImageHash, Website, DisplayName).</summary>
-    Profile
+    Profile,
+    /// <summary>Signed user-authored comment operation on a track (supports ReplyToId threading).</summary>
+    Comment,
+    /// <summary>Signed soft-delete for a previously authored comment operation.</summary>
+    CommentDelete
 }
 
 /// <summary>
