@@ -17,6 +17,7 @@ namespace MeshWave.ViewModels
         private string _description = string.Empty;
         private string _genre = string.Empty;
         private int _year;
+        private int _trackNumber;
         private bool _isReleased;
         private int _version = 1;
 
@@ -87,6 +88,12 @@ namespace MeshWave.ViewModels
             set => SetProperty(ref _year, value);
         }
 
+        public int TrackNumber
+        {
+            get => _trackNumber;
+            set => SetProperty(ref _trackNumber, value < 0 ? 0 : value);
+        }
+
         public bool IsReleased
         {
             get => _isReleased;
@@ -121,6 +128,7 @@ namespace MeshWave.ViewModels
             Description = metadata.Description;
             Genre = metadata.Genre;
             Year = metadata.Year;
+            TrackNumber = metadata.TrackNumber;
             IsReleased = metadata.IsReleased;
             Version = metadata.Version <= 0 ? 1 : metadata.Version;
         }
@@ -139,6 +147,7 @@ namespace MeshWave.ViewModels
             Description = metadata.Description;
             Genre = metadata.Genre;
             Year = metadata.Year;
+            TrackNumber = metadata.TrackNumber;
             IsReleased = metadata.IsReleased;
             Version = metadata.Version <= 0 ? 1 : metadata.Version;
         }
@@ -153,6 +162,7 @@ namespace MeshWave.ViewModels
                 Description = Description,
                 Genre = Genre,
                 Year = Year,
+                TrackNumber = TrackNumber,
                 IsReleased = IsReleased,
                 Version = Version
             };

@@ -33,6 +33,10 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     private float[] _waveformSamples = [];
     private string _trackDescription = string.Empty;
     private int _currentTrackVersion = 1;
+    private ObservableCollection<PlaybackTrackListItem> _albumTracks = [];
+    private PlaybackTrackListItem? _selectedAlbumTrack;
+    private string _trackContextTitle = "Current Album / Playlist";
+    private string _trackContextIconPath = string.Empty;
 
     public PlaybackViewModel()
     {
@@ -40,12 +44,14 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         PauseCommand = new RelayCommand(_ => Pause());
         StopCommand = new RelayCommand(_ => Stop());
         PlayPauseToggleCommand = new RelayCommand(_ => PlayPauseToggle());
+        PlayAlbumTrackCommand = new RelayCommand(param => PlayAlbumTrack(param as PlaybackTrackListItem));
     }
 
     public ICommand PlayCommand { get; }
     public ICommand PauseCommand { get; }
     public ICommand StopCommand { get; }
     public ICommand PlayPauseToggleCommand { get; }
+    public ICommand PlayAlbumTrackCommand { get; }
 
     public string CurrentTrackTitle
     {
@@ -137,6 +143,30 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         }
     }
 
+    public ObservableCollection<PlaybackTrackListItem> AlbumTracks
+    {
+        get => _albumTracks;
+        set => SetProperty(ref _albumTracks, value);
+    }
+
+    public PlaybackTrackListItem? SelectedAlbumTrack
+    {
+        get => _selectedAlbumTrack;
+        set => SetProperty(ref _selectedAlbumTrack, value);
+    }
+
+    public string TrackContextTitle
+    {
+        get => _trackContextTitle;
+        set => SetProperty(ref _trackContextTitle, value);
+    }
+
+    public string TrackContextIconPath
+    {
+        get => _trackContextIconPath;
+        set => SetProperty(ref _trackContextIconPath, value);
+    }
+
     private bool _showOnlyCurrentVersionComments;
     public bool ShowOnlyCurrentVersionComments
     {
@@ -216,6 +246,18 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         SaveTimelineMarkers();
     }
 
+    public void SetAlbumTrackContext(IEnumerable<PlaybackTrackListItem> tracks, string? selectedTrackId = null, string? contextTitle = null, string? contextIconPath = null)
+    {
+        AlbumTracks = new ObservableCollection<PlaybackTrackListItem>(tracks);
+        TrackContextTitle = string.IsNullOrWhiteSpace(contextTitle) ? "Current Album / Playlist" : contextTitle;
+        TrackContextIconPath = contextIconPath ?? string.Empty;
+
+        if (!string.IsNullOrWhiteSpace(selectedTrackId))
+        {
+            SelectedAlbumTrack = AlbumTracks.FirstOrDefault(t => string.Equals(t.TrackId, selectedTrackId, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
     public void LoadTrack(string trackTitle, string artist, TimeSpan duration, string? filePath = null)
     {
         CurrentTrackTitle = trackTitle;
@@ -251,6 +293,19 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             _audioService.LoadFile(filePath);
             Duration = _audioService.Duration;
             Play();
+
+            var remapped = AlbumTracks.Select(t => new PlaybackTrackListItem
+            {
+                TrackId = t.TrackId,
+                Title = t.Title,
+                Artist = t.Artist,
+                Duration = t.Duration,
+                FilePath = t.FilePath,
+                TrackNumber = t.TrackNumber,
+                IsNowPlaying = string.Equals(t.FilePath, filePath, StringComparison.OrdinalIgnoreCase)
+            }).ToList();
+            AlbumTracks = new ObservableCollection<PlaybackTrackListItem>(remapped);
+            SelectedAlbumTrack = AlbumTracks.FirstOrDefault(t => string.Equals(t.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
 
             if (WaveformSamples.Length == 0)
             {
@@ -340,6 +395,16 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         }
     }
 
+    private void PlayAlbumTrack(PlaybackTrackListItem? item)
+    {
+        if (item == null || string.IsNullOrWhiteSpace(item.FilePath))
+        {
+            return;
+        }
+
+        LoadTrack(item.Title, item.Artist, item.Duration, item.FilePath);
+    }
+
     private void RebuildComments()
     {
         var visibleMarkers = ShowOnlyCurrentVersionComments
@@ -388,4 +453,16 @@ public sealed class TimelineCommentMarker
     public string UserDisplayName { get; set; } = string.Empty;
     public string UserIconPath { get; set; } = string.Empty;
     public int TrackVersion { get; set; } = 1;
+}
+
+public sealed class PlaybackTrackListItem
+{
+    public string TrackId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Artist { get; set; } = string.Empty;
+    public TimeSpan Duration { get; set; }
+    public string FilePath { get; set; } = string.Empty;
+    public int TrackNumber { get; set; }
+    public string TrackNumberLabel => TrackNumber > 0 ? $"{TrackNumber}." : "-";
+    public bool IsNowPlaying { get; set; }
 }

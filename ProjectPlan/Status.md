@@ -19,7 +19,7 @@ This repository now uses:
 2. Play count registration for future community sync
 3. Library/community data model progression (stats and persistence)
 4. My Music release/version lifecycle UX (draft vs released, update track preserving metadata)
-5. Album/playlist playback UX redesign and tracklist panel
+5. Version notes and multi-version data structures for future playback compare flows
 
 
 ## For later

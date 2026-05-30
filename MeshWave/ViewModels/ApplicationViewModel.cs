@@ -55,8 +55,13 @@ public class ApplicationViewModel : ViewModelBase
         CurrentViewModel = _playbackViewModel;
     }
 
-    public void PlayTrack(string trackTitle, string artist, TimeSpan duration, string filePath)
+    public void PlayTrack(string trackTitle, string artist, TimeSpan duration, string filePath, IEnumerable<PlaybackTrackListItem>? contextTracks = null, string? selectedTrackId = null, string? contextTitle = null, string? contextIconPath = null)
     {
+        if (contextTracks != null)
+        {
+            _playbackViewModel.SetAlbumTrackContext(contextTracks, selectedTrackId, contextTitle, contextIconPath);
+        }
+
         _playbackViewModel.Stop();
         _playbackViewModel.LoadTrack(trackTitle, artist, duration, filePath);
         CurrentViewModel = _playbackViewModel;

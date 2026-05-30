@@ -26,6 +26,7 @@
 - Profile model/editing (name, avatar, generated icon)
 - Play-count registration + sync preparation
 - My Music release/version lifecycle (draft/released state and track update flow)
+- Version notes and multi-version playback-ready data modeling (future mixes/compare flow)
 
 ## Next Milestones
 
@@ -41,6 +42,7 @@
 - Marker hover previews and richer visuals
 - Stabilize waveform generation/caching telemetry
 - Comment filtering by target track version (all/current toggle)
+- Album/playlist side-panel tracklist browsing and in-view track switching
 
 ### Milestone C: Library & Persistence
 

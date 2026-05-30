@@ -210,6 +210,33 @@ namespace MeshWave.ViewModels
             Tracks = filteredTracks;
         }
 
+        private IEnumerable<PlaybackTrackListItem> GetCurrentPlaybackContext(Track currentTrack)
+        {
+            var sameAlbumTracks = _trackObjects
+                .Where(t => string.Equals(t.AlbumId, currentTrack.AlbumId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            var contextTracks = sameAlbumTracks.Select(t =>
+            {
+                var path = t.FilePath ?? string.Empty;
+                var meta = string.IsNullOrWhiteSpace(path) ? null : _myMusicMetadataService.LoadForTrack(path);
+                return new PlaybackTrackListItem
+                {
+                    TrackId = t.TrackId,
+                    Title = t.Title,
+                    Artist = string.IsNullOrWhiteSpace(t.Description) ? "Unknown Artist" : t.Description!,
+                    Duration = t.Duration,
+                    FilePath = path,
+                    TrackNumber = meta?.TrackNumber ?? 0
+                };
+            }).Where(t => !string.IsNullOrWhiteSpace(t.FilePath));
+
+            return contextTracks
+                .OrderBy(t => t.TrackNumber <= 0 ? 1 : 0)
+                .ThenBy(t => t.TrackNumber <= 0 ? int.MaxValue : t.TrackNumber)
+                .ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase);
+        }
+
         public Track? GetTrackById(string trackId)
         {
             return _trackObjects.FirstOrDefault(t => t.TrackId == trackId);

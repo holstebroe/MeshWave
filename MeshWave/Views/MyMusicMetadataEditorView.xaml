@@ -24,6 +24,9 @@
             <TextBlock Text="Year"/>
             <TextBox Text="{Binding Year, UpdateSourceTrigger=PropertyChanged}"/>
 
+            <TextBlock Text="Track Number"/>
+            <TextBox Text="{Binding TrackNumber, UpdateSourceTrigger=PropertyChanged}"/>
+
             <TextBlock Text="Description"/>
             <TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" MinHeight="70" TextWrapping="Wrap"/>
 

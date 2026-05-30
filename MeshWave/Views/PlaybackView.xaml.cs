@@ -210,5 +210,14 @@ namespace MeshWave.Views
                 CommentTextBox.Clear();
             }
         }
+
+        private void AlbumTrackListBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is ListBox listBox && listBox.SelectedItem is PlaybackTrackListItem item && DataContext is PlaybackViewModel vm)
+            {
+                vm.PlayAlbumTrackCommand.Execute(item);
+                e.Handled = true;
+            }
+        }
     }
 }

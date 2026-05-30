@@ -9,6 +9,7 @@
 - [ ] Community sync for tracks/comments/play counts
 - [ ] Play count registration threshold + sync
 - [ ] Rich home dashboard polish/flashy visuals
+- [x] Home dashboard panel hover style polish (discrete inner border highlight, no ugly outer hover)
 - [x] Home dashboard panel cards should navigate to respective tabs when clicked
 - [ ] Persistent library index database (optional simple file DB first)
 
@@ -28,15 +29,17 @@
 - [x] Marker tooltip/avatar polish
 - [x] Play / pause button simplified to a single Play/Pause toggle (icons, no text).
 - [x] Show song description if available.
-- [ ] Album/playlist playback. The Playback page should have a panel with the current album/playlist tracklist, allowing users to easily see and select other tracks in the same album/playlist. This will require some UI redesign to accommodate the tracklist panel alongside the waveform and controls.
+- [x] Album/playlist playback. The Playback page should have a panel with the current album/playlist tracklist, allowing users to easily see and select other tracks in the same album/playlist. This will require some UI redesign to accommodate the tracklist panel alongside the waveform and controls.
 
 ### Library (MyMusic)
 - [x] Metadata editor baseline for Track (title, artist, album, year, genre, description)
 - [x] Metadata editor expansion for Artist/Album/Cover image management
 - [x] Single file import.
+- [x] Normalize My Music import button sizing/alignment
 - [x] Release/unrelease toggle and version field in My Music metadata editor (album + track)
 - [x] Show release status/version badges in My Music album and track lists
 - [x] Baseline API for updating imported track file while preserving metadata sidecars
+- [ ] Track version change notes (what changed) and structure for future multi-version mix browsing/playback
 
 
 ### Library (community)
