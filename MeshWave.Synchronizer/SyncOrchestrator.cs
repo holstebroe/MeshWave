@@ -25,6 +25,8 @@ public class SyncOrchestrator : IDisposable
     private CancellationTokenSource? _cts;
     private IReadOnlyList<string> _bootstrapNodes = [];
     private PeerConnectionAttemptReport? _lastConnectionReport;
+    private int _inboundManifestPushCount;
+    private int _outboundManifestFetchCount;
 
     // Tracks which trackIds have already had a Play op recorded in this process session.
     private readonly HashSet<string> _playedThisSession = new(StringComparer.OrdinalIgnoreCase);
@@ -49,6 +51,11 @@ public class SyncOrchestrator : IDisposable
 
     /// <summary>Last peer connection attempt report from RequestContentAsync, if any.</summary>
     public PeerConnectionAttemptReport? LastConnectionAttemptReport => _lastConnectionReport;
+
+    public int InboundManifestPushCount => _inboundManifestPushCount;
+    public int OutboundManifestFetchCount => _outboundManifestFetchCount;
+    public int BootstrapPeerCount => _router.GetPeers().Count(p => p.UserId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase));
+    public int MeshPeerCount => Math.Max(0, ConnectedPeerCount - BootstrapPeerCount);
 
     /// <summary>Returns the persisted manifest for a specific peer, or null if not yet received.</summary>
     public Manifest? GetPeerManifest(string userId) => _peerStore.Get(userId);
@@ -268,6 +275,8 @@ public class SyncOrchestrator : IDisposable
         // Ignore pushes from ourselves
         if (e.Manifest.UserId == _identity?.UserId) return;
 
+        Interlocked.Increment(ref _inboundManifestPushCount);
+
         var peer = _router.GetPeers().FirstOrDefault(p => p.UserId == e.Manifest.UserId);
         if (peer == null || string.IsNullOrWhiteSpace(peer.PublicKeyPem)) return;
 
@@ -283,6 +292,7 @@ public class SyncOrchestrator : IDisposable
         {
             var remoteManifest = await _client.FetchManifestAsync(peer.Address, peer.Port, ct);
             if (remoteManifest == null) return;
+            Interlocked.Increment(ref _outboundManifestFetchCount);
             TryMerge(remoteManifest, peer.PublicKeyPem);
         }
         catch { /* peer unreachable – will retry on next cycle */ }

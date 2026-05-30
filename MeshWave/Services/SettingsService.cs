@@ -19,7 +19,7 @@ namespace MeshWave.Services
             Environment.GetFolderPath(Environment.SpecialFolder.MyMusic),
             "MeshWave");
 
-        private AppSettings? _currentSettings;
+        private static AppSettings? _currentSettings;
 
         public AppSettings LoadSettings()
         {

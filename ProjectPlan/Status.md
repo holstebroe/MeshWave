@@ -5,9 +5,9 @@
 - Build: passing
 - Common.Core tests: passing (32/32)
 - LibraryManager tests: passing (4/4)
-- Synchronizer tests: passing (34/34, includes 8 PlayCountTests)
+- Synchronizer tests: passing (35/35, includes 8 PlayCountTests)
 - Integration.Tests: passing (12/12)
-- **Total: 82 tests passing**
+- **Total: 83 tests passing**
 
 ## Active Sprint
 
@@ -28,6 +28,8 @@ Completed in latest session:
 - Phase-2 implemented: bootstrap-provided coordinated probe window timing + synchronized rendezvous-window hole-punch attempt
 - Added integration coverage for rendezvous scheduling and report visibility of rendezvous-window attempts
 - Network settings now include diagnostics panel showing per-attempt outcomes, endpoints, and NAT forwarding guidance from latest connection report
+- SettingsService cache behavior fixed so saved network settings apply immediately without requiring app restart
+- Bootstrap project now includes ARM Linux runtime identifiers (`linux-arm`, `linux-arm64`) as deployment baseline
 
 Milestone I -- Mesh Resilience and Background Mode (COMPLETE)
 Milestone J -- Mesh Integration Tests (COMPLETE)
@@ -38,7 +40,7 @@ Milestone H -- Settings Storage and Housekeeping Tab (COMPLETE)
 ### Milestone J: Integration Tests
 - Created MeshWave.Integration.Tests project (xUnit)
 - NullPeerDiscovery stub for isolated test environments
-- 10 integration tests now cover bootstrap discovery, coordinator registration, fixed-port bootstrap compatibility, operations signing, profile broadcast, follow/unfollow, merge events, signature verification, and connection-attempt NAT guidance fallback
+- 12 integration tests now cover bootstrap discovery, rendezvous scheduling/timing, coordinator registration, fixed-port bootstrap compatibility, operations signing, profile broadcast, follow/unfollow, merge events, signature verification, and connection-attempt NAT guidance fallback
 - All tests passing
 - Tests use dynamic ports and temp directories, no network conflicts
 

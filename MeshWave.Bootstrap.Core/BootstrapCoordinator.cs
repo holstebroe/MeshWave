@@ -16,6 +16,10 @@ public sealed class BootstrapCoordinator : IDisposable
     private int _requestCount;
     private int _peerCount;
 
+    public event EventHandler<BootstrapPeerEventArgs>? PeerRegistered;
+    public event EventHandler<BootstrapPeerEventArgs>? PeerRefreshed;
+    public event EventHandler<BootstrapPeerEventArgs>? PeerDisconnected;
+
     public BootstrapCoordinator(int port)
     {
         Port = port;
@@ -45,9 +49,9 @@ public sealed class BootstrapCoordinator : IDisposable
 
     public IReadOnlyList<PeerInfo> GetLivePeers()
     {
-        var cutoff = DateTime.UtcNow.AddMinutes(-10);
+        PruneStalePeers();
+
         return _peers.Values
-            .Where(e => e.LastSeen >= cutoff)
             .OrderByDescending(e => e.LastSeen)
             .Take(SecurityLimits.MaxPeersPerExchange)
             .Select(e => e.Peer)
@@ -150,6 +154,9 @@ public sealed class BootstrapCoordinator : IDisposable
         if (_peers.TryGetValue(peer.UserId, out var existing))
         {
             existing.LastSeen = DateTime.UtcNow;
+            existing.Peer.Address = peer.Address;
+            existing.Peer.Port = peer.Port;
+            PeerRefreshed?.Invoke(this, new BootstrapPeerEventArgs(existing.Peer, "refreshed"));
             return;
         }
 
@@ -158,14 +165,31 @@ public sealed class BootstrapCoordinator : IDisposable
 
         var entry = new BootstrapPeerEntry { Peer = peer, LastSeen = DateTime.UtcNow };
         if (_peers.TryAdd(peer.UserId, entry))
+        {
             Interlocked.Increment(ref _peerCount);
+            PeerRegistered?.Invoke(this, new BootstrapPeerEventArgs(peer, "registered"));
+        }
     }
 
     private void EvictStalest()
     {
         var stalest = _peers.Values.OrderBy(e => e.LastSeen).FirstOrDefault();
-        if (stalest != null)
-            _peers.TryRemove(stalest.Peer.UserId, out _);
+        if (stalest != null && _peers.TryRemove(stalest.Peer.UserId, out var removed))
+        {
+            PeerDisconnected?.Invoke(this, new BootstrapPeerEventArgs(removed.Peer, "evicted"));
+        }
+    }
+
+    private void PruneStalePeers()
+    {
+        var cutoff = DateTime.UtcNow.AddMinutes(-10);
+        foreach (var stale in _peers.Where(kv => kv.Value.LastSeen < cutoff).ToList())
+        {
+            if (_peers.TryRemove(stale.Key, out var removed))
+            {
+                PeerDisconnected?.Invoke(this, new BootstrapPeerEventArgs(removed.Peer, "stale-timeout"));
+            }
+        }
     }
 
     private static (string host, int port) ParseEndpoint(string endpoint, int defaultPort)
@@ -180,6 +204,12 @@ public sealed class BootstrapCoordinator : IDisposable
     {
         _server.Dispose();
     }
+}
+
+public sealed class BootstrapPeerEventArgs(PeerInfo peer, string reason) : EventArgs
+{
+    public PeerInfo Peer { get; } = peer;
+    public string Reason { get; } = reason;
 }
 
 internal sealed class BootstrapPeerEntry

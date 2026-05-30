@@ -523,23 +523,35 @@ public class SettingsViewModel : ViewModelBase
 
     private void RefreshNetworkDiagnostics()
     {
+        var lines = new List<string>();
+
+        if (_sync != null)
+        {
+            lines.Add("Network Statistics:");
+            lines.Add($"- Routing table peers: {_sync.ConnectedPeerCount}");
+            lines.Add($"- Mesh peers: {_sync.MeshPeerCount}");
+            lines.Add($"- Bootstrap peers: {_sync.BootstrapPeerCount}");
+            lines.Add($"- Inbound peer connections (manifest pushes to this node): {_sync.InboundManifestPushCount}");
+            lines.Add($"- Outbound peer connections (manifest fetches from this node): {_sync.OutboundManifestFetchCount}");
+            lines.Add($"- Configured bootstrap servers: {P2PBootstrapNodesText.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Length}");
+            lines.Add("");
+        }
+
         var report = _sync?.LastConnectionAttemptReport;
         if (report == null)
         {
-            NetworkDiagnosticsText = "No connection attempts recorded yet.";
+            lines.Add("No connection attempts recorded yet.");
+            NetworkDiagnosticsText = string.Join(Environment.NewLine, lines);
             return;
         }
 
-        var lines = new List<string>
-        {
-            $"Peer: {report.PeerUserId}",
-            $"Requested hash: {report.RequestedContentHash}",
-            $"Local endpoint suggestion: {(string.IsNullOrWhiteSpace(report.SuggestedLocalIp) ? "n/a" : report.SuggestedLocalIp)}:{(report.LocalManifestPort > 0 ? report.LocalManifestPort : ManifestExchangeServer.DefaultPort)}",
-            $"Remote endpoint: {(string.IsNullOrWhiteSpace(report.TargetAddress) ? "n/a" : report.TargetAddress)}:{report.TargetPort}",
-            $"Attempted at: {report.CreatedAtUtc:O}",
-            "",
-            "Attempts:"
-        };
+        lines.Add($"Peer: {report.PeerUserId}");
+        lines.Add($"Requested hash: {report.RequestedContentHash}");
+        lines.Add($"Local endpoint suggestion: {(string.IsNullOrWhiteSpace(report.SuggestedLocalIp) ? "n/a" : report.SuggestedLocalIp)}:{(report.LocalManifestPort > 0 ? report.LocalManifestPort : ManifestExchangeServer.DefaultPort)}");
+        lines.Add($"Remote endpoint: {(string.IsNullOrWhiteSpace(report.TargetAddress) ? "n/a" : report.TargetAddress)}:{report.TargetPort}");
+        lines.Add($"Attempted at: {report.CreatedAtUtc:O}");
+        lines.Add("");
+        lines.Add("Attempts:");
 
         foreach (var attempt in report.Attempts)
         {

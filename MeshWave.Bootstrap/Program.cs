@@ -43,6 +43,13 @@ internal class Program
         };
 
         _coordinator = new BootstrapCoordinator(port);
+        _coordinator.PeerRegistered += (_, e) =>
+            Console.WriteLine($"[peer+] {DateTime.UtcNow:HH:mm:ss} user={e.Peer.UserId} addr={e.Peer.Address}:{e.Peer.Port} reason={e.Reason}");
+        _coordinator.PeerRefreshed += (_, e) =>
+            Console.WriteLine($"[peer~] {DateTime.UtcNow:HH:mm:ss} user={e.Peer.UserId} addr={e.Peer.Address}:{e.Peer.Port} reason={e.Reason}");
+        _coordinator.PeerDisconnected += (_, e) =>
+            Console.WriteLine($"[peer-] {DateTime.UtcNow:HH:mm:ss} user={e.Peer.UserId} addr={e.Peer.Address}:{e.Peer.Port} reason={e.Reason}");
+
         await _coordinator.StartAsync(cts.Token);
 
         Console.WriteLine($"Listening on port {port}. Press Ctrl+C to stop.\n");

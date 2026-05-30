@@ -37,8 +37,8 @@
 - [x] Likes sync via manifest operations (one like per user per track, signed)
 - [x] User profile sync (display name, avatar hash, IsArtist flag as signed Profile op)
 - [x] Content exchange: TCP file transfer by content hash (NAT hole-punch prep via UDP probes before direct transfer attempts)
-- [ ] Bootstrap rendezvous ("crossing hands") phase 1: explicit rendezvous session ID issuance by bootstrap coordinator
-- [ ] Bootstrap rendezvous phase 2: coordinated simultaneous outbound probe window (TCP SYN + UDP punch hints)
+- [x] Bootstrap rendezvous ("crossing hands") phase 1: explicit rendezvous session ID issuance by bootstrap coordinator
+- [x] Bootstrap rendezvous phase 2: coordinated simultaneous outbound probe window (TCP SYN + UDP punch hints)
 - [ ] Relay fallback (opt-in): bootstrap-assisted relay only when direct methods fail
 - [x] Connection diagnostics panel: show per-attempt outcomes, local/remote endpoints, and recommended NAT forwarding rules
 
@@ -170,7 +170,7 @@ Example groups: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone Col
       -- verify ManifestMerged event mechanism is wired
 - [x] ManifestExchange_TamperedOperation_FailsSignatureCheck
       -- verify tampering is detectable by signature mismatch
-- [x] All 10 tests passing
+- [x] All 12 integration tests passing
 
 ---
 
