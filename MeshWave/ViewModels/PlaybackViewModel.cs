@@ -265,7 +265,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         CurrentPosition = position;
     }
 
-    public void AddComment(string text, double? timestampSeconds = null)
+    public void AddComment(string text, double? timestampSeconds = null, string? replyToId = null)
     {
         var timestamp = timestampSeconds.HasValue
             ? TimeSpan.FromSeconds(timestampSeconds.Value)
@@ -273,11 +273,13 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         var profile = _profileService.LoadProfile();
         var marker = new TimelineCommentMarker
         {
+            Id = Guid.NewGuid().ToString("N"),
             TimestampSeconds = timestamp.TotalSeconds,
             Label = text,
             UserDisplayName = string.IsNullOrWhiteSpace(profile.DisplayName) ? "You" : profile.DisplayName,
             UserIconPath = string.IsNullOrWhiteSpace(profile.AvatarIconPath) ? profile.AvatarImagePath : profile.AvatarIconPath,
-            TrackVersion = CurrentTrackVersion
+            TrackVersion = CurrentTrackVersion,
+            ReplyToId = replyToId
         };
         TimelineMarkers.Add(marker);
         OnPropertyChanged(nameof(TimelineMarkers));
@@ -415,6 +417,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         var markerPath = GetTimelineMarkerPath();
         if (string.IsNullOrWhiteSpace(markerPath) || !File.Exists(markerPath))
         {
+            RebuildComments();   // clear the displayed comments list when there is no file
             return;
         }
 
@@ -432,7 +435,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         }
         catch
         {
-            // ignore marker load failures
+            RebuildComments();   // still clear stale comments on error
         }
     }
 
@@ -468,12 +471,21 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
 
     private void RebuildComments()
     {
-        var visibleMarkers = ShowOnlyCurrentVersionComments
+        var visibleMarkers = (ShowOnlyCurrentVersionComments
             ? TimelineMarkers.Where(m => (m.TrackVersion <= 0 ? 1 : m.TrackVersion) == CurrentTrackVersion)
-            : TimelineMarkers;
+            : TimelineMarkers).ToList();
 
-        Comments = new ObservableCollection<string>(visibleMarkers.Select(m =>
-            $"[{TimeSpan.FromSeconds(m.TimestampSeconds):mm\\:ss}] (v{(m.TrackVersion <= 0 ? 1 : m.TrackVersion)}) {m.UserDisplayName}: {m.Label}"));
+        var lines = new List<string>();
+        foreach (var m in visibleMarkers.Where(m => string.IsNullOrEmpty(m.ReplyToId)))
+        {
+            lines.Add($"[{TimeSpan.FromSeconds(m.TimestampSeconds):mm\\:ss}] (v{(m.TrackVersion <= 0 ? 1 : m.TrackVersion)}) {m.UserDisplayName}: {m.Label}");
+            foreach (var r in visibleMarkers.Where(r => r.ReplyToId == m.Id))
+            {
+                lines.Add($"  ↳ [{TimeSpan.FromSeconds(r.TimestampSeconds):mm\\:ss}] {r.UserDisplayName}: {r.Label}");
+            }
+        }
+
+        Comments = new ObservableCollection<string>(lines);
     }
 
     private void SaveTimelineMarkers()
@@ -509,11 +521,14 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
 
 public sealed class TimelineCommentMarker
 {
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public double TimestampSeconds { get; set; }
     public string Label { get; set; } = string.Empty;
     public string UserDisplayName { get; set; } = string.Empty;
     public string UserIconPath { get; set; } = string.Empty;
     public int TrackVersion { get; set; } = 1;
+    /// <summary>Id of the marker this is a reply to, or null/empty for top-level comments.</summary>
+    public string? ReplyToId { get; set; }
 }
 
 public sealed class PlaybackTrackListItem

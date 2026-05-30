@@ -49,17 +49,47 @@
                         Command="{Binding PreviousTrackCommand}"
                         FontSize="18" Margin="0,0,4,0"/>
                 <Button Command="{Binding PlayPauseToggleCommand}"
-                        Width="36" Height="36" Margin="8,0">
-                    <Button.Style>
-                        <Style TargetType="Button" BasedOn="{StaticResource PlayerCircleButton}">
-                            <Setter Property="Content" Value="▶"/>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsPlaying}" Value="True">
-                                    <Setter Property="Content" Value="⏸"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
+                        Width="36" Height="36" Margin="8,0"
+                        Style="{StaticResource PlayerCircleButton}">
+                    <Button.Content>
+                        <Grid Width="36" Height="36">
+                            <!-- Play glyph: nudged slightly left/up to optically centre ▶ -->
+                            <TextBlock Text="▶"
+                                       FontSize="17" FontWeight="Bold"
+                                       Foreground="Black"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Margin="-2,-1,0,0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsPlaying}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <!-- Pause glyph: two clean vertical bars, no box -->
+                            <StackPanel Orientation="Horizontal"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center">
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsPlaying}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
+                                <Rectangle Width="3" Height="13" Fill="Black" RadiusX="1" RadiusY="1"/>
+                                <Rectangle Width="3" Height="13" Fill="Black" RadiusX="1" RadiusY="1" Margin="4,0,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                    </Button.Content>
                 </Button>
                 <Button Content="⏭"
                         Style="{StaticResource PlayerIconButton}"
@@ -82,6 +112,7 @@
                         Minimum="0"
                         Maximum="{Binding Duration, Converter={StaticResource TimeSpanToSecondsConverter}}"
                         Value="{Binding CurrentPosition, Mode=TwoWay, Converter={StaticResource TimeSpanToSecondsConverter}}"
+                        IsMoveToPointEnabled="True"
                         VerticalAlignment="Center"/>
                 <TextBlock Grid.Column="2"
                            Text="{Binding Duration, StringFormat=mm\\:ss}"

@@ -11,6 +11,8 @@ namespace MeshWave.Views
     public partial class PlaybackView : UserControl
     {
         private PlaybackViewModel? _boundViewModel;
+        // Timestamp captured at first keystroke in the comment box
+        private double? _commentStartTimestamp;
 
         public PlaybackView()
         {
@@ -210,10 +212,38 @@ namespace MeshWave.Views
 
         private void AddComment_Click(object sender, RoutedEventArgs e)
         {
+            SubmitComment();
+        }
+
+        private void CommentTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            // Capture the playback position on the very first character entered
+            if (_commentStartTimestamp == null && CommentTextBox.Text.Length > 0)
+            {
+                _commentStartTimestamp = (DataContext as PlaybackViewModel)?.CurrentPosition.TotalSeconds;
+            }
+            else if (CommentTextBox.Text.Length == 0)
+            {
+                _commentStartTimestamp = null;
+            }
+        }
+
+        private void CommentTextBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            {
+                SubmitComment();
+                e.Handled = true;
+            }
+        }
+
+        private void SubmitComment()
+        {
             if (DataContext is PlaybackViewModel vm && !string.IsNullOrWhiteSpace(CommentTextBox.Text))
             {
-                vm.AddComment(CommentTextBox.Text, vm.CurrentPosition.TotalSeconds);
+                vm.AddComment(CommentTextBox.Text, _commentStartTimestamp);
                 CommentTextBox.Clear();
+                _commentStartTimestamp = null;
             }
         }
 

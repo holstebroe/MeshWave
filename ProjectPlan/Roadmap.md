@@ -35,6 +35,9 @@
 - User profile persistence (name, avatar, bio)
 - Rounded icon generation from profile image
 - Use user icon in comments/timeline markers
+- Friends / Groups / Follows social graph (local store first, P2P sync in Milestone D)
+- Comment permission policy per album/track (`All` / `FriendsOnly` / `GroupsOnly` / `None`)
+- Comment moderation: owner can delete comments on their material (soft-delete, propagated via P2P)
 
 ### Milestone B: Playback UX Completion
 
@@ -62,6 +65,19 @@
 - [x] Wire `SyncOrchestrator` into `ApplicationViewModel` (auto-start when P2P enabled, graceful shutdown via `App.OnExit`)
 - [ ] Per-peer manifest disk persistence
 - [ ] Community library ingestion flow (`Other Music`) driven by peer manifests
-- [ ] Play count sync strategy (manifest operations)
-- [ ] Comment sync via manifest operations
+- [ ] Play count sync — local signed manifest operations (`op: "play"`, rate-capped, one per session)
+- [ ] Play count consensus — `MergeManifest` enforces `MaxPlaysPerUserPerTrackPerDay`; aggregate = sum of per-user capped counts
+- [ ] Comment sync via manifest operations (signed, author-owned; includes `ReplyToId` threading)
+- [ ] Comment moderation sync (owner soft-delete ops)
+- [ ] Social graph sync (friends, groups, follows as signed user-owned manifest ops)
+- [ ] Comment permission enforcement across peers (respect `CommentPolicy` from album manifest)
+- [ ] Likes sync via manifest operations (one like per user per track, signed)
+- [ ] User profile sync (display name, avatar hash broadcast as signed manifest operations)
 - [ ] Content exchange: TCP file transfer by content hash
+
+## Milestone E: Trust & Aggregate Integrity
+
+- [ ] `SecurityLimits.MaxPlaysPerUserPerTrackPerDay` constant + enforcement in `MergeManifest`
+- [ ] Sybil-resistance research spike (proof-of-work UserId registration or web-of-trust score)
+- [ ] Audit log / replay verification for play count manifest operations
+- [ ] Per-user contribution cap UI (show "X plays from Y unique listeners")

@@ -139,6 +139,10 @@
                              Background="#FF252525"
                              Foreground="{StaticResource TextPrimaryColor}"
                              BorderBrush="{StaticResource PrimaryColor}"
+                             AcceptsReturn="False"
+                             TextChanged="CommentTextBox_TextChanged"
+                             KeyDown="CommentTextBox_KeyDown"
+                             ToolTip="Type a comment. Ctrl+Enter to add."
                              Margin="0,0,10,0"/>
                     <Button Grid.Column="1"
                             Content="Add Comment"
