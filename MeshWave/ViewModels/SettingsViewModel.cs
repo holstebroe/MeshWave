@@ -48,6 +48,7 @@ public class SettingsViewModel : ViewModelBase
 
     private readonly ObservableCollection<StorageCategoryUsage> _storageCategories = [];
     private string _storageStatusMessage = string.Empty;
+    private string _networkDiagnosticsText = "No connection attempts recorded yet.";
     private double _storageQuotaWarningGb = 10;
     private long _totalDriveBytes;
     private long _freeDriveBytes;
@@ -67,6 +68,7 @@ public class SettingsViewModel : ViewModelBase
         BrowseBannerCommand = new RelayCommand(_ => BrowseBannerImage());
         RegenerateIdentityCommand = new RelayCommand(_ => RegenerateIdentity());
         RefreshStorageCommand = new RelayCommand(_ => RefreshStorageStats());
+        RefreshNetworkDiagnosticsCommand = new RelayCommand(_ => RefreshNetworkDiagnostics());
         ClearPeerManifestCacheCommand = new RelayCommand(_ => ClearPeerManifestCache());
         ClearWaveformCacheCommand = new RelayCommand(_ => ClearWaveformCache());
     }
@@ -77,6 +79,7 @@ public class SettingsViewModel : ViewModelBase
     public ICommand BrowseBannerCommand { get; }
     public ICommand RegenerateIdentityCommand { get; }
     public ICommand RefreshStorageCommand { get; }
+    public ICommand RefreshNetworkDiagnosticsCommand { get; }
     public ICommand ClearPeerManifestCacheCommand { get; }
     public ICommand ClearWaveformCacheCommand { get; }
 
@@ -217,6 +220,12 @@ public class SettingsViewModel : ViewModelBase
         set => SetProperty(ref _storageStatusMessage, value);
     }
 
+    public string NetworkDiagnosticsText
+    {
+        get => _networkDiagnosticsText;
+        set => SetProperty(ref _networkDiagnosticsText, value);
+    }
+
     public double StorageQuotaWarningGb
     {
         get => _storageQuotaWarningGb;
@@ -288,6 +297,7 @@ public class SettingsViewModel : ViewModelBase
 
         IsInitialized = !string.IsNullOrEmpty(settings.BaseFolder);
         RefreshStorageStats();
+        RefreshNetworkDiagnostics();
     }
 
     private void RefreshIdentityInfo()
@@ -509,6 +519,35 @@ public class SettingsViewModel : ViewModelBase
         {
             StorageStatusMessage = $"Failed to clear peer manifest cache: {ex.Message}";
         }
+    }
+
+    private void RefreshNetworkDiagnostics()
+    {
+        var report = _sync?.LastConnectionAttemptReport;
+        if (report == null)
+        {
+            NetworkDiagnosticsText = "No connection attempts recorded yet.";
+            return;
+        }
+
+        var lines = new List<string>
+        {
+            $"Peer: {report.PeerUserId}",
+            $"Requested hash: {report.RequestedContentHash}",
+            $"Local endpoint suggestion: {(string.IsNullOrWhiteSpace(report.SuggestedLocalIp) ? "n/a" : report.SuggestedLocalIp)}:{(report.LocalManifestPort > 0 ? report.LocalManifestPort : ManifestExchangeServer.DefaultPort)}",
+            $"Remote endpoint: {(string.IsNullOrWhiteSpace(report.TargetAddress) ? "n/a" : report.TargetAddress)}:{report.TargetPort}",
+            $"Attempted at: {report.CreatedAtUtc:O}",
+            "",
+            "Attempts:"
+        };
+
+        foreach (var attempt in report.Attempts)
+        {
+            lines.Add($"- {attempt.Method}: {(attempt.Success ? "ok" : "fail")}");
+            lines.Add($"  {attempt.Details}");
+        }
+
+        NetworkDiagnosticsText = string.Join(Environment.NewLine, lines);
     }
 
     private void ClearWaveformCache()

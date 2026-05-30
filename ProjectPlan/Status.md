@@ -27,6 +27,7 @@ Completed in latest session:
 - Started implementing crossing-hands plan: rendezvous request/response protocol + bootstrap session issuance + synchronizer fallback attempt integration
 - Phase-2 implemented: bootstrap-provided coordinated probe window timing + synchronized rendezvous-window hole-punch attempt
 - Added integration coverage for rendezvous scheduling and report visibility of rendezvous-window attempts
+- Network settings now include diagnostics panel showing per-attempt outcomes, endpoints, and NAT forwarding guidance from latest connection report
 
 Milestone I -- Mesh Resilience and Background Mode (COMPLETE)
 Milestone J -- Mesh Integration Tests (COMPLETE)

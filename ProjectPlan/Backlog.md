@@ -40,7 +40,7 @@
 - [ ] Bootstrap rendezvous ("crossing hands") phase 1: explicit rendezvous session ID issuance by bootstrap coordinator
 - [ ] Bootstrap rendezvous phase 2: coordinated simultaneous outbound probe window (TCP SYN + UDP punch hints)
 - [ ] Relay fallback (opt-in): bootstrap-assisted relay only when direct methods fail
-- [ ] Connection diagnostics panel: show per-attempt outcomes, local/remote endpoints, and recommended NAT forwarding rules
+- [x] Connection diagnostics panel: show per-attempt outcomes, local/remote endpoints, and recommended NAT forwarding rules
 
 ## Milestone E: Trust and Aggregate Integrity
 - [ ] Sybil-resistance research spike (proof-of-work UserId or web-of-trust score)

@@ -366,7 +366,29 @@
                                     Command="{Binding RegenerateIdentityCommand}"
                                     Style="{StaticResource DangerButton}"
                                     HorizontalAlignment="Left"
-                                    Padding="12,6"/>
+                                    Padding="12,6"
+                                    Margin="0,0,0,14"/>
+
+                            <TextBlock Text="Network Diagnostics" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
+                            <TextBlock Text="Shows latest connection attempts, rendezvous timing, and actionable NAT guidance details."
+                                       Foreground="{StaticResource TextSecondaryColor}"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,8"/>
+                            <Button Content="Refresh Diagnostics"
+                                    Command="{Binding RefreshNetworkDiagnosticsCommand}"
+                                    Style="{StaticResource PrimaryButton}"
+                                    HorizontalAlignment="Left"
+                                    Padding="12,6"
+                                    Margin="0,0,0,8"/>
+                            <TextBox Text="{Binding NetworkDiagnosticsText}"
+                                     IsReadOnly="True"
+                                     AcceptsReturn="True"
+                                     TextWrapping="Wrap"
+                                     MinHeight="160"
+                                     FontFamily="Consolas"
+                                     FontSize="11"
+                                     VerticalScrollBarVisibility="Auto"/>
 
                         </StackPanel>
                     </ScrollViewer>
