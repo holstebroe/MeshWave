@@ -90,8 +90,26 @@ Example use cases: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone 
 - [x] User profile sync (display name, avatar hash, IsArtist flag via signed Profile op)
 - [x] Add to Library flow (content exchange)
 - [x] Content exchange: direct TCP transfer by content hash with ordered attempts (routing lookup, bootstrap refresh, direct TCP probe, UDP hole-punch) and explicit NAT fallback guidance
+- [ ] Bootstrap rendezvous ("crossing hands") session orchestration via bootstrap coordinator
+- [ ] Coordinated simultaneous outbound probe window for peers behind restrictive NAT
+- [ ] Optional relay fallback mode (bootstrap-assisted relay only when direct and rendezvous attempts fail)
+- [ ] Network diagnostics surface in Settings with explicit user guidance details from fallback reports
 - [x] Follow notifications badge on Community nav for followed artists with new Create ops
 - [x] Release feed now hydrated from followed peers' persisted manifests (ordered newest-first)
+
+## NAT Traversal Next Wave (planned under Milestone D remainder)
+
+1. Bootstrap rendezvous token/session contract
+2. Peer rendezvous state machine and timeout handling
+3. Coordinated TCP/UDP simultaneous attempt scheduling
+4. Relay fallback guardrails (bandwidth caps, opt-in, only-on-failure)
+5. Integration tests for symmetric-NAT simulation paths
+
+## Platform Expansion (planned)
+
+- Define bootstrap build/publish configuration for ARM Linux (Raspberry Pi + lightweight cloud targets)
+- Mobile player-only app: playback of community files + community interactions; cache only most-recently-played files
+- Web frontend phase 1: playback-focused UI; future phase can add backend support for user-owned file storage
 
 ## Upcoming: Milestone E -- Trust and Aggregate Integrity
 

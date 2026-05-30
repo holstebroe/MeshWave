@@ -6,8 +6,8 @@
 - Common.Core tests: passing (32/32)
 - LibraryManager tests: passing (4/4)
 - Synchronizer tests: passing (34/34, includes 8 PlayCountTests)
-- Integration.Tests: passing (10/10)
-- **Total: 80 tests passing**
+- Integration.Tests: passing (12/12)
+- **Total: 82 tests passing**
 
 ## Active Sprint
 
@@ -22,8 +22,11 @@ Completed in latest session:
 - Social graph actions now publish signed FriendAdd/FriendRemove and GroupJoin/GroupLeave ops
 - Likes sync now uses signed Like/Unlike ops and shows aggregate like counts in feed
 - Bootstrap runtime split completed: `MeshWave.Bootstrap` console host + reusable `MeshWave.Bootstrap.Core` coordinator library
-- NAT traversal pipeline expanded with ordered attempts (routing lookup -> bootstrap refresh -> direct TCP probe -> UDP punch -> content request -> concrete NAT guidance)
+- NAT traversal pipeline expanded with ordered attempts (routing lookup -> bootstrap refresh -> direct TCP probe -> UDP punch -> bootstrap rendezvous session request -> content request -> concrete NAT guidance)
 - Added detailed handshake documentation: `Documentation/P2P-Handshake.md`
+- Started implementing crossing-hands plan: rendezvous request/response protocol + bootstrap session issuance + synchronizer fallback attempt integration
+- Phase-2 implemented: bootstrap-provided coordinated probe window timing + synchronized rendezvous-window hole-punch attempt
+- Added integration coverage for rendezvous scheduling and report visibility of rendezvous-window attempts
 
 Milestone I -- Mesh Resilience and Background Mode (COMPLETE)
 Milestone J -- Mesh Integration Tests (COMPLETE)
@@ -93,8 +96,8 @@ Milestone H -- Settings Storage and Housekeeping Tab (COMPLETE)
 - Sybil-resistance / web-of-trust hardening for play count integrity
 - Content exchange: TCP file transfer by content hash (Milestone D remainder)
 - Community groups and distributed chat (Milestone G)
-- Add to Library flow (triggers content exchange, places files in Other Music)
-- Follow notifications badge (when followed artist has new releases)
+- Optional relay fallback mode after direct + rendezvous attempts fail
+- Network diagnostics panel with per-attempt status and actionable NAT guidance details
 
 - Build: passing
 - Common.Core tests: passing (32/32)

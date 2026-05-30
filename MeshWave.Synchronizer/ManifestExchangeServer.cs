@@ -22,6 +22,7 @@ public class ManifestExchangeServer : IDisposable
 
     private Func<Manifest?>? _localManifestProvider;
     private Func<IReadOnlyList<PeerInfo>>? _peersProvider;
+    private Func<RendezvousRequest, RendezvousResponse?>? _rendezvousProvider;
 
     public ManifestExchangeServer(int port = DefaultPort)
     {
@@ -35,10 +36,16 @@ public class ManifestExchangeServer : IDisposable
     /// </summary>
     /// <param name="localManifestProvider">Returns this peer's current manifest on demand.</param>
     /// <param name="peersProvider">Returns known peers for PEX responses. May be null to disable PEX serving.</param>
-    public async Task StartAsync(Func<Manifest?> localManifestProvider, Func<IReadOnlyList<PeerInfo>>? peersProvider = null, CancellationToken cancellationToken = default)
+    /// <param name="rendezvousProvider">Optional bootstrap rendezvous provider for crossing-hands session issuance.</param>
+    public async Task StartAsync(
+        Func<Manifest?> localManifestProvider,
+        Func<IReadOnlyList<PeerInfo>>? peersProvider = null,
+        Func<RendezvousRequest, RendezvousResponse?>? rendezvousProvider = null,
+        CancellationToken cancellationToken = default)
     {
         _localManifestProvider = localManifestProvider;
         _peersProvider = peersProvider;
+        _rendezvousProvider = rendezvousProvider;
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         _listener = new TcpListener(IPAddress.Any, _port);
@@ -121,6 +128,19 @@ public class ManifestExchangeServer : IDisposable
                         await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
                         break;
                     }
+                    case ManifestRequestType.RequestRendezvous when request.Rendezvous != null:
+                    {
+                        var rendezvous = _rendezvousProvider?.Invoke(request.Rendezvous)
+                            ?? new RendezvousResponse
+                            {
+                                Success = false,
+                                Message = "Rendezvous is not enabled on this node."
+                            };
+
+                        var response = new ManifestResponse { Rendezvous = rendezvous, Acknowledged = rendezvous.Success };
+                        await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
+                        break;
+                    }
                 }
             }
             catch { /* ignore per-client errors */ }
@@ -168,13 +188,15 @@ internal enum ManifestRequestType
 {
     GetManifest,
     PushManifest,
-    GetPeers
+    GetPeers,
+    RequestRendezvous
 }
 
 internal class ManifestRequest
 {
     public ManifestRequestType Type { get; set; }
     public Manifest? Manifest { get; set; }
+    public RendezvousRequest? Rendezvous { get; set; }
 }
 
 internal class ManifestResponse
@@ -182,4 +204,23 @@ internal class ManifestResponse
     public Manifest? Manifest { get; set; }
     public bool Acknowledged { get; set; }
     public List<PeerInfo> Peers { get; set; } = [];
+    public RendezvousResponse? Rendezvous { get; set; }
+}
+
+public class RendezvousRequest
+{
+    public string InitiatorUserId { get; set; } = string.Empty;
+    public string TargetUserId { get; set; } = string.Empty;
+    public int InitiatorPort { get; set; }
+    public int RequestedProbeWindowMs { get; set; } = 4_000;
+}
+
+public class RendezvousResponse
+{
+    public bool Success { get; set; }
+    public string SessionId { get; set; } = string.Empty;
+    public DateTime ExpiresAtUtc { get; set; }
+    public DateTime ProbeStartUtc { get; set; }
+    public int ProbeWindowMs { get; set; } = 4_000;
+    public string Message { get; set; } = string.Empty;
 }

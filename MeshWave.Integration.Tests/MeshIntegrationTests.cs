@@ -372,6 +372,83 @@ public class MeshIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task BootstrapRendezvous_ReturnsCoordinatedProbeWindow()
+    {
+        const int bootstrapPort = 39877;
+
+        if (await CanConnectAsync("127.0.0.1", bootstrapPort))
+        {
+            // Canonical bootstrap port already occupied by an external process; avoid interference.
+            return;
+        }
+
+        using var bootstrap = new BootstrapCoordinator(bootstrapPort);
+        await bootstrap.StartAsync();
+
+        var client = new ManifestExchangeClient(timeoutMs: 5_000);
+        var response = await client.RequestRendezvousAsync("127.0.0.1", bootstrapPort, new RendezvousRequest
+        {
+            InitiatorUserId = "user-initiator-1",
+            TargetUserId = "user-target-1",
+            InitiatorPort = 47474,
+            RequestedProbeWindowMs = 4_500
+        });
+
+        Assert.NotNull(response);
+        Assert.True(response!.Success);
+        Assert.False(string.IsNullOrWhiteSpace(response.SessionId));
+        Assert.True(response.ProbeWindowMs >= 1_500 && response.ProbeWindowMs <= 10_000);
+        Assert.True(response.ProbeStartUtc > DateTime.UtcNow.AddMilliseconds(-200));
+        Assert.True(response.ExpiresAtUtc > response.ProbeStartUtc);
+
+        await bootstrap.StopAsync();
+    }
+
+    [Fact]
+    public async Task RequestContentAsync_AttemptReport_IncludesRendezvousWindowAttempt_WhenDirectPunchFails()
+    {
+        const int bootstrapPort = 39877;
+
+        if (await CanConnectAsync("127.0.0.1", bootstrapPort))
+        {
+            // Canonical bootstrap port already occupied by an external process; avoid interference.
+            return;
+        }
+
+        using var bootstrap = new BootstrapCoordinator(bootstrapPort);
+        await bootstrap.StartAsync();
+
+        var (peerA, identityA, manifestA, _) = CreatePeer("Alice");
+        var (peerB, identityB, manifestB, _) = CreatePeer("Bob");
+
+        identityA.ManifestPort = FindFreePort();
+        identityB.ManifestPort = FindFreePort();
+
+        await peerA.StartAsync(identityA, manifestA, bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
+        await peerB.StartAsync(identityB, manifestB, bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
+
+        peerA.RecordFollow("rendezvous-probe");
+        peerB.RecordFollow("rendezvous-probe");
+
+        var pushClient = new ManifestExchangeClient(timeoutMs: 5_000);
+        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, manifestA);
+        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, manifestB);
+
+        await peerA.SyncAllPeersAsync();
+
+        var content = await peerA.RequestContentAsync(identityB.UserId, "missing-content-hash");
+
+        Assert.Null(content);
+
+        var report = peerA.LastConnectionAttemptReport;
+        Assert.NotNull(report);
+        Assert.Contains(report!.Attempts, a => a.Method == "bootstrap-rendezvous");
+        Assert.Contains(report.Attempts, a => a.Method == "udp-hole-punch-rendezvous-window");
+
+        await bootstrap.StopAsync();
+    }
+
+    [Fact]
     public async Task ManifestExchange_TamperedOperation_FailsSignatureCheck()
     {
         var (peerA, identityA, manifestA, portA) = CreatePeer("Alice");

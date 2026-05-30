@@ -37,6 +37,10 @@
 - [x] Likes sync via manifest operations (one like per user per track, signed)
 - [x] User profile sync (display name, avatar hash, IsArtist flag as signed Profile op)
 - [x] Content exchange: TCP file transfer by content hash (NAT hole-punch prep via UDP probes before direct transfer attempts)
+- [ ] Bootstrap rendezvous ("crossing hands") phase 1: explicit rendezvous session ID issuance by bootstrap coordinator
+- [ ] Bootstrap rendezvous phase 2: coordinated simultaneous outbound probe window (TCP SYN + UDP punch hints)
+- [ ] Relay fallback (opt-in): bootstrap-assisted relay only when direct methods fail
+- [ ] Connection diagnostics panel: show per-attempt outcomes, local/remote endpoints, and recommended NAT forwarding rules
 
 ## Milestone E: Trust and Aggregate Integrity
 - [ ] Sybil-resistance research spike (proof-of-work UserId or web-of-trust score)
@@ -141,6 +145,7 @@ Example groups: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone Col
 ### Goals
 - Spin up a real bootstrap node in-process, connect multiple SyncOrchestrator instances,
   verify peer discovery, manifest exchange, and play count sync across peers.
+- Extend NAT traversal to include rendezvous-coordinated "crossing hands" before any relay fallback.
 
 ### Tests
 - [x] New project: MeshWave.Integration.Tests (xUnit, references Synchronizer + Common.Core)

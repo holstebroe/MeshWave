@@ -98,7 +98,8 @@ public class SyncOrchestrator : IDisposable
             await _server.StartAsync(
                 () => _localManifest,
                 () => _router.GetPeersForExchange(),
-                _cts.Token);
+                rendezvousProvider: null,
+                cancellationToken: _cts.Token);
 
             await _natTraversal.StartAsync(identity.ManifestPort, _cts.Token);
         }
@@ -208,6 +209,29 @@ public class SyncOrchestrator : IDisposable
                 ? "UDP punch ACK received from peer."
                 : "No UDP punch ACK observed; continuing with direct TCP attempt."));
 
+        if (!punched)
+        {
+            var rendezvous = await RequestBootstrapRendezvousAsync(peerUserId, report);
+            report.Attempts.Add(new PeerConnectionAttemptResult(
+                "bootstrap-rendezvous",
+                rendezvous?.Success == true,
+                rendezvous?.Success == true
+                    ? $"Session {rendezvous.SessionId} issued (probe-start={rendezvous.ProbeStartUtc:O}, window={rendezvous.ProbeWindowMs}ms, expires={rendezvous.ExpiresAtUtc:O}). {rendezvous.Message}"
+                    : "Bootstrap rendezvous unavailable or failed."));
+
+            if (rendezvous?.Success == true)
+            {
+                await WaitForProbeWindowAsync(rendezvous, report);
+                var synchronizedPunch = await _natTraversal.TryPunchAsync(peer.Address, peer.Port);
+                report.Attempts.Add(new PeerConnectionAttemptResult(
+                    "udp-hole-punch-rendezvous-window",
+                    synchronizedPunch,
+                    synchronizedPunch
+                        ? "UDP punch ACK received during coordinated rendezvous window."
+                        : "No ACK during coordinated rendezvous window."));
+            }
+        }
+
         var bytes = await _contentExchange.RequestContentAsync(peer.Address, peer.Port, contentHash);
         var succeeded = bytes != null && bytes.Length > 0;
         report.Attempts.Add(new PeerConnectionAttemptResult(
@@ -313,6 +337,60 @@ public class SyncOrchestrator : IDisposable
                 false,
                 "Bootstrap refresh completed without usable peer data."));
         }
+    }
+
+    private async Task<RendezvousResponse?> RequestBootstrapRendezvousAsync(string targetUserId, PeerConnectionAttemptReport report)
+    {
+        if (_bootstrapNodes.Count == 0 || _identity == null)
+            return null;
+
+        foreach (var endpoint in _bootstrapNodes.Take(SecurityLimits.MaxBootstrapNodes))
+        {
+            if (!TryParseEndpoint(endpoint, out var host, out var port))
+                continue;
+
+            try
+            {
+                var response = await _client.RequestRendezvousAsync(host, port, new RendezvousRequest
+                {
+                    InitiatorUserId = _identity.UserId,
+                    TargetUserId = targetUserId,
+                    InitiatorPort = _identity.ManifestPort,
+                    RequestedProbeWindowMs = 4_000
+                });
+
+                if (response != null)
+                    return response;
+            }
+            catch (Exception ex)
+            {
+                report.Attempts.Add(new PeerConnectionAttemptResult(
+                    "bootstrap-rendezvous",
+                    false,
+                    $"Rendezvous request to {host}:{port} failed: {ex.Message}"));
+            }
+        }
+
+        return null;
+    }
+
+    private static async Task WaitForProbeWindowAsync(RendezvousResponse rendezvous, PeerConnectionAttemptReport report)
+    {
+        var now = DateTime.UtcNow;
+        if (rendezvous.ProbeStartUtc <= now)
+            return;
+
+        var delay = rendezvous.ProbeStartUtc - now;
+        if (delay > TimeSpan.FromSeconds(8))
+        {
+            report.Attempts.Add(new PeerConnectionAttemptResult(
+                "bootstrap-rendezvous-timing",
+                false,
+                "Probe start is too far in the future; skipping wait."));
+            return;
+        }
+
+        await Task.Delay(delay);
     }
 
     private static bool TryParseEndpoint(string endpoint, out string host, out int port)

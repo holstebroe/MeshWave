@@ -78,6 +78,41 @@ public class ManifestExchangeTests : IAsyncDisposable
         }
     }
 
+    [Fact]
+    public async Task RequestRendezvous_ReturnsSessionFromServerProvider()
+    {
+        using var serverWithDifferentPort = new ManifestExchangeServer(TestPort + 3);
+        await serverWithDifferentPort.StartAsync(
+            () => null,
+            peersProvider: null,
+            rendezvousProvider: request => new RendezvousResponse
+            {
+                Success = true,
+                SessionId = $"rv-{request.InitiatorUserId}-{request.TargetUserId}",
+                ExpiresAtUtc = DateTime.UtcNow.AddSeconds(30),
+                Message = "ok"
+            });
+
+        try
+        {
+            var client = new ManifestExchangeClient(timeoutMs: 5000);
+            var response = await client.RequestRendezvousAsync("127.0.0.1", TestPort + 3, new RendezvousRequest
+            {
+                InitiatorUserId = "initiator-1",
+                TargetUserId = "target-1",
+                InitiatorPort = 40001
+            });
+
+            Assert.NotNull(response);
+            Assert.True(response!.Success);
+            Assert.Contains("initiator-1", response.SessionId, StringComparison.Ordinal);
+        }
+        finally
+        {
+            await serverWithDifferentPort.StopAsync();
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _server.StopAsync();

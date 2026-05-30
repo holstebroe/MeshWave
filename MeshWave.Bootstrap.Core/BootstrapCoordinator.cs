@@ -10,6 +10,7 @@ namespace MeshWave.Bootstrap.Core;
 public sealed class BootstrapCoordinator : IDisposable
 {
     private readonly ConcurrentDictionary<string, BootstrapPeerEntry> _peers = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, BootstrapRendezvousSession> _rendezvousSessions = new(StringComparer.OrdinalIgnoreCase);
     private readonly ManifestExchangeServer _server;
 
     private int _requestCount;
@@ -32,6 +33,7 @@ public sealed class BootstrapCoordinator : IDisposable
         await _server.StartAsync(
             localManifestProvider: () => null,
             peersProvider: GetLivePeers,
+            rendezvousProvider: OnRendezvousRequested,
             cancellationToken: cancellationToken);
     }
 
@@ -94,6 +96,52 @@ public sealed class BootstrapCoordinator : IDisposable
         RegisterPeer(peer);
     }
 
+    private RendezvousResponse OnRendezvousRequested(RendezvousRequest request)
+    {
+        if (request == null || !SecurityLimits.IsValidUserId(request.InitiatorUserId) || !SecurityLimits.IsValidUserId(request.TargetUserId))
+        {
+            return new RendezvousResponse
+            {
+                Success = false,
+                Message = "Invalid rendezvous request."
+            };
+        }
+
+        var now = DateTime.UtcNow;
+        var probeWindow = Math.Clamp(request.RequestedProbeWindowMs, 1_500, 10_000);
+        var probeStart = now.AddMilliseconds(1_200);
+        var expiry = probeStart.AddMilliseconds(probeWindow + 2_000);
+        var session = new BootstrapRendezvousSession
+        {
+            SessionId = Guid.NewGuid().ToString("N"),
+            InitiatorUserId = request.InitiatorUserId,
+            TargetUserId = request.TargetUserId,
+            InitiatorPort = request.InitiatorPort,
+            ProbeStartUtc = probeStart,
+            ProbeWindowMs = probeWindow,
+            CreatedAtUtc = now,
+            ExpiresAtUtc = expiry
+        };
+
+        _rendezvousSessions[session.SessionId] = session;
+
+        foreach (var stale in _rendezvousSessions.Where(kv => kv.Value.ExpiresAtUtc <= now).Select(kv => kv.Key).ToList())
+            _rendezvousSessions.TryRemove(stale, out _);
+
+        var targetKnown = _peers.ContainsKey(request.TargetUserId);
+        return new RendezvousResponse
+        {
+            Success = true,
+            SessionId = session.SessionId,
+            ExpiresAtUtc = expiry,
+            ProbeStartUtc = session.ProbeStartUtc,
+            ProbeWindowMs = session.ProbeWindowMs,
+            Message = targetKnown
+                ? "Rendezvous session issued. Start coordinated outbound probes at probeStartUtc."
+                : "Rendezvous session issued; target is not currently registered on this bootstrap."
+        };
+    }
+
     private void RegisterPeer(PeerInfo peer)
     {
         if (!SecurityLimits.IsValidUserId(peer.UserId)) return;
@@ -138,4 +186,16 @@ internal sealed class BootstrapPeerEntry
 {
     public required PeerInfo Peer { get; set; }
     public DateTime LastSeen { get; set; }
+}
+
+internal sealed class BootstrapRendezvousSession
+{
+    public required string SessionId { get; set; }
+    public required string InitiatorUserId { get; set; }
+    public required string TargetUserId { get; set; }
+    public int InitiatorPort { get; set; }
+    public DateTime ProbeStartUtc { get; set; }
+    public int ProbeWindowMs { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
+    public DateTime ExpiresAtUtc { get; set; }
 }
