@@ -4,6 +4,70 @@
 
     <converters:SliderFillWidthConverter x:Key="SliderFillWidthConverter"/>
 
+    <!-- ===== Dark TabControl / TabItem ===== -->
+    <Style TargetType="TabControl">
+        <Setter Property="Background" Value="{DynamicResource BackgroundColor}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabControl">
+                    <DockPanel>
+                        <!-- Tab strip -->
+                        <Border DockPanel.Dock="Top"
+                                Background="{DynamicResource SurfaceColor}"
+                                CornerRadius="8,8,0,0"
+                                Margin="0,0,0,0">
+                            <TabPanel IsItemsHost="True"
+                                      Background="Transparent"
+                                      Margin="4,4,4,0"/>
+                        </Border>
+                        <!-- Content area -->
+                        <Border Background="{DynamicResource SurfaceColor}"
+                                CornerRadius="0,0,8,8"
+                                Padding="20">
+                            <ContentPresenter ContentSource="SelectedContent"/>
+                        </Border>
+                    </DockPanel>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="TabItem">
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryColor}"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="14,8"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabItem">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="6,6,0,0"
+                            Padding="{TemplateBinding Padding}"
+                            Margin="2,0">
+                        <ContentPresenter ContentSource="Header"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SurfaceLightColor}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryColor}"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SurfaceLightColor}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryColor}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- ===== Sidebar Navigation Button ===== -->
     <Style x:Key="SidebarNavButton" TargetType="Button">
         <Setter Property="Background" Value="Transparent"/>

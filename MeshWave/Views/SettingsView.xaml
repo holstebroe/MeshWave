@@ -10,281 +10,392 @@
     <UserControl.Resources>
         <converters:PathToBitmapConverter x:Key="PathToBitmap"/>
     </UserControl.Resources>
+
     <Grid Margin="20">
-        <ScrollViewer VerticalScrollBarVisibility="Auto">
-            <StackPanel MaxWidth="600">
-                <TextBlock Text="⚙️ Settings" 
-                          Style="{StaticResource SectionHeader}"
-                          FontSize="28"
-                          Margin="0,0,0,20"/>
+        <DockPanel>
+            <!-- Header -->
+            <TextBlock DockPanel.Dock="Top"
+                       Text="⚙️ Settings"
+                       Style="{StaticResource SectionHeader}"
+                       FontSize="28"
+                       Margin="0,0,0,16"/>
 
-                <!-- Base Folder Section -->
-                <Border Background="{StaticResource SurfaceColor}" 
-                       CornerRadius="8" 
-                       Padding="20"
-                       Margin="0,0,0,20">
-                    <StackPanel>
-                        <TextBlock Text="📁 Base Folder" 
-                                  Style="{StaticResource SectionHeader}"
-                                  Margin="0,0,0,10"/>
-                        <TextBlock Text="All MeshWave data will be stored here (My Music, Other Music, etc.)"
-                                  Foreground="{StaticResource TextSecondaryColor}"
-                                  TextWrapping="Wrap"
-                                  Margin="0,0,0,10"/>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBox Grid.Column="0" 
-                                    Text="{Binding BaseFolder, UpdateSourceTrigger=PropertyChanged}"
-                                    Margin="0,0,10,0"/>
-                            <Button Grid.Column="1" 
-                                   Content="Browse..." 
-                                   Command="{Binding BrowseBaseFolderCommand}"
-                                   Style="{StaticResource PrimaryButton}"/>
-                        </Grid>
-                    </StackPanel>
-                </Border>
+            <!-- Save + hint at bottom -->
+            <StackPanel DockPanel.Dock="Bottom" Margin="0,16,0,0">
+                <Button Content="💾 Save Settings"
+                        Command="{Binding SaveCommand}"
+                        Style="{StaticResource PrimaryButton}"
+                        FontSize="16"
+                        Padding="20,12"
+                        HorizontalAlignment="Stretch"/>
+                <TextBlock Text="Settings are saved to your AppData folder"
+                           Foreground="{StaticResource TextSecondaryColor}"
+                           FontStyle="Italic"
+                           HorizontalAlignment="Center"
+                           Margin="0,8,0,0"/>
+            </StackPanel>
 
-                <!-- Profile -->
-                <Border Background="{StaticResource SurfaceColor}" 
-                       CornerRadius="8" 
-                       Padding="20"
-                       Margin="0,0,0,20">
-                    <StackPanel>
-                        <TextBlock Text="👤 Profile"
-                                  Style="{StaticResource SectionHeader}"
-                                  Margin="0,0,0,10"/>
+            <!-- Tabbed content -->
+            <TabControl>
 
-                        <TextBlock Text="Display Name" Margin="0,0,0,5"/>
-                        <TextBox Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,10"/>
+                <!-- ══════════════════ GENERAL ══════════════════ -->
+                <TabItem Header="General">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel MaxWidth="560">
 
-                        <TextBlock Text="Avatar Image" Margin="0,0,0,5"/>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBox Grid.Column="0" Text="{Binding AvatarImagePath, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0"/>
-                            <Button Grid.Column="1"
-                                    Content="Browse Avatar..."
-                                    Command="{Binding BrowseAvatarCommand}"
-                                    Style="{StaticResource PrimaryButton}"/>
-                        </Grid>
+                            <!-- Base Folder -->
+                            <TextBlock Text="📁 Base Folder"
+                                       Style="{StaticResource SectionHeader}"
+                                       Margin="0,0,0,8"/>
+                            <TextBlock Text="All MeshWave data will be stored here (My Music, Other Music, etc.)"
+                                       Foreground="{StaticResource TextSecondaryColor}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,10"/>
+                            <Grid Margin="0,0,0,20">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0"
+                                         Text="{Binding BaseFolder, UpdateSourceTrigger=PropertyChanged}"
+                                         Margin="0,0,10,0"/>
+                                <Button Grid.Column="1"
+                                        Content="Browse..."
+                                        Command="{Binding BrowseBaseFolderCommand}"
+                                        Style="{StaticResource PrimaryButton}"/>
+                            </Grid>
 
-                        <TextBlock Text="Avatar Preview" Margin="0,10,0,6"/>
-                        <StackPanel Orientation="Horizontal">
-                            <Border Width="64" Height="64" CornerRadius="12" ClipToBounds="True" Background="{StaticResource BackgroundColor}" Margin="0,0,12,0">
-                                <Image Source="{Binding AvatarImagePath, Converter={StaticResource PathToBitmap}}" Stretch="UniformToFill"/>
-                            </Border>
-                            <StackPanel>
-                                <TextBlock Text="Generated Icon" Margin="0,0,0,4" Foreground="{StaticResource TextSecondaryColor}"/>
-                                <Border Width="40" Height="40" CornerRadius="8" ClipToBounds="True" Background="{StaticResource BackgroundColor}">
-                                    <Image Source="{Binding AvatarIconPath, Converter={StaticResource PathToBitmap}}" Stretch="UniformToFill"/>
+                            <!-- Supported extensions -->
+                            <TextBlock Text="🧩 Supported Audio Extensions"
+                                       Style="{StaticResource SectionHeader}"
+                                       Margin="0,0,0,8"/>
+                            <TextBlock Text="Comma-separated list used for import and library indexing (e.g. .mp3, .flac, .wav)"
+                                       Foreground="{StaticResource TextSecondaryColor}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,8"/>
+                            <TextBox Text="{Binding SupportedExtensionsText, UpdateSourceTrigger=PropertyChanged}"
+                                     AcceptsReturn="True"
+                                     TextWrapping="Wrap"
+                                     MinHeight="60"/>
+
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <!-- ══════════════════ PROFILE ══════════════════ -->
+                <TabItem Header="Profile">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel MaxWidth="560">
+
+                            <TextBlock Text="👤 Profile"
+                                       Style="{StaticResource SectionHeader}"
+                                       Margin="0,0,0,12"/>
+
+                            <!-- Role selector -->
+                            <TextBlock Text="Account Type" Margin="0,0,0,6"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                <RadioButton Content="Fan / Listener"
+                                             IsChecked="{Binding IsArtist, Converter={StaticResource InverseBoolConverter}, Mode=TwoWay}"
+                                             GroupName="RoleGroup"
+                                             Margin="0,0,20,0"
+                                             VerticalAlignment="Center"/>
+                                <RadioButton Content="Artist"
+                                             IsChecked="{Binding IsArtist, Mode=TwoWay}"
+                                             GroupName="RoleGroup"
+                                             VerticalAlignment="Center"/>
+                            </StackPanel>
+
+                            <!-- Display name -->
+                            <TextBlock Text="Display Name" Margin="0,0,0,5"/>
+                            <TextBox Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,14"/>
+
+                            <!-- Avatar -->
+                            <TextBlock Text="Avatar Image" Margin="0,0,0,5"/>
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0"
+                                         Text="{Binding AvatarImagePath, UpdateSourceTrigger=PropertyChanged}"
+                                         Margin="0,0,10,0"/>
+                                <Button Grid.Column="1"
+                                        Content="Browse..."
+                                        Command="{Binding BrowseAvatarCommand}"
+                                        Style="{StaticResource PrimaryButton}"/>
+                            </Grid>
+
+                            <TextBlock Text="Preview" Margin="0,0,0,6" Foreground="{StaticResource TextSecondaryColor}"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
+                                <Border Width="64" Height="64" CornerRadius="12" ClipToBounds="True"
+                                        Background="{StaticResource BackgroundColor}" Margin="0,0,12,0">
+                                    <Image Source="{Binding AvatarImagePath, Converter={StaticResource PathToBitmap}}"
+                                           Stretch="UniformToFill"/>
                                 </Border>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Generated icon (64px)"
+                                               Foreground="{StaticResource TextSecondaryColor}"
+                                               FontSize="11"
+                                               Margin="0,0,0,4"/>
+                                    <Border Width="40" Height="40" CornerRadius="8" ClipToBounds="True"
+                                            Background="{StaticResource BackgroundColor}">
+                                        <Image Source="{Binding AvatarIconPath, Converter={StaticResource PathToBitmap}}"
+                                               Stretch="UniformToFill"/>
+                                    </Border>
+                                </StackPanel>
+                            </StackPanel>
+
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <!-- ══════════════════ ARTIST ══════════════════ -->
+                <TabItem Header="Artist">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel MaxWidth="560">
+
+                            <!-- Disabled notice when not artist -->
+                            <Border Background="#33E67E22"
+                                    CornerRadius="6"
+                                    Padding="12,8"
+                                    Margin="0,0,0,16"
+                                    Visibility="{Binding IsArtist, Converter={StaticResource InverseBoolToVis}}">
+                                <TextBlock Text="Enable the Artist account type on the Profile tab to unlock these fields."
+                                           Foreground="#E67E22"
+                                           TextWrapping="Wrap"/>
+                            </Border>
+
+                            <StackPanel IsEnabled="{Binding IsArtist}">
+
+                                <TextBlock Text="🎸 Artist Profile"
+                                           Style="{StaticResource SectionHeader}"
+                                           Margin="0,0,0,12"/>
+
+                                <!-- Bio -->
+                                <TextBlock Text="Bio" Margin="0,0,0,5"/>
+                                <TextBlock Text="Describe yourself and your music (max 1000 characters)"
+                                           Foreground="{StaticResource TextSecondaryColor}"
+                                           FontSize="11"
+                                           Margin="0,0,0,6"/>
+                                <TextBox Text="{Binding Bio, UpdateSourceTrigger=PropertyChanged}"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         MinHeight="100"
+                                         MaxLength="1000"
+                                         Margin="0,0,0,14"/>
+
+                                <!-- Website -->
+                                <TextBlock Text="Website / Social Link" Margin="0,0,0,5"/>
+                                <TextBox Text="{Binding Website, UpdateSourceTrigger=PropertyChanged}"
+                                         Margin="0,0,0,14"/>
+
+                                <!-- Banner image -->
+                                <TextBlock Text="Banner Image" Margin="0,0,0,5"/>
+                                <TextBlock Text="Displayed at the top of your artist profile card seen by other users"
+                                           Foreground="{StaticResource TextSecondaryColor}"
+                                           FontSize="11"
+                                           Margin="0,0,0,6"/>
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0"
+                                             Text="{Binding BannerImagePath, UpdateSourceTrigger=PropertyChanged}"
+                                             Margin="0,0,10,0"/>
+                                    <Button Grid.Column="1"
+                                            Content="Browse..."
+                                            Command="{Binding BrowseBannerCommand}"
+                                            Style="{StaticResource PrimaryButton}"/>
+                                </Grid>
+
+                                <!-- Banner preview -->
+                                <TextBlock Text="Banner Preview" Margin="0,0,0,6" Foreground="{StaticResource TextSecondaryColor}"/>
+                                <Border Height="120" CornerRadius="8" ClipToBounds="True"
+                                        Background="{StaticResource SurfaceLightColor}">
+                                    <Image Source="{Binding BannerImagePath, Converter={StaticResource PathToBitmap}}"
+                                           Stretch="UniformToFill"/>
+                                </Border>
+
                             </StackPanel>
                         </StackPanel>
-                    </StackPanel>
-                </Border>
+                    </ScrollViewer>
+                </TabItem>
 
-                <!-- Playback Settings -->
-                <Border Background="{StaticResource SurfaceColor}" 
-                       CornerRadius="8" 
-                       Padding="20"
-                       Margin="0,0,0,20">
-                    <StackPanel>
-                        <TextBlock Text="🎵 Playback" 
-                                  Style="{StaticResource SectionHeader}"
-                                  Margin="0,0,0,10"/>
+                <!-- ══════════════════ APPEARANCE ══════════════════ -->
+                <TabItem Header="Appearance">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel MaxWidth="560">
 
-                        <TextBlock Text="Default Volume"
-                                  Foreground="{StaticResource TextPrimaryColor}"
-                                  Margin="0,0,0,5"/>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <Slider Grid.Column="0"
-                                   Minimum="0" 
-                                   Maximum="1" 
-                                   Value="{Binding Volume, Mode=TwoWay}"
-                                   VerticalAlignment="Center"
-                                   Margin="0,0,10,0"/>
-                            <TextBlock Grid.Column="1"
-                                      Text="{Binding Volume, StringFormat={}{0:P0}}"
-                                      Foreground="{StaticResource TextSecondaryColor}"
-                                      VerticalAlignment="Center"
-                                      Width="50"/>
-                        </Grid>
-                    </StackPanel>
-                </Border>
+                            <TextBlock Text="🎨 Appearance"
+                                       Style="{StaticResource SectionHeader}"
+                                       Margin="0,0,0,12"/>
+                            <TextBlock Text="Theme: Dark (Light theme coming soon)"
+                                       Foreground="{StaticResource TextSecondaryColor}"
+                                       Margin="0,0,0,16"/>
 
-                <!-- Supported File Extensions -->
-                <Border Background="{StaticResource SurfaceColor}" 
-                       CornerRadius="8" 
-                       Padding="20"
-                       Margin="0,0,0,20">
-                    <StackPanel>
-                        <TextBlock Text="🧩 Supported Audio Extensions" 
-                                  Style="{StaticResource SectionHeader}"
-                                  Margin="0,0,0,10"/>
-                        <TextBlock Text="Comma-separated list used for import and library indexing (example: .mp3, .flac, .wav)"
-                                  Foreground="{StaticResource TextSecondaryColor}"
-                                  TextWrapping="Wrap"
-                                  Margin="0,0,0,10"/>
-                        <TextBox Text="{Binding SupportedExtensionsText, UpdateSourceTrigger=PropertyChanged}"
-                                 AcceptsReturn="True"
-                                 TextWrapping="Wrap"
-                                 MinHeight="60"/>
-                    </StackPanel>
-                </Border>
+                            <!-- Volume -->
+                            <TextBlock Text="🎵 Default Volume" Margin="0,0,0,6"/>
+                            <Grid Margin="0,0,0,20">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Slider Grid.Column="0"
+                                        Minimum="0" Maximum="1"
+                                        Value="{Binding Volume, Mode=TwoWay}"
+                                        VerticalAlignment="Center"
+                                        Margin="0,0,10,0"/>
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding Volume, StringFormat={}{0:P0}}"
+                                           Foreground="{StaticResource TextSecondaryColor}"
+                                           VerticalAlignment="Center"
+                                           Width="50"/>
+                            </Grid>
 
-                <!-- Theme / Appearance Settings -->
-                <Border Background="{StaticResource SurfaceColor}" 
-                       CornerRadius="8" 
-                       Padding="20"
-                       Margin="0,0,0,20">
-                    <StackPanel>
-                        <TextBlock Text="🎨 Appearance" 
-                                  Style="{StaticResource SectionHeader}"
-                                  Margin="0,0,0,10"/>
-                        <TextBlock Text="Theme: Dark (Light theme coming soon)"
-                                  Foreground="{StaticResource TextSecondaryColor}"
-                                  Margin="0,0,0,16"/>
+                            <!-- Waveform style -->
+                            <TextBlock Text="Waveform Style" Margin="0,0,0,6"/>
+                            <TextBlock Foreground="{StaticResource TextSecondaryColor}"
+                                       FontSize="12" TextWrapping="Wrap"
+                                       Margin="0,0,0,8">
+                                <Run Text="Filled"/>
+                                <Run Text=" — solid bars.  "/>
+                                <Run Text="Cloudy"/>
+                                <Run Text=" — spaced bars with reflection.  "/>
+                                <Run Text="Mirror"/>
+                                <Run Text=" — symmetric vertical.  "/>
+                                <Run Text="Neon"/>
+                                <Run Text=" — thin glowing bars.  "/>
+                                <Run Text="Smooth"/>
+                                <Run Text=" — Hann-envelope curve with gradient fill."/>
+                            </TextBlock>
+                            <ComboBox ItemsSource="{Binding AvailableWaveformStyles}"
+                                      SelectedItem="{Binding WaveformStyle, Mode=TwoWay}"
+                                      Padding="8,5"
+                                      MinWidth="160"
+                                      HorizontalAlignment="Left"/>
 
-                        <TextBlock Text="Waveform Style"
-                                   Foreground="{StaticResource TextPrimaryColor}"
-                                   Margin="0,0,0,6"/>
-                        <TextBlock Foreground="{StaticResource TextSecondaryColor}"
-                                   FontSize="12" TextWrapping="Wrap"
-                                   Margin="0,0,0,8">
-                            <Run Text="Filled"/>
-                            <Run Text=" — solid bars. "/>
-                            <Run Text="Cloudy"/>
-                            <Run Text=" — spaced bars with a tinted reflection. "/>
-                            <Run Text="Mirror"/>
-                            <Run Text=" — symmetric vertical reflection. "/>
-                            <Run Text="Neon"/>
-                            <Run Text=" — thin glowing bars. "/>
-                            <Run Text="Smooth"/>
-                            <Run Text=" — Hann-envelope curve with gradient fill."/>
-                        </TextBlock>
-                        <ComboBox ItemsSource="{Binding AvailableWaveformStyles}"
-                                  SelectedItem="{Binding WaveformStyle, Mode=TwoWay}"
-                                  Padding="8,5"
-                                  MinWidth="160"
-                                  HorizontalAlignment="Left"/>
-                    </StackPanel>
-                </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
 
-                <!-- P2P Settings -->
-                <Border Background="{StaticResource SurfaceColor}" 
-                       CornerRadius="8" 
-                       Padding="20"
-                       Margin="0,0,0,20">
-                    <StackPanel>
-                        <TextBlock Text="🌐 Peer-to-Peer Network" 
-                                  Style="{StaticResource SectionHeader}"
-                                  Margin="0,0,0,4"/>
-                        <TextBlock Text="Connect to the MeshWave community to share and discover music."
-                                  Foreground="{StaticResource TextSecondaryColor}"
-                                  TextWrapping="Wrap"
-                                  Margin="0,0,0,12"/>
+                <!-- ══════════════════ NETWORK ══════════════════ -->
+                <TabItem Header="Network">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel MaxWidth="560">
 
-                        <!-- Enable toggle -->
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <TextBlock Text="🌐 Peer-to-Peer Network"
+                                       Style="{StaticResource SectionHeader}"
+                                       Margin="0,0,0,8"/>
+                            <TextBlock Text="Connect to the MeshWave community to share and discover music."
+                                       Foreground="{StaticResource TextSecondaryColor}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,12"/>
+
                             <CheckBox IsChecked="{Binding P2PEnabled, Mode=TwoWay}"
                                       Content="Enable P2P on startup"
-                                      VerticalAlignment="Center"/>
+                                      Margin="0,0,0,14"/>
+
+                            <TextBlock Text="Listen Port" Margin="0,0,0,4"/>
+                            <Grid Margin="0,0,0,14">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="120"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0"
+                                         Text="{Binding P2PPort, UpdateSourceTrigger=PropertyChanged}"/>
+                                <TextBlock Grid.Column="1"
+                                           Text="TCP port this node listens on."
+                                           Foreground="{StaticResource TextSecondaryColor}"
+                                           FontSize="12"
+                                           VerticalAlignment="Center"
+                                           Margin="10,0,0,0"/>
+                            </Grid>
+
+                            <TextBlock Text="Max Peers" Margin="0,0,0,4"/>
+                            <Grid Margin="0,0,0,14">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="120"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0"
+                                         Text="{Binding P2PMaxPeers, UpdateSourceTrigger=PropertyChanged}"/>
+                                <TextBlock Grid.Column="1"
+                                           Text="Maximum peers in routing table (1–500)."
+                                           Foreground="{StaticResource TextSecondaryColor}"
+                                           FontSize="12"
+                                           VerticalAlignment="Center"
+                                           Margin="10,0,0,0"/>
+                            </Grid>
+
+                            <TextBlock Text="Bootstrap Nodes" Margin="0,0,0,4"/>
+                            <TextBlock Text="One node per line in host:port format. Entry points into the network."
+                                       Foreground="{StaticResource TextSecondaryColor}"
+                                       FontSize="12" TextWrapping="Wrap"
+                                       Margin="0,0,0,6"/>
+                            <TextBox Text="{Binding P2PBootstrapNodesText, UpdateSourceTrigger=PropertyChanged}"
+                                     AcceptsReturn="True"
+                                     TextWrapping="Wrap"
+                                     MinHeight="80"
+                                     FontFamily="Consolas"
+                                     FontSize="12"
+                                     Margin="0,0,0,16"/>
+
+                            <TextBlock Text="Identity" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
+                            <TextBlock Text="{Binding P2PIdentityInfo}"
+                                       Foreground="{StaticResource TextSecondaryColor}"
+                                       FontFamily="Consolas"
+                                       FontSize="11"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,8"/>
+                            <TextBlock Text="⚠️ Regenerating creates a new key. Peers will see you as a new user and you will lose your history."
+                                       Foreground="#E67E22"
+                                       FontSize="11"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,8"/>
+                            <Button Content="🔑 Regenerate Identity"
+                                    Command="{Binding RegenerateIdentityCommand}"
+                                    Style="{StaticResource DangerButton}"
+                                    HorizontalAlignment="Left"
+                                    Padding="12,6"/>
+
                         </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
 
-                        <!-- Port -->
-                        <TextBlock Text="Listen Port" Margin="0,0,0,4"/>
-                        <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="120"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBox Grid.Column="0"
-                                     Text="{Binding P2PPort, UpdateSourceTrigger=PropertyChanged}"/>
-                            <TextBlock Grid.Column="1"
-                                       Text="TCP port this node listens on for incoming peer connections."
+                <!-- ══════════════════ STORAGE ══════════════════ -->
+                <TabItem Header="Storage">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel MaxWidth="560">
+
+                            <TextBlock Text="💾 Storage"
+                                       Style="{StaticResource SectionHeader}"
+                                       Margin="0,0,0,12"/>
+
+                            <!-- Storage info placeholder — wired in next milestone -->
+                            <Border Background="{StaticResource SurfaceLightColor}"
+                                    CornerRadius="6" Padding="16" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <TextBlock Text="Base Folder"
+                                               Foreground="{StaticResource TextSecondaryColor}"
+                                               FontSize="12"
+                                               Margin="0,0,0,4"/>
+                                    <TextBlock Text="{Binding BaseFolder}"
+                                               Foreground="{StaticResource TextPrimaryColor}"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+
+                            <TextBlock Text="Detailed storage breakdown and cleanup tools will be available here in an upcoming update."
                                        Foreground="{StaticResource TextSecondaryColor}"
-                                       FontSize="12"
-                                       VerticalAlignment="Center"
-                                       Margin="10,0,0,0"
-                                       TextWrapping="Wrap"/>
-                        </Grid>
+                                       TextWrapping="Wrap"
+                                       FontStyle="Italic"/>
 
-                        <!-- Max peers -->
-                        <TextBlock Text="Max Peers" Margin="0,0,0,4"/>
-                        <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="120"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBox Grid.Column="0"
-                                     Text="{Binding P2PMaxPeers, UpdateSourceTrigger=PropertyChanged}"/>
-                            <TextBlock Grid.Column="1"
-                                       Text="Maximum number of peers to maintain in the routing table (1–500)."
-                                       Foreground="{StaticResource TextSecondaryColor}"
-                                       FontSize="12"
-                                       VerticalAlignment="Center"
-                                       Margin="10,0,0,0"
-                                       TextWrapping="Wrap"/>
-                        </Grid>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
 
-                        <!-- Bootstrap nodes -->
-                        <TextBlock Text="Bootstrap Nodes" Margin="0,0,0,4"/>
-                        <TextBlock Text="One node per line in host:port format. These are your entry points into the network (like BitTorrent bootstrap nodes)."
-                                   Foreground="{StaticResource TextSecondaryColor}"
-                                   FontSize="12"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,6"/>
-                        <TextBox Text="{Binding P2PBootstrapNodesText, UpdateSourceTrigger=PropertyChanged}"
-                                 AcceptsReturn="True"
-                                 TextWrapping="Wrap"
-                                 MinHeight="80"
-                                 FontFamily="Consolas"
-                                 FontSize="12"/>
-
-                        <!-- Identity -->
-                        <TextBlock Text="Identity" Style="{StaticResource SectionHeader}" Margin="0,10,0,4"/>
-                        <TextBlock Text="{Binding P2PIdentityInfo}"
-                                   Foreground="{StaticResource TextSecondaryColor}"
-                                   FontFamily="Consolas"
-                                   FontSize="11"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,8"/>
-                        <TextBlock Text="⚠️ Regenerating your identity creates a new cryptographic key. Peers will see you as a completely different user and you will lose your history."
-                                   Foreground="#E67E22"
-                                   FontSize="11"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,8"/>
-                        <Button Content="🔑 Regenerate Identity"
-                                Command="{Binding RegenerateIdentityCommand}"
-                                Style="{StaticResource DangerButton}"
-                                HorizontalAlignment="Left"
-                                Padding="12,6"/>
-                    </StackPanel>
-                </Border>
-
-                <!-- Save Button -->
-                <Button Content="💾 Save Settings" 
-                       Command="{Binding SaveCommand}"
-                       Style="{StaticResource PrimaryButton}"
-                       FontSize="16"
-                       Padding="20,12"
-                       HorizontalAlignment="Stretch"/>
-
-                <TextBlock Text="Settings are saved to your AppData folder"
-                          Foreground="{StaticResource TextSecondaryColor}"
-                          FontStyle="Italic"
-                          HorizontalAlignment="Center"
-                          Margin="0,10,0,0"/>
-            </StackPanel>
-        </ScrollViewer>
+            </TabControl>
+        </DockPanel>
     </Grid>
 </UserControl>

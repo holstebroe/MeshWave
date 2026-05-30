@@ -25,6 +25,8 @@
 
             <converters:ViewModelToViewConverter x:Key="ViewModelToViewConverter" />
             <converters:TimeSpanToSecondsConverter x:Key="TimeSpanToSecondsConverter" />
+            <converters:InverseBoolConverter x:Key="InverseBoolConverter" />
+            <converters:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

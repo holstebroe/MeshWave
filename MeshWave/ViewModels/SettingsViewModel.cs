@@ -26,6 +26,13 @@ public class SettingsViewModel : ViewModelBase
     private string _avatarImagePath = string.Empty;
     private string _avatarIconPath = string.Empty;
 
+    // Artist profile fields
+    private bool _isArtist = false;
+    private string _bio = string.Empty;
+    private string _website = string.Empty;
+    private string _bannerImagePath = string.Empty;
+    private string _selectedTab = "General";
+
     // P2P settings
     private bool _p2pEnabled;
     private int _p2pPort = 39877;
@@ -44,12 +51,14 @@ public class SettingsViewModel : ViewModelBase
         SaveCommand = new RelayCommand(_ => SaveSettings());
         BrowseBaseFolderCommand = new RelayCommand(_ => BrowseStorageFolder());
         BrowseAvatarCommand = new RelayCommand(_ => BrowseAvatarImage());
+        BrowseBannerCommand = new RelayCommand(_ => BrowseBannerImage());
         RegenerateIdentityCommand = new RelayCommand(_ => RegenerateIdentity());
     }
 
     public ICommand SaveCommand { get; }
     public ICommand BrowseBaseFolderCommand { get; }
     public ICommand BrowseAvatarCommand { get; }
+    public ICommand BrowseBannerCommand { get; }
     public ICommand RegenerateIdentityCommand { get; }
 
     public string BaseFolder
@@ -74,6 +83,39 @@ public class SettingsViewModel : ViewModelBase
     {
         get => _avatarIconPath;
         set => SetProperty(ref _avatarIconPath, value);
+    }
+
+    // ---- Role and artist profile ----
+
+    public bool IsArtist
+    {
+        get => _isArtist;
+        set => SetProperty(ref _isArtist, value);
+    }
+
+    public string Bio
+    {
+        get => _bio;
+        set => SetProperty(ref _bio, value);
+    }
+
+    public string Website
+    {
+        get => _website;
+        set => SetProperty(ref _website, value);
+    }
+
+    public string BannerImagePath
+    {
+        get => _bannerImagePath;
+        set => SetProperty(ref _bannerImagePath, value);
+    }
+
+    /// <summary>Currently selected settings tab name.</summary>
+    public string SelectedTab
+    {
+        get => _selectedTab;
+        set => SetProperty(ref _selectedTab, value);
     }
 
     public string Theme
@@ -158,6 +200,10 @@ public class SettingsViewModel : ViewModelBase
         Username = profile.DisplayName;
         AvatarImagePath = profile.AvatarImagePath;
         AvatarIconPath = profile.AvatarIconPath;
+        IsArtist = profile.IsArtist;
+        Bio = profile.Bio;
+        Website = profile.Website;
+        BannerImagePath = profile.BannerImagePath;
 
         P2PEnabled = settings.P2P.Enabled;
         P2PPort = settings.P2P.Port;
@@ -227,6 +273,21 @@ public class SettingsViewModel : ViewModelBase
         }
     }
 
+    public void BrowseBannerImage()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = "Image Files|*.png;*.jpg;*.jpeg;*.bmp",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            BannerImagePath = dialog.FileName;
+        }
+    }
+
     public void SaveSettings()
     {
         var bootstrapNodes = P2PBootstrapNodesText
@@ -266,7 +327,11 @@ public class SettingsViewModel : ViewModelBase
         {
             DisplayName = string.IsNullOrWhiteSpace(Username) ? "You" : Username,
             AvatarImagePath = AvatarImagePath,
-            AvatarIconPath = AvatarIconPath
+            AvatarIconPath = AvatarIconPath,
+            IsArtist = IsArtist,
+            Bio = Bio.Length > 1000 ? Bio[..1000] : Bio,
+            Website = Website,
+            BannerImagePath = BannerImagePath
         });
 
         var savedProfile = _profileService.LoadProfile();

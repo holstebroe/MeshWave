@@ -1,162 +1,139 @@
-# MeshWave Backlog (High/Low Level)
+# MeshWave Backlog
 
-## High-Level Feature Backlog
+## Milestone A: Core Playback (done)
+- [x] Basic audio playback (NAudio)
+- [x] Waveform styles: Filled, Cloudy, Mirror, Neon, Smooth
+- [x] Timeline comments and markers
+- [x] Track versioning
+- [x] Waveform style selector in Settings
 
-- [x] User profile editor (name, avatar) baseline in Settings
-- [ ] User profile editor (bio and advanced profile fields)
-- [x] Rounded profile icon generation and use in timeline markers/comments
-- [x] Profile/setup page shows avatar preview and generated icon preview
-- [x] Community sync for tracks/comments/play counts (P2P foundation: UDP discovery, manifest exchange server/client, SyncOrchestrator)
-- [ ] Play count registration threshold + sync
-- [ ] Social graph: Friends, Groups, Follows (see Social section)
-- [ ] Comment permissions per album/track (All / Groups / Friends only)
-- [ ] Comment moderation: track owners can delete comments on their own material
-- [ ] Rich home dashboard polish/flashy visuals
-- [x] Home dashboard panel hover style polish (discrete inner border highlight, no ugly outer hover)
-- [x] Home dashboard panel cards should navigate to respective tabs when clicked
-- [ ] Persistent library index database (optional simple file DB first)
+## Milestone B: Library Management (done)
+- [x] File scanner (My Music / Other Music folders)
+- [x] Album/track list views with .mymusic.json sidecar metadata
+- [x] Library ViewModel + View
 
-## Detailed TODO / Bugs
+## Milestone C: Library and Persistence
+- [ ] File-based DB or lightweight index for faster startup
+- [ ] More robust artist/album statistics
+- [ ] Improved search/filter and sorting
 
-### Playback
+## Milestone D: Community Sync
+- [x] P2P foundation: PeerDiscovery, ManifestExchangeServer/Client, SyncOrchestrator
+- [x] Manifest signing + verification using RSA
+- [x] SecurityLimits -- central constants enforced at TCP layer and manifest merge
+- [x] P2PIdentityService -- persistent RSA keypair, UserId derived from public key fingerprint
+- [x] PeerRouter -- unified routing table: LAN UDP + bootstrap nodes + PEX maintenance loop
+- [x] PEX wire protocol, capped at SecurityLimits.MaxPeersPerExchange
+- [x] AppSettings.P2PSettings.BootstrapNodes -- configurable internet bootstrap nodes
+- [x] Wire SyncOrchestrator into ApplicationViewModel
+- [x] Per-peer manifest disk persistence (PeerManifestStore)
+- [x] Play count sync -- signed Play ops, session rate cap, RecordPlay on IsPlaying
+- [x] Play count consensus -- MergeManifest enforces MaxPlaysPerUserPerTrackPerDay=3
+- [ ] Community library ingestion flow (Other Music) driven by peer manifests
+- [ ] Comment sync via manifest operations (signed, author-owned; ReplyToId threading)
+- [ ] Comment moderation sync (owner soft-delete ops)
+- [ ] Social graph sync (friends, groups, follows as signed manifest ops)
+- [ ] Comment permission enforcement across peers
+- [ ] Likes sync via manifest operations (one like per user per track, signed)
+- [ ] User profile sync (display name, avatar hash, IsArtist flag as signed Profile op)
+- [ ] Content exchange: TCP file transfer by content hash
 
-- [x] Comment filter options by current track version (show all vs current only)
-- [x] Persist track version on timeline comments for future filtering
-- [x] Stop->Play reliability fixed
-- [x] Avoid multiple simultaneous tracks when selecting new track
-- [x] Keep playback active while switching tabs
-- [x] Preserve waveform/cursor behavior when returning to playback tab
-- [x] Replace fake waveform with real waveform generation pipeline
-- [x] Background waveform generation when cache is missing
-- [x] Marker click seeks playback to timestamp
-- [x] Marker tooltip/avatar polish
-- [x] Play / pause button simplified to a single Play/Pause toggle (icons, no text).
-- [x] Show song description if available.
-- [x] Album/playlist playback. The Playback page should have a panel with the current album/playlist tracklist, allowing users to easily see and select other tracks in the same album/playlist.
-- [x] Comments follow the playing track (bug: comments were not cleared on track change)
-- [x] Comment timestamp captured at first keystroke, not at submit time
-- [x] Ctrl+Enter submits comment
-- [x] Comment data model has `Id` + `ReplyToId` for threaded replies; replies shown indented under parent
-- [ ] Comment reply UI: reply button per comment, inline reply box
-- [ ] Comment delete: track owners can delete comments on their own tracks
-- [ ] Comment like / reaction
+## Milestone E: Trust and Aggregate Integrity
+- [ ] Sybil-resistance research spike (proof-of-work UserId or web-of-trust score)
+- [ ] Audit log / replay verification for play count manifest operations
+- [ ] Per-user contribution cap UI (show X plays from Y unique listeners)
 
-### Social
+## Milestone F: Artist and Fan Profiles  <-- NEXT
+- [ ] User role flag -- IsArtist: bool added to UserProfile and User model
+- [ ] Extended artist profile fields -- Bio (plain text max 1000 chars), BannerImagePath (local path), BannerImageHash (P2P content hash), Website (URL)
+- [ ] Settings tabbed layout -- replace linear scroll with tabs: General | Profile | Artist | Appearance | Network | Storage
+- [ ] Profile tab -- display name, avatar picker, avatar preview (existing content moved here)
+- [ ] Artist tab -- conditionally enabled when IsArtist=true; fields: Bio, Website, Banner image picker and preview
+- [ ] Artist profile card view -- read-only card shown in Community when browsing a peer; displays banner, rounded avatar, display name, bio, website, track/album count, Follow button
+- [ ] Release timestamp -- ReleasedAt: DateTime field on track/album sidecar; set on first announce; shown in library and community views
+- [ ] Release feed panel in CommunityView -- lists recent Create manifest ops from followed peers ordered by ReleasedAt; shows artist, title, timestamp, Add to Library button
+- [ ] Add to Library flow -- triggers content exchange request; places files in Other Music folder
+- [ ] Follow notifications -- badge on Community nav item when followed artist has new Create ops since last sync
+- [ ] Persist follow list as signed Follow manifest ops (social graph)
+- [ ] User profile sync op -- broadcast IsArtist, Bio, BannerImageHash, Website as signed Profile manifest op
 
-- [ ] Friends: add/remove friends (by UserId / display name); bilateral relationship stored in user profile manifest
-- [ ] Groups: create/manage groups; group membership list stored in user-owned group manifest
-- [ ] Follows: follow any user (unilateral); stored in follower's manifest
-- [ ] Social graph sync via P2P manifest operations (signed, owner-only writes)
-- [ ] Comment permission model per album/track: `CommentPolicy` enum (`All` | `FriendsOnly` | `GroupsOnly` | `None`)
-  - Stored in album/track metadata sidecar
-  - Enforced locally when adding comments; broadcast in album manifest so peers respect it
-- [ ] Comment moderation: owner can mark a comment as deleted (soft-delete via signed manifest op; propagates to peers)
+## Milestone G: Community Groups and Distributed Chat
 
-### Library (MyMusic)
-- [x] Metadata editor baseline for Track (title, artist, album, year, genre, description)
-- [x] Metadata editor expansion for Artist/Album/Cover image management
-- [x] Single file import.
-- [x] Normalize My Music import button sizing/alignment
-- [x] Release/unrelease toggle and version field in My Music metadata editor (album + track)
-- [x] Show release status/version badges in My Music album and track lists
-- [x] Baseline API for updating imported track file while preserving metadata sidecars
-- [ ] Track version change notes (what changed) and structure for future multi-version mix browsing/playback
+### Design Philosophy
 
+Groups are first-class distributed entities with no central server. Each group is identified
+by a group manifest -- an append-only signed log of group events (join, leave, post, channel
+create, moderation). Any peer can host and exchange group manifests exactly like personal
+manifests. The GroupId is derived from the hash of the founding operation combined with the
+founder UserId, making it globally unique without any central registration.
 
-### Library (community)
+Example groups: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone Collective.
 
-- [x] Split Library (community) vs My Music
-- [x] Artist->Album->Track filtering flow
-- [x] Scrollable artist/album/track lists
-- [x] Import progress + cancellation
-- [x] Cover extraction and display
-- [ ] Artist stats polish (albums/tracks/plays/comments from persisted stats)
-- [ ] Community data loading model for Other Music
-- [x] P2P: integrate SyncOrchestrator into ApplicationViewModel (start/stop on app launch)
-- [x] P2P: per-peer manifest store (disk persistence, one manifest file per peer UserId)
-- [x] P2P: SecurityLimits enforcement (message size, field lengths, manifest op count, routing table cap)
-- [x] P2P: P2PIdentityService (persistent RSA keypair in AppData)
-- [x] P2P: PeerRouter (LAN UDP + bootstrap nodes + PEX maintenance loop)
-- [x] P2P: PEX GetPeers protocol (server + client, rate-capped)
-- [x] P2P: BootstrapNodes config added to AppSettings.P2PSettings
-- [ ] P2P: content exchange (request/serve audio files by content hash over TCP)
-- [x] Community mesh menu (search users/groups, follow, add friend, join group) — CommunityView + CommunityViewModel scaffold wired into navigation
-- [x] Bootstrap console application (MeshWave.Bootstrap) — minimal PEX-only node; no manifest data stored or served; configurable port + seed list
-- [ ] Community view: wire real peer data into search results from PeerManifestStore / PeerRouter
-- [ ] Community view: persist social graph (friends/follows/groups) as manifest operations
-- [ ] P2P: likes sync (push/pull as manifest operations; one like per user per track, signed)
-- [ ] P2P: user profile sync (broadcast own profile — display name, avatar hash — as manifest operations; only owner can update)
-- [ ] P2P: play count sync (record local counts, broadcast as manifest operations)
-- [ ] P2P: play count consensus — aggregate across peers, prevent single-user manipulation (see Architecture note below)
-- [ ] P2P: comment sync (push/pull timeline comments as manifest operations)
+### Group Model
+- GroupManifest -- parallel to user Manifest; fields: GroupId, Name, Description, Tags,
+  FounderUserId, IsPublic, Channels, BannedUserIds
+- Group discovery: peers broadcast known GroupId list in PEX metadata; interested peers
+  fetch the full group manifest on demand
+- GroupOperationType enum: FoundGroup | JoinGroup | LeaveGroup | PostMessage |
+  CreateChannel | DeleteMessage | PromoteModerator | BanUser
 
-### Settings / Storage
+### Channels and Posts
+- A Channel has ChannelId, Name, Topic, CreatedBy, CreatedAt
+- A PostMessage op carries: ChannelId, Text (<=2000 chars), optional AttachmentHash,
+  ReplyToOpId for threaded replies
+- Posts are ordered by SequenceNumber; clients render history by replaying ops in order
+- Attachments are content-addressed files fetched via the content exchange layer
 
-- [x] Base folder selection and persistence
-- [x] Supported extension list editable/persisted
-- [x] Ensure `My Music` and `Other Music` folders
-- [ ] Expanded settings (audio device, P2P settings UX)
-- [ ] Improve contrast for secondary actions and popup/tooltips in dark theme (cancel/import/tooltips)
+### Moderation and Trust
+- Founders and promoted moderators may append DeleteMessage (soft tombstone) and BanUser ops
+- Banned users ops are hidden client-side but kept in the manifest (append-only integrity)
+- Rate limits in SecurityLimits: MaxGroupPostsPerUserPerDay, MaxGroupsPerUser,
+  MaxGroupNameLength, MaxChannelNameLength
 
-### Technical / Quality
+### Group Sync Infrastructure
+- Group manifests exchanged via the same ManifestExchangeServer/Client TCP infrastructure
+- New GroupManifestStore mirrors PeerManifestStore -- persists group manifests by GroupId
+- SyncOrchestrator extended: FoundGroup, JoinGroup, LeaveGroup, PostToChannel,
+  GetGroupManifest, GetGroupPosts
 
-- [x] Replace Track.FileHash file-path workaround with dedicated FilePath field
-- [ ] Add more automated tests for WPF viewmodels/services
-- [ ] Better structured logging + error UI
-- [ ] Performance pass for large libraries
-- [x] Move long-running import progress to popup-only UX (no inline panel)
+### Implementation tasks
+- [ ] GroupManifest + GroupOperation + Channel models in MeshWave.Common.Core
+- [ ] GroupOperationType enum
+- [ ] SecurityLimits additions: MaxGroupPostsPerUserPerDay, MaxGroupsPerUser, MaxGroupNameLength, MaxChannelNameLength
+- [ ] GroupManifestStore -- disk persistence (mirrors PeerManifestStore)
+- [ ] GroupManager -- signing, verification, merge for group manifests (mirrors ManifestManager)
+- [ ] Wire group sync into SyncOrchestrator
+- [ ] CommunityViewModel expanded -- discovered groups, joined groups, channel list, post list
+- [ ] CommunityView -- Groups tab: joined/discovered list; channel sidebar; post thread; reply box
+- [ ] Group discovery panel -- search by name/tag; Join/Leave actions
+- [ ] Group creation flow -- name, description, tags, initial channel; broadcasts FoundGroup + CreateChannel ops
+
+## Milestone H: Settings Storage and Housekeeping Tab
+- [ ] Storage tab added to Settings (alongside General/Profile/Artist/Appearance/Network)
+- [ ] Show used/free disk space and per-category breakdown: My Music, Other Music, Manifests, Cache
+- [ ] Visual progress bar per category (green < 70%, amber < 90%, red >= 90%)
+- [ ] Clear cached peer manifests button -- deletes PeerManifests/ folder contents and reloads store
+- [ ] Clear waveform cache button (future use)
+- [ ] Configurable storage quota warning threshold (default 10 GB)
 
 ---
 
 ## Architecture Notes
 
-### User-Owned Data Model
+### User-owned data principle
+All user-generated content (tracks, play counts, comments, likes, profile, posts) is
+propagated as signed manifest operations. No peer can forge another users data.
 
-All data generated by a user is owned exclusively by that user and propagated through the P2P network
-as **signed manifest operations**. Because every operation is signed with the user's RSA private key
-(see `P2PIdentityService`, `ManifestManager.AppendSignedOperation`), no other peer can forge or
-modify another user's data. Categories of user-owned data:
+### Play count consensus
+Aggregate = sum of per-user counts; each user capped at MaxPlaysPerUserPerTrackPerDay
+enforced during MergeManifest.
 
-| Category | Examples | Authority |
-|---|---|---|
-| Music tracks + metadata | Title, artist, album, description, release status, version | Track owner only |
-| Play counts | Per-user per-track play count increments | Counted user only |
-| Comments & likes | Timeline comments, track likes | Comment/like author only |
-| User profile | Display name, avatar image hash, bio | Profile owner only |
-| Chat messages *(future)* | Direct or room messages | Message sender only |
+### Artist role
+IsArtist is stored in UserProfile locally and broadcast in a signed Profile manifest op.
+Fans and artists are equal P2P peers -- the role controls which UI surfaces are shown
+and which manifest ops are authored (only artists announce tracks and albums).
 
-### Play Count Consensus
-
-**Goal:** Display an aggregate play count across all peers that cannot be inflated by a single user.
-
-**Design (to implement in Milestone D / E):**
-
-1. **Local recording** — Each user stores their own play count increments locally in the track
-   metadata sidecar (`.mymusic.json`). Each "play" is a discrete signed manifest operation:
-   `{ op: "play", trackId, userId, timestamp, sequenceNumber }`.
-
-2. **One-play-per-session rule** — A play is registered only once per continuous listening session
-   (e.g., ≥ 30 seconds listened, same track, same session). The client enforces this before
-   appending the manifest operation.
-
-3. **Rate limiting at merge** — `ManifestManager.MergeManifest` enforces
-   `SecurityLimits.MaxPlaysPerUserPerTrackPerDay` (to be added). Any peer broadcasting more play
-   increments than this threshold in a single manifest sync is clamped/ignored, protecting the
-   aggregate from spam.
-
-4. **Aggregate display** — The displayed play count for a track is the **sum of unique-user play
-   counts** collected from all peer manifests received so far. Each user contributes at most their
-   own daily-capped count. No single peer can raise the global aggregate beyond their own capped
-   contribution.
-
-5. **Future hardening** — A Sybil-resistance layer (e.g., proof-of-work on UserId registration or
-   a web-of-trust score) may be added later if fake account farming becomes a concern. Tracked in
-   the roadmap under Milestone E.
-
-**Security boundary:** A user can only influence their *own* row in the distributed play-count
-table, bounded by the daily cap. The global aggregate is tamper-evident because every contributing
-operation is individually signed and sequence-checked.
-- [x] Clarify or remove non-functional search/filter text box until filtering is implemented
-- [x] Ensure cover cache writes standardized .jpg file output in LocalLibraryManager
-- [x] Remove waveform bar gap artifacts in playback waveform rendering
-
+### Community group identity
+A group has no central owner after founding. The GroupId hash makes it globally unique.
+Groups survive founder departure as long as any member holds a copy of the manifest.
+Moderation is cooperative -- bans and deletions are visible but enforcement is client-side.
