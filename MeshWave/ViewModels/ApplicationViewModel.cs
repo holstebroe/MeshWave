@@ -1,6 +1,7 @@
 using MeshWave.Mvvm;
 using MeshWave.Services;
 using MeshWave.Synchronizer;
+using System.Windows.Input;
 
 namespace MeshWave.ViewModels;
 
@@ -21,11 +22,23 @@ public class ApplicationViewModel : ViewModelBase
     private readonly SyncOrchestrator _syncOrchestrator = new();
 
     private MeshWave.Common.Core.Models.Manifest? _localManifest;
+    private bool _p2pIsConnected;
+    private string _p2pStatusText = "Disconnected";
+    private int _p2pPeerCount;
 
     public ApplicationViewModel()
     {
         _playbackViewModel = new PlaybackViewModel();
         _currentViewModel = new HomeViewModel();
+
+        ConnectP2PCommand = new RelayCommand(_ => _ = ConnectP2PAsync(), _ => !P2PIsConnected);
+        DisconnectP2PCommand = new RelayCommand(_ => _ = DisconnectP2PAsync(), _ => P2PIsConnected);
+
+        _syncOrchestrator.PeerCountChanged += (_, _) =>
+        {
+            P2PPeerCount = _syncOrchestrator.ConnectedPeerCount;
+            P2PStatusText = $"Connected · {P2PPeerCount} peer{(P2PPeerCount == 1 ? "" : "s")}";
+        };
 
         InitializeP2PAsync();
     }
@@ -41,6 +54,27 @@ public class ApplicationViewModel : ViewModelBase
         get => _currentViewModel;
         set => SetProperty(ref _currentViewModel, value);
     }
+
+    public bool P2PIsConnected
+    {
+        get => _p2pIsConnected;
+        private set => SetProperty(ref _p2pIsConnected, value);
+    }
+
+    public string P2PStatusText
+    {
+        get => _p2pStatusText;
+        private set => SetProperty(ref _p2pStatusText, value);
+    }
+
+    public int P2PPeerCount
+    {
+        get => _p2pPeerCount;
+        private set => SetProperty(ref _p2pPeerCount, value);
+    }
+
+    public ICommand ConnectP2PCommand { get; }
+    public ICommand DisconnectP2PCommand { get; }
 
     public SyncOrchestrator SyncOrchestrator => _syncOrchestrator;
 
@@ -82,11 +116,69 @@ public class ApplicationViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// Announces a released track to the P2P network.
+    /// </summary>
+    public void AnnounceTrackToNetwork(string trackId, string contentHash, string title, string artist, string album)
+    {
+        if (!P2PIsConnected) return;
+        _syncOrchestrator.AnnounceTrack(trackId, contentHash, new Dictionary<string, string>
+        {
+            ["title"] = SecurityLimits.Truncate(title, SecurityLimits.MaxTrackTitleLength),
+            ["artist"] = SecurityLimits.Truncate(artist, SecurityLimits.MaxArtistNameLength),
+            ["album"] = SecurityLimits.Truncate(album, SecurityLimits.MaxAlbumNameLength)
+        });
+    }
+
+    /// <summary>
+    /// Announces a released album to the P2P network.
+    /// </summary>
+    public void AnnounceAlbumToNetwork(string albumId, string name, string artist)
+    {
+        if (!P2PIsConnected) return;
+        _syncOrchestrator.AnnounceAlbum(albumId, null, new Dictionary<string, string>
+        {
+            ["name"] = SecurityLimits.Truncate(name, SecurityLimits.MaxAlbumNameLength),
+            ["artist"] = SecurityLimits.Truncate(artist, SecurityLimits.MaxArtistNameLength)
+        });
+    }
+
+    /// <summary>
     /// Call during app shutdown to cleanly stop P2P sync.
     /// </summary>
     public async Task ShutdownAsync()
     {
         await _syncOrchestrator.StopAsync();
+    }
+
+    private async Task ConnectP2PAsync()
+    {
+        try
+        {
+            P2PStatusText = "Connecting…";
+            var settings = _settingsService.LoadSettings();
+            var profile = _profileService.LoadProfile();
+            var identity = _identityService.LoadOrCreate(profile.DisplayName);
+            identity.ManifestPort = settings.P2P.Port;
+
+            _localManifest ??= _manifestManager.CreateManifest(identity.UserId);
+
+            await _syncOrchestrator.StartAsync(identity, _localManifest, settings.P2P.BootstrapNodes);
+            P2PIsConnected = true;
+            P2PStatusText = "Connected · 0 peers";
+        }
+        catch (Exception ex)
+        {
+            P2PStatusText = $"Error: {ex.Message}";
+            P2PIsConnected = false;
+        }
+    }
+
+    private async Task DisconnectP2PAsync()
+    {
+        await _syncOrchestrator.StopAsync();
+        P2PIsConnected = false;
+        P2PPeerCount = 0;
+        P2PStatusText = "Disconnected";
     }
 
     private void InitializeP2PAsync()
@@ -98,26 +190,11 @@ public class ApplicationViewModel : ViewModelBase
                 var settings = _settingsService.LoadSettings();
                 if (!settings.P2P.Enabled) return;
 
-                var profile = _profileService.LoadProfile();
-                var identity = _identityService.LoadOrCreate(profile.DisplayName);
-                identity.ManifestPort = settings.P2P.Port;
-
-                _localManifest = _manifestManager.CreateManifest(identity.UserId);
-
-                _syncOrchestrator.ManifestMerged += (_, e) =>
-                {
-                    // Post to UI thread if needed for future dashboard updates
-                    System.Diagnostics.Debug.WriteLine($"[P2P] Merged {e.OperationsAdded} ops from {e.UserId}");
-                };
-
-                await _syncOrchestrator.StartAsync(
-                    identity,
-                    _localManifest,
-                    settings.P2P.BootstrapNodes);
+                await ConnectP2PAsync();
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[P2P] Startup error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[P2P] Auto-start error: {ex.Message}");
             }
         });
     }

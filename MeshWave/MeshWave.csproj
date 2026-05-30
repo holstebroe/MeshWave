@@ -6,7 +6,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <ApplicationIcon>MeshWaveIcon128.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="MeshWaveIcon128.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../MeshWave.Common.Core/MeshWave.Common.Core.csproj" />

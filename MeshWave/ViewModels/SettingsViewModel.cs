@@ -3,6 +3,7 @@ using System.Windows.Input;
 using MeshWave.Models;
 using MeshWave.Mvvm;
 using MeshWave.Services;
+using MeshWave.Synchronizer;
 
 namespace MeshWave.ViewModels;
 
@@ -13,6 +14,7 @@ public class SettingsViewModel : ViewModelBase
 {
     private readonly SettingsService _settingsService;
     private readonly UserProfileService _profileService;
+    private readonly P2PIdentityService _identityService = new();
     private string _baseFolder = string.Empty;
     private string _username = string.Empty;
     private bool _isInitialized = false;
@@ -21,6 +23,13 @@ public class SettingsViewModel : ViewModelBase
     private string _supportedExtensionsText = string.Empty;
     private string _avatarImagePath = string.Empty;
     private string _avatarIconPath = string.Empty;
+
+    // P2P settings
+    private bool _p2pEnabled;
+    private int _p2pPort = 39877;
+    private int _p2pMaxPeers = 50;
+    private string _p2pBootstrapNodesText = string.Empty;
+    private string _p2pIdentityInfo = string.Empty;
 
     public SettingsViewModel()
     {
@@ -31,11 +40,13 @@ public class SettingsViewModel : ViewModelBase
         SaveCommand = new RelayCommand(_ => SaveSettings());
         BrowseBaseFolderCommand = new RelayCommand(_ => BrowseStorageFolder());
         BrowseAvatarCommand = new RelayCommand(_ => BrowseAvatarImage());
+        RegenerateIdentityCommand = new RelayCommand(_ => RegenerateIdentity());
     }
 
     public ICommand SaveCommand { get; }
     public ICommand BrowseBaseFolderCommand { get; }
     public ICommand BrowseAvatarCommand { get; }
+    public ICommand RegenerateIdentityCommand { get; }
 
     public string BaseFolder
     {
@@ -85,6 +96,40 @@ public class SettingsViewModel : ViewModelBase
         set => SetProperty(ref _isInitialized, value);
     }
 
+    // ---- P2P Properties ----
+
+    public bool P2PEnabled
+    {
+        get => _p2pEnabled;
+        set => SetProperty(ref _p2pEnabled, value);
+    }
+
+    public int P2PPort
+    {
+        get => _p2pPort;
+        set => SetProperty(ref _p2pPort, value);
+    }
+
+    public int P2PMaxPeers
+    {
+        get => _p2pMaxPeers;
+        set => SetProperty(ref _p2pMaxPeers, value);
+    }
+
+    /// <summary>Bootstrap nodes, one per line (host:port).</summary>
+    public string P2PBootstrapNodesText
+    {
+        get => _p2pBootstrapNodesText;
+        set => SetProperty(ref _p2pBootstrapNodesText, value);
+    }
+
+    /// <summary>Read-only display of the local peer UserId (public key fingerprint).</summary>
+    public string P2PIdentityInfo
+    {
+        get => _p2pIdentityInfo;
+        set => SetProperty(ref _p2pIdentityInfo, value);
+    }
+
     private void LoadSettings()
     {
         var settings = _settingsService.LoadSettings();
@@ -102,7 +147,34 @@ public class SettingsViewModel : ViewModelBase
         AvatarImagePath = profile.AvatarImagePath;
         AvatarIconPath = profile.AvatarIconPath;
 
+        P2PEnabled = settings.P2P.Enabled;
+        P2PPort = settings.P2P.Port;
+        P2PMaxPeers = Math.Min(settings.P2P.MaxPeers, SecurityLimits.MaxRoutingTableSize);
+        P2PBootstrapNodesText = string.Join(Environment.NewLine, settings.P2P.BootstrapNodes);
+
+        RefreshIdentityInfo();
+
         IsInitialized = !string.IsNullOrEmpty(settings.BaseFolder);
+    }
+
+    private void RefreshIdentityInfo()
+    {
+        if (_identityService.IdentityExists())
+        {
+            var identity = _identityService.LoadOrCreate(Username);
+            P2PIdentityInfo = $"Peer ID: {identity.UserId}";
+        }
+        else
+        {
+            P2PIdentityInfo = "No identity yet — will be created on first connect.";
+        }
+    }
+
+    private void RegenerateIdentity()
+    {
+        var profile = _profileService.LoadProfile();
+        var identity = _identityService.Regenerate(profile.DisplayName);
+        P2PIdentityInfo = $"Peer ID: {identity.UserId}  (regenerated — peers will see you as a new user)";
     }
 
     public void BrowseStorageFolder()
@@ -125,11 +197,6 @@ public class SettingsViewModel : ViewModelBase
         }
     }
 
-    public void GenerateKeypair()
-    {
-        // TODO: Implement keypair generation
-    }
-
     public void BrowseAvatarImage()
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
@@ -147,6 +214,11 @@ public class SettingsViewModel : ViewModelBase
 
     public void SaveSettings()
     {
+        var bootstrapNodes = P2PBootstrapNodesText
+            .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Take(SecurityLimits.MaxBootstrapNodes)
+            .ToList();
+
         var settings = new AppSettings
         {
             BaseFolder = BaseFolder,
@@ -161,6 +233,13 @@ public class SettingsViewModel : ViewModelBase
             {
                 Volume = Volume,
                 RegisterPlayAt = 0.5
+            },
+            P2P = new P2PSettings
+            {
+                Enabled = P2PEnabled,
+                Port = P2PPort,
+                MaxPeers = Math.Clamp(P2PMaxPeers, 1, SecurityLimits.MaxRoutingTableSize),
+                BootstrapNodes = bootstrapNodes
             }
         };
 
@@ -178,7 +257,5 @@ public class SettingsViewModel : ViewModelBase
         AvatarIconPath = savedProfile.AvatarIconPath;
 
         IsInitialized = true;
-
-        // TODO: Show success message
     }
 }

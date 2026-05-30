@@ -151,18 +151,95 @@
                     </StackPanel>
                 </Border>
 
-                <!-- P2P Settings (Future) -->
+                <!-- P2P Settings -->
                 <Border Background="{StaticResource SurfaceColor}" 
                        CornerRadius="8" 
                        Padding="20"
                        Margin="0,0,0,20">
                     <StackPanel>
-                        <TextBlock Text="🌐 Peer-to-Peer (Coming Soon)" 
+                        <TextBlock Text="🌐 Peer-to-Peer Network" 
                                   Style="{StaticResource SectionHeader}"
-                                  Margin="0,0,0,10"/>
-                        <TextBlock Text="P2P music sharing features will be available in a future update."
+                                  Margin="0,0,0,4"/>
+                        <TextBlock Text="Connect to the MeshWave community to share and discover music."
                                   Foreground="{StaticResource TextSecondaryColor}"
-                                  TextWrapping="Wrap"/>
+                                  TextWrapping="Wrap"
+                                  Margin="0,0,0,12"/>
+
+                        <!-- Enable toggle -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <CheckBox IsChecked="{Binding P2PEnabled, Mode=TwoWay}"
+                                      Content="Enable P2P on startup"
+                                      VerticalAlignment="Center"/>
+                        </StackPanel>
+
+                        <!-- Port -->
+                        <TextBlock Text="Listen Port" Margin="0,0,0,4"/>
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0"
+                                     Text="{Binding P2PPort, UpdateSourceTrigger=PropertyChanged}"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="TCP port this node listens on for incoming peer connections."
+                                       Foreground="{StaticResource TextSecondaryColor}"
+                                       FontSize="12"
+                                       VerticalAlignment="Center"
+                                       Margin="10,0,0,0"
+                                       TextWrapping="Wrap"/>
+                        </Grid>
+
+                        <!-- Max peers -->
+                        <TextBlock Text="Max Peers" Margin="0,0,0,4"/>
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0"
+                                     Text="{Binding P2PMaxPeers, UpdateSourceTrigger=PropertyChanged}"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="Maximum number of peers to maintain in the routing table (1–500)."
+                                       Foreground="{StaticResource TextSecondaryColor}"
+                                       FontSize="12"
+                                       VerticalAlignment="Center"
+                                       Margin="10,0,0,0"
+                                       TextWrapping="Wrap"/>
+                        </Grid>
+
+                        <!-- Bootstrap nodes -->
+                        <TextBlock Text="Bootstrap Nodes" Margin="0,0,0,4"/>
+                        <TextBlock Text="One node per line in host:port format. These are your entry points into the network (like BitTorrent bootstrap nodes)."
+                                   Foreground="{StaticResource TextSecondaryColor}"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,6"/>
+                        <TextBox Text="{Binding P2PBootstrapNodesText, UpdateSourceTrigger=PropertyChanged}"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 MinHeight="80"
+                                 FontFamily="Consolas"
+                                 FontSize="12"/>
+
+                        <!-- Identity -->
+                        <TextBlock Text="Identity" Style="{StaticResource SectionHeader}" Margin="0,10,0,4"/>
+                        <TextBlock Text="{Binding P2PIdentityInfo}"
+                                   Foreground="{StaticResource TextSecondaryColor}"
+                                   FontFamily="Consolas"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,8"/>
+                        <TextBlock Text="⚠️ Regenerating your identity creates a new cryptographic key. Peers will see you as a completely different user and you will lose your history."
+                                   Foreground="#E67E22"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,8"/>
+                        <Button Content="🔑 Regenerate Identity"
+                                Command="{Binding RegenerateIdentityCommand}"
+                                Style="{StaticResource DangerButton}"
+                                HorizontalAlignment="Left"
+                                Padding="12,6"/>
                     </StackPanel>
                 </Border>
 

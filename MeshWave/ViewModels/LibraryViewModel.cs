@@ -22,18 +22,35 @@ public partial class LibraryViewModel : ViewModelBase
     private int _importRemainingFiles;
     private int _importImportedFiles;
     private string _importSingleFileStatus = string.Empty;
+    private string _syncStatus = string.Empty;
 
     public LibraryViewModel(ApplicationViewModel? applicationViewModel = null, bool isMyMusicLibrary = false)
     {
         _applicationViewModel = applicationViewModel;
         IsMyMusicLibrary = isMyMusicLibrary;
         CancelImportCommand = new RelayCommand(_ => CancelImport(), _ => IsImporting);
+        SyncAlbumCommand = new RelayCommand(_ => SyncSelectedAlbum(), _ => CanSyncToNetwork);
+        SyncTrackCommand = new RelayCommand<LibraryTrackItem>(SyncTrack, t => CanSyncToNetwork && t != null);
         LoadFromConfiguredBaseFolder();
     }
 
     public ICommand CancelImportCommand { get; }
+    public ICommand SyncAlbumCommand { get; }
+    public ICommand SyncTrackCommand { get; }
+
     public bool IsMyMusicLibrary { get; }
     public bool CanImportMyMusic => IsMyMusicLibrary;
+
+    /// <summary>
+    /// True when the user is in My Music view and P2P is connected.
+    /// </summary>
+    public bool CanSyncToNetwork => IsMyMusicLibrary && (_applicationViewModel?.P2PIsConnected ?? false);
+
+    public string SyncStatus
+    {
+        get => _syncStatus;
+        set => SetProperty(ref _syncStatus, value);
+    }
 
     public string SearchQuery
     {
@@ -80,6 +97,7 @@ public partial class LibraryViewModel : ViewModelBase
             if (SetProperty(ref _selectedAlbum, value))
             {
                 RefreshAlbumAndTrackSelection();
+                OnPropertyChanged(nameof(CanSyncToNetwork));
             }
         }
     }
@@ -169,6 +187,41 @@ public partial class LibraryViewModel : ViewModelBase
         }
 
         OpenMetadataEditorRequested?.Invoke(this, trackFilePath);
+    }
+
+    private void SyncSelectedAlbum()
+    {
+        var album = SelectedAlbum;
+        if (album == null || _applicationViewModel == null) return;
+
+        _applicationViewModel.AnnounceAlbumToNetwork(album.AlbumId, album.Name, album.Artist);
+
+        foreach (var track in Tracks.Where(t => t.IsReleased))
+        {
+            _applicationViewModel.AnnounceTrackToNetwork(
+                track.TrackId,
+                MeshWave.Common.Core.Crypto.CryptoService.ComputeFileHash(track.FilePath),
+                track.Title,
+                track.Artist,
+                album.Name);
+        }
+
+        var count = Tracks.Count(t => t.IsReleased);
+        SyncStatus = $"Announced album '{album.Name}' with {count} released track(s) to the network.";
+    }
+
+    private void SyncTrack(LibraryTrackItem? track)
+    {
+        if (track == null || _applicationViewModel == null) return;
+
+        _applicationViewModel.AnnounceTrackToNetwork(
+            track.TrackId,
+            MeshWave.Common.Core.Crypto.CryptoService.ComputeFileHash(track.FilePath),
+            track.Title,
+            track.Artist,
+            SelectedAlbum?.Name ?? string.Empty);
+
+        SyncStatus = $"Announced '{track.Title}' to the network.";
     }
 
     public void Search()

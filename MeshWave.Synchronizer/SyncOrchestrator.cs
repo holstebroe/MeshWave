@@ -19,6 +19,16 @@ public class SyncOrchestrator : IDisposable
     private CancellationTokenSource? _cts;
 
     public event EventHandler<ManifestMergedEventArgs>? ManifestMerged;
+    public event EventHandler? PeerCountChanged;
+
+    /// <summary>Whether the orchestrator is currently running.</summary>
+    public bool IsRunning => _cts != null && !_cts.IsCancellationRequested;
+
+    /// <summary>Number of currently visible peers in the routing table.</summary>
+    public int ConnectedPeerCount => _router.GetPeers().Count;
+
+    /// <summary>The local identity in use (set after StartAsync).</summary>
+    public LocalPeerIdentity? Identity => _identity;
 
     public SyncOrchestrator(
         PeerRouter? router = null,
@@ -35,10 +45,6 @@ public class SyncOrchestrator : IDisposable
     /// <summary>
     /// Starts P2P sync: LAN discovery, bootstrap node connections, PEX, and manifest exchange server.
     /// </summary>
-    /// <param name="identity">Local peer identity with keypair.</param>
-    /// <param name="localManifest">This user's own manifest to serve to peers.</param>
-    /// <param name="bootstrapNodes">Internet bootstrap node addresses (format: "host:port").</param>
-    /// <param name="cancellationToken">Cancellation token for graceful shutdown.</param>
     public async Task StartAsync(
         LocalPeerIdentity identity,
         Manifest localManifest,
@@ -50,6 +56,7 @@ public class SyncOrchestrator : IDisposable
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         _router.PeerAdded += OnPeerAdded;
+        _router.PeerRemoved += OnPeerRemoved;
         _server.ManifestReceived += OnManifestReceived;
 
         await _server.StartAsync(
@@ -66,6 +73,7 @@ public class SyncOrchestrator : IDisposable
     public async Task StopAsync()
     {
         _router.PeerAdded -= OnPeerAdded;
+        _router.PeerRemoved -= OnPeerRemoved;
         _server.ManifestReceived -= OnManifestReceived;
 
         await _router.StopAsync();
@@ -91,7 +99,13 @@ public class SyncOrchestrator : IDisposable
 
     private void OnPeerAdded(object? sender, PeerInfo peer)
     {
+        PeerCountChanged?.Invoke(this, EventArgs.Empty);
         _ = Task.Run(() => TryFetchAndMergeAsync(peer, _cts?.Token ?? CancellationToken.None));
+    }
+
+    private void OnPeerRemoved(object? sender, string userId)
+    {
+        PeerCountChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnManifestReceived(object? sender, ManifestReceivedEventArgs e)
@@ -115,6 +129,39 @@ public class SyncOrchestrator : IDisposable
             TryMerge(remoteManifest, peer.PublicKeyPem);
         }
         catch { /* peer unreachable – will retry on next cycle */ }
+    }
+
+    /// <summary>
+    /// Announces a track release to the network by appending a signed Create operation to the local manifest.
+    /// Call this when the user marks a track as released and wants peers to discover it.
+    /// </summary>
+    public void AnnounceTrack(string trackId, string contentHash, Dictionary<string, string>? metadata = null)
+    {
+        if (_localManifest == null || _identity == null) return;
+        _manifestManager.AppendSignedOperation(
+            _localManifest,
+            ManifestOperationType.Create,
+            trackId,
+            "Track",
+            contentHash,
+            metadata,
+            _identity.PrivateKeyPem);
+    }
+
+    /// <summary>
+    /// Announces an album release to the network.
+    /// </summary>
+    public void AnnounceAlbum(string albumId, string? contentHash, Dictionary<string, string>? metadata = null)
+    {
+        if (_localManifest == null || _identity == null) return;
+        _manifestManager.AppendSignedOperation(
+            _localManifest,
+            ManifestOperationType.Create,
+            albumId,
+            "Album",
+            contentHash,
+            metadata,
+            _identity.PrivateKeyPem);
     }
 
     private void TryMerge(Manifest remote, string publicKeyPem)

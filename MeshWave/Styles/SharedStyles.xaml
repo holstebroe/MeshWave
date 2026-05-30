@@ -52,4 +52,24 @@
         <Setter Property="Foreground" Value="{DynamicResource AccentColor}"/>
         <Setter Property="Background" Value="{DynamicResource SurfaceColor}"/>
     </Style>
+
+    <Style x:Key="DangerButton" TargetType="Button">
+        <Setter Property="Background" Value="#C0392B"/>
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+        <Setter Property="Padding" Value="10,4"/>
+        <Setter Property="Margin" Value="0,0,0,10"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+
+    <Style x:Key="SuccessButton" TargetType="Button">
+        <Setter Property="Background" Value="#27AE60"/>
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+        <Setter Property="Padding" Value="10,4"/>
+        <Setter Property="Margin" Value="0,0,0,10"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Cursor" Value="Hand"/>
+    </Style>
 </ResourceDictionary>

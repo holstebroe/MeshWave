@@ -10,15 +10,72 @@
         Background="{StaticResource BackgroundColor}">
     <Grid>
         <DockPanel>
-            <Menu DockPanel.Dock="Top" 
-                  Background="{StaticResource SurfaceColor}"
-                  Foreground="{StaticResource TextPrimaryColor}">
-                <MenuItem Header="Home" Click="HomeMenu_Click"/>
-                <MenuItem Header="Library" Click="LibraryMenu_Click"/>
-                <MenuItem Header="My Music" Click="MyMusicMenu_Click"/>
-                <MenuItem Header="Playback" Click="PlaybackMenu_Click"/>
-                <MenuItem Header="Settings" Click="SettingsMenu_Click"/>
-            </Menu>
+            <!-- Top bar: nav menu + P2P status strip -->
+            <Grid DockPanel.Dock="Top" Background="{StaticResource SurfaceColor}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Menu Grid.Column="0"
+                      Background="Transparent"
+                      Foreground="{StaticResource TextPrimaryColor}">
+                    <MenuItem Header="Home" Click="HomeMenu_Click"/>
+                    <MenuItem Header="Library" Click="LibraryMenu_Click"/>
+                    <MenuItem Header="My Music" Click="MyMusicMenu_Click"/>
+                    <MenuItem Header="Playback" Click="PlaybackMenu_Click"/>
+                    <MenuItem Header="Settings" Click="SettingsMenu_Click"/>
+                </Menu>
+
+                <!-- P2P status strip (right side of title bar) -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" 
+                            VerticalAlignment="Center" Margin="8,0">
+                    <Ellipse Width="8" Height="8" Margin="0,0,6,0" VerticalAlignment="Center">
+                        <Ellipse.Style>
+                            <Style TargetType="Ellipse">
+                                <Setter Property="Fill" Value="#555555"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding P2PIsConnected}" Value="True">
+                                        <Setter Property="Fill" Value="#27AE60"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Ellipse.Style>
+                    </Ellipse>
+                    <TextBlock Text="{Binding P2PStatusText}"
+                               Foreground="{StaticResource TextSecondaryColor}"
+                               VerticalAlignment="Center"
+                               FontSize="12"
+                               Margin="0,0,10,0"/>
+                    <Button Content="Connect"
+                            Command="{Binding ConnectP2PCommand}"
+                            Padding="8,3" Margin="0,2,4,2" FontSize="12">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource SuccessButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding P2PIsConnected}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Button Content="Disconnect"
+                            Command="{Binding DisconnectP2PCommand}"
+                            Padding="8,3" Margin="0,2,4,2" FontSize="12">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource DangerButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding P2PIsConnected}" Value="False">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
             <ContentControl x:Name="MainContent" Background="{StaticResource BackgroundColor}">
                 <ContentControl.Content>
                     <Binding Path="CurrentViewModel" Converter="{StaticResource ViewModelToViewConverter}"/>

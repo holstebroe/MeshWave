@@ -32,12 +32,25 @@
                         Style="{StaticResource PrimaryButton}"
                         FontSize="16"
                         Padding="20,12"
-                        Width="220"/>
+                        Width="220"
+                        Margin="0,0,10,0"/>
+                <Button Content="📡 Sync Album to Network"
+                        Command="{Binding SyncAlbumCommand}"
+                        Visibility="{Binding CanImportMyMusic, Converter={StaticResource BoolToVisibilityConverter}}"
+                        Style="{StaticResource SuccessButton}"
+                        FontSize="14"
+                        Padding="16,12"
+                        Margin="0,0,0,0"/>
             </StackPanel>
 
             <TextBlock Text="{Binding ImportSingleFileStatus}"
                        Margin="0,8,0,0"
                        Foreground="{StaticResource TextSecondaryColor}"
+                       Visibility="{Binding CanImportMyMusic, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+            <TextBlock Text="{Binding SyncStatus}"
+                       Margin="0,4,0,0"
+                       Foreground="#27AE60"
                        Visibility="{Binding CanImportMyMusic, Converter={StaticResource BoolToVisibilityConverter}}"/>
 
             <TextBlock Text="Search tracks/albums (filtering coming soon)"
@@ -120,6 +133,10 @@
                         <ContextMenu>
                             <MenuItem Header="Edit Metadata"
                                       Click="EditMetadata_Click"
+                                      Visibility="{Binding PlacementTarget.DataContext.CanImportMyMusic, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                            <MenuItem Header="📡 Sync Track to Network"
+                                      Command="{Binding PlacementTarget.DataContext.SyncTrackCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding}"
                                       Visibility="{Binding PlacementTarget.DataContext.CanImportMyMusic, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVisibilityConverter}}"/>
                         </ContextMenu>
                     </ListBox.ContextMenu>
