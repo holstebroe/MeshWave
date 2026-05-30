@@ -83,6 +83,15 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         set => SetProperty(ref _currentTrackTitle, value);
     }
 
+    /// <summary>Stable identifier for the current track (filename without extension).</summary>
+    public string CurrentTrackId => _currentTrackId;
+
+    /// <summary>Alias matching the ApplicationViewModel consumption pattern.</summary>
+    public string TrackTitle => _currentTrackTitle;
+
+    /// <summary>Alias matching the ApplicationViewModel consumption pattern.</summary>
+    public string Artist => _currentArtist;
+
     public string CurrentArtist
     {
         get => _currentArtist;

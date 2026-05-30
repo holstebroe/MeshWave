@@ -19,6 +19,9 @@ public class SyncOrchestrator : IDisposable
     private Manifest? _localManifest;
     private CancellationTokenSource? _cts;
 
+    // Tracks which trackIds have already had a Play op recorded in this process session.
+    private readonly HashSet<string> _playedThisSession = new(StringComparer.OrdinalIgnoreCase);
+
     public event EventHandler<ManifestMergedEventArgs>? ManifestMerged;
     public event EventHandler? PeerCountChanged;
 
@@ -141,6 +144,38 @@ public class SyncOrchestrator : IDisposable
             TryMerge(remoteManifest, peer.PublicKeyPem);
         }
         catch { /* peer unreachable – will retry on next cycle */ }
+    }
+
+    /// <summary>
+    /// Records a signed Play operation for the given track in the local manifest.
+    /// Rate-capped to one call per track per process session so that repeated pauses
+    /// and resumes do not inflate the count.
+    /// Does nothing when P2P is not started or the track has already been counted this session.
+    /// </summary>
+    /// <param name="trackId">Stable identifier for the track (e.g. filename without extension).</param>
+    /// <param name="title">Track title stored as metadata.</param>
+    /// <param name="artist">Artist name stored as metadata.</param>
+    /// <returns><c>true</c> if a new Play operation was appended; <c>false</c> if rate-capped or not ready.</returns>
+    public bool RecordPlay(string trackId, string title, string artist)
+    {
+        if (_localManifest == null || _identity == null) return false;
+        if (string.IsNullOrWhiteSpace(trackId)) return false;
+        if (!_playedThisSession.Add(trackId)) return false;   // already counted this session
+
+        _manifestManager.AppendSignedOperation(
+            _localManifest,
+            ManifestOperationType.Play,
+            SecurityLimits.Truncate(trackId, SecurityLimits.MaxTargetIdLength),
+            "Track",
+            contentHash: null,
+            new Dictionary<string, string>
+            {
+                ["title"]  = SecurityLimits.Truncate(title,  SecurityLimits.MaxTrackTitleLength),
+                ["artist"] = SecurityLimits.Truncate(artist, SecurityLimits.MaxArtistNameLength)
+            },
+            _identity.PrivateKeyPem);
+
+        return true;
     }
 
     /// <summary>

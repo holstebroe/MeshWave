@@ -159,3 +159,4 @@ operation is individually signed and sequence-checked.
 - [x] Clarify or remove non-functional search/filter text box until filtering is implemented
 - [x] Ensure cover cache writes standardized .jpg file output in LocalLibraryManager
 - [x] Remove waveform bar gap artifacts in playback waveform rendering
+

@@ -16,11 +16,12 @@ This repository now uses:
 ## Active Focus
 
 1. Profile persistence and icon generation
-2. Play count registration â€” local increment persisted in `.mymusic.json` sidecar; P2P broadcast and consensus designed (see Backlog Architecture Notes)
-3. Social graph model â€” Friends / Groups / Follows; comment permission policy per album/track
-4. Community mesh menu implemented (scaffold); next: wire real PeerManifestStore data into search/display
-5. Per-peer manifest store complete (disk-persisted, signature-verified, 8 tests); SyncOrchestrator now stores remote manifests separately from own manifest
-6. Bootstrap console node (MeshWave.Bootstrap) created â€” PEX-only, bandwidth-minimal, --port/--seeds args
+2. ? Play count sync — signed \Play\ ops in local manifest; session rate cap (one per track); \RecordPlay\ wired via \IsPlaying\ property change in ApplicationViewModel
+3. ? Play count consensus — \MergeManifest\ enforces \MaxPlaysPerUserPerTrackPerDay=3\ per (trackId, utcDate) per user
+4. Social graph model — Friends / Groups / Follows; comment permission policy (next focus)
+5. Community mesh menu implemented (scaffold); next: wire real PeerManifestStore data into search/display
+6. Per-peer manifest store complete
+7. Bootstrap console node (MeshWave.Bootstrap) created
 
 ## Architecture Decisions
 
@@ -30,3 +31,5 @@ This repository now uses:
 ## For later
 - Sybil-resistance / web-of-trust hardening for play count integrity
 - Networking and P2P sync beyond manifest exchange (content/file transfer)
+
+

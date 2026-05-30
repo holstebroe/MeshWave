@@ -96,6 +96,7 @@ public class ManifestManager
     /// Merges a remote manifest into a local one, appending any operations the local copy lacks.
     /// Only operations that pass signature verification are accepted.
     /// Rejects manifests that exceed security limits.
+    /// Play operations are capped at <see cref="SecurityLimits.MaxPlaysPerUserPerTrackPerDay"/> per track per UTC day.
     /// Returns the number of new operations added.
     /// </summary>
     public int MergeManifest(Manifest local, Manifest remote, string remoteUserPublicKey)
@@ -105,6 +106,10 @@ public class ManifestManager
 
         if (remote.Operations.Count > SecurityLimits.MaxManifestOperations)
             throw new InvalidDataException($"Remote manifest exceeds operation limit ({remote.Operations.Count}).");
+
+        // Build existing play counts per (trackId, utcDate) from the local manifest so we
+        // know how much headroom remains before merging remote play ops.
+        var playCounts = BuildPlayCounts(local.Operations);
 
         int added = 0;
         var localSeq = local.Operations.Count;
@@ -116,6 +121,16 @@ public class ManifestManager
 
             if (!IsOperationWithinLimits(op))
                 continue;
+
+            // Enforce per-user daily play cap.
+            if (op.OperationType == ManifestOperationType.Play)
+            {
+                var key = (TrackId: op.TargetId, Date: op.Timestamp.ToUniversalTime().Date);
+                playCounts.TryGetValue(key, out var existing);
+                if (existing >= SecurityLimits.MaxPlaysPerUserPerTrackPerDay)
+                    continue;
+                playCounts[key] = existing + 1;
+            }
 
             var signable = BuildSignablePayload(op);
             if (!CryptoService.VerifySignature(signable, op.Signature, remoteUserPublicKey))
@@ -129,6 +144,23 @@ public class ManifestManager
         }
 
         return added;
+    }
+
+    /// <summary>
+    /// Counts existing Play operations in a list grouped by (trackId, utcDate).
+    /// Used to enforce <see cref="SecurityLimits.MaxPlaysPerUserPerTrackPerDay"/> during merge.
+    /// </summary>
+    private static Dictionary<(string TrackId, DateTime Date), int> BuildPlayCounts(
+        IEnumerable<ManifestOperation> ops)
+    {
+        var counts = new Dictionary<(string TrackId, DateTime Date), int>();
+        foreach (var op in ops.Where(o => o.OperationType == ManifestOperationType.Play))
+        {
+            var key = (TrackId: op.TargetId, Date: op.Timestamp.ToUniversalTime().Date);
+            counts.TryGetValue(key, out var c);
+            counts[key] = c + 1;
+        }
+        return counts;
     }
 
     private static bool IsOperationWithinLimits(ManifestOperation op)

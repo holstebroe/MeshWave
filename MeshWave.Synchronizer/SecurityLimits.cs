@@ -48,6 +48,12 @@ public static class SecurityLimits
     /// <summary>Minimum milliseconds between manifest pushes to the same peer.</summary>
     public const int ManifestPushCooldownMs = 30_000;
 
+    /// <summary>
+    /// Maximum play-count operations a single user may contribute per track per UTC day.
+    /// Operations beyond this cap are dropped during MergeManifest to prevent inflation.
+    /// </summary>
+    public const int MaxPlaysPerUserPerTrackPerDay = 3;
+
     // --- Connection timeouts ---
 
     public const int ConnectTimeoutMs = 8_000;

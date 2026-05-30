@@ -21,7 +21,9 @@ public enum ManifestOperationType
 {
     Create,
     Update,
-    Delete
+    Delete,
+    /// <summary>Records that the user played a track. Rate-capped during manifest merge.</summary>
+    Play
 }
 
 /// <summary>

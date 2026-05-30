@@ -46,6 +46,18 @@ public class ApplicationViewModel : ViewModelBase
             P2PStatusText = $"Connected · {P2PPeerCount} peer{(P2PPeerCount == 1 ? "" : "s")}";
         };
 
+        // Record a signed Play operation the first time each track starts playing.
+        _playbackViewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PlaybackViewModel.IsPlaying) && _playbackViewModel.IsPlaying)
+            {
+                _syncOrchestrator.RecordPlay(
+                    _playbackViewModel.CurrentTrackId,
+                    _playbackViewModel.TrackTitle,
+                    _playbackViewModel.Artist);
+            }
+        };
+
         InitializeP2PAsync();
     }
 
