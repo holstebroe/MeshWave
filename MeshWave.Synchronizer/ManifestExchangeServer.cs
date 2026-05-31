@@ -155,6 +155,12 @@ public class ManifestExchangeServer : IDisposable
                         await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
                         break;
                     }
+                    default:
+                    {
+                        var response = new ManifestResponse { Acknowledged = false };
+                        await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
+                        break;
+                    }
                 }
             }
             catch { /* ignore per-client errors */ }
@@ -199,7 +205,7 @@ public class ManifestReceivedEventArgs(Manifest manifest, string peerAddress, Pe
     public PeerInfo? AnnouncingPeer { get; } = announcingPeer;
 }
 
-internal enum ManifestRequestType
+public enum ManifestRequestType
 {
     GetManifest,
     PushManifest,
@@ -208,7 +214,7 @@ internal enum ManifestRequestType
     RequestContent
 }
 
-internal class ManifestRequest
+public class ManifestRequest
 {
     public ManifestRequestType Type { get; set; }
     public Manifest? Manifest { get; set; }
@@ -217,7 +223,7 @@ internal class ManifestRequest
     public PeerInfo? AnnouncingPeer { get; set; }
 }
 
-internal class ManifestResponse
+public class ManifestResponse
 {
     public Manifest? Manifest { get; set; }
     public bool Acknowledged { get; set; }

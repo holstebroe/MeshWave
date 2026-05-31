@@ -178,14 +178,14 @@ public partial class LibraryViewModel : ViewModelBase
             return;
         }
 
-        var playbackContext = GetCurrentPlaybackContext(track);
+        var playbackContext = GetCurrentPlaybackContext(track!);
         _applicationViewModel?.PlayTrack(
-            track.Title,
-            track.Description ?? "Unknown Artist",
-            track.Duration,
+            track!.Title,
+            track!.Description ?? "Unknown Artist",
+            track!.Duration,
             playbackPath,
             playbackContext,
-            track.TrackId,
+            track!.TrackId,
             SelectedAlbum?.Name,
             SelectedAlbum?.CoverPath);
     }
