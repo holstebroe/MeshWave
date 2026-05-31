@@ -22,12 +22,12 @@ namespace MeshWave.Views
 
         private void Vm_OpenMetadataEditorRequested(object? sender, string trackFilePath)
         {
-            var vm = new MeshWave.ViewModels.MyMusicMetadataEditorViewModel();
-            vm.LoadTrack(trackFilePath);
+            var editorVm = new MeshWave.ViewModels.MyMusicMetadataEditorViewModel();
+            editorVm.LoadTrack(trackFilePath);
 
             var view = new MyMusicMetadataEditorView
             {
-                DataContext = vm,
+                DataContext = editorVm,
                 Margin = new Thickness(8)
             };
 
@@ -42,6 +42,10 @@ namespace MeshWave.Views
             };
 
             window.ShowDialog();
+            if (DataContext is MeshWave.ViewModels.LibraryViewModel libraryVm)
+            {
+                libraryVm.LoadFromConfiguredBaseFolder();
+            }
         }
 
         private async void ImportMyMusic_Click(object sender, System.Windows.RoutedEventArgs e)
@@ -132,13 +136,24 @@ namespace MeshWave.Views
 
         private void OnTrackDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            if (sender is ListBox listBox && listBox.SelectedItem is MeshWave.ViewModels.LibraryTrackItem trackItem)
+            if (sender is not ListBox listBox || listBox.SelectedItem is not MeshWave.ViewModels.LibraryTrackItem trackItem)
             {
-                if (DataContext is MeshWave.ViewModels.LibraryViewModel vm)
-                {
-                    vm.PlayTrackById(trackItem.TrackId);
-                }
+                return;
             }
+
+            if (DataContext is not MeshWave.ViewModels.LibraryViewModel vm)
+            {
+                return;
+            }
+
+            // My Music double-click opens metadata editor; playback is single-click via ▶ button.
+            if (vm.CanImportMyMusic)
+            {
+                vm.RequestOpenMetadataEditor(trackItem.FilePath);
+                return;
+            }
+
+            vm.PlayTrackById(trackItem.TrackId);
         }
 
         private void OnAlbumDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -197,6 +212,29 @@ namespace MeshWave.Views
                 {
                     vm.RequestOpenMetadataEditor(trackItem.FilePath);
                 }
+            }
+        }
+
+        private void AlbumPlayButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement element &&
+                element.DataContext is MeshWave.ViewModels.LibraryAlbumItem album &&
+                DataContext is MeshWave.ViewModels.LibraryViewModel vm)
+            {
+                vm.SelectedAlbum = album;
+                var firstTrack = vm.Tracks.FirstOrDefault();
+                if (firstTrack != null)
+                    vm.PlayTrackById(firstTrack.TrackId);
+            }
+        }
+
+        private void TrackPlayButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement element &&
+                element.DataContext is MeshWave.ViewModels.LibraryTrackItem trackItem &&
+                DataContext is MeshWave.ViewModels.LibraryViewModel vm)
+            {
+                vm.PlayTrackById(trackItem.TrackId);
             }
         }
 

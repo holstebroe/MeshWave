@@ -132,6 +132,7 @@ namespace MeshWave.ViewModels
                 var resolvedPath = string.IsNullOrWhiteSpace(t.FilePath) ? t.FileHash : t.FilePath;
                 var coverPath = _libraryManager.GetTrackCoverPath(resolvedPath);
                 var trackMeta = _myMusicMetadataService.LoadForTrack(resolvedPath);
+                var effectiveRelease = trackMeta.IsReleased;
                 return new LibraryTrackItem
                 {
                     TrackId = t.TrackId,
@@ -140,7 +141,7 @@ namespace MeshWave.ViewModels
                     AlbumId = t.AlbumId ?? string.Empty,
                     CoverPath = coverPath,
                     FilePath = resolvedPath,
-                    IsReleased = trackMeta.IsReleased,
+                    IsReleased = effectiveRelease,
                     Version = trackMeta.Version <= 0 ? 1 : trackMeta.Version,
                     TrackNumber = trackMeta.TrackNumber,
                     Duration = t.Duration,
@@ -155,6 +156,8 @@ namespace MeshWave.ViewModels
                 var firstTrackPath = tracksInAlbum.Select(t => t.FilePath).FirstOrDefault(p => !string.IsNullOrWhiteSpace(p));
                 var albumFolder = string.IsNullOrWhiteSpace(firstTrackPath) ? string.Empty : Path.GetDirectoryName(firstTrackPath) ?? string.Empty;
                 var albumMeta = _myMusicMetadataService.LoadForAlbum(albumFolder);
+                var albumReleased = albumMeta.IsReleased || tracksInAlbum.Any(t => t.IsReleased);
+
                 return new LibraryAlbumItem
                 {
                     AlbumId = a.AlbumId,
@@ -162,7 +165,7 @@ namespace MeshWave.ViewModels
                     Name = a.Title,
                     CoverPath = coverPath,
                     TrackCount = tracksInAlbum.Count,
-                    IsReleased = albumMeta.IsReleased,
+                    IsReleased = albumReleased,
                     Version = albumMeta.Version <= 0 ? 1 : albumMeta.Version
                 };
             }).ToList();
@@ -227,6 +230,7 @@ namespace MeshWave.ViewModels
             var contextTracks = sameAlbumTracks.Select(t =>
             {
                 var path = t.FilePath ?? string.Empty;
+                var matchedTrack = _allTrackItems.FirstOrDefault(x => string.Equals(x.TrackId, t.TrackId, StringComparison.OrdinalIgnoreCase));
                 var meta = string.IsNullOrWhiteSpace(path) ? null : _myMusicMetadataService.LoadForTrack(path);
                 return new PlaybackTrackListItem
                 {
@@ -236,7 +240,7 @@ namespace MeshWave.ViewModels
                     Duration = t.Duration,
                     FilePath = path,
                     TrackNumber = meta?.TrackNumber ?? 0,
-                    PlayCount = meta?.PlayCount ?? 0
+                    PlayCount = matchedTrack?.PlayCount ?? meta?.PlayCount ?? 0
                 };
             }).Where(t => !string.IsNullOrWhiteSpace(t.FilePath));
 

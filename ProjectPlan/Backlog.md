@@ -1,5 +1,25 @@
 # MeshWave Backlog
 
+## Priority Now (clear execution order)
+
+### P0 -- Community Browse + Shared Catalogue (highest)
+- [ ] Write architecture decision: replicated metadata index vs distributed search vs hybrid model
+- [ ] Define shared catalogue schema for Artist/Album/Track/Playlist metadata and peer availability
+- [ ] Implement catalogue sync/index pipeline (ingest, dedupe, staleness rules)
+- [ ] Build Browse UI for artists/albums/tracks/playlists with download actions
+- [ ] Implement play-while-downloading flow (buffered start)
+- [ ] Add global pending downloads queue UI with per-item progress/state
+
+### P1 -- Library/My Music search (replace "coming soon")
+- [ ] Define local search behavior (fields, tokenization, matching, ranking, empty-state UX)
+- [ ] Implement My Music search for tracks/albums/artists
+- [ ] Implement Library search for tracks/albums/artists/playlists
+
+### P1 -- Library download lifecycle UX
+- [ ] Show pending downloads in Library views with progress indicators
+- [ ] Support remove-from-library while keeping list membership as "Not Downloaded" state
+- [ ] Define and apply consistent wording/state for removed-but-discoverable items
+
 ## Milestone A: Core Playback (done)
 - [x] Basic audio playback (NAudio)
 - [x] Waveform styles: Filled, Cloudy, Mirror, Neon, Smooth
@@ -141,54 +161,3 @@ Example groups: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone Col
 
 ## Milestone J: Mesh Integration Tests (DONE)
 
-## Milestone D (current focus): Community Sync remainder
-
-### Goals
-- Spin up a real bootstrap node in-process, connect multiple SyncOrchestrator instances,
-  verify peer discovery, manifest exchange, and play count sync across peers.
-- Extend NAT traversal to include rendezvous-coordinated "crossing hands" before any relay fallback.
-
-### Tests
-- [x] New project: MeshWave.Integration.Tests (xUnit, references Synchronizer + Common.Core)
-- [x] NullPeerDiscovery stub to suppress UDP broadcast in tests
-- [x] Bootstrap_LateJoiner_CanDiscoverExistingPeer
-      -- verify late-joining peer can bootstrap via an existing node
-- [x] Bootstrap_PeriodicRetry_IntervalIsConfigured
-      -- verify bootstrap retry interval is configured in SecurityLimits
-- [x] Bootstrap_CanRunOn39877_WhileClientListensOnDifferentConfiguredPort
-      -- verify canonical bootstrap port and custom peer listen ports coexist
-- [x] BootstrapCoordinator_RegistersConnectedClients_AndSharesViaPex
-      -- verify extracted bootstrap coordinator library registers peers and serves PEX
-- [x] RequestContentAsync_RecordsAttempts_AndProducesNatGuidance_WhenTransferFails
-      -- verify ordered connection attempts and concrete NAT guidance fallback
-- [x] ManifestExchange_SignedOperation_IsVerifiable
-      -- verify track announcements are signed and verifiable
-- [x] ManifestExchange_ProfileBroadcast_IsRecorded
-      -- verify profile operations are recorded in manifest
-- [x] ManifestExchange_FollowUnfollow_AreRecorded
-      -- verify follow/unfollow operations are recorded
-- [x] ManifestMerged_Event_FiresCorrectly
-      -- verify ManifestMerged event mechanism is wired
-- [x] ManifestExchange_TamperedOperation_FailsSignatureCheck
-      -- verify tampering is detectable by signature mismatch
-- [x] All 12 integration tests passing
-
----
-
-### User-owned data principle
-All user-generated content (tracks, play counts, comments, likes, profile, posts) is
-propagated as signed manifest operations. No peer can forge another users data.
-
-### Play count consensus
-Aggregate = sum of per-user counts; each user capped at MaxPlaysPerUserPerTrackPerDay
-enforced during MergeManifest.
-
-### Artist role
-IsArtist is stored in UserProfile locally and broadcast in a signed Profile manifest op.
-Fans and artists are equal P2P peers -- the role controls which UI surfaces are shown
-and which manifest ops are authored (only artists announce tracks and albums).
-
-### Community group identity
-A group has no central owner after founding. The GroupId hash makes it globally unique.
-Groups survive founder departure as long as any member holds a copy of the manifest.
-Moderation is cooperative -- bans and deletions are visible but enforcement is client-side.

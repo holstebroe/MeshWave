@@ -34,13 +34,6 @@
                         Padding="20,12"
                         Width="220"
                         Margin="0,0,10,0"/>
-                <Button Content="📡 Sync Album to Network"
-                        Command="{Binding SyncAlbumCommand}"
-                        Visibility="{Binding CanImportMyMusic, Converter={StaticResource BoolToVisibilityConverter}}"
-                        Style="{StaticResource SuccessButton}"
-                        FontSize="14"
-                        Padding="16,12"
-                        Margin="0,0,0,0"/>
             </StackPanel>
 
             <TextBlock Text="{Binding ImportSingleFileStatus}"
@@ -53,7 +46,7 @@
                        Foreground="#27AE60"
                        Visibility="{Binding CanImportMyMusic, Converter={StaticResource BoolToVisibilityConverter}}"/>
 
-            <TextBlock Text="Search tracks/albums (filtering coming soon)"
+            <TextBlock Text="Search tracks/albums"
                        Margin="0,12,0,4"
                        Foreground="{StaticResource TextSecondaryColor}"
                        FontStyle="Italic"/>
@@ -102,9 +95,19 @@
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <StackPanel Orientation="Horizontal" Margin="0,2">
-                                <Border Width="36" Height="36" CornerRadius="4" ClipToBounds="True" Background="{StaticResource SurfaceColor}" Margin="0,0,8,0">
-                                    <Image Source="{Binding CoverPath}" Stretch="UniformToFill"/>
-                                </Border>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,8,0">
+                                    <Button Content="▶"
+                                            Width="22" Height="22"
+                                            FontSize="10"
+                                            Click="AlbumPlayButton_Click"
+                                            Padding="0"
+                                            VerticalAlignment="Center"
+                                            Margin="0,0,6,0"
+                                            Style="{StaticResource DiscreteIconButton}"/>
+                                    <Border Width="36" Height="36" CornerRadius="4" ClipToBounds="True" Background="{StaticResource SurfaceColor}">
+                                        <Image Source="{Binding CoverPath}" Stretch="UniformToFill"/>
+                                    </Border>
+                                </StackPanel>
                                 <StackPanel>
                                     <TextBlock Text="{Binding Name}"/>
                                     <StackPanel Orientation="Horizontal">
@@ -134,10 +137,6 @@
                             <MenuItem Header="Edit Metadata"
                                       Click="EditMetadata_Click"
                                       Visibility="{Binding PlacementTarget.DataContext.CanImportMyMusic, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                            <MenuItem Header="📡 Sync Track to Network"
-                                      Command="{Binding PlacementTarget.DataContext.SyncTrackCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                      CommandParameter="{Binding}"
-                                      Visibility="{Binding PlacementTarget.DataContext.CanImportMyMusic, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVisibilityConverter}}"/>
                         </ContextMenu>
                     </ListView.ContextMenu>
                     <ListView.View>
@@ -145,11 +144,15 @@
                             <GridViewColumn Header="#" Width="36">
                                 <GridViewColumn.CellTemplate>
                                     <DataTemplate>
-                                        <TextBlock Text="{Binding TrackNumber}" FontSize="12"
-                                                   TextAlignment="Right"
-                                                   HorizontalAlignment="Right"
-                                                   Foreground="{StaticResource TextSecondaryColor}"
-                                                   VerticalAlignment="Center"/>
+                                        <Button Content="▶"
+                                                Width="20"
+                                                Height="20"
+                                                FontSize="10"
+                                                Padding="0"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"
+                                                Click="TrackPlayButton_Click"
+                                                Style="{StaticResource DiscreteIconButton}"/>
                                     </DataTemplate>
                                 </GridViewColumn.CellTemplate>
                             </GridViewColumn>
@@ -161,7 +164,25 @@
                                                     ClipToBounds="True"
                                                     Background="{StaticResource SurfaceLightColor}"
                                                     Margin="0,0,10,0">
-                                                <Image Source="{Binding CoverPath}" Stretch="UniformToFill"/>
+                                                <Grid>
+                                                    <Image Source="{Binding CoverPath}" Stretch="UniformToFill"/>
+                                                    <TextBlock Text="♪"
+                                                               FontSize="16"
+                                                               Foreground="{StaticResource TextSecondaryColor}"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding CoverPath}" Value="">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </Grid>
                                             </Border>
                                             <StackPanel VerticalAlignment="Center">
                                                 <TextBlock Text="{Binding Title}"

@@ -6,6 +6,9 @@
              mc:Ignorable="d"
              Height="Auto" Width="Auto"
              Background="{StaticResource BackgroundColor}">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+    </UserControl.Resources>
     <Grid Margin="20">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="3*"/>
@@ -44,10 +47,39 @@
                            FontSize="13" TextWrapping="Wrap"
                            Foreground="{StaticResource TextSecondaryColor}"
                            Margin="0,6,0,0"/>
-                <TextBlock Text="{Binding CurrentTrackVersion, StringFormat=Version: v{0}}"
-                           FontSize="12"
-                           Foreground="{StaticResource TextSecondaryColor}"
-                           Margin="0,4,0,0"/>
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <TextBlock Text="{Binding CurrentTrackVersion, StringFormat=Version: v{0}}"
+                               FontSize="12"
+                               Foreground="{StaticResource TextSecondaryColor}"
+                               Margin="0,0,8,0"/>
+                    <Button Content="✏"
+                            Width="24"
+                            Height="22"
+                            Padding="0"
+                            FontSize="11"
+                            ToolTip="Edit metadata"
+                            Click="EditCurrentTrack_Click"
+                            Visibility="{Binding IsOwnedTrack, Converter={StaticResource BoolToVisibilityConverter}}"
+                            Style="{StaticResource DiscreteIconButton}"/>
+                    <Button Width="24"
+                            Height="22"
+                            Padding="0"
+                            FontSize="11"
+                            ToolTip="Like current track"
+                            Click="LikeCurrentTrack_Click">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource DiscreteIconButton}">
+                                <Setter Property="Content" Value="♡"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsCurrentTrackLikedByMe}" Value="True">
+                                        <Setter Property="Content" Value="❤"/>
+                                        <Setter Property="Foreground" Value="#E74C3C"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </StackPanel>
             </StackPanel>
         </Grid>
 

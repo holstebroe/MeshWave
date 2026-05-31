@@ -45,6 +45,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     private WaveformStyle _waveformStyle = WaveformStyle.Filled;
     private readonly SyncOrchestrator? _sync;
     private readonly Dictionary<string, HashSet<string>> _importedCommentOperationIdsByPeer = new(StringComparer.OrdinalIgnoreCase);
+    private bool _isCurrentTrackLikedByMe;
 
     public PlaybackViewModel(SyncOrchestrator? sync = null)
     {
@@ -92,6 +93,22 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         set => SetProperty(ref _currentTrackTitle, value);
     }
 
+    public bool IsOwnedTrack
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(_currentFilePath))
+                return false;
+
+            var settings = new SettingsService().LoadSettings();
+            if (string.IsNullOrWhiteSpace(settings.BaseFolder))
+                return false;
+
+            var myMusicRoot = Path.Combine(settings.BaseFolder, "My Music");
+            return _currentFilePath.StartsWith(myMusicRoot, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     /// <summary>Stable identifier for the current track (filename without extension).</summary>
     public string CurrentTrackId => _currentTrackId;
 
@@ -105,6 +122,12 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     {
         get => _currentArtist;
         set => SetProperty(ref _currentArtist, value);
+    }
+
+    public bool IsCurrentTrackLikedByMe
+    {
+        get => _isCurrentTrackLikedByMe;
+        private set => SetProperty(ref _isCurrentTrackLikedByMe, value);
     }
 
     public TimeSpan CurrentPosition
@@ -350,6 +373,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         CurrentPosition = TimeSpan.Zero;
         _currentFilePath = filePath;
         _currentTrackId = Path.GetFileNameWithoutExtension(filePath ?? string.Empty) ?? string.Empty;
+        RefreshCurrentTrackLikeState();
 
         if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
         {
@@ -362,6 +386,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
                 ? string.Empty
                 : myMusicMeta.Description;
             CurrentTrackVersion = myMusicMeta.Version <= 0 ? 1 : myMusicMeta.Version;
+            OnPropertyChanged(nameof(IsOwnedTrack));
 
             _myMusicMetadataService.IncrementPlayCount(filePath);
 
@@ -389,6 +414,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
                 Duration = t.Duration,
                 FilePath = t.FilePath,
                 TrackNumber = t.TrackNumber,
+                PlayCount = t.PlayCount,
                 IsNowPlaying = string.Equals(t.FilePath, filePath, StringComparison.OrdinalIgnoreCase)
             }).ToList();
             AlbumTracks = new ObservableCollection<PlaybackTrackListItem>(remapped);
@@ -406,6 +432,8 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             TimelineMarkers.Clear();
             TrackDescription = string.Empty;
             CurrentTrackVersion = 1;
+            IsCurrentTrackLikedByMe = false;
+            OnPropertyChanged(nameof(IsOwnedTrack));
         }
     }
 
@@ -662,6 +690,41 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         }
 
         return changed;
+    }
+
+    public void ToggleLikeCurrentTrack()
+    {
+        if (_sync == null || string.IsNullOrWhiteSpace(CurrentTrackId))
+            return;
+
+        if (IsCurrentTrackLikedByMe)
+        {
+            _sync.RecordUnlike(CurrentTrackId);
+            IsCurrentTrackLikedByMe = false;
+        }
+        else
+        {
+            _sync.RecordLike(CurrentTrackId);
+            IsCurrentTrackLikedByMe = true;
+        }
+    }
+
+    private void RefreshCurrentTrackLikeState()
+    {
+        if (_sync?.LocalManifest == null || string.IsNullOrWhiteSpace(CurrentTrackId))
+        {
+            IsCurrentTrackLikedByMe = false;
+            return;
+        }
+
+        var lastLikeState = _sync.LocalManifest.Operations
+            .Where(op => string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(op.TargetId, CurrentTrackId, StringComparison.OrdinalIgnoreCase)
+                && (op.OperationType == ManifestOperationType.Like || op.OperationType == ManifestOperationType.Unlike))
+            .OrderBy(op => op.SequenceNumber)
+            .LastOrDefault();
+
+        IsCurrentTrackLikedByMe = lastLikeState?.OperationType == ManifestOperationType.Like;
     }
 
     private static double ParseDouble(string? value, DateTime timestamp)

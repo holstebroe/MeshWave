@@ -5,47 +5,140 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
              Background="{StaticResource BackgroundColor}">
-    <Border Background="{StaticResource SurfaceColor}" CornerRadius="8" Padding="16">
-        <StackPanel>
-            <TextBlock Text="{Binding EditorTitle}" Style="{StaticResource SectionHeader}" FontSize="20" Margin="0,0,0,12"/>
+    <UserControl.Resources>
+        <Style x:Key="EditorFieldLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryColor}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+        </Style>
+    </UserControl.Resources>
 
-            <TextBlock Text="Title"/>
-            <TextBox Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}"/>
+    <Border Background="{StaticResource SurfaceColor}" CornerRadius="10" Padding="18">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
-            <TextBlock Text="Artist"/>
-            <TextBox Text="{Binding Artist, UpdateSourceTrigger=PropertyChanged}"/>
-
-            <TextBlock Text="Album"/>
-            <TextBox Text="{Binding Album, UpdateSourceTrigger=PropertyChanged}"/>
-
-            <TextBlock Text="Genre"/>
-            <TextBox Text="{Binding Genre, UpdateSourceTrigger=PropertyChanged}"/>
-
-            <TextBlock Text="Year"/>
-            <TextBox Text="{Binding Year, UpdateSourceTrigger=PropertyChanged}"/>
-
-            <TextBlock Text="Track Number"/>
-            <TextBox Text="{Binding TrackNumber, UpdateSourceTrigger=PropertyChanged}"/>
-
-            <TextBlock Text="Description"/>
-            <TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" MinHeight="70" TextWrapping="Wrap"/>
-
-            <TextBlock Text="Release Status" Margin="0,10,0,4"/>
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                <TextBlock Text="Current:" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <TextBlock Text="{Binding IsReleased, StringFormat=Released: {0}}" VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryColor}"/>
+            <StackPanel Grid.Row="0" Margin="0,0,0,14">
+                <TextBlock Text="{Binding EditorTitle}" Style="{StaticResource SectionHeader}" FontSize="22" Margin="0,0,0,8"/>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Basic info" FontSize="14" FontWeight="SemiBold" Margin="0,0,18,0"/>
+                    <TextBlock Text="Metadata" FontSize="14" Foreground="{StaticResource TextSecondaryColor}" Margin="0,0,18,0"/>
+                    <TextBlock Text="Permissions" FontSize="14" Foreground="{StaticResource TextSecondaryColor}" Margin="0,0,18,0"/>
+                    <TextBlock Text="Advanced" FontSize="14" Foreground="{StaticResource TextSecondaryColor}"/>
+                </StackPanel>
             </StackPanel>
 
-            <TextBlock Text="Version"/>
-            <StackPanel Orientation="Horizontal">
-                <TextBox Width="80" Text="{Binding Version, UpdateSourceTrigger=PropertyChanged}"/>
-                <Button Content="Bump Version" Command="{Binding IncrementVersionCommand}" Style="{StaticResource PrimaryButton}" Margin="8,0,0,0" Padding="10,6"/>
-            </StackPanel>
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="220"/>
+                    <ColumnDefinition Width="20"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
 
-            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                <StackPanel Grid.Column="0">
+                    <Border Width="200" Height="200"
+                            CornerRadius="8"
+                            Background="{StaticResource BackgroundColor}"
+                            ClipToBounds="True">
+                        <Grid>
+                            <TextBlock Text="♪" FontSize="40"
+                                       Foreground="{StaticResource TextSecondaryColor}"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+                    <Button Content="Replace image"
+                            Width="120"
+                            Margin="0,12,0,0"
+                            Style="{StaticResource DiscreteIconButton}"/>
+                    <TextBlock Margin="0,16,0,4" Text="Release status" Foreground="{StaticResource TextSecondaryColor}"/>
+                    <TextBlock Text="{Binding IsReleased, StringFormat=Public: {0}}"
+                               Foreground="{StaticResource TextSecondaryColor}"/>
+                </StackPanel>
+
+                <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Title" Style="{StaticResource EditorFieldLabel}"/>
+                        <TextBox Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <TextBlock Text="Artist" Style="{StaticResource EditorFieldLabel}"/>
+                        <TextBox Text="{Binding Artist, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <StackPanel>
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsAlbumEditor}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <TextBlock Text="Album" Style="{StaticResource EditorFieldLabel}"/>
+                            <TextBox Text="{Binding Album, UpdateSourceTrigger=PropertyChanged}"/>
+                        </StackPanel>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="14"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Genre" Style="{StaticResource EditorFieldLabel}"/>
+                                <TextBox Text="{Binding Genre, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Year" Style="{StaticResource EditorFieldLabel}"/>
+                                <TextBox Text="{Binding Year, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <StackPanel>
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsAlbumEditor}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <TextBlock Text="Track Number" Style="{StaticResource EditorFieldLabel}"/>
+                            <TextBox Text="{Binding TrackNumber, UpdateSourceTrigger=PropertyChanged}"/>
+                        </StackPanel>
+
+                        <TextBlock Text="Description" Style="{StaticResource EditorFieldLabel}"/>
+                        <TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"
+                                 AcceptsReturn="True"
+                                 Height="120"
+                                 TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto"/>
+
+                        <TextBlock Text="Version" Style="{StaticResource EditorFieldLabel}"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <TextBox Width="90" Text="{Binding Version, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0"/>
+                            <Button Content="Bump Version"
+                                    Command="{Binding IncrementVersionCommand}"
+                                    Style="{StaticResource PrimaryButton}"
+                                    Padding="12,6"
+                                    Margin="0"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
                 <Button Content="{Binding ReleaseButtonText}" Command="{Binding ToggleReleaseCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
-                <Button Content="Save Metadata" Command="{Binding SaveCommand}" Style="{StaticResource PrimaryButton}"/>
+                <Button Content="Save changes" Command="{Binding SaveCommand}" Style="{StaticResource PrimaryButton}" Margin="0"/>
             </StackPanel>
-        </StackPanel>
+        </Grid>
     </Border>
 </UserControl>

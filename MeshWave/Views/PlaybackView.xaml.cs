@@ -59,6 +59,11 @@ namespace MeshWave.Views
             if (args.PropertyName == nameof(_boundViewModel.CurrentPosition))
             {
                 UpdatePlaybackCursor();
+                if (SeekPreviewOverlay.Visibility == Visibility.Visible)
+                {
+                    var mouseX = Mouse.GetPosition(WaveformCanvas).X;
+                    UpdateSeekPreview(Canvas.GetLeft(PlaybackCursor), mouseX);
+                }
             }
             else if (args.PropertyName == nameof(_boundViewModel.WaveformSamples) ||
                      args.PropertyName == nameof(_boundViewModel.TimelineMarkers) ||
@@ -206,9 +211,9 @@ namespace MeshWave.Views
             if (DataContext is not PlaybackViewModel vm || vm.Duration.TotalSeconds <= 0)
                 return;
 
-            var mouseX   = e.GetPosition(WaveformCanvas).X;
-            var canvasW  = WaveformCanvas.ActualWidth > 0 ? WaveformCanvas.ActualWidth : 800;
-            var cursorX  = (vm.CurrentPosition.TotalSeconds / vm.Duration.TotalSeconds) * canvasW;
+            var mouseX = e.GetPosition(WaveformCanvas).X;
+            var canvasW = WaveformCanvas.ActualWidth > 0 ? WaveformCanvas.ActualWidth : 800;
+            var cursorX = (vm.CurrentPosition.TotalSeconds / vm.Duration.TotalSeconds) * canvasW;
 
             SeekPreviewOverlay.Visibility = Visibility.Visible;
             UpdateSeekPreview(cursorX, mouseX);
@@ -276,6 +281,43 @@ namespace MeshWave.Views
                 vm.PlayAlbumTrackCommand.Execute(item);
                 e.Handled = true;
             }
+        }
+
+        private void EditCurrentTrack_Click(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is not PlaybackViewModel vm || !vm.IsOwnedTrack)
+                return;
+
+            var item = vm.SelectedAlbumTrack;
+            if (item == null || string.IsNullOrWhiteSpace(item.FilePath))
+                return;
+
+            var editorVm = new MyMusicMetadataEditorViewModel();
+            editorVm.LoadTrack(item.FilePath);
+
+            var view = new MyMusicMetadataEditorView
+            {
+                DataContext = editorVm,
+                Margin = new Thickness(8)
+            };
+
+            var window = new Window
+            {
+                Title = "Edit My Music Metadata",
+                Width = 500,
+                Height = 620,
+                Content = view,
+                Owner = Application.Current.MainWindow,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner
+            };
+
+            window.ShowDialog();
+        }
+
+        private void LikeCurrentTrack_Click(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is PlaybackViewModel vm)
+                vm.ToggleLikeCurrentTrack();
         }
     }
 }
