@@ -4,6 +4,8 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using MeshWave.Common.Core.Models;
+using MeshWave.Common.Core.Storage;
 using MeshWave.Services;
 using MeshWave.ViewModels;
 
@@ -110,6 +112,9 @@ namespace MeshWave.Views
                 return;
             }
 
+            var appVm = Application.Current.MainWindow.DataContext as ApplicationViewModel;
+            var userRepo = appVm?.SyncOrchestrator?.UserRepository;
+
             foreach (var marker in vm.TimelineMarkers)
             {
                 var progress = Math.Clamp(marker.TimestampSeconds / vm.Duration.TotalSeconds, 0.0, 1.0);
@@ -125,11 +130,12 @@ namespace MeshWave.Views
                     Tag = marker.TimestampSeconds
                 };
 
-                if (!string.IsNullOrWhiteSpace(marker.UserIconPath) && File.Exists(marker.UserIconPath))
+                var iconPath = userRepo?.GetUserIconPath(marker.UserId);
+                if (!string.IsNullOrWhiteSpace(iconPath) && File.Exists(iconPath))
                 {
                     try
                     {
-                        markerIcon.Fill = new ImageBrush(new System.Windows.Media.Imaging.BitmapImage(new Uri(marker.UserIconPath, UriKind.Absolute)))
+                        markerIcon.Fill = new ImageBrush(new System.Windows.Media.Imaging.BitmapImage(new Uri(iconPath, UriKind.Absolute)))
                         {
                             Stretch = Stretch.UniformToFill
                         };
@@ -146,6 +152,8 @@ namespace MeshWave.Views
 
                 markerIcon.MouseLeftButtonDown += TimelineMarker_MouseLeftButtonDown;
 
+                var displayName = userRepo?.GetDisplayName(marker.UserId) ?? marker.UserId;
+
                 var tooltipBorder = new Border
                 {
                     Background = new SolidColorBrush(Color.FromRgb(32, 32, 32)),
@@ -156,7 +164,7 @@ namespace MeshWave.Views
                 };
                 tooltipBorder.Child = new TextBlock
                 {
-                    Text = $"[{TimeSpan.FromSeconds(marker.TimestampSeconds):mm\\:ss}] (v{(marker.TrackVersion <= 0 ? 1 : marker.TrackVersion)}) {marker.UserDisplayName}: {marker.Label}",
+                    Text = $"[{TimeSpan.FromSeconds(marker.TimestampSeconds):mm\\:ss}] (v{(marker.TrackVersion <= 0 ? 1 : marker.TrackVersion)}) {displayName}: {marker.Comment}",
                     Foreground = Brushes.White,
                     TextWrapping = TextWrapping.Wrap,
                     MaxWidth = 280
@@ -303,7 +311,7 @@ namespace MeshWave.Views
 
             var window = new Window
             {
-                Title = "Edit My Music Metadata",
+                Title = "Edit Local Music Metadata",
                 Width = 500,
                 Height = 620,
                 Content = view,

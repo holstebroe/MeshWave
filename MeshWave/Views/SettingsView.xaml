@@ -47,7 +47,7 @@
                             <TextBlock Text="📁 Base Folder"
                                        Style="{StaticResource SectionHeader}"
                                        Margin="0,0,0,8"/>
-                            <TextBlock Text="All MeshWave data will be stored here (My Music, Other Music, etc.)"
+                            <TextBlock Text="All MeshWave data will be stored here (Local Music, Peer Music, etc.)"
                                        Foreground="{StaticResource TextSecondaryColor}"
                                        TextWrapping="Wrap"
                                        Margin="0,0,0,10"/>

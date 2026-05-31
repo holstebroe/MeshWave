@@ -50,7 +50,7 @@
                     <Button Content="🎵  Now Playing" 
                             Style="{StaticResource SidebarNavButton}"
                             Click="PlaybackMenu_Click"/>
-                    <Button Content="🎙  My Music"
+                    <Button Content="🎙  Local Music"
                             Style="{StaticResource SidebarNavButton}"
                             Click="MyMusicMenu_Click"/>
                 </StackPanel>

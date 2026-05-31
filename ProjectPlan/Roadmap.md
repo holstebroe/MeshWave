@@ -13,9 +13,9 @@
 - Add play-while-downloading capability (buffer then start playback)
 - Add pending downloads UI (queue, per-item progress, retry/error)
 
-### 2) Search in Library + My Music
+### 2) Search in Library + Local Music
 - Define local search behavior for track/album/artist/playlist fields
-- Implement search in My Music (replace "coming soon")
+- Implement search in Local Music (replace "coming soon")
 - Implement search in Library (replace "coming soon")
 - Add empty-result UX and clear-search behavior
 

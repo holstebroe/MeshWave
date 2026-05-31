@@ -446,8 +446,8 @@ public class SettingsViewModel : ViewModelBase
     {
         try
         {
-            var myMusic = _settingsService.GetMyMusicFolder();
-            var otherMusic = _settingsService.GetOtherMusicFolder();
+            var myMusic = _settingsService.GetLocalMusicFolder();
+            var otherMusic = _settingsService.GetPeerMusicFolder();
             var appDataRoot = MeshWave.Common.Core.MeshWaveEnvironment.GetAppDataRoot();
             var peerManifestFolder = Path.Combine(appDataRoot, "PeerManifests");
 
@@ -457,8 +457,8 @@ public class SettingsViewModel : ViewModelBase
             var cacheBytes = GetWaveformCacheSize(myMusic) + GetWaveformCacheSize(otherMusic);
 
             _storageCategories.Clear();
-            _storageCategories.Add(new StorageCategoryUsage("My Music", myMusic, myMusicBytes));
-            _storageCategories.Add(new StorageCategoryUsage("Other Music", otherMusic, otherMusicBytes));
+            _storageCategories.Add(new StorageCategoryUsage("Local Music", myMusic, myMusicBytes));
+            _storageCategories.Add(new StorageCategoryUsage("Peer Music", otherMusic, otherMusicBytes));
             _storageCategories.Add(new StorageCategoryUsage("Manifests", peerManifestFolder, manifestsBytes));
             _storageCategories.Add(new StorageCategoryUsage("Cache", "Waveform .cache folders", cacheBytes));
 
@@ -588,8 +588,8 @@ public class SettingsViewModel : ViewModelBase
     {
         try
         {
-            DeleteWaveformCache(_settingsService.GetMyMusicFolder());
-            DeleteWaveformCache(_settingsService.GetOtherMusicFolder());
+            DeleteWaveformCache(_settingsService.GetLocalMusicFolder());
+            DeleteWaveformCache(_settingsService.GetPeerMusicFolder());
             RefreshStorageStats();
             StorageStatusMessage = "Waveform cache cleared.";
         }

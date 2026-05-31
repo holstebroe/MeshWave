@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
 using MeshWave.LibraryManager;
 using MeshWave.Mvvm;
@@ -27,8 +28,8 @@ namespace MeshWave.ViewModels
             _settingsService.EnsureFoldersExist();
             var settings = _settingsService.LoadSettings();
             var libraryFolder = IsMyMusicLibrary
-                ? _settingsService.GetMyMusicFolder()
-                : _settingsService.GetOtherMusicFolder();
+                ? _settingsService.GetLocalMusicFolder()
+                : _settingsService.GetPeerMusicFolder();
             LoadLibrary(libraryFolder, settings.SupportedExtensions);
         }
 
@@ -43,7 +44,7 @@ namespace MeshWave.ViewModels
 
             _settingsService.EnsureFoldersExist();
             var settings = _settingsService.LoadSettings();
-            var myMusicFolder = _settingsService.GetMyMusicFolder();
+            var myMusicFolder = _settingsService.GetLocalMusicFolder();
 
             _folderWatcher?.Dispose();
             _folderWatcher = null;
@@ -110,7 +111,7 @@ namespace MeshWave.ViewModels
 
             _settingsService.EnsureFoldersExist();
             var settings = _settingsService.LoadSettings();
-            var myMusicFolder = _settingsService.GetMyMusicFolder();
+            var myMusicFolder = _settingsService.GetLocalMusicFolder();
 
             var imported = LocalLibraryManager.ImportSingleFileToOrganizedStructure(sourceFile, myMusicFolder, settings.SupportedExtensions);
             ImportSingleFileStatus = imported
@@ -144,7 +145,7 @@ namespace MeshWave.ViewModels
                     AlbumName = album?.Title ?? string.Empty,
                     CoverPath = coverPath,
                     FilePath = resolvedPath,
-                    ContentHash = MeshWave.Common.Core.Crypto.CryptoService.ComputeFileHash(resolvedPath),
+                    ContentHash = CryptoService.ComputeFileHash(resolvedPath),
                     IsReleased = effectiveRelease,
                     Version = trackMeta.Version <= 0 ? 1 : trackMeta.Version,
                     TrackNumber = trackMeta.TrackNumber,
@@ -500,7 +501,7 @@ namespace MeshWave.ViewModels
                 {
                     _applicationViewModel.AnnounceTrackToNetwork(
                         track.TrackId,
-                        MeshWave.Common.Core.Crypto.CryptoService.ComputeFileHash(track.FilePath),
+                        CryptoService.ComputeFileHash(track.FilePath),
                         track.Title,
                         track.Artist,
                         _allAlbumItems.FirstOrDefault(a => a.AlbumId == track.AlbumId)?.Name ?? string.Empty);

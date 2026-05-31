@@ -1,4 +1,5 @@
 using MeshWave.Common.Core.Models;
+using MeshWave.Common.Core.Storage;
 using MeshWave.LibraryManager;
 using MeshWave.Models;
 using MeshWave.Mvvm;
@@ -45,12 +46,16 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     private string _trackContextIconPath = string.Empty;
     private WaveformStyle _waveformStyle = WaveformStyle.Filled;
     private readonly SyncOrchestrator? _sync;
+    private readonly UserRepository? _userRepository;
+    private readonly MetadataLookupRepository? _metadataLookup;
     private readonly Dictionary<string, HashSet<string>> _importedCommentOperationIdsByPeer = new(StringComparer.OrdinalIgnoreCase);
     private bool _isCurrentTrackLikedByMe;
 
-    public PlaybackViewModel(SyncOrchestrator? sync = null)
+    public PlaybackViewModel(SyncOrchestrator? sync = null, UserRepository? userRepository = null, MetadataLookupRepository? metadataLookup = null)
     {
         _sync = sync;
+        _userRepository = userRepository;
+        _metadataLookup = metadataLookup;
 
         PlayCommand = new RelayCommand(_ => Play());
         PauseCommand = new RelayCommand(_ => Pause());
@@ -107,7 +112,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             if (string.IsNullOrWhiteSpace(settings.BaseFolder))
                 return false;
 
-            var myMusicRoot = Path.Combine(settings.BaseFolder, "My Music");
+            var myMusicRoot = Path.Combine(settings.BaseFolder, "Local Music");
             return _currentFilePath.StartsWith(myMusicRoot, StringComparison.OrdinalIgnoreCase);
         }
     }
@@ -323,26 +328,30 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             ? TimeSpan.FromSeconds(timestampSeconds.Value)
             : CurrentPosition;
         var profile = _profileService.LoadProfile();
+        var myUserId = _sync?.Identity?.UserId ?? "local";
 
         var marker = new TimelineCommentMarker
         {
             Id = Guid.NewGuid().ToString("N"),
             TimestampSeconds = timestamp.TotalSeconds,
-            Label = text,
-            UserDisplayName = string.IsNullOrWhiteSpace(profile.DisplayName) ? "You" : profile.DisplayName,
-            UserIconPath = string.IsNullOrWhiteSpace(profile.AvatarIconPath) ? profile.AvatarImagePath : profile.AvatarIconPath,
+            Comment = text,
+            UserId = myUserId,
             TrackVersion = CurrentTrackVersion,
             ReplyToId = replyToId
         };
 
+        var trackHash = string.Empty;
+        if (!string.IsNullOrWhiteSpace(_currentFilePath) && File.Exists(_currentFilePath))
+        {
+            trackHash = MeshWave.Common.Core.Crypto.CryptoService.ComputeFileHash(_currentFilePath);
+        }
+
         var syncedCommentOperationId = _sync?.RecordComment(
-            trackId: CurrentTrackId,
+            trackId: string.IsNullOrWhiteSpace(trackHash) ? CurrentTrackId : trackHash,
             commentText: text,
             replyToId: replyToId,
             metadata: new Dictionary<string, string>
             {
-                ["displayName"] = marker.UserDisplayName,
-                ["iconPath"] = marker.UserIconPath,
                 ["trackVersion"] = marker.TrackVersion.ToString(),
                 ["timestampSeconds"] = marker.TimestampSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture)
             });
@@ -557,10 +566,12 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         var lines = new List<string>();
         foreach (var m in visibleMarkers.Where(m => string.IsNullOrEmpty(m.ReplyToId)))
         {
-            lines.Add($"[{TimeSpan.FromSeconds(m.TimestampSeconds):mm\\:ss}] (v{(m.TrackVersion <= 0 ? 1 : m.TrackVersion)}) {m.UserDisplayName}: {m.Label}");
+            var displayName = _userRepository?.GetDisplayName(m.UserId) ?? m.UserId;
+            lines.Add($"[{TimeSpan.FromSeconds(m.TimestampSeconds):mm\\:ss}] (v{(m.TrackVersion <= 0 ? 1 : m.TrackVersion)}) {displayName}: {m.Comment}");
             foreach (var r in visibleMarkers.Where(r => r.ReplyToId == m.Id))
             {
-                lines.Add($"  ↳ [{TimeSpan.FromSeconds(r.TimestampSeconds):mm\\:ss}] {r.UserDisplayName}: {r.Label}");
+                var replyDisplayName = _userRepository?.GetDisplayName(r.UserId) ?? r.UserId;
+                lines.Add($"  ↳ [{TimeSpan.FromSeconds(r.TimestampSeconds):mm\\:ss}] {replyDisplayName}: {r.Comment}");
             }
         }
 
@@ -615,12 +626,21 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
 
     private void SyncCommentsFromPeerManifests()
     {
-        if (_sync == null || string.IsNullOrWhiteSpace(CurrentTrackId))
+        if (_sync == null)
+            return;
+
+        var trackHash = string.Empty;
+        if (!string.IsNullOrWhiteSpace(_currentFilePath) && File.Exists(_currentFilePath))
+        {
+            trackHash = MeshWave.Common.Core.Crypto.CryptoService.ComputeFileHash(_currentFilePath);
+        }
+
+        if (string.IsNullOrWhiteSpace(trackHash) && string.IsNullOrWhiteSpace(CurrentTrackId))
             return;
 
         var changed = false;
         foreach (var manifest in _sync.PeerManifests)
-            changed |= ApplyPeerComments(manifest);
+            changed |= ApplyPeerComments(manifest, trackHash);
 
         if (!changed)
             return;
@@ -630,9 +650,9 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         SaveTimelineMarkers();
     }
 
-    private bool ApplyPeerComments(Manifest manifest)
+    private bool ApplyPeerComments(Manifest manifest, string? trackHash = null)
     {
-        if (string.IsNullOrWhiteSpace(CurrentTrackId))
+        if (string.IsNullOrWhiteSpace(trackHash) && string.IsNullOrWhiteSpace(CurrentTrackId))
             return false;
 
         var imported = _importedCommentOperationIdsByPeer.GetValueOrDefault(manifest.UserId);
@@ -648,8 +668,10 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             if (imported.Contains(op.OperationId))
                 continue;
 
-            if (!string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(op.TargetId, CurrentTrackId, StringComparison.OrdinalIgnoreCase))
+            var isTargetMatch = string.Equals(op.TargetId, CurrentTrackId, StringComparison.OrdinalIgnoreCase) ||
+                               (!string.IsNullOrWhiteSpace(trackHash) && string.Equals(op.TargetId, trackHash, StringComparison.OrdinalIgnoreCase));
+
+            if (!string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase) || !isTargetMatch)
             {
                 imported.Add(op.OperationId);
                 continue;
@@ -668,9 +690,8 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
                     {
                         Id = op.OperationId,
                         TimestampSeconds = ParseDouble(op.Metadata.GetValueOrDefault("timestampSeconds"), op.Timestamp),
-                        Label = text,
-                        UserDisplayName = op.Metadata.GetValueOrDefault("displayName") ?? manifest.UserId,
-                        UserIconPath = op.Metadata.GetValueOrDefault("iconPath") ?? string.Empty,
+                        Comment = text,
+                        UserId = manifest.UserId,
                         TrackVersion = parsedVersion <= 0 ? 1 : parsedVersion,
                         ReplyToId = op.Metadata.GetValueOrDefault("replyToId")
                     };
@@ -836,27 +857,3 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     }
 }
 
-public sealed class TimelineCommentMarker
-{
-    public string Id { get; set; } = Guid.NewGuid().ToString("N");
-    public double TimestampSeconds { get; set; }
-    public string Label { get; set; } = string.Empty;
-    public string UserDisplayName { get; set; } = string.Empty;
-    public string UserIconPath { get; set; } = string.Empty;
-    public int TrackVersion { get; set; } = 1;
-    /// <summary>Id of the marker this is a reply to, or null/empty for top-level comments.</summary>
-    public string? ReplyToId { get; set; }
-}
-
-public sealed class PlaybackTrackListItem
-{
-    public string TrackId { get; set; } = string.Empty;
-    public string Title { get; set; } = string.Empty;
-    public string Artist { get; set; } = string.Empty;
-    public TimeSpan Duration { get; set; }
-    public string FilePath { get; set; } = string.Empty;
-    public int TrackNumber { get; set; }
-    public string TrackNumberLabel => TrackNumber > 0 ? $"{TrackNumber}" : "-";
-    public bool IsNowPlaying { get; set; }
-    public int PlayCount { get; set; }
-}

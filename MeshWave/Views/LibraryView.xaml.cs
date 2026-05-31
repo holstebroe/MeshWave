@@ -33,7 +33,7 @@ namespace MeshWave.Views
 
             var window = new Window
             {
-                Title = "Edit My Music Metadata",
+                Title = "Edit Local Music Metadata",
                 Width = 500,
                 Height = 620,
                 Content = view,
@@ -146,7 +146,7 @@ namespace MeshWave.Views
                 return;
             }
 
-            // My Music double-click opens metadata editor; playback is single-click via ▶ button.
+            // Local Music double-click opens metadata editor; playback is single-click via ▶ button.
             if (vm.CanImportMyMusic)
             {
                 vm.RequestOpenMetadataEditor(trackItem.FilePath);

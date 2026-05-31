@@ -2,6 +2,7 @@ using System.Collections.Specialized;
 using System.IO;
 using System.Windows.Input;
 using MeshWave.Mvvm;
+using MeshWave.Common.Core.Crypto;
 using MeshWave.Services;
 
 namespace MeshWave.ViewModels;
@@ -55,7 +56,7 @@ public partial class LibraryViewModel : ViewModelBase
     public bool CanImportMyMusic => IsMyMusicLibrary;
 
     /// <summary>
-    /// True when the user is in My Music view and P2P is connected.
+    /// True when the user is in Local Music view and P2P is connected.
     /// </summary>
     public bool CanSyncToNetwork => IsMyMusicLibrary && (_applicationViewModel?.P2PIsConnected ?? false);
 
@@ -213,7 +214,7 @@ public partial class LibraryViewModel : ViewModelBase
         {
             _applicationViewModel.AnnounceTrackToNetwork(
                 track.TrackId,
-                MeshWave.Common.Core.Crypto.CryptoService.ComputeFileHash(track.FilePath),
+                CryptoService.ComputeFileHash(track.FilePath),
                 track.Title,
                 track.Artist,
                 album.Name);
@@ -229,7 +230,7 @@ public partial class LibraryViewModel : ViewModelBase
 
         _applicationViewModel.AnnounceTrackToNetwork(
             track.TrackId,
-            MeshWave.Common.Core.Crypto.CryptoService.ComputeFileHash(track.FilePath),
+            CryptoService.ComputeFileHash(track.FilePath),
             track.Title,
             track.Artist,
             SelectedAlbum?.Name ?? string.Empty);

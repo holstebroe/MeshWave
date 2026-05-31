@@ -476,7 +476,7 @@ public class BrowseViewModel : ViewModelBase
                 }
 
                 _settingsService.EnsureFoldersExist();
-                var otherMusicFolder = _settingsService.GetOtherMusicFolder();
+                var otherMusicFolder = _settingsService.GetPeerMusicFolder();
                 Directory.CreateDirectory(otherMusicFolder);
 
                 var safeArtist = SanitizeForPath(item.Artist, "Unknown Artist");
@@ -545,7 +545,7 @@ public class BrowseViewModel : ViewModelBase
         try
         {
             _settingsService.EnsureFoldersExist();
-            var otherMusicFolder = _settingsService.GetOtherMusicFolder();
+            var otherMusicFolder = _settingsService.GetPeerMusicFolder();
             var safeArtist = SanitizeForPath(artist, "Unknown Artist");
             var safeAlbum = SanitizeForPath(string.IsNullOrWhiteSpace(album) ? "Downloads" : album, "Downloads");
             var destFolder = Path.Combine(otherMusicFolder, safeArtist, safeAlbum);
