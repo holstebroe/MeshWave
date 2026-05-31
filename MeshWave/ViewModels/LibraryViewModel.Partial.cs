@@ -353,6 +353,7 @@ namespace MeshWave.ViewModels
                 {
                     var albumQueueItems = _applicationViewModel.DownloadQueueItems
                         .Where(q => string.Equals(q.Album, album.Name, StringComparison.OrdinalIgnoreCase)
+                                 && string.Equals(q.Artist, album.Artist, StringComparison.OrdinalIgnoreCase)
                                  && (q.State == DownloadState.Pending || q.State == DownloadState.Downloading || q.State == DownloadState.Failed))
                         .ToList();
 
@@ -415,12 +416,15 @@ namespace MeshWave.ViewModels
                     .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
                 var activeAlbumName = SelectedAlbum?.Name;
+                var activeAlbumArtist = SelectedAlbum?.Artist;
                 var pendingPlaceholders = _applicationViewModel.DownloadQueueItems
                     .Where(q => !string.IsNullOrWhiteSpace(q.ContentHash)
                              && (q.State == DownloadState.Pending || q.State == DownloadState.Downloading || q.State == DownloadState.Failed)
                              && !existingHashes.Contains(q.ContentHash)
                              && (string.IsNullOrWhiteSpace(activeAlbumName)
-                                 || string.Equals(q.Album, activeAlbumName, StringComparison.OrdinalIgnoreCase)))
+                                 || (string.Equals(q.Album, activeAlbumName, StringComparison.OrdinalIgnoreCase)
+                                  && (string.IsNullOrWhiteSpace(activeAlbumArtist)
+                                      || string.Equals(q.Artist, activeAlbumArtist, StringComparison.OrdinalIgnoreCase)))))
                     .Select(q => new LibraryTrackItem
                     {
                         TrackId = q.ContentHash,

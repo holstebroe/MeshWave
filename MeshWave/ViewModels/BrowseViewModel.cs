@@ -450,6 +450,8 @@ public class BrowseViewModel : ViewModelBase
 
         track.IsQueued = true;
 
+        EnsureDownloadFolderPlaceholder(track.ArtistDisplayName, track.Album);
+
         if (_sync == null) return;
 
         _ = Task.Run(async () =>
@@ -536,6 +538,23 @@ public class BrowseViewModel : ViewModelBase
             dispatcher.Invoke(action);
         else
             action();
+    }
+
+    private void EnsureDownloadFolderPlaceholder(string artist, string album)
+    {
+        try
+        {
+            _settingsService.EnsureFoldersExist();
+            var otherMusicFolder = _settingsService.GetOtherMusicFolder();
+            var safeArtist = SanitizeForPath(artist, "Unknown Artist");
+            var safeAlbum = SanitizeForPath(string.IsNullOrWhiteSpace(album) ? "Downloads" : album, "Downloads");
+            var destFolder = Path.Combine(otherMusicFolder, safeArtist, safeAlbum);
+            Directory.CreateDirectory(destFolder);
+        }
+        catch
+        {
+            // best-effort — folder will be created at download time if this fails
+        }
     }
 
     private static string ResolveFileExtension(byte[] bytes, string title)

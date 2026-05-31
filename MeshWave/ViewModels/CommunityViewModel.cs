@@ -558,11 +558,14 @@ public class CommunityViewModel : ViewModelBase
         var trackCount = manifest != null ? CountPublicTracks(manifest) : 0;
         var routedName = _sync?.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, userId, StringComparison.OrdinalIgnoreCase))?.DisplayName;
 
+        var profileName = profileOp?.Metadata.GetValueOrDefault("displayName");
+
         return new CommunityUserItem
         {
             UserId = userId,
-            DisplayName = profileOp?.Metadata.GetValueOrDefault("displayName")
-                ?? (!string.IsNullOrWhiteSpace(routedName) ? routedName : userId),
+            DisplayName = !string.IsNullOrWhiteSpace(profileName)
+                ? profileName
+                : (!string.IsNullOrWhiteSpace(routedName) ? routedName : userId),
             AvatarIconPath = profileOp?.Metadata.GetValueOrDefault("iconPath") ?? string.Empty,
             IsArtist = bool.TryParse(profileOp?.Metadata.GetValueOrDefault("isArtist"), out var ia) && ia,
             Bio = profileOp?.Metadata.GetValueOrDefault("bio") ?? string.Empty,
@@ -884,8 +887,10 @@ public class CommunityViewModel : ViewModelBase
                 .OrderByDescending(op => op.SequenceNumber)
                 .FirstOrDefault();
 
-            var displayName = profileOp?.Metadata.GetValueOrDefault("displayName")
-                              ?? (!string.IsNullOrWhiteSpace(peer.DisplayName) ? peer.DisplayName : peer.UserId);
+            var profileName = profileOp?.Metadata.GetValueOrDefault("displayName");
+            var displayName = !string.IsNullOrWhiteSpace(profileName)
+                ? profileName
+                : (!string.IsNullOrWhiteSpace(peer.DisplayName) ? peer.DisplayName : peer.UserId);
             var isArtist = bool.TryParse(profileOp?.Metadata.GetValueOrDefault("isArtist"), out var parsedIsArtist) && parsedIsArtist;
             var bio = profileOp?.Metadata.GetValueOrDefault("bio") ?? string.Empty;
             var website = profileOp?.Metadata.GetValueOrDefault("website") ?? string.Empty;

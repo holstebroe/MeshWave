@@ -19,6 +19,14 @@
 - [x] Show pending downloads in Library views with progress indicators
 - [x] Support remove-from-library while keeping list membership as "Not Downloaded" state
 - [x] Define and apply consistent wording/state for removed-but-discoverable items
+- [x] Create artist/album folder placeholder on download enqueue (before bytes arrive)
+- [x] Fix pending download tracks appearing under wrong artist in Library (cross-artist album name collision)
+
+### P2 -- Artist/Album folder rename tracking
+- [ ] Design: write a small `.meshwave-id` JSON sidecar file into each artist and album folder on creation, containing a stable GUID and the original entity ID (UserId for artist, AlbumId for album)
+- [ ] On library scan, read sidecar files to correlate folders to their peer entity even after rename
+- [ ] When a peer profile or album name changes (manifest Profile/Update op), locate the local folder via sidecar GUID and rename it to the new readable name
+- [ ] Handle edge cases: missing sidecar (folder created before feature), manual renames, cross-device sync
 
 ## Milestone A: Core Playback (done)
 - [x] Basic audio playback (NAudio)

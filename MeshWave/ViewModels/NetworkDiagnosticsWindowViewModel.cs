@@ -61,6 +61,19 @@ public sealed class NetworkDiagnosticsWindowViewModel : ViewModelBase
             Peers.Add(new PeerDiagnosticsItemViewModel(snapshot));
         }
 
+        var deduped = Peers
+            .GroupBy(p => p.UserId, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.OrderByDescending(p => p.IsOnline).ThenByDescending(p => p.HasManifest).First())
+            .OrderByDescending(p => p.IsOnline)
+            .ThenBy(p => p.IsBootstrapPeer)
+            .ThenByDescending(p => p.PublishedTrackCount)
+            .ThenBy(p => p.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        Peers.Clear();
+        foreach (var item in deduped)
+            Peers.Add(item);
+
         if (Peers.Count == 0)
         {
             foreach (var routedPeer in _sync.GetPeers().Where(p => !string.IsNullOrWhiteSpace(p.UserId)))

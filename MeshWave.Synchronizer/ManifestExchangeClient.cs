@@ -108,9 +108,10 @@ public class ManifestExchangeClient
 
     /// <summary>
     /// Requests raw content bytes from a peer by content hash.
-    /// Returns null if the peer does not have the content or is unreachable.
+    /// Returns null bytes if the peer does not have the content or is unreachable,
+    /// along with a human-readable failure reason.
     /// </summary>
-    public async Task<byte[]?> RequestContentAsync(string address, int port, string contentHash, CancellationToken cancellationToken = default)
+    public async Task<(byte[]? Bytes, string FailureReason)> RequestContentAsync(string address, int port, string contentHash, CancellationToken cancellationToken = default)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(_timeoutMs);
@@ -126,11 +127,28 @@ public class ManifestExchangeClient
 
             var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
             var response = JsonSerializer.Deserialize<ManifestResponse>(responseJson);
-            return response?.ContentBytes;
+
+            if (response?.ContentBytes == null || response.ContentBytes.Length == 0)
+            {
+                var reason = response?.Acknowledged == false
+                    ? "Peer acknowledged the request but reported the content is not available."
+                    : "Peer returned an empty response (content may not be hosted here).";
+                return (null, reason);
+            }
+
+            return (response.ContentBytes, string.Empty);
         }
-        catch
+        catch (OperationCanceledException)
         {
-            return null;
+            return (null, $"Request timed out after {_timeoutMs / 1000}s connecting to {address}:{port}.");
+        }
+        catch (SocketException ex)
+        {
+            return (null, $"TCP connection to {address}:{port} failed: {ex.SocketErrorCode} – {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            return (null, $"Unexpected error requesting content from {address}:{port}: {ex.Message}");
         }
     }
 

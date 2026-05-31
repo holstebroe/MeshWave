@@ -82,6 +82,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                 .Concat(manifests.Keys)
                 .Concat(_peerMessageLogs.Keys)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
                 .Where(id => !string.Equals(id, _identity?.UserId, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
@@ -341,18 +342,44 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             }
         }
 
-        var bytes = await _client.RequestContentAsync(peer.Address, peer.Port, contentHash);
+        var (bytes, failureReason) = await _client.RequestContentAsync(peer.Address, peer.Port, contentHash);
         var succeeded = bytes != null && bytes.Length > 0;
+
+        if (!succeeded)
+        {
+            report.Attempts.Add(new PeerConnectionAttemptResult(
+                "content-request-initial",
+                false,
+                $"Initial content request failed: {failureReason}"));
+
+            await RefreshBootstrapAsync(report);
+            var refreshedPeer = _router.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, peerUserId, StringComparison.OrdinalIgnoreCase));
+            if (refreshedPeer != null && (!string.Equals(refreshedPeer.Address, peer.Address, StringComparison.OrdinalIgnoreCase) || refreshedPeer.Port != peer.Port))
+            {
+                report.Attempts.Add(new PeerConnectionAttemptResult(
+                    "content-request-endpoint-refresh",
+                    true,
+                    $"Routing endpoint changed from {peer.Address}:{peer.Port} to {refreshedPeer.Address}:{refreshedPeer.Port}; retrying content request."));
+
+                peer = refreshedPeer;
+                report.TargetAddress = peer.Address;
+                report.TargetPort = peer.Port;
+
+                (bytes, failureReason) = await _client.RequestContentAsync(peer.Address, peer.Port, contentHash);
+                succeeded = bytes != null && bytes.Length > 0;
+            }
+        }
+
         report.Attempts.Add(new PeerConnectionAttemptResult(
             "content-request",
             succeeded,
             succeeded
                 ? $"Received {bytes!.Length} bytes from peer."
-                : "Peer did not return content bytes."));
+                : $"Peer did not return content bytes: {failureReason}"));
         RecordPeerMessage(peer.UserId, "RequestContent", succeeded,
             succeeded
                 ? $"Content request succeeded ({bytes!.Length} bytes) from {peer.Address}:{peer.Port}."
-                : $"Content request failed from {peer.Address}:{peer.Port} for hash {contentHash}.");
+                : $"Content request failed from {peer.Address}:{peer.Port} for hash {contentHash}. Reason: {failureReason}");
 
         if (!succeeded)
         {
@@ -695,8 +722,23 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             .OrderByDescending(op => op.SequenceNumber)
             .FirstOrDefault();
 
-        return profileOp?.Metadata.GetValueOrDefault("displayName")
-            ?? (!string.IsNullOrWhiteSpace(peer?.DisplayName) ? peer.DisplayName : manifest?.UserId ?? peer?.UserId ?? "peer");
+        var profileName = profileOp?.Metadata.GetValueOrDefault("displayName");
+        if (!string.IsNullOrWhiteSpace(profileName))
+            return profileName;
+
+        if (!string.IsNullOrWhiteSpace(peer?.DisplayName))
+            return peer.DisplayName;
+
+        if (!string.IsNullOrWhiteSpace(manifest?.UserId))
+            return manifest.UserId;
+
+        if (!string.IsNullOrWhiteSpace(peer?.UserId))
+            return peer.UserId;
+
+        if (!string.IsNullOrWhiteSpace(peer?.Address))
+            return $"{peer.Address}:{peer.Port}";
+
+        return "peer";
     }
 
     /// <summary>

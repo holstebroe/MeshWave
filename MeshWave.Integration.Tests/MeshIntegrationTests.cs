@@ -683,7 +683,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         // Jane requests the content directly via the TCP client (bypasses routing table,
         // tests the content-download protocol itself end-to-end).
         var downloadClient = new ManifestExchangeClient(timeoutMs: LocalTestTimeoutMs);
-        var receivedBytes = await downloadClient.RequestContentAsync("127.0.0.1", johnPort, firstHash);
+        var (receivedBytes, downloadFailure) = await downloadClient.RequestContentAsync("127.0.0.1", johnPort, firstHash);
 
         Assert.NotNull(receivedBytes);
         Assert.True(receivedBytes!.Length > 0, "Downloaded content should have bytes.");
