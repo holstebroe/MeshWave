@@ -47,6 +47,9 @@
 
 ## Milestone D: Community Sync
 - [x] P2P foundation: PeerDiscovery, ManifestExchangeServer/Client, SyncOrchestrator
+- [ ] Implement delta manifest synchronization (request operations by `SequenceNumber` range)
+- [ ] Implement manifest compaction/snapshotting (signed state checkpoints to squash old operations)
+- [ ] Migrate manifest wire format to a compact binary format (e.g., Protobuf or MessagePack)
 - [x] Manifest signing + verification using RSA
 - [x] SecurityLimits -- central constants enforced at TCP layer and manifest merge
 - [x] P2PIdentityService -- persistent RSA keypair, UserId derived from public key fingerprint
