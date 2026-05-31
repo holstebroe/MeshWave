@@ -2,36 +2,45 @@ name: Daily Jules Fleet Worker
 
 on:
   schedule:
-    # Runs every day at 02:00 UTC (Adjust as needed)
-    - cron: '0 2 * * *'
-  workflow_dispatch: # Allows you to trigger this manually to test it!
+    - cron: '0 2 * * *' # Runs daily at 02:00 UTC
+  workflow_dispatch: # Allows manual trigger for testing
 
 jobs:
   triage-and-dispatch:
     runs-on: ubuntu-latest
     steps:
-      # Step 1: Clone the MeshWave repo
+      # Step 1: Clone the MeshWave repo (giving access to ProjectPlan/ files)
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Step 2: Fetch open issues and save them to a markdown file
-      - name: Gather Open Issues
+      # Step 2: Extract GitHub issues and point to your project planning documents
+      - name: Gather Master Task List
         env:
           GH_TOKEN: ${{ secrets.JULES_AUTOMATION_TOKEN }}
         run: |
-          echo "### Current Open Issues" > open_issues.md
-          gh issue list --state open --limit 10 --json number,title,body --template '{{range .}}#### Issue #{{.number}}: {{.title}}\n{{.body}}\n---\n{{end}}' >> open_issues.md
+          echo "# MASTER TRIAGE LIST" > combined_triage_list.md
+          echo "## Section 1: Live GitHub Issue Tracker Tracker" >> combined_triage_list.md
+          gh issue list --state open --limit 10 --json number,title,body --template '{{range .}}### Issue #{{.number}}: {{.title}}\n{{.body}}\n---\n{{end}}' >> combined_triage_list.md
+          
+          echo "## Section 2: Instructions for Project Plan Documents" >> combined_triage_list.md
+          echo "You have internal project documents tracking our features. Please read and evaluate:" >> combined_triage_list.md
+          echo "- \`ProjectPlan/Backlog.md\` (Contains immediate upcoming issues)" >> combined_triage_list.md
+          echo "- \`ProjectPlan/Roadmap.md\` (Contains macro features/epics)" >> combined_triage_list.md
 
-      # Step 3: Use Jules to analyze code and dispatch parallel workers
+      # Step 3: Run Jules with updated analytical instructions
       - name: Run Jules Fleet Planner
         uses: google-labs-code/jules-invoke@v1
         with:
           jules_api_key: ${{ secrets.JULES_API_KEY }}
           prompt: |
-            You are acting as the Core Fleet Architect for the MeshWave repository.
+            You are acting as the Lead Systems Architect and Product Manager for the MeshWave workspace.
             
-            1. Read the file `open_issues.md` which lists our active open issues.
-            2. Inspect the current codebase architecture.
-            3. Pick the top 3 to 5 issues that are independent, well-defined, and won't cause code conflicts with one another. (Do not exceed 5 issues to respect our daily session limits).
-            4. For each selected issue, spawn a separate, autonomous child Jules session.
-            5. Instruct each child session to fix its assigned issue on a clean, isolated branch, run validation tests, and submit a targeted Pull Request linked back to the issue via "Closes #IssueNumber".
+            Your goal is to cross-reference our internal project documents and outstanding live tracker requests to choose 3 high-priority tasks to work on today.
+            
+            EXECUTION STEPS:
+            1. Read the file `combined_triage_list.md` to see active GitHub issues.
+            2. Open and thoroughly parse `ProjectPlan/Backlog.md` and `ProjectPlan/Roadmap.md`. 
+            3. Synthesize this information. If a live GitHub issue aligns with an item on the roadmap or backlog, prioritize it. If there is an open, standalone actionable task in `Backlog.md` that does not require a live issue link, you may pick that up instead.
+            4. Choose exactly 2 to 3 distinct, isolated engineering tasks. (Do not exceed 3 tasks total to strictly respect our daily computing quotas).
+            5. For each chosen task, spawn a dedicated parallel child Jules session to build out the feature or bugfix on an isolated branch.
+            6. Ensure child tasks link back explicitly using "Closes #[Issue Number]" if solving a live tracker issue, or update the Markdown file status inside their PR if handling a purely local `Backlog.md` item.
