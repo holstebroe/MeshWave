@@ -33,10 +33,12 @@ public class CommunityViewModel : ViewModelBase
     private readonly Dictionary<string, int> _lastFeedReleaseSequenceByPeer = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, int> _trackLikes = new(StringComparer.OrdinalIgnoreCase);
     private string _discoverHintText = "Search for users by name or peer id.";
+    private readonly Action<string>? _onBrowseArtist;
 
-    public CommunityViewModel(SyncOrchestrator? sync = null)
+    public CommunityViewModel(SyncOrchestrator? sync = null, Action<string>? onBrowseArtist = null)
     {
         _sync = sync;
+        _onBrowseArtist = onBrowseArtist;
 
         SearchCommand = new RelayCommand(_ => Search(), _ => !IsSearching && !string.IsNullOrWhiteSpace(SearchQuery));
         FollowUserCommand = new RelayCommand<CommunityUserItem>(FollowUser, u => u != null && !u.IsFollowing);
@@ -57,6 +59,10 @@ public class CommunityViewModel : ViewModelBase
         RefreshFeedCommand = new RelayCommand(_ => RefreshFeed());
         AddToLibraryCommand = new RelayCommand<ReleaseFeedItem>(AddToLibrary, r => r != null && !string.IsNullOrWhiteSpace(r.ContentHash));
         ToggleLikeCommand = new RelayCommand<ReleaseFeedItem>(ToggleLike, item => item != null);
+        BrowseArtistCommand = new RelayCommand<CommunityUserItem>(u =>
+        {
+            if (u != null) _onBrowseArtist?.Invoke(u.UserId);
+        }, u => u != null && _onBrowseArtist != null);
 
         if (_sync != null)
         {
@@ -83,6 +89,7 @@ public class CommunityViewModel : ViewModelBase
     public ICommand RefreshFeedCommand { get; }
     public ICommand AddToLibraryCommand { get; }
     public ICommand ToggleLikeCommand { get; }
+    public ICommand BrowseArtistCommand { get; }
 
     /// <summary>Count of new releases from followed peers since the Feed tab was last viewed.</summary>
     public int NewReleaseCount
@@ -335,17 +342,27 @@ public class CommunityViewModel : ViewModelBase
     private void OnManifestMerged(object? sender, ManifestMergedEventArgs e)
     {
         if (_sync == null) return;
+
+        // Always re-enrich follow/friend lists as manifests arrive (fixes display names + track counts)
         var followedIds = Following.Select(u => u.UserId).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (!followedIds.Contains(e.UserId))
         {
-            System.Windows.Application.Current.Dispatcher.Invoke(() => RefreshDiscoverResults(SearchQuery));
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                RebuildFollowFriendLists();
+                RefreshDiscoverResults(SearchQuery);
+            });
             return;
         }
 
         var manifest = _sync.GetPeerManifest(e.UserId);
         if (manifest == null)
         {
-            System.Windows.Application.Current.Dispatcher.Invoke(() => RefreshDiscoverResults(SearchQuery));
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                RebuildFollowFriendLists();
+                RefreshDiscoverResults(SearchQuery);
+            });
             return;
         }
 
@@ -367,6 +384,7 @@ public class CommunityViewModel : ViewModelBase
 
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
+            RebuildFollowFriendLists();
             RefreshFeed();
             RefreshDiscoverResults(SearchQuery);
         });

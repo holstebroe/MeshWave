@@ -572,7 +572,13 @@
                                 <!-- Artist profile card -->
                                 <Border Background="{StaticResource SurfaceColor}"
                                         CornerRadius="8" Margin="0,0,0,8"
-                                        ClipToBounds="True">
+                                        ClipToBounds="True"
+                                        Cursor="Hand">
+                                    <Border.InputBindings>
+                                        <MouseBinding MouseAction="LeftDoubleClick"
+                                                      Command="{Binding DataContext.BrowseArtistCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                      CommandParameter="{Binding}"/>
+                                    </Border.InputBindings>
                                     <StackPanel>
                                         <!-- Banner image (artists only) -->
                                         <Border Height="80" ClipToBounds="True">

@@ -24,6 +24,7 @@ public class ApplicationViewModel : ViewModelBase
     private readonly P2PIdentityService _identityService = new();
     private readonly ManifestManager _manifestManager = new();
     private readonly SyncOrchestrator _syncOrchestrator = new();
+    private readonly DownloadQueueService _downloadQueue = new();
     private bool _resumeStateDirty;
 
     private MeshWave.Common.Core.Models.Manifest? _localManifest;
@@ -149,9 +150,12 @@ public class ApplicationViewModel : ViewModelBase
         CurrentViewModel = new SettingsViewModel(style => _playbackViewModel.WaveformStyle = style, _syncOrchestrator);
     }
 
-    public void NavigateToBrowse()
+    public void NavigateToBrowse(string? artistUserId = null)
     {
-        CurrentViewModel = new BrowseViewModel();
+        var vm = new BrowseViewModel(_syncOrchestrator, _downloadQueue);
+        if (!string.IsNullOrWhiteSpace(artistUserId))
+            vm.NavigateToArtist(artistUserId);
+        CurrentViewModel = vm;
     }
 
     private bool _hasCommunityNotification;
@@ -164,14 +168,13 @@ public class ApplicationViewModel : ViewModelBase
 
     public void NavigateToCommunity()
     {
-        var vm = new CommunityViewModel(_syncOrchestrator);
-        // Forward badge state to the shell so the nav button can show the dot.
+        var vm = new CommunityViewModel(_syncOrchestrator, NavigateToBrowse);
         vm.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(CommunityViewModel.HasNewReleases))
                 HasCommunityNotification = vm.HasNewReleases;
         };
-        HasCommunityNotification = false;   // clear on open
+        HasCommunityNotification = false;
         CurrentViewModel = vm;
     }
 
