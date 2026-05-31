@@ -79,6 +79,15 @@ Milestone D remainder -- Community Sync (in progress), with priority ordered as:
 - **Remove lifecycle completed**: Other Music tracks can now be removed via context menu while remaining
   discoverable as `Not Downloaded` placeholders; state persists via appdata-backed removal markers and
   auto-clears when a track is downloaded again
+- **Library organization fix for pending/removed tracks**: pending and removed placeholder tracks now
+  materialize artist/album shells first, so items stay organized under Artists/Albums instead of appearing
+  only in the transient Tracks pane
+- **Library one-click re-download**: `Re-download` action now available on `Not Downloaded` placeholders,
+  re-queues by content hash and peer hint directly from Library
+- **Diagnostics peers fallback**: diagnostics window now backfills peer rows from routing table when
+  snapshot feed unexpectedly returns empty list
+- **Content serving hardening**: local content provider now ignores zero-length files for matched hashes to
+  reduce false `content-request: fail` outcomes
 
 ## Open Work (next execution items)
 

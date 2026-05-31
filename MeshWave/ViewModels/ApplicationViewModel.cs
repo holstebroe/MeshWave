@@ -435,6 +435,10 @@ public class ApplicationViewModel : ViewModelBase
                     if (!string.Equals(hash, contentHash, StringComparison.OrdinalIgnoreCase))
                         continue;
 
+                    var info = new FileInfo(file);
+                    if (!info.Exists || info.Length <= 0)
+                        continue;
+
                     return File.ReadAllBytes(file);
                 }
             }

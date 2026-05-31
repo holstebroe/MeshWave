@@ -56,9 +56,34 @@ public sealed class NetworkDiagnosticsWindowViewModel : ViewModelBase
         var snapshots = _sync.GetPeerDiagnosticsSnapshots();
 
         Peers.Clear();
-        foreach (var snapshot in snapshots)
+        foreach (var snapshot in snapshots.Where(s => !string.IsNullOrWhiteSpace(s.UserId)))
         {
             Peers.Add(new PeerDiagnosticsItemViewModel(snapshot));
+        }
+
+        if (Peers.Count == 0)
+        {
+            foreach (var routedPeer in _sync.GetPeers().Where(p => !string.IsNullOrWhiteSpace(p.UserId)))
+            {
+                var existing = Peers.Any(p => string.Equals(p.UserId, routedPeer.UserId, StringComparison.OrdinalIgnoreCase));
+                if (existing)
+                    continue;
+
+                Peers.Add(new PeerDiagnosticsItemViewModel(new PeerDiagnosticsSnapshot
+                {
+                    UserId = routedPeer.UserId,
+                    DisplayName = !string.IsNullOrWhiteSpace(routedPeer.DisplayName) ? routedPeer.DisplayName : routedPeer.UserId,
+                    Address = routedPeer.Address,
+                    Port = routedPeer.Port,
+                    IsOnline = true,
+                    IsBootstrap = routedPeer.UserId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase),
+                    HasManifest = false,
+                    PublishedTrackCount = 0,
+                    PublishedAlbumCount = 0,
+                    OperationCount = 0,
+                    RecentMessages = []
+                }));
+            }
         }
 
         var localTracks = _sync.LocalPublishedTrackCount;

@@ -149,7 +149,8 @@ namespace MeshWave.ViewModels
                     Version = trackMeta.Version <= 0 ? 1 : trackMeta.Version,
                     TrackNumber = trackMeta.TrackNumber,
                     Duration = t.Duration,
-                    PlayCount = trackMeta.PlayCount
+                    PlayCount = trackMeta.PlayCount,
+                    SourcePeerUserId = string.Empty
                 };
             }).ToList();
 
@@ -209,15 +210,142 @@ namespace MeshWave.ViewModels
         private List<LibraryAlbumItem> _allAlbumItems = [];
         private List<LibraryTrackItem> _allTrackItems = [];
 
+        private void EnsureQueueAlbumShells(List<LibraryAlbumItem> targetAlbums, IEnumerable<DownloadQueueItem> queueItems)
+        {
+            var knownAlbumKeys = targetAlbums
+                .Select(a => $"{a.Artist}|{a.Name}")
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var q in queueItems.Where(q => !string.IsNullOrWhiteSpace(q.Artist) && !string.IsNullOrWhiteSpace(q.Album)))
+            {
+                var key = $"{q.Artist}|{q.Album}";
+                if (knownAlbumKeys.Contains(key))
+                    continue;
+
+                targetAlbums.Add(new LibraryAlbumItem
+                {
+                    AlbumId = ResolveAlbumId(targetAlbums, q.Artist, q.Album),
+                    Artist = q.Artist,
+                    Name = q.Album,
+                    CoverPath = string.Empty,
+                    TrackCount = 0,
+                    IsReleased = true,
+                    Version = 1
+                });
+
+                knownAlbumKeys.Add(key);
+            }
+
+            var refreshedArtists = targetAlbums
+                .GroupBy(a => a.Artist)
+                .Select(g => new LibraryArtistItem
+                {
+                    Name = g.Key,
+                    CoverPath = g.Select(a => a.CoverPath).FirstOrDefault(p => !string.IsNullOrWhiteSpace(p)) ?? string.Empty,
+                    AlbumCount = g.Count(),
+                    TrackCount = _allTrackItems.Count(t => string.Equals(t.Artist, g.Key, StringComparison.OrdinalIgnoreCase))
+                })
+                .OrderBy(a => a.Name)
+                .ToList();
+
+            _allAlbumItems = targetAlbums
+                .OrderBy(a => a.Artist, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            Artists = refreshedArtists;
+
+            if (SelectedArtist != null)
+            {
+                var existing = Artists.FirstOrDefault(a => string.Equals(a.Name, SelectedArtist.Name, StringComparison.OrdinalIgnoreCase));
+                if (existing != null)
+                    _selectedArtist = existing;
+            }
+        }
+
+        private static string ResolveAlbumId(IEnumerable<LibraryAlbumItem> albums, string artist, string albumName)
+        {
+            var existing = albums.FirstOrDefault(a => string.Equals(a.Artist, artist, StringComparison.OrdinalIgnoreCase)
+                                                   && string.Equals(a.Name, albumName, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+                return existing.AlbumId;
+
+            return $"placeholder:{artist}:{albumName}";
+        }
+
+        private void QueueTrackRedownload(LibraryTrackItem track)
+        {
+            if (_applicationViewModel == null || string.IsNullOrWhiteSpace(track.ContentHash))
+                return;
+
+            var existing = _applicationViewModel.DownloadQueueItems.FirstOrDefault(q =>
+                string.Equals(q.ContentHash, track.ContentHash, StringComparison.OrdinalIgnoreCase)
+                && q.State != DownloadState.Done);
+            if (existing != null)
+            {
+                if (existing.State == DownloadState.Failed)
+                {
+                    existing.State = DownloadState.Pending;
+                    existing.StatusMessage = "Queued from Library placeholder.";
+                }
+                return;
+            }
+
+            _applicationViewModel.DownloadQueueItems.Add(new DownloadQueueItem
+            {
+                PeerUserId = track.SourcePeerUserId,
+                ContentHash = track.ContentHash,
+                Title = track.Title,
+                Artist = track.Artist,
+                Album = track.AlbumName,
+                TargetType = "Track",
+                State = DownloadState.Pending,
+                StatusMessage = "Queued from Library placeholder."
+            });
+        }
+
         private void RefreshAlbumAndTrackSelection()
         {
-            var filteredAlbums = SelectedArtist == null
-                ? _allAlbumItems
-                : _allAlbumItems.Where(a => a.Artist == SelectedArtist.Name).ToList();
-
             var removedEntries = !IsMyMusicLibrary
                 ? _downloadStateService.GetRemovedEntries()
                 : [];
+
+            if (!IsMyMusicLibrary && _applicationViewModel != null)
+            {
+                EnsureQueueAlbumShells(_allAlbumItems, _applicationViewModel.DownloadQueueItems);
+
+                var addedRemovedShells = false;
+                foreach (var removed in removedEntries)
+                {
+                    if (string.IsNullOrWhiteSpace(removed.Artist) || string.IsNullOrWhiteSpace(removed.Album))
+                        continue;
+
+                    var exists = _allAlbumItems.Any(a => string.Equals(a.Artist, removed.Artist, StringComparison.OrdinalIgnoreCase)
+                                                      && string.Equals(a.Name, removed.Album, StringComparison.OrdinalIgnoreCase));
+                    if (exists)
+                        continue;
+
+                    _allAlbumItems.Add(new LibraryAlbumItem
+                    {
+                        AlbumId = ResolveAlbumId(_allAlbumItems, removed.Artist, removed.Album),
+                        Artist = removed.Artist,
+                        Name = removed.Album,
+                        CoverPath = string.Empty,
+                        TrackCount = 0,
+                        IsReleased = true,
+                        Version = 1
+                    });
+                    addedRemovedShells = true;
+                }
+
+                if (addedRemovedShells)
+                {
+                    EnsureQueueAlbumShells(_allAlbumItems, []);
+                }
+            }
+
+            var filteredAlbums = SelectedArtist == null
+                ? _allAlbumItems
+                : _allAlbumItems.Where(a => a.Artist == SelectedArtist.Name).ToList();
 
             if (!IsMyMusicLibrary && _applicationViewModel != null)
             {
@@ -262,11 +390,12 @@ namespace MeshWave.ViewModels
                     TrackId = string.IsNullOrWhiteSpace(e.TrackId) ? e.ContentHash : e.TrackId,
                     Title = e.Title,
                     Artist = e.Artist,
-                    AlbumId = string.IsNullOrWhiteSpace(e.AlbumId) ? e.Album : e.AlbumId,
+                    AlbumId = string.IsNullOrWhiteSpace(e.AlbumId) ? ResolveAlbumId(_allAlbumItems, e.Artist, e.Album) : e.AlbumId,
                     AlbumName = e.Album,
                     CoverPath = string.Empty,
                     FilePath = string.Empty,
                     ContentHash = e.ContentHash,
+                    SourcePeerUserId = e.PeerUserId,
                     IsReleased = true,
                     Version = 1,
                     TrackNumber = int.MaxValue,
@@ -297,11 +426,12 @@ namespace MeshWave.ViewModels
                         TrackId = q.ContentHash,
                         Title = q.Title,
                         Artist = q.Artist,
-                        AlbumId = SelectedAlbum?.AlbumId ?? q.Album,
+                        AlbumId = ResolveAlbumId(_allAlbumItems, q.Artist, q.Album),
                         AlbumName = q.Album,
                         CoverPath = string.Empty,
                         FilePath = string.Empty,
                         ContentHash = q.ContentHash,
+                        SourcePeerUserId = q.PeerUserId,
                         IsReleased = true,
                         Version = 1,
                         TrackNumber = int.MaxValue,
@@ -328,10 +458,16 @@ namespace MeshWave.ViewModels
                     }
                 }
 
+                var pendingHashes = pendingPlaceholders
+                    .Select(p => p.ContentHash)
+                    .Where(static h => !string.IsNullOrWhiteSpace(h))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
                 var removedFiltered = removedTrackPlaceholders
                     .Where(p => string.IsNullOrWhiteSpace(activeAlbumName)
                              || string.Equals(p.AlbumName, activeAlbumName, StringComparison.OrdinalIgnoreCase))
-                    .Where(p => string.IsNullOrWhiteSpace(p.ContentHash) || !existingHashes.Contains(p.ContentHash))
+                    .Where(p => string.IsNullOrWhiteSpace(p.ContentHash)
+                             || (!existingHashes.Contains(p.ContentHash) && !pendingHashes.Contains(p.ContentHash)))
                     .ToList();
 
                 filteredTracks.AddRange(pendingPlaceholders);

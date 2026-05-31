@@ -35,7 +35,8 @@ public partial class LibraryViewModel : ViewModelBase
         CancelImportCommand = new RelayCommand(_ => CancelImport(), _ => IsImporting);
         SyncAlbumCommand = new RelayCommand(_ => SyncSelectedAlbum(), _ => CanSyncToNetwork);
         SyncTrackCommand = new RelayCommand<LibraryTrackItem>(SyncTrack, t => CanSyncToNetwork && t != null);
-        RemoveTrackFromLibraryCommand = new RelayCommand<LibraryTrackItem>(RemoveTrackFromLibrary, t => t != null && !IsMyMusicLibrary);
+        RemoveTrackFromLibraryCommand = new RelayCommand<LibraryTrackItem>(RemoveTrackFromLibrary, t => t != null && !IsMyMusicLibrary && !t.IsDownloadPlaceholder);
+        ReDownloadTrackCommand = new RelayCommand<LibraryTrackItem>(ReDownloadTrack, t => t != null && !IsMyMusicLibrary && t.IsRemovedFromLibrary && !string.IsNullOrWhiteSpace(t.ContentHash));
         if (!IsMyMusicLibrary && _applicationViewModel != null)
         {
             _applicationViewModel.DownloadQueueItems.CollectionChanged += OnDownloadQueueChanged;
@@ -48,6 +49,7 @@ public partial class LibraryViewModel : ViewModelBase
     public ICommand SyncAlbumCommand { get; }
     public ICommand SyncTrackCommand { get; }
     public ICommand RemoveTrackFromLibraryCommand { get; }
+    public ICommand ReDownloadTrackCommand { get; }
 
     public bool IsMyMusicLibrary { get; }
     public bool CanImportMyMusic => IsMyMusicLibrary;
@@ -259,7 +261,8 @@ public partial class LibraryViewModel : ViewModelBase
                 Title = track.Title,
                 Artist = track.Artist,
                 Album = track.AlbumName,
-                AlbumId = track.AlbumId
+                AlbumId = track.AlbumId,
+                PeerUserId = track.SourcePeerUserId
             });
         }
 
@@ -279,6 +282,14 @@ public partial class LibraryViewModel : ViewModelBase
         }
 
         LoadFromConfiguredBaseFolder();
+    }
+
+    private void ReDownloadTrack(LibraryTrackItem? track)
+    {
+        if (track == null || IsMyMusicLibrary)
+            return;
+
+        QueueTrackRedownload(track);
     }
 
     private void OnDownloadQueueChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -334,6 +345,7 @@ public sealed class LibraryTrackItem
     public required string CoverPath { get; set; }
     public required string FilePath { get; set; }
     public string? ContentHash { get; set; }
+    public string SourcePeerUserId { get; set; } = string.Empty;
     public bool IsReleased { get; set; }
     public int Version { get; set; } = 1;
     public int TrackNumber { get; set; }

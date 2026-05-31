@@ -84,5 +84,6 @@ public sealed class RemovedLibraryTrackEntry
     public string Artist { get; set; } = string.Empty;
     public string Album { get; set; } = string.Empty;
     public string AlbumId { get; set; } = string.Empty;
+    public string PeerUserId { get; set; } = string.Empty;
     public DateTime RemovedAtUtc { get; set; } = DateTime.UtcNow;
 }
