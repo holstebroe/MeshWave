@@ -1,0 +1,37 @@
+name: Jules Fleet Worker
+
+on:
+  issues:
+    types: [opened, labeled]
+
+jobs:
+  implement-task:
+    if: contains(github.event.issue.labels.*.name, 'jules-task')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Jules Implementer
+        uses: google-labs-code/jules-invoke@v1.0.0
+        env:
+          GH_TOKEN: ${{ secrets.JULES_AUTOMATION_TOKEN }}
+        with:
+          jules_api_key: ${{ secrets.JULES_API_KEY }}
+          prompt: |
+            You are a Jules engineering agent. Your task is to implement the feature or bugfix described in the GitHub issue below.
+
+            ISSUE TITLE: ${{ github.event.issue.title }}
+            ISSUE BODY:
+            ${{ github.event.issue.body }}
+
+            EXECUTION STEPS:
+            1. Read the codebase to understand the current implementation.
+            2. Build out the requested change on a new branch.
+            3. Write and run tests to verify your changes.
+            4. If this issue is from the local backlog, update the Markdown file status in your PR.
+            5. Submit the change using the `submit` tool, ensuring "Closes #${{ github.event.issue.number }}" is in the description.
