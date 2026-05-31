@@ -22,6 +22,7 @@ jobs:
           GH_TOKEN: ${{ secrets.JULES_AUTOMATION_TOKEN }}
         with:
           jules_api_key: ${{ secrets.JULES_API_KEY }}
+          starting_branch: master
           prompt: |
             You are a Jules engineering agent. Your task is to implement the feature or bugfix described in the GitHub issue below.
 
