@@ -99,38 +99,6 @@ Milestone D remainder -- Community Sync (in progress), with priority ordered as:
 - Optional relay fallback after direct+rendezvous failure
 - NAT: outbound-only peer should push its manifest via bootstrap when no direct listener port
 
-## Jules Fleet Dispatch (2026-05-31)
-
-### Task 1: Implement Search in Library and My Music
-**Branch**: `feat/library-search`
-**Objective**: Replace the "Coming Soon" search stubs in `LibraryViewModel` with a working implementation for tracks, albums, and artists.
-**Instructions**:
-1. Modify `LibraryViewModel.cs` and `LibraryViewModel.Partial.cs` to implement the `Search()` method.
-2. Search should be case-insensitive and filter the `Artists`, `Albums`, and `Tracks` collections.
-3. Define "Search Behavior": if `SearchQuery` is empty, show all items. Otherwise, filter items by name/title.
-4. If an artist matches the search, show that artist. If an album matches, show that album. If a track matches, show that track.
-5. Ensure the empty-result UX is handled gracefully in `LibraryView.xaml` (e.g., showing a message when no results are found).
-
-### Task 2: Comment Moderation Sync
-**Branch**: `feat/comment-moderation`
-**Objective**: Implement the remaining "Comment moderation sync (owner soft-delete ops)" from Milestone D.
-**Instructions**:
-1. Add `CommentDelete` operation handling in `ManifestManager.MergeManifest` and `SyncOrchestrator`.
-2. A `CommentDelete` operation should reference a `TargetId` which is the `OperationId` of the original `Comment` operation.
-3. Only the original author of the manifest can delete their own comments.
-4. Update the `Comment` model or the UI logic to respect `IsHidden` when a `CommentDelete` op is found in the manifest.
-5. Add unit tests in `MeshWave.Synchronizer.Tests` to verify that deleted comments are not displayed/indexed.
-
-### Task 3: Community Groups Core Infrastructure
-**Branch**: `feat/groups-core`
-**Objective**: Implement the foundational models and persistence for "Milestone G: Community Groups".
-**Instructions**:
-1. Define `GroupManifest`, `GroupOperation`, and `Channel` models in `MeshWave.Common.Core/Models`.
-2. Add `GroupOperationType` enum for: `FoundGroup`, `JoinGroup`, `LeaveGroup`, `PostMessage`, `CreateChannel`.
-3. Implement `GroupManifestStore` for disk persistence (mirroring `PeerManifestStore`) in `MeshWave.Synchronizer`.
-4. Add group-related limits to `SecurityLimits.cs` (e.g., `MaxGroupsPerUser`, `MaxGroupPostsPerUserPerDay`).
-5. Update `ManifestManager.cs` to handle group manifest signing and verification logic if it differs from user manifests.
-
 ## Notes
 
 - Backlog contains actionable task-level items.
