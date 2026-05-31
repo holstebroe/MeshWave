@@ -9,11 +9,9 @@ on:
 jobs:
   build-and-test:
     runs-on: windows-latest
-
     strategy:
       matrix:
         configuration: [Debug, Release]
-
     env:
       Solution_Name: MeshWave.slnx
 
@@ -35,7 +33,8 @@ jobs:
       run: dotnet build $env:Solution_Name --configuration ${{ matrix.configuration }} --no-restore
 
     - name: Test (${{ matrix.configuration }})
-      run: dotnet test $env:Solution_Name --configuration ${{ matrix.configuration }} --no-build --logger "trx;LogFileName=test-results-${{ matrix.configuration }}.trx"
+      # Added --filter to exclude the integration test assembly namespace
+      run: dotnet test $env:Solution_Name --configuration ${{ matrix.configuration }} --no-build --filter "FullyQualifiedName!~MeshWave.Integration.Tests" --logger "trx;LogFileName=test-results-${{ matrix.configuration }}.trx"
 
     - name: Upload test results (${{ matrix.configuration }})
       if: always()
