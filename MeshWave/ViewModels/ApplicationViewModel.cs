@@ -263,7 +263,8 @@ public class ApplicationViewModel : ViewModelBase
                 }
             }
 
-            _localManifest ??= _manifestManager.CreateManifest(identity.UserId);
+            _localManifest ??= SyncOrchestrator.LoadLocalManifest(identity.UserId)
+                               ?? _manifestManager.CreateManifest(identity.UserId);
 
             await _syncOrchestrator.StartAsync(identity, _localManifest, bootstrapNodes, actAsListener: _p2pActAsListener);
             P2PIsConnected = true;

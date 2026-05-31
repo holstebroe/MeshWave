@@ -96,11 +96,31 @@ Example groups: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone Col
 
 ### Group Model
 - GroupManifest -- parallel to user Manifest; fields: GroupId, Name, Description, Tags,
-  FounderUserId, IsPublic, Channels, BannedUserIds
+  FounderUserId, IsPublic, CoverImageHash, Channels, BannedUserIds, AdminUserIds
 - Group discovery: peers broadcast known GroupId list in PEX metadata; interested peers
   fetch the full group manifest on demand
 - GroupOperationType enum: FoundGroup | JoinGroup | LeaveGroup | PostMessage |
-  CreateChannel | DeleteMessage | PromoteModerator | BanUser
+  CreateChannel | DeleteMessage | PromoteModerator | DemoteModerator | BanUser | KickUser |
+  ApproveInviteRequest | UpdateGroupProfile | InviteRequest
+
+### Group Membership and Access Control
+- Any user can create (found) a new group with a name, description, cover image, and initial
+  channel; the founder is automatically the first administrator
+- A group is either **open** (any peer can join by appending a JoinGroup op) or
+  **invite-only** (joining requires an InviteRequest op to be approved by an administrator
+  who then appends an ApproveInviteRequest op)
+- Administrators are tracked as a list in the group manifest; the founder can promote/demote
+  any member; there must always be at least one administrator
+- Administrators can kick (remove) existing members and ban peers from re-joining
+- Banned user ops are soft tombstones -- stored in the manifest for audit but hidden client-side
+- Rate limits in SecurityLimits: MaxGroupPostsPerUserPerDay, MaxGroupsPerUser,
+  MaxGroupNameLength, MaxChannelNameLength
+
+### Group Profile Page
+- Each group has a discoverable profile page showing: cover image, title, description,
+  member count, admin list, tags/genre labels, creation date
+- Administrators can edit title, description, cover image, and tags via an UpdateGroupProfile op
+- Profile page includes a Join / Request Invite button and a channel list
 
 ### Channels and Posts
 - A Channel has ChannelId, Name, Topic, CreatedBy, CreatedAt
@@ -110,8 +130,7 @@ Example groups: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone Col
 - Attachments are content-addressed files fetched via the content exchange layer
 
 ### Moderation and Trust
-- Founders and promoted moderators may append DeleteMessage (soft tombstone) and BanUser ops
-- Banned users ops are hidden client-side but kept in the manifest (append-only integrity)
+- Founders and promoted moderators may append DeleteMessage (soft tombstone) and BanUser/KickUser ops
 - Rate limits in SecurityLimits: MaxGroupPostsPerUserPerDay, MaxGroupsPerUser,
   MaxGroupNameLength, MaxChannelNameLength
 
@@ -119,19 +138,33 @@ Example groups: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone Col
 - Group manifests exchanged via the same ManifestExchangeServer/Client TCP infrastructure
 - New GroupManifestStore mirrors PeerManifestStore -- persists group manifests by GroupId
 - SyncOrchestrator extended: FoundGroup, JoinGroup, LeaveGroup, PostToChannel,
-  GetGroupManifest, GetGroupPosts
+  GetGroupManifest, GetGroupPosts, ApproveInvite, KickMember
 
 ### Implementation tasks
 - [ ] GroupManifest + GroupOperation + Channel models in MeshWave.Common.Core
-- [ ] GroupOperationType enum
-- [ ] SecurityLimits additions: MaxGroupPostsPerUserPerDay, MaxGroupsPerUser, MaxGroupNameLength, MaxChannelNameLength
+- [ ] GroupOperationType enum (including InviteRequest + ApproveInviteRequest)
+- [ ] SecurityLimits additions: MaxGroupPostsPerUserPerDay, MaxGroupsPerUser,
+      MaxGroupNameLength, MaxChannelNameLength, MaxGroupDescriptionLength,
+      MaxGroupTagsCount, MaxGroupAdminsCount
 - [ ] GroupManifestStore -- disk persistence (mirrors PeerManifestStore)
 - [ ] GroupManager -- signing, verification, merge for group manifests (mirrors ManifestManager)
-- [ ] Wire group sync into SyncOrchestrator
-- [ ] CommunityViewModel expanded -- discovered groups, joined groups, channel list, post list
+- [ ] Wire group sync into SyncOrchestrator (FoundGroup, Join, Leave, Post, Moderate ops)
+- [ ] CommunityViewModel expanded -- group discovery, joined groups, channel list,
+      post list, invite request queue (for admins), membership management
 - [ ] CommunityView -- Groups tab: joined/discovered list; channel sidebar; post thread; reply box
-- [ ] Group discovery panel -- search by name/tag; Join/Leave actions
-- [ ] Group creation flow -- name, description, tags, initial channel; broadcasts FoundGroup + CreateChannel ops
+- [ ] Group discovery panel -- search by name/tag; Join (open) / Request Invite (closed) actions
+- [ ] Group creation flow -- name, description, tags, cover image, privacy setting,
+      initial channel; broadcasts FoundGroup + CreateChannel ops
+- [ ] Group profile page -- view/edit title, description, cover image, tags; member/admin list;
+      Join/Request Invite CTA
+- [ ] Admin panel -- pending invite requests list with Approve/Deny; member list with
+      Kick/Ban/Promote actions; online indicators per member
+- [ ] Admin promote/demote moderator flow with confirmation dialog
+- [ ] Open vs invite-only toggle in group settings (stored as IsPublic in group manifest)
+
+### Future: Competition Feature (Roadmap)
+- See Roadmap.md for the full competition feature design (ballot-sealed voting, deadlines,
+  playlist lock, admin-decrypted tally)
 
 ## Milestone H: Settings Storage and Housekeeping Tab (DONE)
 - [x] Storage tab added to Settings (alongside General/Profile/Artist/Appearance/Network)

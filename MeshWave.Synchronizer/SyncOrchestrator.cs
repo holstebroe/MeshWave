@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Text.Json;
 using MeshWave.Common.Core.Models;
 
 namespace MeshWave.Synchronizer;
@@ -22,6 +23,7 @@ public class SyncOrchestrator : IDisposable
 
     private LocalPeerIdentity? _identity;
     private Manifest? _localManifest;
+    private string? _localManifestPath;
     private CancellationTokenSource? _cts;
     private IReadOnlyList<string> _bootstrapNodes = [];
     private PeerConnectionAttemptReport? _lastConnectionReport;
@@ -97,6 +99,7 @@ public class SyncOrchestrator : IDisposable
     {
         _identity = identity;
         _localManifest = localManifest;
+        _localManifestPath = BuildLocalManifestPath(identity.UserId);
         _contentProvider = contentProvider;
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
@@ -150,6 +153,44 @@ public class SyncOrchestrator : IDisposable
     public void ClearPeerManifestCache()
     {
         _peerStore.ClearAll();
+    }
+
+    /// <summary>
+    /// Saves the local manifest to disk so Follow/Friend/Profile operations persist across restarts.
+    /// </summary>
+    public void SaveLocalManifest()
+    {
+        if (_localManifest == null || _localManifestPath == null) return;
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_localManifestPath)!);
+            File.WriteAllText(_localManifestPath, JsonSerializer.Serialize(_localManifest));
+        }
+        catch { /* best-effort */ }
+    }
+
+    /// <summary>
+    /// Loads a previously persisted local manifest for the given userId.
+    /// Returns null if no persisted manifest exists.
+    /// </summary>
+    public static Manifest? LoadLocalManifest(string userId)
+    {
+        var path = BuildLocalManifestPath(userId);
+        if (!File.Exists(path)) return null;
+        try
+        {
+            var json = File.ReadAllText(path);
+            return JsonSerializer.Deserialize<Manifest>(json);
+        }
+        catch { return null; }
+    }
+
+    private static string BuildLocalManifestPath(string userId)
+    {
+        var safeName = string.Concat(userId.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "MeshWave", "LocalManifests", $"{safeName}.json");
     }
 
     /// <summary>
@@ -561,6 +602,7 @@ public class SyncOrchestrator : IDisposable
             contentHash: null,
             metadata: null,
             _identity.PrivateKeyPem);
+        SaveLocalManifest();
     }
 
     /// <summary>
@@ -578,6 +620,7 @@ public class SyncOrchestrator : IDisposable
             contentHash: null,
             metadata: null,
             _identity.PrivateKeyPem);
+        SaveLocalManifest();
     }
 
     /// <summary>
@@ -595,6 +638,7 @@ public class SyncOrchestrator : IDisposable
             contentHash: null,
             metadata: null,
             _identity.PrivateKeyPem);
+        SaveLocalManifest();
     }
 
     /// <summary>
@@ -646,6 +690,7 @@ public class SyncOrchestrator : IDisposable
             contentHash: null,
             metadata: null,
             _identity.PrivateKeyPem);
+        SaveLocalManifest();
     }
 
     /// <summary>
@@ -755,6 +800,7 @@ public class SyncOrchestrator : IDisposable
             contentHash: bannerImageHash,
             meta,
             _identity.PrivateKeyPem);
+        SaveLocalManifest();
     }
 
     private void TryMerge(Manifest remote, string publicKeyPem)

@@ -6,8 +6,8 @@
 - Common.Core tests: passing (32/32)
 - LibraryManager tests: passing (4/4)
 - Synchronizer tests: passing (35/35)
-- Integration.Tests: passing (12/12)
-- **Total: 83 tests passing**
+- Integration.Tests: passing (14/14)
+- **Total: 85 tests passing**
 
 ## Current Focus
 
@@ -16,16 +16,24 @@ Milestone D remainder -- Community Sync (in progress), with priority ordered as:
 2. Library/My Music search implementation
 3. Download lifecycle UX (pending/progress/not-downloaded states)
 4. Relay fallback hardening
+5. NAT: outbound-only peer manifest push (peer without open port should push to listener)
 
 ## Recently Completed
 
-- Bootstrap split: `MeshWave.Bootstrap` host + `MeshWave.Bootstrap.Core` coordinator library
-- NAT traversal upgraded with rendezvous-coordinated probe window
-- Settings network diagnostics expanded with connection counters and attempt details
-- Settings save/apply behavior fixed (network setting changes now apply without restart)
-- ARM Linux bootstrap baseline added:
-  - RID support (`linux-arm`, `linux-arm64`)
-  - publish helper script (`scripts/publish-bootstrap-arm.ps1`)
+- **Content download protocol wired end-to-end**: `ManifestExchangeClient.RequestContentAsync`,
+  `SyncOrchestrator.StartAsync` content provider parameter, `ManifestExchangeServer` `RequestContent`
+  type + `ContentBytes` response field
+- **Two new integration tests**: John/Jane artist discovery; Jane downloads John's DeskPlastic
+  track by content hash from real TestData MP3 files
+- **Local manifest persistence**: Follow/Friend/Profile ops now saved to disk and reloaded on
+  startup — Friends and Following lists survive application restarts
+- **Self excluded from Discover**: local user no longer appears in the peer discovery list
+- **Follower/track counts fixed**: counts now include local manifest ops; accurate on both sides
+- **Online/offline indicator**: Friends and Following lists show live Online/Offline status
+  from the routing table; updates automatically on peer connect/disconnect
+- **Discover rebuilt from manifest on startup**: Friends and Following collections are
+  repopulated from persisted local manifest operations when CommunityViewModel is created
+- **Build error fixed**: missing `{` in `RebuildLikesIndex` after partial edit
 
 ## Open Work (next execution items)
 
@@ -35,6 +43,7 @@ Milestone D remainder -- Community Sync (in progress), with priority ordered as:
 - Pending downloads/progress visibility in Browse + Library
 - Remove-from-library while preserving list membership as "Not Downloaded"
 - Optional relay fallback after direct+rendezvous failure
+- NAT: outbound-only peer should push its manifest via bootstrap when no direct listener port
 
 ## Notes
 

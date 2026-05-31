@@ -58,10 +58,43 @@
 - Per-user contribution-cap UI
 
 ## Community Groups (Milestone G)
-- Group model + operation types
+- Group model + operation types (open/invite-only, admins, kick/ban, profile editing)
 - Group manifest store + manager
 - SyncOrchestrator group ops
-- Groups UI (discover/join/channel/post/reply)
+- Groups UI: discover/join/request invite/channel/post/reply
+- Admin panel: pending invites, member management, promote/demote moderators
+- Group profile page: editable title, description, cover image, tags
+
+## Future Feature Ideas
+
+### Chat Channels in Groups
+- Persistent text channels within a group, synced over the P2P manifest layer
+- Threaded replies via ReplyToOpId; attachment support via content hash
+
+### Music Competitions in Groups
+A fully decentralised, sealed-ballot competition flow:
+
+1. **Setup** — A group administrator creates a Competition op specifying: title, description,
+   submission deadline, voting deadline, and whether votes are publicly revealed or
+   admin-only until tally.
+2. **Submission phase** — Group members submit tracks (up to the submission deadline) by
+   appending a CompetitionSubmit op containing a content hash and optional description.
+   At the submission deadline the playlist is locked (no new submissions accepted).
+3. **Voting phase** — After the submission deadline and before the voting deadline, members
+   cast votes by appending a CompetitionVote op. Votes are encrypted with the competition
+   administrator's RSA public key so only the admin can decrypt the tally. This ensures
+   votes remain secret until the admin chooses to publish results.
+4. **Reveal** — When the voting deadline passes, the administrator decrypts the vote ops,
+   tallies results, and appends a CompetitionResult op containing the ordered rankings and
+   (optionally) each voter's choice. The result propagates over the mesh like any other op.
+5. **Integrity** — Because all ops are signed and append-only, the vote history cannot be
+   altered retroactively. Any peer can verify signatures and replay the manifest to confirm
+   the tally is correct once votes are decrypted.
+
+This requires additions to MeshWave.Common.Core:
+- `CompetitionOperationType` enum: CreateCompetition | Submit | CastVote | PublishResult
+- Sealed-vote encryption helper in CryptoService (RSA-OAEP encrypt/decrypt for vote payloads)
+- Competition-aware merge rules in ManifestManager (deadline enforcement, lock check)
 
 ## Completed highlights
 - Milestones A, B (baseline), F, H, I, J complete

@@ -62,6 +62,7 @@ public class CommunityViewModel : ViewModelBase
         {
             _sync.ManifestMerged += OnManifestMerged;
             _sync.PeerCountChanged += OnPeerCountChanged;
+            RebuildFollowFriendLists();
             RefreshFeed();
             RefreshDiscoverResults();
         }
@@ -473,6 +474,73 @@ public class CommunityViewModel : ViewModelBase
         _trackLikes[item.TargetId] = item.LikeCount;
     }
 
+    /// <summary>
+    /// Rebuilds the Following and Friends lists from the persisted local manifest operations.
+    /// Called once on startup so the lists survive restarts.
+    /// </summary>
+    private void RebuildFollowFriendLists()
+    {
+        var local = _sync?.LocalManifest;
+        if (local == null) return;
+
+        // Compute the latest follow/unfollow state per user
+        var followStates = local.Operations
+            .Where(op => op.TargetType == "User"
+                && (op.OperationType == ManifestOperationType.Follow || op.OperationType == ManifestOperationType.Unfollow))
+            .GroupBy(op => op.TargetId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(op => op.SequenceNumber).First().OperationType,
+                StringComparer.OrdinalIgnoreCase);
+
+        // Compute the latest friend add/remove state per user
+        var friendStates = local.Operations
+            .Where(op => op.TargetType == "User"
+                && (op.OperationType == ManifestOperationType.FriendAdd || op.OperationType == ManifestOperationType.FriendRemove))
+            .GroupBy(op => op.TargetId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(op => op.SequenceNumber).First().OperationType,
+                StringComparer.OrdinalIgnoreCase);
+
+        var liveUserIds = _sync!.GetPeers()
+            .Select(p => p.UserId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        Following = new ObservableCollection<CommunityUserItem>(
+            followStates
+                .Where(kv => kv.Value == ManifestOperationType.Follow)
+                .Select(kv => BuildUserItem(kv.Key, liveUserIds)));
+
+        Friends = new ObservableCollection<CommunityUserItem>(
+            friendStates
+                .Where(kv => kv.Value == ManifestOperationType.FriendAdd)
+                .Select(kv => BuildUserItem(kv.Key, liveUserIds)));
+    }
+
+    private CommunityUserItem BuildUserItem(string userId, HashSet<string> liveUserIds)
+    {
+        var manifest = _sync?.PeerManifests.FirstOrDefault(m =>
+            string.Equals(m.UserId, userId, StringComparison.OrdinalIgnoreCase));
+        var profileOp = manifest?.Operations
+            .Where(op => op.OperationType == ManifestOperationType.Profile)
+            .OrderByDescending(op => op.SequenceNumber)
+            .FirstOrDefault();
+
+        return new CommunityUserItem
+        {
+            UserId = userId,
+            DisplayName = profileOp?.Metadata.GetValueOrDefault("displayName") ?? userId,
+            AvatarIconPath = profileOp?.Metadata.GetValueOrDefault("iconPath") ?? string.Empty,
+            IsArtist = bool.TryParse(profileOp?.Metadata.GetValueOrDefault("isArtist"), out var ia) && ia,
+            Bio = profileOp?.Metadata.GetValueOrDefault("bio") ?? string.Empty,
+            Website = profileOp?.Metadata.GetValueOrDefault("website") ?? string.Empty,
+            IsFollowing = true,
+            IsFriend = Friends.Any(f => string.Equals(f.UserId, userId, StringComparison.OrdinalIgnoreCase)),
+            IsOnline = liveUserIds.Contains(userId)
+        };
+    }
+
     private void RebuildLikesIndex()
     {
         _trackLikes.Clear();
@@ -555,7 +623,24 @@ public class CommunityViewModel : ViewModelBase
         if (System.Windows.Application.Current?.Dispatcher == null)
             return;
 
-        System.Windows.Application.Current.Dispatcher.Invoke(() => RefreshDiscoverResults(SearchQuery));
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            RefreshDiscoverResults(SearchQuery);
+            UpdateOnlineStatus();
+        });
+    }
+
+    private void UpdateOnlineStatus()
+    {
+        if (_sync == null) return;
+        var liveUserIds = _sync.GetPeers()
+            .Select(p => p.UserId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var u in Following)
+            u.IsOnline = liveUserIds.Contains(u.UserId);
+        foreach (var u in Friends)
+            u.IsOnline = liveUserIds.Contains(u.UserId);
     }
 
     private void RefreshDiscoverResults(string? query = null)
@@ -569,8 +654,11 @@ public class CommunityViewModel : ViewModelBase
         }
 
         var filter = (query ?? string.Empty).Trim();
+        var localUserId = _sync.LocalManifest?.UserId ?? string.Empty;
+
         var peersByUserId = _sync.GetPeers()
-            .Where(p => !p.UserId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase))
+            .Where(p => !p.UserId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase)
+                     && !string.Equals(p.UserId, localUserId, StringComparison.OrdinalIgnoreCase))
             .GroupBy(p => p.UserId, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(p => p.LastSeen).First(), StringComparer.OrdinalIgnoreCase);
 
@@ -613,7 +701,11 @@ public class CommunityViewModel : ViewModelBase
                 op.OperationType == ManifestOperationType.Create
                 && string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase)) ?? 0;
 
-            var followerCount = _sync.PeerManifests.Count(pm =>
+            // Count followers: scan all peer manifests + local manifest
+            var allManifests = _sync.PeerManifests.Concat(
+                _sync.LocalManifest != null ? [_sync.LocalManifest] : []);
+
+            var followerCount = allManifests.Count(pm =>
             {
                 var lastFollowState = pm.Operations
                     .Where(op => string.Equals(op.TargetType, "User", StringComparison.OrdinalIgnoreCase)
@@ -690,6 +782,7 @@ public class CommunityUserItem : ViewModelBase
 {
     private bool _isFollowing;
     private bool _isFriend;
+    private bool _isOnline;
 
     public string UserId { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
@@ -714,6 +807,21 @@ public class CommunityUserItem : ViewModelBase
         get => _isFriend;
         set => SetProperty(ref _isFriend, value);
     }
+
+    /// <summary>True when this peer is currently reachable in the routing table.</summary>
+    public bool IsOnline
+    {
+        get => _isOnline;
+        set
+        {
+            SetProperty(ref _isOnline, value);
+            OnPropertyChanged(nameof(OnlineStatusText));
+            OnPropertyChanged(nameof(OnlineStatusColor));
+        }
+    }
+
+    public string OnlineStatusText => _isOnline ? "Online" : "Offline";
+    public string OnlineStatusColor => _isOnline ? "#4CAF50" : "#888888";
 }
 
 /// <summary>A single item in the release feed — a Create op from a followed/discovered peer.</summary>
