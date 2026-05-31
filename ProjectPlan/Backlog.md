@@ -16,9 +16,9 @@
 - [ ] Implement Library search for tracks/albums/artists/playlists
 
 ### P1 -- Library download lifecycle UX
-- [ ] Show pending downloads in Library views with progress indicators
-- [ ] Support remove-from-library while keeping list membership as "Not Downloaded" state
-- [ ] Define and apply consistent wording/state for removed-but-discoverable items
+- [x] Show pending downloads in Library views with progress indicators
+- [x] Support remove-from-library while keeping list membership as "Not Downloaded" state
+- [x] Define and apply consistent wording/state for removed-but-discoverable items
 
 ## Milestone A: Core Playback (done)
 - [x] Basic audio playback (NAudio)

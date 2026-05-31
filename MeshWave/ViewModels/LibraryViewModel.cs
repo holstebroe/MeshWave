@@ -1,5 +1,8 @@
+using System.Collections.Specialized;
+using System.IO;
 using System.Windows.Input;
 using MeshWave.Mvvm;
+using MeshWave.Services;
 
 namespace MeshWave.ViewModels;
 
@@ -23,6 +26,7 @@ public partial class LibraryViewModel : ViewModelBase
     private int _importImportedFiles;
     private string _importSingleFileStatus = string.Empty;
     private string _syncStatus = string.Empty;
+    private readonly LibraryDownloadStateService _downloadStateService = new();
 
     public LibraryViewModel(ApplicationViewModel? applicationViewModel = null, bool isMyMusicLibrary = false)
     {
@@ -31,12 +35,19 @@ public partial class LibraryViewModel : ViewModelBase
         CancelImportCommand = new RelayCommand(_ => CancelImport(), _ => IsImporting);
         SyncAlbumCommand = new RelayCommand(_ => SyncSelectedAlbum(), _ => CanSyncToNetwork);
         SyncTrackCommand = new RelayCommand<LibraryTrackItem>(SyncTrack, t => CanSyncToNetwork && t != null);
+        RemoveTrackFromLibraryCommand = new RelayCommand<LibraryTrackItem>(RemoveTrackFromLibrary, t => t != null && !IsMyMusicLibrary);
+        if (!IsMyMusicLibrary && _applicationViewModel != null)
+        {
+            _applicationViewModel.DownloadQueueItems.CollectionChanged += OnDownloadQueueChanged;
+        }
+
         LoadFromConfiguredBaseFolder();
     }
 
     public ICommand CancelImportCommand { get; }
     public ICommand SyncAlbumCommand { get; }
     public ICommand SyncTrackCommand { get; }
+    public ICommand RemoveTrackFromLibraryCommand { get; }
 
     public bool IsMyMusicLibrary { get; }
     public bool CanImportMyMusic => IsMyMusicLibrary;
@@ -233,6 +244,55 @@ public partial class LibraryViewModel : ViewModelBase
     {
         // TODO: Implement library refresh
     }
+
+    private void RemoveTrackFromLibrary(LibraryTrackItem? track)
+    {
+        if (track == null || IsMyMusicLibrary)
+            return;
+
+        if (!track.IsDownloadPlaceholder && !string.IsNullOrWhiteSpace(track.ContentHash))
+        {
+            _downloadStateService.MarkRemoved(new RemovedLibraryTrackEntry
+            {
+                ContentHash = track.ContentHash,
+                TrackId = track.TrackId,
+                Title = track.Title,
+                Artist = track.Artist,
+                Album = track.AlbumName,
+                AlbumId = track.AlbumId
+            });
+        }
+
+        if (!string.IsNullOrWhiteSpace(track.FilePath) && File.Exists(track.FilePath))
+        {
+            try
+            {
+                File.Delete(track.FilePath);
+                var folder = Path.GetDirectoryName(track.FilePath);
+                if (!string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder) && !Directory.EnumerateFileSystemEntries(folder).Any())
+                    Directory.Delete(folder, recursive: false);
+            }
+            catch
+            {
+                // best-effort delete
+            }
+        }
+
+        LoadFromConfiguredBaseFolder();
+    }
+
+    private void OnDownloadQueueChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher != null)
+        {
+            dispatcher.Invoke(RefreshAlbumAndTrackSelection);
+        }
+        else
+        {
+            RefreshAlbumAndTrackSelection();
+        }
+    }
 }
 
 public sealed class LibraryArtistItem
@@ -253,6 +313,13 @@ public sealed class LibraryAlbumItem
     public int TrackCount { get; set; }
     public bool IsReleased { get; set; }
     public int Version { get; set; } = 1;
+    public int PendingDownloadCount { get; set; }
+    public int DownloadingCount { get; set; }
+    public int FailedDownloadCount { get; set; }
+    public bool HasDownloadActivity => PendingDownloadCount > 0 || DownloadingCount > 0 || FailedDownloadCount > 0;
+    public string DownloadStatusBadge => HasDownloadActivity
+        ? $"Pending {PendingDownloadCount} · Downloading {DownloadingCount} · Failed {FailedDownloadCount}"
+        : string.Empty;
     public string ReleaseBadge => IsReleased ? "Public" : "Private";
     public override string ToString() => Name;
 }
@@ -263,13 +330,20 @@ public sealed class LibraryTrackItem
     public required string Title { get; set; }
     public required string Artist { get; set; }
     public required string AlbumId { get; set; }
+    public string AlbumName { get; set; } = string.Empty;
     public required string CoverPath { get; set; }
     public required string FilePath { get; set; }
+    public string? ContentHash { get; set; }
     public bool IsReleased { get; set; }
     public int Version { get; set; } = 1;
     public int TrackNumber { get; set; }
     public TimeSpan Duration { get; set; }
     public int PlayCount { get; set; }
+    public bool IsDownloadPlaceholder { get; set; }
+    public bool IsRemovedFromLibrary { get; set; }
+    public string DownloadStateLabel { get; set; } = "Downloaded";
     public string ReleaseBadge => IsReleased ? "Public" : "Private";
+    public string StatusBadge => IsRemovedFromLibrary ? "Not Downloaded" : IsDownloadPlaceholder ? DownloadStateLabel : ReleaseBadge;
+    public bool CanPlay => !IsDownloadPlaceholder && !IsRemovedFromLibrary && !string.IsNullOrWhiteSpace(FilePath);
     public override string ToString() => Title;
 }

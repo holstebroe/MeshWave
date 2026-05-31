@@ -141,8 +141,10 @@ namespace MeshWave.ViewModels
                     Title = t.Title,
                     Artist = string.IsNullOrWhiteSpace(t.Description) ? "Unknown Artist" : t.Description!,
                     AlbumId = t.AlbumId ?? string.Empty,
+                    AlbumName = album?.Title ?? string.Empty,
                     CoverPath = coverPath,
                     FilePath = resolvedPath,
+                    ContentHash = MeshWave.Common.Core.Crypto.CryptoService.ComputeFileHash(resolvedPath),
                     IsReleased = effectiveRelease,
                     Version = trackMeta.Version <= 0 ? 1 : trackMeta.Version,
                     TrackNumber = trackMeta.TrackNumber,
@@ -212,6 +214,35 @@ namespace MeshWave.ViewModels
             var filteredAlbums = SelectedArtist == null
                 ? _allAlbumItems
                 : _allAlbumItems.Where(a => a.Artist == SelectedArtist.Name).ToList();
+
+            var removedEntries = !IsMyMusicLibrary
+                ? _downloadStateService.GetRemovedEntries()
+                : [];
+
+            if (!IsMyMusicLibrary && _applicationViewModel != null)
+            {
+                foreach (var album in filteredAlbums)
+                {
+                    var albumQueueItems = _applicationViewModel.DownloadQueueItems
+                        .Where(q => string.Equals(q.Album, album.Name, StringComparison.OrdinalIgnoreCase)
+                                 && (q.State == DownloadState.Pending || q.State == DownloadState.Downloading || q.State == DownloadState.Failed))
+                        .ToList();
+
+                    album.PendingDownloadCount = albumQueueItems.Count(q => q.State == DownloadState.Pending);
+                    album.DownloadingCount = albumQueueItems.Count(q => q.State == DownloadState.Downloading);
+                    album.FailedDownloadCount = albumQueueItems.Count(q => q.State == DownloadState.Failed);
+                }
+            }
+            else
+            {
+                foreach (var album in filteredAlbums)
+                {
+                    album.PendingDownloadCount = 0;
+                    album.DownloadingCount = 0;
+                    album.FailedDownloadCount = 0;
+                }
+            }
+
             Albums = filteredAlbums;
 
             var filteredTracks = SelectedAlbum == null
@@ -222,6 +253,91 @@ namespace MeshWave.ViewModels
                     .ThenBy(t => t.TrackNumber <= 0 ? int.MaxValue : t.TrackNumber)
                     .ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase)
                     .ToList();
+
+            var removedTrackPlaceholders = removedEntries
+                .Where(e => string.IsNullOrWhiteSpace(SelectedAlbum?.Name)
+                         || string.Equals(e.Album, SelectedAlbum.Name, StringComparison.OrdinalIgnoreCase))
+                .Select(e => new LibraryTrackItem
+                {
+                    TrackId = string.IsNullOrWhiteSpace(e.TrackId) ? e.ContentHash : e.TrackId,
+                    Title = e.Title,
+                    Artist = e.Artist,
+                    AlbumId = string.IsNullOrWhiteSpace(e.AlbumId) ? e.Album : e.AlbumId,
+                    AlbumName = e.Album,
+                    CoverPath = string.Empty,
+                    FilePath = string.Empty,
+                    ContentHash = e.ContentHash,
+                    IsReleased = true,
+                    Version = 1,
+                    TrackNumber = int.MaxValue,
+                    Duration = TimeSpan.Zero,
+                    PlayCount = 0,
+                    IsDownloadPlaceholder = true,
+                    IsRemovedFromLibrary = true,
+                    DownloadStateLabel = "Not Downloaded"
+                })
+                .ToList();
+
+            if (!IsMyMusicLibrary && _applicationViewModel != null)
+            {
+                var existingHashes = filteredTracks
+                    .Select(t => t.ContentHash)
+                    .Where(static h => !string.IsNullOrWhiteSpace(h))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                var activeAlbumName = SelectedAlbum?.Name;
+                var pendingPlaceholders = _applicationViewModel.DownloadQueueItems
+                    .Where(q => !string.IsNullOrWhiteSpace(q.ContentHash)
+                             && (q.State == DownloadState.Pending || q.State == DownloadState.Downloading || q.State == DownloadState.Failed)
+                             && !existingHashes.Contains(q.ContentHash)
+                             && (string.IsNullOrWhiteSpace(activeAlbumName)
+                                 || string.Equals(q.Album, activeAlbumName, StringComparison.OrdinalIgnoreCase)))
+                    .Select(q => new LibraryTrackItem
+                    {
+                        TrackId = q.ContentHash,
+                        Title = q.Title,
+                        Artist = q.Artist,
+                        AlbumId = SelectedAlbum?.AlbumId ?? q.Album,
+                        AlbumName = q.Album,
+                        CoverPath = string.Empty,
+                        FilePath = string.Empty,
+                        ContentHash = q.ContentHash,
+                        IsReleased = true,
+                        Version = 1,
+                        TrackNumber = int.MaxValue,
+                        Duration = TimeSpan.Zero,
+                        PlayCount = 0,
+                        IsDownloadPlaceholder = true,
+                        DownloadStateLabel = q.State switch
+                        {
+                            DownloadState.Pending => "Pending",
+                            DownloadState.Downloading => "Downloading",
+                            DownloadState.Failed => "Failed",
+                            _ => "Pending"
+                        }
+                    })
+                    .OrderBy(p => p.AlbumName, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(p => p.Title, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                foreach (var queueItem in _applicationViewModel.DownloadQueueItems.Where(q => q.State == DownloadState.Done))
+                {
+                    if (!string.IsNullOrWhiteSpace(queueItem.ContentHash))
+                    {
+                        _downloadStateService.ClearRemoved(queueItem.ContentHash);
+                    }
+                }
+
+                var removedFiltered = removedTrackPlaceholders
+                    .Where(p => string.IsNullOrWhiteSpace(activeAlbumName)
+                             || string.Equals(p.AlbumName, activeAlbumName, StringComparison.OrdinalIgnoreCase))
+                    .Where(p => string.IsNullOrWhiteSpace(p.ContentHash) || !existingHashes.Contains(p.ContentHash))
+                    .ToList();
+
+                filteredTracks.AddRange(pendingPlaceholders);
+                filteredTracks.AddRange(removedFiltered);
+            }
+
             Tracks = filteredTracks;
         }
 
@@ -293,6 +409,11 @@ namespace MeshWave.ViewModels
 
         public void Dispose()
         {
+            if (!IsMyMusicLibrary && _applicationViewModel != null)
+            {
+                _applicationViewModel.DownloadQueueItems.CollectionChanged -= OnDownloadQueueChanged;
+            }
+
             _folderWatcher?.Dispose();
             _importCancellation?.Dispose();
         }

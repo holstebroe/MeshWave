@@ -34,11 +34,13 @@ public class CommunityViewModel : ViewModelBase
     private readonly Dictionary<string, int> _trackLikes = new(StringComparer.OrdinalIgnoreCase);
     private string _discoverHintText = "Search for users by name or peer id.";
     private readonly Action<string>? _onBrowseArtist;
+    private readonly System.Collections.ObjectModel.ObservableCollection<DownloadQueueItem>? _downloadQueue;
 
     public CommunityViewModel(SyncOrchestrator? sync = null, Action<string>? onBrowseArtist = null)
     {
         _sync = sync;
         _onBrowseArtist = onBrowseArtist;
+        _downloadQueue = (System.Windows.Application.Current?.MainWindow?.DataContext as ApplicationViewModel)?.DownloadQueueItems;
 
         SearchCommand = new RelayCommand(_ => Search(), _ => !IsSearching && !string.IsNullOrWhiteSpace(SearchQuery));
         FollowUserCommand = new RelayCommand<CommunityUserItem>(FollowUser, u => u != null && !u.IsFollowing);
@@ -249,7 +251,8 @@ public class CommunityViewModel : ViewModelBase
                     ? parsedRelease
                     : op.Timestamp,
                 LikeCount = _trackLikes.GetValueOrDefault(op.TargetId, 0),
-                IsLikedByMe = IsLocallyLiked(op.TargetId)
+                IsLikedByMe = IsLocallyLiked(op.TargetId),
+                Metadata = new Dictionary<string, string>(op.Metadata, StringComparer.OrdinalIgnoreCase)
             }));
         }
 
@@ -411,7 +414,14 @@ public class CommunityViewModel : ViewModelBase
             return;
         }
 
-        SearchStatus = $"Requesting \"{item.Title}\" from the mesh...";
+        SearchStatus = $"Queuing \"{item.Title}\" for download...";
+
+        var queued = TryQueueFeedDownload(item);
+        if (queued != null)
+        {
+            SearchStatus = $"Queued \"{item.Title}\" for Library download.";
+            return;
+        }
 
         try
         {
@@ -546,11 +556,13 @@ public class CommunityViewModel : ViewModelBase
             .FirstOrDefault();
 
         var trackCount = manifest != null ? CountPublicTracks(manifest) : 0;
+        var routedName = _sync?.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, userId, StringComparison.OrdinalIgnoreCase))?.DisplayName;
 
         return new CommunityUserItem
         {
             UserId = userId,
-            DisplayName = profileOp?.Metadata.GetValueOrDefault("displayName") ?? userId,
+            DisplayName = profileOp?.Metadata.GetValueOrDefault("displayName")
+                ?? (!string.IsNullOrWhiteSpace(routedName) ? routedName : userId),
             AvatarIconPath = profileOp?.Metadata.GetValueOrDefault("iconPath") ?? string.Empty,
             IsArtist = bool.TryParse(profileOp?.Metadata.GetValueOrDefault("isArtist"), out var ia) && ia,
             Bio = profileOp?.Metadata.GetValueOrDefault("bio") ?? string.Empty,
@@ -649,6 +661,154 @@ public class CommunityViewModel : ViewModelBase
 
         var result = sb.ToString().Trim();
         return string.IsNullOrWhiteSpace(result) ? fallback : result;
+    }
+
+    private DownloadQueueItem? TryQueueFeedDownload(ReleaseFeedItem item)
+    {
+        if (_downloadQueue == null || string.IsNullOrWhiteSpace(item.ContentHash))
+            return null;
+
+        var existing = _downloadQueue.FirstOrDefault(q => string.Equals(q.ContentHash, item.ContentHash, StringComparison.OrdinalIgnoreCase));
+        if (existing != null)
+        {
+            if (existing.State == DownloadState.Failed)
+            {
+                existing.State = DownloadState.Pending;
+                existing.StatusMessage = "Queued from Community Feed.";
+                StartQueuedDownload(existing);
+            }
+            return existing;
+        }
+
+        var queueItem = new DownloadQueueItem
+        {
+            PeerUserId = item.ArtistUserId,
+            ContentHash = item.ContentHash,
+            Title = item.Title,
+            Artist = item.ArtistDisplayName,
+            Album = item.Metadata.GetValueOrDefault("album") ?? "Community",
+            TargetType = item.TargetType,
+            State = DownloadState.Pending,
+            StatusMessage = "Queued from Community Feed."
+        };
+
+        _downloadQueue.Add(queueItem);
+        StartQueuedDownload(queueItem);
+        return queueItem;
+    }
+
+    private void StartQueuedDownload(DownloadQueueItem item)
+    {
+        if (_sync == null)
+            return;
+
+        _ = Task.Run(async () =>
+        {
+            ExecuteOnUi(() =>
+            {
+                item.State = DownloadState.Downloading;
+                item.StatusMessage = "Requesting content from mesh...";
+            });
+
+            try
+            {
+                var bytes = await _sync.RequestContentAsync(item.PeerUserId, item.ContentHash);
+                if (bytes == null || bytes.Length == 0)
+                {
+                    var details = _sync.LastConnectionAttemptReport?.BuildUserFacingSummary() ?? "Peer did not return content.";
+                    ExecuteOnUi(() =>
+                    {
+                        item.State = DownloadState.Failed;
+                        item.StatusMessage = details;
+                        SearchStatus = $"Download failed for \"{item.Title}\". {details}";
+                    });
+
+                    ScheduleQueueRetry(item);
+                    return;
+                }
+
+                _settingsService.EnsureFoldersExist();
+                var settings = _settingsService.LoadSettings();
+                var otherMusicFolder = _settingsService.GetOtherMusicFolder();
+                Directory.CreateDirectory(otherMusicFolder);
+
+                var extension = ResolveFileExtension(bytes, item.Title);
+                var tempFile = Path.Combine(Path.GetTempPath(), $"MeshWave_{Guid.NewGuid():N}{extension}");
+                File.WriteAllBytes(tempFile, bytes);
+
+                var imported = LocalLibraryManager.ImportSingleFileToOrganizedStructure(
+                    tempFile,
+                    _settingsService.GetOtherMusicFolder(),
+                    settings.SupportedExtensions);
+
+                if (!imported)
+                {
+                    var safeArtist = SanitizeForPath(item.Artist, "Unknown Artist");
+                    var safeAlbum = SanitizeForPath(string.IsNullOrWhiteSpace(item.Album) ? "Community" : item.Album, "Community");
+                    var fallbackName = SanitizeForPath(item.Title, "Imported Track");
+                    var fallbackPath = Path.Combine(otherMusicFolder, safeArtist, safeAlbum, $"{fallbackName}{extension}");
+                    var fallbackFolder = Path.GetDirectoryName(fallbackPath);
+                    if (!string.IsNullOrWhiteSpace(fallbackFolder))
+                        Directory.CreateDirectory(fallbackFolder);
+                    File.WriteAllBytes(fallbackPath, bytes);
+                    ExecuteOnUi(() =>
+                    {
+                        item.State = DownloadState.Done;
+                        item.ProgressPercent = 100;
+                        item.StatusMessage = fallbackPath;
+                        SearchStatus = $"Downloaded \"{item.Title}\" to Library.";
+                    });
+                }
+                else
+                {
+                    ExecuteOnUi(() =>
+                    {
+                        item.State = DownloadState.Done;
+                        item.ProgressPercent = 100;
+                        item.StatusMessage = "Imported to Other Music.";
+                        SearchStatus = $"Downloaded \"{item.Title}\" to Library.";
+                    });
+                }
+
+                try { File.Delete(tempFile); } catch { }
+            }
+            catch (Exception ex)
+            {
+                ExecuteOnUi(() =>
+                {
+                    item.State = DownloadState.Failed;
+                    item.StatusMessage = ex.Message;
+                    SearchStatus = $"Download failed for \"{item.Title}\": {ex.Message}";
+                });
+                ScheduleQueueRetry(item);
+            }
+        });
+    }
+
+    private static void ExecuteOnUi(Action action)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher != null)
+            dispatcher.Invoke(action);
+        else
+            action();
+    }
+
+    private void ScheduleQueueRetry(DownloadQueueItem item)
+    {
+        _ = Task.Delay(TimeSpan.FromSeconds(20)).ContinueWith(_ =>
+        {
+            ExecuteOnUi(() =>
+            {
+                if (item.State != DownloadState.Failed)
+                    return;
+
+                item.State = DownloadState.Pending;
+                item.StatusMessage = "Auto-retrying...";
+                SearchStatus = $"Retrying \"{item.Title}\"...";
+                StartQueuedDownload(item);
+            });
+        });
     }
 
     private void OnPeerCountChanged(object? sender, EventArgs e)
@@ -868,6 +1028,7 @@ public class ReleaseFeedItem : ViewModelBase
     public string TargetType { get; set; } = string.Empty;   // "Track" or "Album"
     public string TargetId { get; set; } = string.Empty;
     public string? ContentHash { get; set; }
+    public Dictionary<string, string> Metadata { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public DateTime ReleasedAt { get; set; }
     public string ReleasedAtDisplay => ReleasedAt.ToLocalTime().ToString("MMM d, yyyy");
 

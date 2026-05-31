@@ -137,6 +137,10 @@
                             <MenuItem Header="Edit Metadata"
                                       Click="EditMetadata_Click"
                                       Visibility="{Binding PlacementTarget.DataContext.CanImportMyMusic, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                            <MenuItem Header="Remove from Library"
+                                      Command="{Binding PlacementTarget.DataContext.RemoveTrackFromLibraryCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      Visibility="{Binding PlacementTarget.DataContext.CanImportMyMusic, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource InverseBoolToVis}}"/>
                         </ContextMenu>
                     </ListView.ContextMenu>
                     <ListView.View>
@@ -151,6 +155,7 @@
                                                 Padding="0"
                                                 HorizontalAlignment="Center"
                                                 VerticalAlignment="Center"
+                                                IsEnabled="{Binding CanPlay}"
                                                 Click="TrackPlayButton_Click"
                                                 Style="{StaticResource DiscreteIconButton}"/>
                                     </DataTemplate>
@@ -188,7 +193,7 @@
                                                 <TextBlock Text="{Binding Title}"
                                                            FontWeight="SemiBold" FontSize="13"
                                                            TextTrimming="CharacterEllipsis" MaxWidth="130"/>
-                                                <TextBlock Text="{Binding ReleaseBadge}"
+                                                <TextBlock Text="{Binding StatusBadge}"
                                                            FontSize="11"
                                                            Foreground="{StaticResource AccentColor}"/>
                                             </StackPanel>
@@ -200,6 +205,17 @@
                                 <GridViewColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Artist}"
+                                                   FontSize="12"
+                                                   Foreground="{StaticResource TextSecondaryColor}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   VerticalAlignment="Center"/>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="Album" Width="130">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding AlbumName}"
                                                    FontSize="12"
                                                    Foreground="{StaticResource TextSecondaryColor}"
                                                    TextTrimming="CharacterEllipsis"

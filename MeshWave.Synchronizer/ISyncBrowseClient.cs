@@ -11,6 +11,8 @@ public interface ISyncBrowseClient
     bool IsRunning { get; }
     IReadOnlyCollection<Manifest> PeerManifests { get; }
     Manifest? LocalManifest { get; }
+    PeerConnectionAttemptReport? LastConnectionAttemptReport { get; }
+    IEnumerable<PeerInfo> GetPeers();
     event EventHandler<ManifestMergedEventArgs>? ManifestMerged;
     Task<byte[]?> RequestContentAsync(string peerUserId, string contentHash);
 }

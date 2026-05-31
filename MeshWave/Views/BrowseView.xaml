@@ -304,7 +304,7 @@
                                             Content="{Binding DownloadButtonLabel}"
                                             Command="{Binding DataContext.DownloadTrackCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                             CommandParameter="{Binding}"
-                                            IsEnabled="{Binding IsQueued, Converter={StaticResource InverseBoolConverter}}"
+                                            IsEnabled="{Binding CanDownload}"
                                             Padding="10,4" VerticalAlignment="Center">
                                         <Button.Style>
                                             <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
@@ -471,13 +471,13 @@
                             </Style>
                         </Border.Style>
                         <StackPanel HorizontalAlignment="Center">
-                            <TextBlock Text="↓" FontSize="36" HorizontalAlignment="Center"
+                            <TextBlock Text="⬇" FontSize="36" HorizontalAlignment="Center"
                                        Foreground="{StaticResource TextSecondaryColor}" Margin="0,0,0,10"/>
                             <TextBlock Text="No downloads queued."
                                        FontSize="15" FontWeight="SemiBold"
                                        HorizontalAlignment="Center"
                                        Foreground="{StaticResource TextPrimaryColor}"/>
-                            <TextBlock Text="Browse Artists or Tracks and click ↓ Download to queue a track."
+                            <TextBlock Text="Browse Artists or Tracks and click ⬇ Download to queue a track."
                                        FontSize="13" Foreground="{StaticResource TextSecondaryColor}"
                                        HorizontalAlignment="Center" TextAlignment="Center"
                                        Margin="0,6,0,0"/>

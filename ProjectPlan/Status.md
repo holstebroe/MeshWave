@@ -58,6 +58,27 @@ Milestone D remainder -- Community Sync (in progress), with priority ordered as:
   (mesh vs bootstrap), shows manifest availability per peer, keeps peer endpoint (`ip:port`) visible,
   and presents the summary in a read-only copyable textbox
 - **Sidebar mesh status readability**: connected status text now wraps instead of truncating mid-label
+- **Peer content serving fixed**: P2P startup now wires a local content provider so `RequestContent` can resolve
+  announced hashes to file bytes (fixes direct probe success but content request failure)
+- **Download UX consistency and resilience**: Community Feed action label now matches Browse (`Download`),
+  feed downloads use the shared queue path, and failed queue items auto-retry after delay
+- **Library pending placeholder visibility**: Library (Other Music) now shows queued/downloading/failed placeholders
+  immediately with status badges and disabled playback until download completes
+- **Display-name fallback hardening**: Browse and follow/friend lists now prefer profile displayName,
+  then routed peer display name, before GUID fallback
+- **Library queue crash fix**: resolved null-reference when no album is selected by making queue placeholders
+  robust to `SelectedAlbum == null` and preserving queue album context
+- **Queue metadata accuracy**: Community Feed queued items now preserve the track's actual album name
+  (instead of hardcoded `Community`) via feed operation metadata
+- **Browse download state polish**: track buttons now transition from queued to downloaded correctly,
+  and queued state only reflects pending/downloading items (not completed ones)
+- **Library status visibility improved**: album rows now show pending/downloading/failed download aggregates,
+  and track rows show album name + download status badge for placeholders
+- **Download icon polish**: Browse download labels now use explicit state icons (`⬇`, `⏳`, `✅`) for
+  faster visual scanning of download state
+- **Remove lifecycle completed**: Other Music tracks can now be removed via context menu while remaining
+  discoverable as `Not Downloaded` placeholders; state persists via appdata-backed removal markers and
+  auto-clears when a track is downloaded again
 
 ## Open Work (next execution items)
 

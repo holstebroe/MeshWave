@@ -39,6 +39,7 @@ public class BrowseAlbumItem : ViewModelBase
 public class BrowseTrackItem : ViewModelBase
 {
     private bool _isQueued;
+    private bool _isDownloaded;
 
     public string TrackId { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
@@ -56,10 +57,23 @@ public class BrowseTrackItem : ViewModelBase
         {
             SetProperty(ref _isQueued, value);
             OnPropertyChanged(nameof(DownloadButtonLabel));
+            OnPropertyChanged(nameof(CanDownload));
         }
     }
 
-    public string DownloadButtonLabel => IsQueued ? "✓ Queued" : "↓ Download";
+    public bool IsDownloaded
+    {
+        get => _isDownloaded;
+        set
+        {
+            SetProperty(ref _isDownloaded, value);
+            OnPropertyChanged(nameof(DownloadButtonLabel));
+            OnPropertyChanged(nameof(CanDownload));
+        }
+    }
+
+    public string DownloadButtonLabel => IsQueued ? "⏳ Queued" : IsDownloaded ? "✅ Downloaded" : "⬇ Download";
+    public bool CanDownload => !IsQueued && !IsDownloaded;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -263,7 +277,9 @@ public class BrowseViewModel : ViewModelBase
                 .OrderByDescending(op => op.SequenceNumber)
                 .FirstOrDefault();
 
-            var displayName = profileOp?.Metadata.GetValueOrDefault("displayName") ?? manifest.UserId;
+            var displayName = profileOp?.Metadata.GetValueOrDefault("displayName")
+                ?? _sync.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, manifest.UserId, StringComparison.OrdinalIgnoreCase))?.DisplayName
+                ?? manifest.UserId;
             var isArtist = bool.TryParse(profileOp?.Metadata.GetValueOrDefault("isArtist"), out var ia) && ia;
             var bio = profileOp?.Metadata.GetValueOrDefault("bio") ?? string.Empty;
 
@@ -309,7 +325,9 @@ public class BrowseViewModel : ViewModelBase
                 .Where(op => op.OperationType == ManifestOperationType.Profile)
                 .OrderByDescending(op => op.SequenceNumber)
                 .FirstOrDefault();
-            var artistName = artistProfileOp?.Metadata.GetValueOrDefault("displayName") ?? manifest.UserId;
+            var artistName = artistProfileOp?.Metadata.GetValueOrDefault("displayName")
+                ?? _sync.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, manifest.UserId, StringComparison.OrdinalIgnoreCase))?.DisplayName
+                ?? manifest.UserId;
 
             var albumOps = manifest.Operations
                 .Where(op => op.OperationType == ManifestOperationType.Create
@@ -351,7 +369,9 @@ public class BrowseViewModel : ViewModelBase
                 .Where(op => op.OperationType == ManifestOperationType.Profile)
                 .OrderByDescending(op => op.SequenceNumber)
                 .FirstOrDefault();
-            var artistName = artistProfileOp?.Metadata.GetValueOrDefault("displayName") ?? manifest.UserId;
+            var artistName = artistProfileOp?.Metadata.GetValueOrDefault("displayName")
+                ?? _sync.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, manifest.UserId, StringComparison.OrdinalIgnoreCase))?.DisplayName
+                ?? manifest.UserId;
 
             var trackOps = GetLatestPublicTrackOperations(manifest);
 
@@ -370,8 +390,11 @@ public class BrowseViewModel : ViewModelBase
                 if (op.Metadata.TryGetValue("releasedAt", out var rat) && DateTime.TryParse(rat, out var dt))
                     releasedAt = dt;
 
-                var isQueued = !string.IsNullOrWhiteSpace(op.ContentHash)
-                    && _downloadQueue.IsQueued(op.ContentHash);
+                var queueItem = !string.IsNullOrWhiteSpace(op.ContentHash)
+                    ? _downloadQueue.AllItems.FirstOrDefault(i => string.Equals(i.ContentHash, op.ContentHash, StringComparison.OrdinalIgnoreCase))
+                    : null;
+                var isQueued = queueItem != null && (queueItem.State == DownloadState.Pending || queueItem.State == DownloadState.Downloading);
+                var isDownloaded = queueItem?.State == DownloadState.Done;
 
                 tracks.Add(new BrowseTrackItem
                 {
@@ -382,7 +405,8 @@ public class BrowseViewModel : ViewModelBase
                     Album = album,
                     ContentHash = op.ContentHash,
                     ReleasedAt = releasedAt,
-                    IsQueued = isQueued
+                    IsQueued = isQueued,
+                    IsDownloaded = isDownloaded
                 });
             }
         }
@@ -437,12 +461,15 @@ public class BrowseViewModel : ViewModelBase
                 var bytes = await _sync.RequestContentAsync(item.PeerUserId, item.ContentHash);
                 if (bytes == null || bytes.Length == 0)
                 {
+                    var details = _sync.LastConnectionAttemptReport?.BuildUserFacingSummary() ?? "Peer did not return content.";
                     ExecuteOnUiOrCurrent(() =>
                     {
                         item.State = DownloadState.Failed;
-                        item.StatusMessage = "Peer did not return content.";
+                        item.StatusMessage = details;
+                        StatusText = $"Download failed for \"{track.Title}\". {details}";
                         track.IsQueued = false;
                     });
+                    ScheduleAutoRetry(track, item);
                     return;
                 }
 
@@ -464,6 +491,9 @@ public class BrowseViewModel : ViewModelBase
                     item.State = DownloadState.Done;
                     item.ProgressPercent = 100;
                     item.StatusMessage = destPath;
+                    track.IsQueued = false;
+                    track.IsDownloaded = true;
+                    StatusText = $"Downloaded \"{track.Title}\" to Library.";
                 });
             }
             catch (Exception ex)
@@ -472,9 +502,30 @@ public class BrowseViewModel : ViewModelBase
                 {
                     item.State = DownloadState.Failed;
                     item.StatusMessage = ex.Message;
+                    StatusText = $"Download failed for \"{track.Title}\": {ex.Message}";
                     track.IsQueued = false;
                 });
+                ScheduleAutoRetry(track, item);
             }
+        });
+    }
+
+    private void ScheduleAutoRetry(BrowseTrackItem track, DownloadQueueItem item)
+    {
+        _ = Task.Delay(TimeSpan.FromSeconds(15)).ContinueWith(_ =>
+        {
+            ExecuteOnUiOrCurrent(() =>
+            {
+                if (item.State != DownloadState.Failed)
+                    return;
+
+                item.State = DownloadState.Pending;
+                item.StatusMessage = "Auto-retrying...";
+                StatusText = $"Retrying download for \"{track.Title}\"...";
+                track.IsQueued = false;
+                track.IsDownloaded = false;
+                EnqueueTrackDownload(track);
+            });
         });
     }
 

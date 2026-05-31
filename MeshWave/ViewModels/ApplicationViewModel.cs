@@ -143,6 +143,7 @@ public class ApplicationViewModel : ViewModelBase
 
     public SyncOrchestrator SyncOrchestrator => _syncOrchestrator;
     public PlaybackViewModel Playback => _playbackViewModel;
+    public System.Collections.ObjectModel.ObservableCollection<DownloadQueueItem> DownloadQueueItems => _downloadQueue.AllItems;
 
     public string BuildMeshDiagnosticsSummary()
     {
@@ -305,7 +306,12 @@ public class ApplicationViewModel : ViewModelBase
             _localManifest ??= SyncOrchestrator.LoadLocalManifest(identity.UserId)
                                ?? _manifestManager.CreateManifest(identity.UserId);
 
-            await _syncOrchestrator.StartAsync(identity, _localManifest, bootstrapNodes, actAsListener: _p2pActAsListener);
+            await _syncOrchestrator.StartAsync(
+                identity,
+                _localManifest,
+                bootstrapNodes,
+                actAsListener: _p2pActAsListener,
+                contentProvider: TryGetLocalContentByHash);
             P2PIsConnected = true;
             P2PPeerCount = _syncOrchestrator.ConnectedPeerCount;
             UpdateP2PStatusText();
@@ -392,6 +398,53 @@ public class ApplicationViewModel : ViewModelBase
         var mode = _p2pActAsListener ? "listener" : "outbound-only";
         var bootstrapPart = bootstrapPeers > 0 ? $", {bootstrapPeers} bootstrap" : string.Empty;
         P2PStatusText = $"Connected ({mode}) · {meshPeers} mesh peer{(meshPeers == 1 ? "" : "s")}{bootstrapPart}";
+    }
+
+    private byte[]? TryGetLocalContentByHash(string contentHash)
+    {
+        if (string.IsNullOrWhiteSpace(contentHash))
+            return null;
+
+        try
+        {
+            var settings = _settingsService.LoadSettings();
+            var supportedExtensions = settings.SupportedExtensions
+                .Select(static ext => ext.StartsWith('.') ? ext : "." + ext)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var roots = new[]
+            {
+                _settingsService.GetMyMusicFolder(),
+                _settingsService.GetOtherMusicFolder()
+            }
+            .Where(static p => !string.IsNullOrWhiteSpace(p))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+            foreach (var root in roots)
+            {
+                if (!Directory.Exists(root))
+                    continue;
+
+                foreach (var file in Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories))
+                {
+                    if (!supportedExtensions.Contains(Path.GetExtension(file)))
+                        continue;
+
+                    var hash = MeshWave.Common.Core.Crypto.CryptoService.ComputeFileHash(file);
+                    if (!string.Equals(hash, contentHash, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    return File.ReadAllBytes(file);
+                }
+            }
+        }
+        catch
+        {
+            // best effort
+        }
+
+        return null;
     }
 
     private static bool TryParseEndpoint(string endpoint, out string host, out int port)

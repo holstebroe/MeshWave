@@ -64,6 +64,7 @@ public class BrowseViewModelTests
         sync.SetupGet(s => s.IsRunning).Returns(true);
         sync.SetupGet(s => s.PeerManifests).Returns(new List<Manifest> { manifest });
         sync.SetupGet(s => s.LocalManifest).Returns((Manifest?)null);
+        sync.Setup(s => s.GetPeers()).Returns(Array.Empty<PeerInfo>());
 
         var vm = new BrowseViewModel(sync.Object, new DownloadQueueService());
 
@@ -83,6 +84,7 @@ public class BrowseViewModelTests
         sync.SetupGet(s => s.IsRunning).Returns(true);
         sync.SetupGet(s => s.PeerManifests).Returns(new List<Manifest> { john, jane });
         sync.SetupGet(s => s.LocalManifest).Returns((Manifest?)null);
+        sync.Setup(s => s.GetPeers()).Returns(Array.Empty<PeerInfo>());
 
         var vm = new BrowseViewModel(sync.Object, new DownloadQueueService());
 

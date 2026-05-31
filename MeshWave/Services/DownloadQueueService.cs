@@ -108,7 +108,7 @@ public class DownloadQueueService
 
     public bool IsQueued(string contentHash) =>
         _items.Any(i => string.Equals(i.ContentHash, contentHash, StringComparison.OrdinalIgnoreCase)
-                     && i.State != DownloadState.Failed);
+                     && (i.State == DownloadState.Pending || i.State == DownloadState.Downloading));
 
     public void Remove(DownloadQueueItem item) => _items.Remove(item);
     public void ClearCompleted() =>
