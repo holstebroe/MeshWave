@@ -6,7 +6,7 @@ namespace MeshWave.Synchronizer.Tests;
 
 public class ManifestExchangeTests : IAsyncDisposable
 {
-    private const int TestPort = 39980;
+    private const int TestPort = 44000;
     private readonly ManifestExchangeServer _server = new(TestPort);
     private readonly ManifestExchangeClient _client = new(timeoutMs: 5000);
     private readonly ManifestManager _manager = new();
@@ -81,7 +81,7 @@ public class ManifestExchangeTests : IAsyncDisposable
     [Fact]
     public async Task RequestRendezvous_ReturnsSessionFromServerProvider()
     {
-        using var serverWithDifferentPort = new ManifestExchangeServer(TestPort + 3);
+        using var serverWithDifferentPort = new ManifestExchangeServer(45000);
         await serverWithDifferentPort.StartAsync(
             () => null,
             peersProvider: null,
@@ -96,7 +96,7 @@ public class ManifestExchangeTests : IAsyncDisposable
         try
         {
             var client = new ManifestExchangeClient(timeoutMs: 5000);
-            var response = await client.RequestRendezvousAsync("127.0.0.1", TestPort + 3, new RendezvousRequest
+            var response = await client.RequestRendezvousAsync("127.0.0.1", 45000, new RendezvousRequest
             {
                 InitiatorUserId = "initiator-1",
                 TargetUserId = "target-1",
