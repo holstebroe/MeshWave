@@ -57,6 +57,11 @@
 - Audit/replay verification for play-count integrity
 - Per-user contribution-cap UI
 
+## Manifest Scalability and Performance (NEW)
+- Implement **Delta Manifest Sync**: Move away from full manifest exchange to range-based requests to save bandwidth as history grows.
+- Implement **Manifest Compaction**: Squash redundant operations (e.g., repeated profile updates or likes/unlikes) into state snapshots to keep manifests manageable.
+- **Binary Wire Protocol**: Evaluate and implement a more compact binary serialization for manifests (Protobuf/MessagePack) to reduce network overhead.
+
 ## Community Groups (Milestone G)
 - Group model + operation types (open/invite-only, admins, kick/ban, profile editing)
 - Group manifest store + manager
