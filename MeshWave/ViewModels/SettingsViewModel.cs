@@ -444,7 +444,7 @@ public class SettingsViewModel : ViewModelBase
         {
             var myMusic = _settingsService.GetMyMusicFolder();
             var otherMusic = _settingsService.GetOtherMusicFolder();
-            var appDataRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MeshWave");
+            var appDataRoot = MeshWave.Common.Core.MeshWaveEnvironment.GetAppDataRoot();
             var peerManifestFolder = Path.Combine(appDataRoot, "PeerManifests");
 
             var myMusicBytes = GetDirectorySizeSafe(myMusic);
@@ -502,7 +502,7 @@ public class SettingsViewModel : ViewModelBase
         {
             _sync?.ClearPeerManifestCache();
 
-            var appDataRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MeshWave");
+            var appDataRoot = MeshWave.Common.Core.MeshWaveEnvironment.GetAppDataRoot();
             var peerManifestFolder = Path.Combine(appDataRoot, "PeerManifests");
             if (Directory.Exists(peerManifestFolder))
             {

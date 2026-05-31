@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using MeshWave.Common.Core;
 using MeshWave.Common.Core.Models;
 
 namespace MeshWave.Synchronizer;
@@ -20,10 +21,7 @@ public class PeerManifestStore
 
     public PeerManifestStore(string? storeDirectory = null)
     {
-        _storeDirectory = storeDirectory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "MeshWave",
-            "PeerManifests");
+        _storeDirectory = storeDirectory ?? MeshWaveEnvironment.CombineInAppData("PeerManifests");
     }
 
     /// <summary>

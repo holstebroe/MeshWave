@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text.Json;
+using MeshWave.Common.Core;
 using MeshWave.Common.Core.Models;
 
 namespace MeshWave.Synchronizer;
@@ -11,7 +12,7 @@ namespace MeshWave.Synchronizer;
 /// It uses PeerRouter (LAN + bootstrap + PEX) to find peers,
 /// exchanges manifests over TCP, and merges verified operations.
 /// </summary>
-public class SyncOrchestrator : IDisposable
+public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 {
     private readonly PeerRouter _router;
     private ManifestExchangeServer? _server;
@@ -188,9 +189,7 @@ public class SyncOrchestrator : IDisposable
     private static string BuildLocalManifestPath(string userId)
     {
         var safeName = string.Concat(userId.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "MeshWave", "LocalManifests", $"{safeName}.json");
+        return MeshWaveEnvironment.CombineInAppData("LocalManifests", $"{safeName}.json");
     }
 
     /// <summary>
@@ -312,6 +311,21 @@ public class SyncOrchestrator : IDisposable
     {
         PeerCountChanged?.Invoke(this, EventArgs.Empty);
         _ = Task.Run(() => TryFetchAndMergeAsync(peer, _cts?.Token ?? CancellationToken.None));
+
+        if (_localManifest == null || peer.UserId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _client.PushManifestAsync(peer.Address, peer.Port, _localManifest, BuildAnnouncingPeerInfo());
+            }
+            catch
+            {
+                // best-effort push; next periodic sync/merge will reconcile.
+            }
+        });
     }
 
     private void OnPeerRemoved(object? sender, string userId)
@@ -327,9 +341,51 @@ public class SyncOrchestrator : IDisposable
         Interlocked.Increment(ref _inboundManifestPushCount);
 
         var peer = _router.GetPeers().FirstOrDefault(p => p.UserId == e.Manifest.UserId);
-        if (peer == null || string.IsNullOrWhiteSpace(peer.PublicKeyPem)) return;
 
-        TryMerge(e.Manifest, peer.PublicKeyPem);
+        if (peer == null)
+        {
+            var profile = e.Manifest.Operations
+                .Where(op => op.OperationType == ManifestOperationType.Profile)
+                .OrderByDescending(op => op.SequenceNumber)
+                .FirstOrDefault();
+
+            var discovered = new PeerInfo
+            {
+                UserId = e.Manifest.UserId,
+                DisplayName = SecurityLimits.Truncate(
+                    profile?.Metadata.GetValueOrDefault("displayName")
+                    ?? e.AnnouncingPeer?.DisplayName
+                    ?? e.Manifest.UserId,
+                    SecurityLimits.MaxDisplayNameLength),
+                Address = e.PeerAddress,
+                Port = e.AnnouncingPeer?.Port > 0 ? e.AnnouncingPeer.Port : ManifestExchangeServer.DefaultPort,
+                LastSeen = DateTime.UtcNow,
+                PublicKeyPem = e.AnnouncingPeer?.PublicKeyPem
+                    ?? profile?.Metadata.GetValueOrDefault("publicKeyPem")
+                    ?? string.Empty
+            };
+
+            _router.LearnPeers([discovered]);
+            peer = _router.GetPeers().FirstOrDefault(p => p.UserId == e.Manifest.UserId);
+        }
+
+        var publicKeyPem = peer?.PublicKeyPem;
+        if (string.IsNullOrWhiteSpace(publicKeyPem))
+            publicKeyPem = e.AnnouncingPeer?.PublicKeyPem;
+
+        if (string.IsNullOrWhiteSpace(publicKeyPem))
+        {
+            publicKeyPem = e.Manifest.Operations
+                .Where(op => op.OperationType == ManifestOperationType.Profile)
+                .OrderByDescending(op => op.SequenceNumber)
+                .Select(op => op.Metadata.GetValueOrDefault("publicKeyPem"))
+                .FirstOrDefault(pk => !string.IsNullOrWhiteSpace(pk));
+        }
+
+        if (string.IsNullOrWhiteSpace(publicKeyPem))
+            return;
+
+        TryMerge(e.Manifest, publicKeyPem);
     }
 
     private async Task TryFetchAndMergeAsync(PeerInfo peer, CancellationToken ct)
@@ -565,6 +621,7 @@ public class SyncOrchestrator : IDisposable
             contentHash,
             meta,
             _identity.PrivateKeyPem);
+        PersistAndFanoutLocalManifest();
     }
 
     /// <summary>
@@ -584,6 +641,7 @@ public class SyncOrchestrator : IDisposable
             contentHash,
             meta,
             _identity.PrivateKeyPem);
+        PersistAndFanoutLocalManifest();
     }
 
     /// <summary>
@@ -602,7 +660,7 @@ public class SyncOrchestrator : IDisposable
             contentHash: null,
             metadata: null,
             _identity.PrivateKeyPem);
-        SaveLocalManifest();
+        PersistAndFanoutLocalManifest();
     }
 
     /// <summary>
@@ -620,7 +678,7 @@ public class SyncOrchestrator : IDisposable
             contentHash: null,
             metadata: null,
             _identity.PrivateKeyPem);
-        SaveLocalManifest();
+        PersistAndFanoutLocalManifest();
     }
 
     /// <summary>
@@ -638,7 +696,7 @@ public class SyncOrchestrator : IDisposable
             contentHash: null,
             metadata: null,
             _identity.PrivateKeyPem);
-        SaveLocalManifest();
+        PersistAndFanoutLocalManifest();
     }
 
     /// <summary>
@@ -690,7 +748,7 @@ public class SyncOrchestrator : IDisposable
             contentHash: null,
             metadata: null,
             _identity.PrivateKeyPem);
-        SaveLocalManifest();
+        PersistAndFanoutLocalManifest();
     }
 
     /// <summary>
@@ -788,6 +846,7 @@ public class SyncOrchestrator : IDisposable
             ["isArtist"]    = isArtist.ToString(),
             ["bio"]         = SecurityLimits.Truncate(bio, 1000),
             ["website"]     = SecurityLimits.Truncate(website, 256),
+            ["publicKeyPem"] = _identity.PublicKeyPem
         };
         if (!string.IsNullOrWhiteSpace(bannerImageHash))
             meta["bannerImageHash"] = bannerImageHash;
@@ -800,7 +859,7 @@ public class SyncOrchestrator : IDisposable
             contentHash: bannerImageHash,
             meta,
             _identity.PrivateKeyPem);
-        SaveLocalManifest();
+        PersistAndFanoutLocalManifest();
     }
 
     private void TryMerge(Manifest remote, string publicKeyPem)
@@ -810,6 +869,42 @@ public class SyncOrchestrator : IDisposable
         var added = _peerStore.MergeAndSave(remote, publicKeyPem, _manifestManager);
         if (added > 0)
             ManifestMerged?.Invoke(this, new ManifestMergedEventArgs(remote.UserId, added));
+    }
+
+    private void PersistAndFanoutLocalManifest()
+    {
+        SaveLocalManifest();
+
+        if (_localManifest == null)
+            return;
+
+        _ = Task.Run(async () =>
+        {
+            foreach (var peer in _router.GetPeers().Where(p => !p.UserId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase)))
+            {
+                try
+                {
+                    await _client.PushManifestAsync(peer.Address, peer.Port, _localManifest, BuildAnnouncingPeerInfo());
+                }
+                catch
+                {
+                    // best-effort push; periodic sync/merge will reconcile later
+                }
+            }
+        });
+    }
+
+    private PeerInfo BuildAnnouncingPeerInfo()
+    {
+        return new PeerInfo
+        {
+            UserId = _identity?.UserId ?? _localManifest?.UserId ?? string.Empty,
+            DisplayName = SecurityLimits.Truncate(_identity?.DisplayName ?? _localManifest?.UserId ?? "peer", SecurityLimits.MaxDisplayNameLength),
+            Address = string.Empty,
+            Port = _identity?.ManifestPort ?? ManifestExchangeServer.DefaultPort,
+            PublicKeyPem = _identity?.PublicKeyPem ?? string.Empty,
+            LastSeen = DateTime.UtcNow
+        };
     }
 
     public void Dispose()

@@ -116,7 +116,7 @@ public class ManifestExchangeServer : IDisposable
                         if (request.Manifest.Operations.Count <= SecurityLimits.MaxManifestOperations)
                         {
                             var peerEndpoint = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString() ?? "unknown";
-                            ManifestReceived?.Invoke(this, new ManifestReceivedEventArgs(request.Manifest, peerEndpoint));
+                            ManifestReceived?.Invoke(this, new ManifestReceivedEventArgs(request.Manifest, peerEndpoint, request.AnnouncingPeer));
                         }
                         var ack = new ManifestResponse { Acknowledged = true };
                         await WriteMessageAsync(stream, JsonSerializer.Serialize(ack), ct);
@@ -192,10 +192,11 @@ public class ManifestExchangeServer : IDisposable
     }
 }
 
-public class ManifestReceivedEventArgs(Manifest manifest, string peerAddress) : EventArgs
+public class ManifestReceivedEventArgs(Manifest manifest, string peerAddress, PeerInfo? announcingPeer) : EventArgs
 {
     public Manifest Manifest { get; } = manifest;
     public string PeerAddress { get; } = peerAddress;
+    public PeerInfo? AnnouncingPeer { get; } = announcingPeer;
 }
 
 internal enum ManifestRequestType
@@ -213,6 +214,7 @@ internal class ManifestRequest
     public Manifest? Manifest { get; set; }
     public RendezvousRequest? Rendezvous { get; set; }
     public string? ContentHash { get; set; }
+    public PeerInfo? AnnouncingPeer { get; set; }
 }
 
 internal class ManifestResponse

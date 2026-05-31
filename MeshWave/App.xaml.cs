@@ -1,4 +1,5 @@
 ﻿using System.Windows;
+using MeshWave.Services;
 using MeshWave.ViewModels;
 
 namespace MeshWave
@@ -24,6 +25,12 @@ namespace MeshWave
 
         protected override void OnStartup(StartupEventArgs e)
         {
+            CommandLineOverrides.Apply(e.Args);
+
+            var mainWindow = new MainWindow();
+            MainWindow = mainWindow;
+            mainWindow.Show();
+
             base.OnStartup(e);
             InitializeTrayIcon();
         }

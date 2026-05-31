@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MeshWave.Common.Core;
 using MeshWave.Common.Core.Crypto;
 
 namespace MeshWave.Synchronizer;
@@ -14,10 +15,7 @@ public class P2PIdentityService
 
     public P2PIdentityService(string? identityFilePath = null)
     {
-        _identityFilePath = identityFilePath ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "MeshWave",
-            "p2p_identity.json");
+        _identityFilePath = identityFilePath ?? MeshWaveEnvironment.CombineInAppData("p2p_identity.json");
     }
 
     /// <summary>

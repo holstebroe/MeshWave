@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text.Json;
 using Microsoft.Win32;
+using MeshWave.Common.Core;
 using MeshWave.Models;
 
 namespace MeshWave.Services
@@ -11,11 +12,6 @@ namespace MeshWave.Services
     /// </summary>
     public class SettingsService
     {
-        private static readonly string AppDataFolder = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "MeshWave");
-
-        private static readonly string SettingsFilePath = Path.Combine(AppDataFolder, "settings.json");
         private static readonly string DefaultBaseFolder = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.MyMusic),
             "MeshWave");
@@ -27,11 +23,13 @@ namespace MeshWave.Services
             if (_currentSettings != null)
                 return _currentSettings;
 
+            var settingsFilePath = GetSettingsFilePath();
+
             try
             {
-                if (File.Exists(SettingsFilePath))
+                if (File.Exists(settingsFilePath))
                 {
-                    var json = File.ReadAllText(SettingsFilePath);
+                    var json = File.ReadAllText(settingsFilePath);
                     _currentSettings = JsonSerializer.Deserialize<AppSettings>(json);
                 }
             }
@@ -57,6 +55,7 @@ namespace MeshWave.Services
                 _currentSettings.BaseFolder = DefaultBaseFolder;
             }
 
+            ApplyLaunchOverrides(_currentSettings);
             return _currentSettings;
         }
 
@@ -64,10 +63,12 @@ namespace MeshWave.Services
         {
             try
             {
-                // Ensure AppData folder exists
-                if (!Directory.Exists(AppDataFolder))
+                var appDataFolder = MeshWaveEnvironment.GetAppDataRoot();
+                var settingsFilePath = GetSettingsFilePath();
+
+                if (!Directory.Exists(appDataFolder))
                 {
-                    Directory.CreateDirectory(AppDataFolder);
+                    Directory.CreateDirectory(appDataFolder);
                 }
 
                 var options = new JsonSerializerOptions
@@ -75,7 +76,7 @@ namespace MeshWave.Services
                     WriteIndented = true
                 };
                 var json = JsonSerializer.Serialize(settings, options);
-                File.WriteAllText(SettingsFilePath, json);
+                File.WriteAllText(settingsFilePath, json);
 
                 _currentSettings = settings;
             }
@@ -136,6 +137,84 @@ namespace MeshWave.Services
                     RegisterPlayAt = 0.5
                 }
             };
+        }
+
+        private static string GetSettingsFilePath() => MeshWaveEnvironment.CombineInAppData("settings.json");
+
+        private static void ApplyLaunchOverrides(AppSettings settings)
+        {
+            var baseFolderOverride = Environment.GetEnvironmentVariable(MeshWaveEnvironment.BaseFolderEnvironmentVariable);
+            if (!string.IsNullOrWhiteSpace(baseFolderOverride))
+                settings.BaseFolder = Path.GetFullPath(baseFolderOverride);
+
+            if (TryGetBooleanOverride(MeshWaveEnvironment.P2PEnabledEnvironmentVariable, out var p2pEnabled))
+                settings.P2P.Enabled = p2pEnabled;
+
+            if (TryGetPositiveIntOverride(MeshWaveEnvironment.P2PPortEnvironmentVariable, out var p2pPort))
+                settings.P2P.Port = p2pPort;
+
+            if (TryGetPositiveIntOverride(MeshWaveEnvironment.P2PMaxPeersEnvironmentVariable, out var maxPeers))
+                settings.P2P.MaxPeers = maxPeers;
+
+            if (TryGetNonNegativeIntOverride(MeshWaveEnvironment.P2PUploadLimitEnvironmentVariable, out var uploadLimit))
+                settings.P2P.UploadLimit = uploadLimit;
+
+            if (TryGetNonNegativeIntOverride(MeshWaveEnvironment.P2PDownloadLimitEnvironmentVariable, out var downloadLimit))
+                settings.P2P.DownloadLimit = downloadLimit;
+
+            if (TryGetBooleanOverride(MeshWaveEnvironment.P2PActAsListenerEnvironmentVariable, out var listener))
+                settings.P2P.ActAsListener = listener;
+
+            var bootstrapOverride = Environment.GetEnvironmentVariable(MeshWaveEnvironment.P2PBootstrapNodesEnvironmentVariable);
+            if (!string.IsNullOrWhiteSpace(bootstrapOverride))
+            {
+                settings.P2P.BootstrapNodes = bootstrapOverride
+                    .Split([',', ';', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+        }
+
+        private static bool TryGetPositiveIntOverride(string variableName, out int value)
+        {
+            value = 0;
+            var raw = Environment.GetEnvironmentVariable(variableName);
+            return int.TryParse(raw, out value) && value > 0;
+        }
+
+        private static bool TryGetNonNegativeIntOverride(string variableName, out int value)
+        {
+            value = 0;
+            var raw = Environment.GetEnvironmentVariable(variableName);
+            return int.TryParse(raw, out value) && value >= 0;
+        }
+
+        private static bool TryGetBooleanOverride(string variableName, out bool value)
+        {
+            value = false;
+            var raw = Environment.GetEnvironmentVariable(variableName);
+            if (string.IsNullOrWhiteSpace(raw))
+                return false;
+
+            switch (raw.Trim().ToLowerInvariant())
+            {
+                case "1":
+                case "true":
+                case "yes":
+                case "on":
+                    value = true;
+                    return true;
+
+                case "0":
+                case "false":
+                case "no":
+                case "off":
+                    value = false;
+                    return true;
+
+                default:
+                    return false;
+            }
         }
 
         private static string GetInstallerDefaultString(string valueName)

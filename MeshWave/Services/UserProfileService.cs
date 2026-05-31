@@ -4,28 +4,26 @@ using System.Text.Json;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32;
+using MeshWave.Common.Core;
 using MeshWave.Models;
 
 namespace MeshWave.Services
 {
     public class UserProfileService
     {
-        private static readonly string AppDataFolder = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "MeshWave");
-
-        private static readonly string ProfileFilePath = Path.Combine(AppDataFolder, "profile.json");
-
         public UserProfile LoadProfile()
         {
+            var profileFilePath = GetProfileFilePath();
+
             try
             {
-                if (File.Exists(ProfileFilePath))
+                if (File.Exists(profileFilePath))
                 {
-                    var json = File.ReadAllText(ProfileFilePath);
+                    var json = File.ReadAllText(profileFilePath);
                     var profile = JsonSerializer.Deserialize<UserProfile>(json);
                     if (profile != null)
                     {
+                        ApplyLaunchOverrides(profile);
                         return profile;
                     }
                 }
@@ -36,22 +34,23 @@ namespace MeshWave.Services
             }
 
             var installerUsername = GetInstallerDefaultString("Username");
-            if (!string.IsNullOrWhiteSpace(installerUsername))
+            var profileFromDefaults = new UserProfile
             {
-                return new UserProfile
-                {
-                    DisplayName = installerUsername
-                };
-            }
+                DisplayName = string.IsNullOrWhiteSpace(installerUsername) ? "You" : installerUsername
+            };
 
-            return new UserProfile();
+            ApplyLaunchOverrides(profileFromDefaults);
+            return profileFromDefaults;
         }
 
         public void SaveProfile(UserProfile profile)
         {
-            if (!Directory.Exists(AppDataFolder))
+            var appDataFolder = MeshWaveEnvironment.GetAppDataRoot();
+            var profileFilePath = GetProfileFilePath();
+
+            if (!Directory.Exists(appDataFolder))
             {
-                Directory.CreateDirectory(AppDataFolder);
+                Directory.CreateDirectory(appDataFolder);
             }
 
             if (!string.IsNullOrWhiteSpace(profile.AvatarImagePath) && File.Exists(profile.AvatarImagePath))
@@ -64,7 +63,7 @@ namespace MeshWave.Services
             }
 
             var json = JsonSerializer.Serialize(profile, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(ProfileFilePath, json);
+            File.WriteAllText(profileFilePath, json);
         }
 
         private static string GetInstallerDefaultString(string valueName)
@@ -82,7 +81,8 @@ namespace MeshWave.Services
 
         private string GenerateRoundedIcon(string sourceImagePath)
         {
-            var iconPath = Path.Combine(AppDataFolder, "user_icon.png");
+            var appDataFolder = MeshWaveEnvironment.GetAppDataRoot();
+            var iconPath = Path.Combine(appDataFolder, "user_icon.png");
             var tempPath = iconPath + ".tmp";
 
             var bitmap = new BitmapImage();
@@ -119,6 +119,17 @@ namespace MeshWave.Services
             File.Move(tempPath, iconPath, overwrite: true);
 
             return iconPath;
+        }
+
+        private static string GetProfileFilePath() => MeshWaveEnvironment.CombineInAppData("profile.json");
+
+        private static void ApplyLaunchOverrides(UserProfile profile)
+        {
+            var displayNameOverride = Environment.GetEnvironmentVariable(MeshWaveEnvironment.DisplayNameEnvironmentVariable);
+            if (!string.IsNullOrWhiteSpace(displayNameOverride))
+            {
+                profile.DisplayName = displayNameOverride.Trim();
+            }
         }
     }
 }

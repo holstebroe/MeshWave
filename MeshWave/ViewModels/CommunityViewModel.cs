@@ -545,6 +545,8 @@ public class CommunityViewModel : ViewModelBase
             .OrderByDescending(op => op.SequenceNumber)
             .FirstOrDefault();
 
+        var trackCount = manifest != null ? CountPublicTracks(manifest) : 0;
+
         return new CommunityUserItem
         {
             UserId = userId,
@@ -553,10 +555,23 @@ public class CommunityViewModel : ViewModelBase
             IsArtist = bool.TryParse(profileOp?.Metadata.GetValueOrDefault("isArtist"), out var ia) && ia,
             Bio = profileOp?.Metadata.GetValueOrDefault("bio") ?? string.Empty,
             Website = profileOp?.Metadata.GetValueOrDefault("website") ?? string.Empty,
+            TrackCount = trackCount,
             IsFollowing = true,
             IsFriend = Friends.Any(f => string.Equals(f.UserId, userId, StringComparison.OrdinalIgnoreCase)),
             IsOnline = liveUserIds.Contains(userId)
         };
+    }
+
+    private static int CountPublicTracks(Manifest manifest)
+    {
+        return manifest.Operations
+            .Where(op => string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase)
+                      && (op.OperationType == ManifestOperationType.Create
+                       || op.OperationType == ManifestOperationType.Update
+                       || op.OperationType == ManifestOperationType.Delete))
+            .GroupBy(op => op.TargetId, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.OrderByDescending(op => op.SequenceNumber).First())
+            .Count(op => op.OperationType != ManifestOperationType.Delete);
     }
 
     private void RebuildLikesIndex()
@@ -715,9 +730,7 @@ public class CommunityViewModel : ViewModelBase
             var bio = profileOp?.Metadata.GetValueOrDefault("bio") ?? string.Empty;
             var website = profileOp?.Metadata.GetValueOrDefault("website") ?? string.Empty;
 
-            var trackCount = manifest?.Operations.Count(op =>
-                op.OperationType == ManifestOperationType.Create
-                && string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase)) ?? 0;
+            var trackCount = manifest != null ? CountPublicTracks(manifest) : 0;
 
             // Count followers: scan all peer manifests + local manifest
             var allManifests = _sync.PeerManifests.Concat(

@@ -6,8 +6,8 @@
 - Common.Core tests: passing (32/32)
 - LibraryManager tests: passing (4/4)
 - Synchronizer tests: passing (35/35)
-- Integration.Tests: passing (14/14)
-- **Total: 85 tests passing**
+- Integration.Tests: passing (16/16)
+- **Total: 87 tests passing**
 
 ## Current Focus
 
@@ -34,6 +34,19 @@ Milestone D remainder -- Community Sync (in progress), with priority ordered as:
 - **Discover rebuilt from manifest on startup**: Friends and Following collections are
   repopulated from persisted local manifest operations when CommunityViewModel is created
 - **Build error fixed**: missing `{` in `RebuildLikesIndex` after partial edit
+- **Command-line instance overrides added**: MeshWave now supports launch-time overrides for
+  settings root/appdata root, display name, base folder, P2P enabled/listener mode, port,
+  bootstrap nodes, max peers, upload/download limits (enables multi-instance local peer simulation)
+- **Persistence root refactor**: settings/profile/identity/local-manifest/peer-manifest and storage
+  diagnostics now use a shared overridable appdata root (`MeshWaveEnvironment`) instead of hardcoded
+  `%AppData%\MeshWave`
+- **Peer discovery/merge reliability fix**: manifest push now carries explicit announcing peer metadata;
+  bootstrap and sync merge paths now preserve peer public key + listener port, fixing mesh discovery
+  and preventing "0 tracks discovered" due to unverifiable/misrouted peers
+- **Manifest fanout hardening**: profile/follow/friend/album/track ops now persist immediately and
+  best-effort push to discovered peers
+- **New integration test**: `AnnouncedTracks_ArePushedToPeers_WithoutManualManifestPush` reproduces
+  bootstrap-assisted discovery + manifest propagation path and now passes
 
 ## Open Work (next execution items)
 

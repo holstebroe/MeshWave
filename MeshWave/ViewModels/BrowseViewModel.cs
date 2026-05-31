@@ -72,7 +72,7 @@ public class BrowseTrackItem : ViewModelBase
 /// </summary>
 public class BrowseViewModel : ViewModelBase
 {
-    private readonly SyncOrchestrator? _sync;
+    private readonly ISyncBrowseClient? _sync;
     private readonly DownloadQueueService _downloadQueue;
     private readonly SettingsService _settingsService = new();
 
@@ -85,7 +85,7 @@ public class BrowseViewModel : ViewModelBase
     private ObservableCollection<BrowseAlbumItem> _albums = [];
     private ObservableCollection<BrowseTrackItem> _tracks = [];
 
-    public BrowseViewModel(SyncOrchestrator? sync = null, DownloadQueueService? downloadQueue = null)
+    public BrowseViewModel(ISyncBrowseClient? sync = null, DownloadQueueService? downloadQueue = null)
     {
         _sync = sync;
         _downloadQueue = downloadQueue ?? new DownloadQueueService();
@@ -267,9 +267,8 @@ public class BrowseViewModel : ViewModelBase
             var isArtist = bool.TryParse(profileOp?.Metadata.GetValueOrDefault("isArtist"), out var ia) && ia;
             var bio = profileOp?.Metadata.GetValueOrDefault("bio") ?? string.Empty;
 
-            var trackCount = manifest.Operations.Count(op =>
-                op.OperationType == ManifestOperationType.Create
-                && string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase));
+            var publicTrackOps = GetLatestPublicTrackOperations(manifest);
+            var trackCount = publicTrackOps.Count;
             var albumCount = manifest.Operations.Count(op =>
                 op.OperationType == ManifestOperationType.Create
                 && string.Equals(op.TargetType, "Album", StringComparison.OrdinalIgnoreCase));
@@ -354,9 +353,7 @@ public class BrowseViewModel : ViewModelBase
                 .FirstOrDefault();
             var artistName = artistProfileOp?.Metadata.GetValueOrDefault("displayName") ?? manifest.UserId;
 
-            var trackOps = manifest.Operations
-                .Where(op => op.OperationType == ManifestOperationType.Create
-                          && string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase));
+            var trackOps = GetLatestPublicTrackOperations(manifest);
 
             foreach (var op in trackOps)
             {
@@ -398,6 +395,20 @@ public class BrowseViewModel : ViewModelBase
         StatusText = $"{totalArtists} artist{(totalArtists == 1 ? "" : "s")}, {totalTracks} track{(totalTracks == 1 ? "" : "s")} discovered from the mesh.";
     }
 
+    private static List<ManifestOperation> GetLatestPublicTrackOperations(Manifest manifest)
+    {
+        return manifest.Operations
+            .Where(op => string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase)
+                      && (op.OperationType == ManifestOperationType.Create
+                       || op.OperationType == ManifestOperationType.Update
+                       || op.OperationType == ManifestOperationType.Delete))
+            .GroupBy(op => op.TargetId, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.OrderByDescending(op => op.SequenceNumber).First())
+            .Where(op => op.OperationType != ManifestOperationType.Delete)
+            .OrderByDescending(op => op.Timestamp)
+            .ToList();
+    }
+
     // ─────────────────────────────────────────────────────────────────────
     // Download
     // ─────────────────────────────────────────────────────────────────────
@@ -419,14 +430,14 @@ public class BrowseViewModel : ViewModelBase
 
         _ = Task.Run(async () =>
         {
-            System.Windows.Application.Current?.Dispatcher.Invoke(() => item.State = DownloadState.Downloading);
+            ExecuteOnUiOrCurrent(() => item.State = DownloadState.Downloading);
 
             try
             {
                 var bytes = await _sync.RequestContentAsync(item.PeerUserId, item.ContentHash);
                 if (bytes == null || bytes.Length == 0)
                 {
-                    System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                    ExecuteOnUiOrCurrent(() =>
                     {
                         item.State = DownloadState.Failed;
                         item.StatusMessage = "Peer did not return content.";
@@ -448,7 +459,7 @@ public class BrowseViewModel : ViewModelBase
                 var destPath = Path.Combine(destFolder, safeName + ext);
                 await File.WriteAllBytesAsync(destPath, bytes);
 
-                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                ExecuteOnUiOrCurrent(() =>
                 {
                     item.State = DownloadState.Done;
                     item.ProgressPercent = 100;
@@ -457,7 +468,7 @@ public class BrowseViewModel : ViewModelBase
             }
             catch (Exception ex)
             {
-                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                ExecuteOnUiOrCurrent(() =>
                 {
                     item.State = DownloadState.Failed;
                     item.StatusMessage = ex.Message;
@@ -465,6 +476,15 @@ public class BrowseViewModel : ViewModelBase
                 });
             }
         });
+    }
+
+    private static void ExecuteOnUiOrCurrent(Action action)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher != null)
+            dispatcher.Invoke(action);
+        else
+            action();
     }
 
     private static string ResolveFileExtension(byte[] bytes, string title)

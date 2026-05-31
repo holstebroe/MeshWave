@@ -33,4 +33,9 @@
   <Project Path="MeshWave.Synchronizer.Tests/MeshWave.Synchronizer.Tests.csproj" />
   <Project Path="MeshWave.Synchronizer/MeshWave.Synchronizer.csproj" />
   <Project Path="MeshWave/MeshWave.csproj" />
+  <Project Path="MeshWave.ViewModels.Tests/MeshWave.ViewModels.Tests.csproj" />
 </Solution>
+
+
+
+

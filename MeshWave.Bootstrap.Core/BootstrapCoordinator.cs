@@ -95,13 +95,20 @@ public sealed class BootstrapCoordinator : IDisposable
             .FirstOrDefault();
 
         var displayName = latestProfile?.Metadata.GetValueOrDefault("displayName");
+        var publicKeyPem = e.AnnouncingPeer?.PublicKeyPem ?? latestProfile?.Metadata.GetValueOrDefault("publicKeyPem") ?? string.Empty;
+        var announcedPort = e.AnnouncingPeer?.Port ?? 0;
 
         var peer = new PeerInfo
         {
             UserId = manifest.UserId,
-            DisplayName = SecurityLimits.Truncate(string.IsNullOrWhiteSpace(displayName) ? manifest.UserId : displayName, SecurityLimits.MaxDisplayNameLength),
+            DisplayName = SecurityLimits.Truncate(
+                string.IsNullOrWhiteSpace(displayName)
+                    ? (string.IsNullOrWhiteSpace(e.AnnouncingPeer?.DisplayName) ? manifest.UserId : e.AnnouncingPeer.DisplayName)
+                    : displayName,
+                SecurityLimits.MaxDisplayNameLength),
             Address = e.PeerAddress,
-            Port = ManifestExchangeServer.DefaultPort,
+            Port = announcedPort > 0 ? announcedPort : ManifestExchangeServer.DefaultPort,
+            PublicKeyPem = publicKeyPem,
             LastSeen = DateTime.UtcNow
         };
 
@@ -164,6 +171,9 @@ public sealed class BootstrapCoordinator : IDisposable
             existing.LastSeen = DateTime.UtcNow;
             existing.Peer.Address = peer.Address;
             existing.Peer.Port = peer.Port;
+            existing.Peer.DisplayName = peer.DisplayName;
+            if (!string.IsNullOrWhiteSpace(peer.PublicKeyPem))
+                existing.Peer.PublicKeyPem = peer.PublicKeyPem;
             PeerRefreshed?.Invoke(this, new BootstrapPeerEventArgs(existing.Peer, "refreshed"));
             return;
         }

@@ -40,7 +40,20 @@ public class ManifestExchangeClient
     /// <summary>
     /// Pushes our manifest to a remote peer.
     /// </summary>
-    public async Task<bool> PushManifestAsync(string address, int port, Manifest manifest, CancellationToken cancellationToken = default)
+    public Task<bool> PushManifestAsync(string address, int port, Manifest manifest, CancellationToken cancellationToken = default)
+    {
+        return PushManifestCoreAsync(address, port, manifest, announcingPeer: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Pushes our manifest to a remote peer and includes explicit local peer metadata.
+    /// </summary>
+    public Task<bool> PushManifestAsync(string address, int port, Manifest manifest, PeerInfo announcingPeer, CancellationToken cancellationToken = default)
+    {
+        return PushManifestCoreAsync(address, port, manifest, announcingPeer, cancellationToken);
+    }
+
+    private async Task<bool> PushManifestCoreAsync(string address, int port, Manifest manifest, PeerInfo? announcingPeer, CancellationToken cancellationToken)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(_timeoutMs);
@@ -49,7 +62,13 @@ public class ManifestExchangeClient
         await client.ConnectAsync(address, port, cts.Token);
 
         var stream = client.GetStream();
-        var request = new ManifestRequest { Type = ManifestRequestType.PushManifest, Manifest = manifest };
+
+        var request = new ManifestRequest
+        {
+            Type = ManifestRequestType.PushManifest,
+            Manifest = manifest,
+            AnnouncingPeer = announcingPeer
+        };
         await ManifestExchangeServer.WriteMessageAsync(stream, JsonSerializer.Serialize(request), cts.Token);
 
         var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);

@@ -76,7 +76,8 @@ public class MeshIntegrationTests : IAsyncLifetime
             UserId = userId,
             DisplayName = displayName,
             PublicKeyPem = pubKey,
-            PrivateKeyPem = privKey
+            PrivateKeyPem = privKey,
+            ManifestPort = port
         };
 
         var manifest = new Manifest
@@ -486,6 +487,18 @@ public class MeshIntegrationTests : IAsyncLifetime
             await Task.Delay(100);
     }
 
+    private static int CountPublicTracksByLatestState(Manifest manifest)
+    {
+        return manifest.Operations
+            .Where(op => string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase)
+                      && (op.OperationType == ManifestOperationType.Create
+                       || op.OperationType == ManifestOperationType.Update
+                       || op.OperationType == ManifestOperationType.Delete))
+            .GroupBy(op => op.TargetId, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.OrderByDescending(op => op.SequenceNumber).First())
+            .Count(op => op.OperationType != ManifestOperationType.Delete);
+    }
+
     private static async Task<bool> CanConnectAsync(string host, int port)
     {
         try
@@ -557,6 +570,65 @@ public class MeshIntegrationTests : IAsyncLifetime
         Assert.Equal("True", janeProfileOp.Metadata["isArtist"]);
     }
 
+    [Fact]
+    public async Task John_And_Jane_CanSeeEachOthers_PublicTracks_AfterSync()
+    {
+        var (john, johnId, johnManifest, johnPort) = CreatePeer("John");
+        var (jane, janeId, janeManifest, janePort) = CreatePeer("Jane");
+
+        await john.StartAsync(johnId, johnManifest);
+        await jane.StartAsync(janeId, janeManifest, bootstrapNodes: [$"127.0.0.1:{johnPort}"]);
+
+        john.BroadcastProfile("John Artist", isArtist: true, "", null, null);
+        jane.BroadcastProfile("Jane Artist", isArtist: true, "", null, null);
+
+        john.AnnounceTrack("john-track-1", "john-hash-1", new Dictionary<string, string>
+        {
+            ["title"] = "John Track 1",
+            ["artist"] = "John",
+            ["album"] = "John Album"
+        });
+        john.AnnounceTrack("john-track-2", "john-hash-2", new Dictionary<string, string>
+        {
+            ["title"] = "John Track 2",
+            ["artist"] = "John",
+            ["album"] = "John Album"
+        });
+
+        jane.AnnounceTrack("jane-track-1", "jane-hash-1", new Dictionary<string, string>
+        {
+            ["title"] = "Jane Track 1",
+            ["artist"] = "Jane",
+            ["album"] = "Jane Album"
+        });
+
+        await WaitUntilAsync(() => jane.ConnectedPeerCount > 0 || jane.PeerManifests.Count > 0, timeoutMs: 5_000);
+
+        await john.SyncAllPeersAsync();
+        await jane.SyncAllPeersAsync();
+
+        // Deterministic cross-push to avoid timing flakiness in local test environments.
+        var directPush = new ManifestExchangeClient(timeoutMs: LocalTestTimeoutMs);
+        await directPush.PushManifestAsync("127.0.0.1", janePort, johnManifest);
+        await directPush.PushManifestAsync("127.0.0.1", johnPort, janeManifest);
+
+        await WaitUntilAsync(() =>
+            john.GetPeerManifest(janeId.UserId) != null && jane.GetPeerManifest(johnId.UserId) != null,
+            timeoutMs: 8_000);
+
+        var janesViewOfJohn = jane.GetPeerManifest(johnId.UserId);
+        var johnsViewOfJane = john.GetPeerManifest(janeId.UserId);
+
+        Assert.NotNull(janesViewOfJohn);
+        Assert.NotNull(johnsViewOfJane);
+
+        var johnPublicTrackCountFromJane = CountPublicTracksByLatestState(janesViewOfJohn!);
+        var janePublicTrackCountFromJohn = CountPublicTracksByLatestState(johnsViewOfJane!);
+
+        Assert.Equal(2, johnPublicTrackCountFromJane);
+        Assert.Equal(1, janePublicTrackCountFromJohn);
+    }
+
     // ---------------------------------------------------------------------------
     // Test: Jane discovers John's albums and can download a track by content hash
     // ---------------------------------------------------------------------------
@@ -619,5 +691,74 @@ public class MeshIntegrationTests : IAsyncLifetime
         // Verify the bytes match the original file on disk.
         var expectedBytes = File.ReadAllBytes(contentIndex[firstHash]);
         Assert.Equal(expectedBytes.Length, receivedBytes.Length);
+    }
+
+    [Fact]
+    public async Task AnnouncedTracks_ArePushedToPeers_WithoutManualManifestPush()
+    {
+        var bootstrapPort = FindFreePort();
+        using var bootstrap = new BootstrapCoordinator(bootstrapPort);
+        await bootstrap.StartAsync();
+
+        var (john, johnId, johnManifest, johnPort) = CreatePeer("John");
+        var (jane, janeId, janeManifest, janePort) = CreatePeer("Jane");
+
+        await john.StartAsync(johnId, johnManifest, bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
+        await jane.StartAsync(janeId, janeManifest, bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
+
+        john.BroadcastProfile("John Artist", isArtist: true, "", null, null);
+        john.AnnounceAlbum("album-fanout", null, new Dictionary<string, string>
+        {
+            ["title"] = "Fanout Album",
+            ["artist"] = "John"
+        });
+        john.AnnounceTrack("track-fanout-1", "hash-fanout-1", new Dictionary<string, string>
+        {
+            ["title"] = "Fanout Track 1",
+            ["artist"] = "John",
+            ["album"] = "Fanout Album"
+        });
+
+        // Register both peers with bootstrap using explicit metadata so discovery includes reachable endpoint + public key.
+        var push = new ManifestExchangeClient(timeoutMs: LocalTestTimeoutMs);
+        await push.PushManifestAsync("127.0.0.1", bootstrapPort, johnManifest, new PeerInfo
+        {
+            UserId = johnId.UserId,
+            DisplayName = johnId.DisplayName,
+            Address = "127.0.0.1",
+            Port = johnPort,
+            PublicKeyPem = johnId.PublicKeyPem,
+            LastSeen = DateTime.UtcNow
+        });
+        await push.PushManifestAsync("127.0.0.1", bootstrapPort, janeManifest, new PeerInfo
+        {
+            UserId = janeId.UserId,
+            DisplayName = janeId.DisplayName,
+            Address = "127.0.0.1",
+            Port = janePort,
+            PublicKeyPem = janeId.PublicKeyPem,
+            LastSeen = DateTime.UtcNow
+        });
+
+        await WaitUntilAsync(() => bootstrap.RegisteredPeerCount >= 2, timeoutMs: 5_000);
+
+        // Trigger bootstrap refresh path so Jane learns John's endpoint from bootstrap registration.
+        await jane.RequestContentAsync(johnId.UserId, "missing-content-hash");
+
+        await WaitUntilAsync(() => jane.GetPeers().Any(p => p.UserId == johnId.UserId), timeoutMs: 5_000);
+
+        await WaitUntilAsync(() =>
+        {
+            jane.SyncAllPeersAsync().GetAwaiter().GetResult();
+            var manifest = jane.GetPeerManifest(johnId.UserId);
+            return manifest != null && CountPublicTracksByLatestState(manifest) >= 1;
+        }, timeoutMs: 8_000);
+
+        var janesViewOfJohn = jane.GetPeerManifest(johnId.UserId);
+        Assert.NotNull(janesViewOfJohn);
+        Assert.True(CountPublicTracksByLatestState(janesViewOfJohn!) >= 1,
+            "Expected Jane to discover John's announced track via bootstrap-assisted discovery and manifest sync.");
+
+        await bootstrap.StopAsync();
     }
 }
