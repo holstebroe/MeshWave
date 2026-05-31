@@ -107,5 +107,24 @@ namespace MeshWave
             ViewModel.PersistPlaybackState();
             ViewModel.NavigateToCommunity();
         }
+
+        private void BrandMenu_MinimizeToTray_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel.PersistPlaybackState(force: true);
+            Hide();
+        }
+
+        private void BrandMenu_Quit_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel.PersistPlaybackState(force: true);
+            if (Application.Current is App app)
+            {
+                app.ExitApplication();
+            }
+            else
+            {
+                Application.Current.Shutdown();
+            }
+        }
     }
 }

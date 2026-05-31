@@ -47,6 +47,17 @@ Milestone D remainder -- Community Sync (in progress), with priority ordered as:
   best-effort push to discovered peers
 - **New integration test**: `AnnouncedTracks_ArePushedToPeers_WithoutManualManifestPush` reproduces
   bootstrap-assisted discovery + manifest propagation path and now passes
+- **Automatic release publish on connect/load**: My Music now auto-announces album/track items marked
+  released (`IsReleased=true`) when P2P is connected, reducing the chance of artist peers showing 0 tracks
+- **Detailed diagnostics window**: Settings → Network now includes "Open Detailed Diagnostics" showing
+  local published counts, per-peer published album/track counts, online status/endpoints, and recent
+  per-peer exchange message logs (push/fetch/content success/failure)
+- **Quick app controls from branding area**: right-click on the top-left MeshWave logo now exposes
+  "Minimize to Tray" and "Quit" actions for faster restart testing
+- **Diagnostics consistency + usability pass**: detailed diagnostics now clearly separates routing peers
+  (mesh vs bootstrap), shows manifest availability per peer, keeps peer endpoint (`ip:port`) visible,
+  and presents the summary in a read-only copyable textbox
+- **Sidebar mesh status readability**: connected status text now wraps instead of truncating mid-label
 
 ## Open Work (next execution items)
 

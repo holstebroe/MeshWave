@@ -62,6 +62,8 @@
 - [ ] Relay fallback (opt-in): bootstrap-assisted relay only when direct methods fail
 - [x] ARM Linux bootstrap publish script baseline (`scripts/publish-bootstrap-arm.ps1`)
 - [x] Connection diagnostics panel: show per-attempt outcomes, local/remote endpoints, and recommended NAT forwarding rules
+- [x] Diagnostics consistency pass: distinguish routing peers vs mesh/bootstrap peers, show manifest availability,
+      keep peer endpoint visibility, and make summary text copyable
 
 ## Milestone E: Trust and Aggregate Integrity
 - [ ] Sybil-resistance research spike (proof-of-work UserId or web-of-trust score)

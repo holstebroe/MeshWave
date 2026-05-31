@@ -2,11 +2,13 @@ using MeshWave.LibraryManager;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Windows;
 using System.Windows.Input;
 using MeshWave.Models;
 using MeshWave.Mvvm;
 using MeshWave.Services;
 using MeshWave.Synchronizer;
+using MeshWave.Views;
 using SolidColorBrush = System.Windows.Media.SolidColorBrush;
 
 namespace MeshWave.ViewModels;
@@ -69,6 +71,7 @@ public class SettingsViewModel : ViewModelBase
         RegenerateIdentityCommand = new RelayCommand(_ => RegenerateIdentity());
         RefreshStorageCommand = new RelayCommand(_ => RefreshStorageStats());
         RefreshNetworkDiagnosticsCommand = new RelayCommand(_ => RefreshNetworkDiagnostics());
+        OpenDetailedDiagnosticsWindowCommand = new RelayCommand(_ => OpenDetailedDiagnosticsWindow(), _ => _sync != null);
         ClearPeerManifestCacheCommand = new RelayCommand(_ => ClearPeerManifestCache());
         ClearWaveformCacheCommand = new RelayCommand(_ => ClearWaveformCache());
     }
@@ -80,6 +83,7 @@ public class SettingsViewModel : ViewModelBase
     public ICommand RegenerateIdentityCommand { get; }
     public ICommand RefreshStorageCommand { get; }
     public ICommand RefreshNetworkDiagnosticsCommand { get; }
+    public ICommand OpenDetailedDiagnosticsWindowCommand { get; }
     public ICommand ClearPeerManifestCacheCommand { get; }
     public ICommand ClearWaveformCacheCommand { get; }
 
@@ -560,6 +564,24 @@ public class SettingsViewModel : ViewModelBase
         }
 
         NetworkDiagnosticsText = string.Join(Environment.NewLine, lines);
+    }
+
+    private void OpenDetailedDiagnosticsWindow()
+    {
+        if (_sync == null)
+            return;
+
+        var appVm = Application.Current.MainWindow?.DataContext as ApplicationViewModel;
+        if (appVm == null)
+            return;
+
+        var vm = new NetworkDiagnosticsWindowViewModel(_sync, appVm);
+        var win = new NetworkDiagnosticsWindow
+        {
+            DataContext = vm,
+            Owner = Application.Current.MainWindow
+        };
+        win.Show();
     }
 
     private void ClearWaveformCache()

@@ -32,6 +32,10 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     private int _outboundManifestFetchCount;
     private Func<string, byte[]?>? _contentProvider;
 
+    private readonly Lock _diagnosticsLock = new();
+    private readonly Dictionary<string, Queue<PeerMessageLogEntry>> _peerMessageLogs = new(StringComparer.OrdinalIgnoreCase);
+    private const int MaxMessageLogEntriesPerPeer = 100;
+
     // Tracks which trackIds have already had a Play op recorded in this process session.
     private readonly HashSet<string> _playedThisSession = new(StringComparer.OrdinalIgnoreCase);
 
@@ -56,6 +60,9 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// <summary>Last peer connection attempt report from RequestContentAsync, if any.</summary>
     public PeerConnectionAttemptReport? LastConnectionAttemptReport => _lastConnectionReport;
 
+    public int LocalPublishedTrackCount => CountPublishedItems(_localManifest, "Track");
+    public int LocalPublishedAlbumCount => CountPublishedItems(_localManifest, "Album");
+
     public int InboundManifestPushCount => _inboundManifestPushCount;
     public int OutboundManifestFetchCount => _outboundManifestFetchCount;
     public int BootstrapPeerCount => _router.GetPeers().Count(p => p.UserId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase));
@@ -63,6 +70,53 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
     /// <summary>Returns the persisted manifest for a specific peer, or null if not yet received.</summary>
     public Manifest? GetPeerManifest(string userId) => _peerStore.Get(userId);
+
+    public IReadOnlyCollection<PeerDiagnosticsSnapshot> GetPeerDiagnosticsSnapshots()
+    {
+        lock (_diagnosticsLock)
+        {
+            var routedPeers = _router.GetPeers().ToDictionary(p => p.UserId, StringComparer.OrdinalIgnoreCase);
+            var manifests = _peerStore.GetAll().ToDictionary(m => m.UserId, StringComparer.OrdinalIgnoreCase);
+
+            var allUserIds = routedPeers.Keys
+                .Concat(manifests.Keys)
+                .Concat(_peerMessageLogs.Keys)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Where(id => !string.Equals(id, _identity?.UserId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            return allUserIds
+                .Select(userId =>
+                {
+                    routedPeers.TryGetValue(userId, out var peer);
+                    manifests.TryGetValue(userId, out var manifest);
+                    _peerMessageLogs.TryGetValue(userId, out var queue);
+
+                    var logs = queue?.ToList() ?? [];
+                    var isBootstrap = userId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase);
+
+                    return new PeerDiagnosticsSnapshot
+                    {
+                        UserId = userId,
+                        DisplayName = ResolveDisplayName(manifest, peer),
+                        Address = peer?.Address ?? string.Empty,
+                        Port = peer?.Port ?? 0,
+                        IsOnline = peer != null,
+                        IsBootstrap = isBootstrap,
+                        HasManifest = manifest != null,
+                        PublishedTrackCount = CountPublishedItems(manifest, "Track"),
+                        PublishedAlbumCount = CountPublishedItems(manifest, "Album"),
+                        OperationCount = manifest?.Operations.Count ?? 0,
+                        RecentMessages = logs
+                    };
+                })
+                .OrderByDescending(p => p.IsOnline)
+                .ThenBy(p => p.IsBootstrap)
+                .ThenByDescending(p => p.PublishedTrackCount)
+                .ThenBy(p => p.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+    }
 
     public SyncOrchestrator(
         PeerRouter? router = null,
@@ -295,6 +349,10 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             succeeded
                 ? $"Received {bytes!.Length} bytes from peer."
                 : "Peer did not return content bytes."));
+        RecordPeerMessage(peer.UserId, "RequestContent", succeeded,
+            succeeded
+                ? $"Content request succeeded ({bytes!.Length} bytes) from {peer.Address}:{peer.Port}."
+                : $"Content request failed from {peer.Address}:{peer.Port} for hash {contentHash}.");
 
         if (!succeeded)
         {
@@ -320,9 +378,13 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             try
             {
                 await _client.PushManifestAsync(peer.Address, peer.Port, _localManifest, BuildAnnouncingPeerInfo());
+                RecordPeerMessage(peer.UserId, "PushManifest", success: true,
+                    $"Pushed local manifest ({_localManifest.Operations.Count} op) to {peer.Address}:{peer.Port}.");
             }
-            catch
+            catch (Exception ex)
             {
+                RecordPeerMessage(peer.UserId, "PushManifest", success: false,
+                    $"Push failed to {peer.Address}:{peer.Port}: {ex.Message}");
                 // best-effort push; next periodic sync/merge will reconcile.
             }
         });
@@ -339,6 +401,8 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         if (e.Manifest.UserId == _identity?.UserId) return;
 
         Interlocked.Increment(ref _inboundManifestPushCount);
+        RecordPeerMessage(e.Manifest.UserId, "PushManifest", success: true,
+            $"Received manifest with {e.Manifest.Operations.Count} operation(s) from {e.PeerAddress}.");
 
         var peer = _router.GetPeers().FirstOrDefault(p => p.UserId == e.Manifest.UserId);
 
@@ -396,11 +460,23 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         try
         {
             var remoteManifest = await _client.FetchManifestAsync(peer.Address, peer.Port, ct);
-            if (remoteManifest == null) return;
+            if (remoteManifest == null)
+            {
+                RecordPeerMessage(peer.UserId, "FetchManifest", success: false,
+                    $"Peer {peer.Address}:{peer.Port} returned no manifest.");
+                return;
+            }
+
             Interlocked.Increment(ref _outboundManifestFetchCount);
+            RecordPeerMessage(peer.UserId, "FetchManifest", success: true,
+                $"Fetched manifest with {remoteManifest.Operations.Count} operation(s) from {peer.Address}:{peer.Port}.");
             TryMerge(remoteManifest, peer.PublicKeyPem);
         }
-        catch { /* peer unreachable – will retry on next cycle */ }
+        catch (Exception ex)
+        {
+            RecordPeerMessage(peer.UserId, "FetchManifest", success: false,
+                $"Fetch failed from {peer.Address}:{peer.Port}: {ex.Message}");
+        }
     }
 
     private async Task RefreshBootstrapAsync(PeerConnectionAttemptReport report)
@@ -569,6 +645,58 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         }
 
         return null;
+    }
+
+    private void RecordPeerMessage(string userId, string messageType, bool success, string details)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return;
+
+        lock (_diagnosticsLock)
+        {
+            if (!_peerMessageLogs.TryGetValue(userId, out var queue))
+            {
+                queue = new Queue<PeerMessageLogEntry>();
+                _peerMessageLogs[userId] = queue;
+            }
+
+            queue.Enqueue(new PeerMessageLogEntry
+            {
+                TimestampUtc = DateTime.UtcNow,
+                MessageType = messageType,
+                Success = success,
+                Details = details
+            });
+
+            while (queue.Count > MaxMessageLogEntriesPerPeer)
+                queue.Dequeue();
+        }
+    }
+
+    private static int CountPublishedItems(Manifest? manifest, string targetType)
+    {
+        if (manifest == null)
+            return 0;
+
+        return manifest.Operations
+            .Where(op => string.Equals(op.TargetType, targetType, StringComparison.OrdinalIgnoreCase)
+                      && (op.OperationType == ManifestOperationType.Create
+                       || op.OperationType == ManifestOperationType.Update
+                       || op.OperationType == ManifestOperationType.Delete))
+            .GroupBy(op => op.TargetId, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.OrderByDescending(op => op.SequenceNumber).First())
+            .Count(op => op.OperationType != ManifestOperationType.Delete);
+    }
+
+    private static string ResolveDisplayName(Manifest? manifest, PeerInfo? peer)
+    {
+        var profileOp = manifest?.Operations
+            .Where(op => op.OperationType == ManifestOperationType.Profile)
+            .OrderByDescending(op => op.SequenceNumber)
+            .FirstOrDefault();
+
+        return profileOp?.Metadata.GetValueOrDefault("displayName")
+            ?? (!string.IsNullOrWhiteSpace(peer?.DisplayName) ? peer.DisplayName : manifest?.UserId ?? peer?.UserId ?? "peer");
     }
 
     /// <summary>
@@ -885,9 +1013,13 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                 try
                 {
                     await _client.PushManifestAsync(peer.Address, peer.Port, _localManifest, BuildAnnouncingPeerInfo());
+                    RecordPeerMessage(peer.UserId, "PushManifest", success: true,
+                        $"Pushed local manifest ({_localManifest.Operations.Count} op) to {peer.Address}:{peer.Port}.");
                 }
-                catch
+                catch (Exception ex)
                 {
+                    RecordPeerMessage(peer.UserId, "PushManifest", success: false,
+                        $"Push failed to {peer.Address}:{peer.Port}: {ex.Message}");
                     // best-effort push; periodic sync/merge will reconcile later
                 }
             }
@@ -944,3 +1076,26 @@ public sealed class PeerConnectionAttemptReport
 }
 
 public sealed record PeerConnectionAttemptResult(string Method, bool Success, string Details);
+
+public sealed class PeerMessageLogEntry
+{
+    public DateTime TimestampUtc { get; init; }
+    public string MessageType { get; init; } = string.Empty;
+    public bool Success { get; init; }
+    public string Details { get; init; } = string.Empty;
+}
+
+public sealed class PeerDiagnosticsSnapshot
+{
+    public string UserId { get; init; } = string.Empty;
+    public string DisplayName { get; init; } = string.Empty;
+    public string Address { get; init; } = string.Empty;
+    public int Port { get; init; }
+    public bool IsOnline { get; init; }
+    public bool IsBootstrap { get; init; }
+    public bool HasManifest { get; init; }
+    public int PublishedTrackCount { get; init; }
+    public int PublishedAlbumCount { get; init; }
+    public int OperationCount { get; init; }
+    public IReadOnlyList<PeerMessageLogEntry> RecentMessages { get; init; } = [];
+}

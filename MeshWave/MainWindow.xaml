@@ -25,6 +25,12 @@
             <DockPanel>
                 <!-- App branding with icon -->
                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="15,20,15,30">
+                    <StackPanel.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Minimize to Tray" Click="BrandMenu_MinimizeToTray_Click"/>
+                            <MenuItem Header="Quit" Click="BrandMenu_Quit_Click"/>
+                        </ContextMenu>
+                    </StackPanel.ContextMenu>
                     <Image Source="Assets/MeshWaveIcon128.png"
                            Width="28" Height="28"
                            RenderOptions.BitmapScalingMode="HighQuality"
@@ -105,8 +111,8 @@
                                            Foreground="{StaticResource TextSecondaryColor}"
                                            FontSize="12"
                                            VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis"
-                                           MaxWidth="160"/>
+                                           TextWrapping="Wrap"
+                                           MaxWidth="180"/>
                             </StackPanel>
                             <Button Content="Connect to Mesh"
                                     Command="{Binding ConnectP2PCommand}"

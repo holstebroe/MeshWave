@@ -216,11 +216,11 @@
                                                 <TextBlock FontSize="12"
                                                            Foreground="{StaticResource TextSecondaryColor}"
                                                            Margin="0,2,0,0">
-                                                    <Run Text="{Binding ArtistDisplayName}"/>
+                                                    <Run Text="{Binding ArtistDisplayName, Mode=OneWay}"/>
                                                     <Run Text=" - "/>
-                                                    <Run Text="{Binding TargetType}"/>
+                                                    <Run Text="{Binding TargetType, Mode=OneWay}"/>
                                                     <Run Text=" - "/>
-                                                    <Run Text="{Binding ReleasedAtDisplay}"/>
+                                                    <Run Text="{Binding ReleasedAtDisplay, Mode=OneWay}"/>
                                                 </TextBlock>
                                             </StackPanel>
 

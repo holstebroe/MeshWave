@@ -246,11 +246,11 @@
                                                    Foreground="{StaticResource TextPrimaryColor}"/>
                                         <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryColor}" Margin="0,2,0,0">
                                             <Run Text="by"/>
-                                            <Run Text="{Binding ArtistDisplayName}" FontWeight="SemiBold"/>
+                                            <Run Text="{Binding ArtistDisplayName, Mode=OneWay}" FontWeight="SemiBold"/>
                                         </TextBlock>
                                     </StackPanel>
                                     <TextBlock Grid.Column="1"
-                                               Text="{Binding ReleasedAtDisplay}"
+                                               Text="{Binding ReleasedAtDisplay, Mode=OneWay}"
                                                FontSize="12"
                                                Foreground="{StaticResource TextSecondaryColor}"
                                                VerticalAlignment="Center" Margin="16,0,0,0"/>

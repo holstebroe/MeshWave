@@ -1,10 +1,12 @@
 using System.Net.Sockets;
+using MeshWave.LibraryManager;
 using MeshWave.Models;
 using MeshWave.Mvvm;
 using MeshWave.Common.Core.Models;
 using MeshWave.Services;
 using MeshWave.Synchronizer;
 using System.Collections.Generic;
+using System.IO;
 using System.Windows.Input;
 
 namespace MeshWave.ViewModels;
@@ -79,6 +81,18 @@ public class ApplicationViewModel : ViewModelBase
                 HasCommunityNotification = true;
         };
 
+        _syncOrchestrator.PeerCountChanged += (_, _) =>
+        {
+            if (_syncOrchestrator.IsRunning)
+            {
+                var current = CurrentViewModel;
+                if (current is LibraryViewModel lib && lib.IsMyMusicLibrary)
+                {
+                    lib.LoadFromConfiguredBaseFolder();
+                }
+            }
+        };
+
         // Record a signed Play operation the first time each track starts playing.
         _playbackViewModel.PropertyChanged += (_, e) =>
         {
@@ -129,6 +143,28 @@ public class ApplicationViewModel : ViewModelBase
 
     public SyncOrchestrator SyncOrchestrator => _syncOrchestrator;
     public PlaybackViewModel Playback => _playbackViewModel;
+
+    public string BuildMeshDiagnosticsSummary()
+    {
+        var snapshots = _syncOrchestrator.GetPeerDiagnosticsSnapshots().ToList();
+        var routingPeers = _syncOrchestrator.GetPeers().ToList();
+
+        var routingMesh = routingPeers.Count(p => !p.UserId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase));
+        var routingBootstrap = routingPeers.Count - routingMesh;
+
+        var meshPeers = snapshots.Where(p => !p.IsBootstrap).ToList();
+        var meshOnline = meshPeers.Count(p => p.IsOnline);
+        var meshWithManifest = meshPeers.Count(p => p.HasManifest);
+        var meshWithoutManifest = Math.Max(0, meshPeers.Count - meshWithManifest);
+
+        var peerTracks = meshPeers.Sum(p => p.PublishedTrackCount);
+        var peerAlbums = meshPeers.Sum(p => p.PublishedAlbumCount);
+
+        return $"Routing: {_syncOrchestrator.ConnectedPeerCount} ({routingMesh} mesh, {routingBootstrap} bootstrap) · "
+             + $"Mesh diagnostics: {meshOnline}/{meshPeers.Count} online, {meshWithManifest} with manifest, {meshWithoutManifest} without manifest · "
+             + $"Local published: {_syncOrchestrator.LocalPublishedAlbumCount} albums, {_syncOrchestrator.LocalPublishedTrackCount} tracks · "
+             + $"Peer totals: {peerAlbums} albums, {peerTracks} tracks";
+    }
 
     public void NavigateToHome()
     {
@@ -273,6 +309,7 @@ public class ApplicationViewModel : ViewModelBase
             P2PIsConnected = true;
             P2PPeerCount = _syncOrchestrator.ConnectedPeerCount;
             UpdateP2PStatusText();
+            PublishReleasedMyMusicToMesh();
         }
         catch (Exception ex)
         {
@@ -391,6 +428,72 @@ public class ApplicationViewModel : ViewModelBase
         }
 
         return false;
+    }
+
+    private void PublishReleasedMyMusicToMesh()
+    {
+        if (!P2PIsConnected)
+            return;
+
+        try
+        {
+            var metadataService = new MyMusicMetadataService();
+            var settings = _settingsService.LoadSettings();
+            var myMusicFolder = _settingsService.GetMyMusicFolder();
+            if (!Directory.Exists(myMusicFolder))
+                return;
+
+            var manager = new LocalLibraryManager(myMusicFolder, settings.SupportedExtensions);
+            manager.IndexLibrary();
+
+            var tracks = manager.GetAllTracks().ToList();
+            var albums = manager.GetAllAlbums().ToList();
+
+            foreach (var album in albums)
+            {
+                var tracksInAlbum = tracks.Where(t => string.Equals(t.AlbumId, album.AlbumId, StringComparison.OrdinalIgnoreCase)).ToList();
+                var firstPath = tracksInAlbum.Select(t => t.FilePath).FirstOrDefault(p => !string.IsNullOrWhiteSpace(p));
+                if (string.IsNullOrWhiteSpace(firstPath))
+                    continue;
+
+                var albumFolder = Path.GetDirectoryName(firstPath) ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(albumFolder))
+                    continue;
+
+                var albumMeta = metadataService.LoadForAlbum(albumFolder);
+                if (!albumMeta.IsReleased)
+                    continue;
+
+                var artistName = tracksInAlbum.FirstOrDefault()?.Description ?? string.Empty;
+                _syncOrchestrator.AnnounceAlbum(album.AlbumId, null, new Dictionary<string, string>
+                {
+                    ["name"] = SecurityLimits.Truncate(album.Title, SecurityLimits.MaxAlbumNameLength),
+                    ["artist"] = SecurityLimits.Truncate(artistName, SecurityLimits.MaxArtistNameLength)
+                });
+            }
+
+            foreach (var track in tracks)
+            {
+                if (string.IsNullOrWhiteSpace(track.FilePath) || !File.Exists(track.FilePath))
+                    continue;
+
+                var trackMeta = metadataService.LoadForTrack(track.FilePath);
+                if (!trackMeta.IsReleased)
+                    continue;
+
+                var albumTitle = albums.FirstOrDefault(a => string.Equals(a.AlbumId, track.AlbumId, StringComparison.OrdinalIgnoreCase))?.Title ?? string.Empty;
+                _syncOrchestrator.AnnounceTrack(track.TrackId, MeshWave.Common.Core.Crypto.CryptoService.ComputeFileHash(track.FilePath), new Dictionary<string, string>
+                {
+                    ["title"] = SecurityLimits.Truncate(track.Title, SecurityLimits.MaxTrackTitleLength),
+                    ["artist"] = SecurityLimits.Truncate(track.Description ?? string.Empty, SecurityLimits.MaxArtistNameLength),
+                    ["album"] = SecurityLimits.Truncate(albumTitle, SecurityLimits.MaxAlbumNameLength)
+                });
+            }
+        }
+        catch
+        {
+            // best-effort publish for diagnostics and availability
+        }
     }
 
     private void RestorePlaybackState(AppSettings settings)

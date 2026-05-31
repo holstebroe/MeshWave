@@ -19,6 +19,8 @@ namespace MeshWave.ViewModels
         private List<Track> _trackObjects = new();
         private List<Album> _albumObjects = new();
         private CancellationTokenSource? _importCancellation;
+        private readonly HashSet<string> _autoAnnouncedTrackIds = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _autoAnnouncedAlbumIds = new(StringComparer.OrdinalIgnoreCase);
 
         public void LoadFromConfiguredBaseFolder()
         {
@@ -188,6 +190,8 @@ namespace MeshWave.ViewModels
             _allTrackItems = trackItems;
             RefreshAlbumAndTrackSelection();
 
+            AnnounceReleasedContentToMesh();
+
             if (Directory.Exists(folderPath))
             {
                 _folderWatcher = new MusicFolderWatcher(folderPath, supportedExtensions ?? LocalLibraryManager.SupportedExtensions, () =>
@@ -219,6 +223,33 @@ namespace MeshWave.ViewModels
                     .ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase)
                     .ToList();
             Tracks = filteredTracks;
+        }
+
+        private void AnnounceReleasedContentToMesh()
+        {
+            if (!IsMyMusicLibrary || _applicationViewModel == null || !_applicationViewModel.P2PIsConnected)
+                return;
+
+            foreach (var album in _allAlbumItems.Where(a => a.IsReleased))
+            {
+                if (_autoAnnouncedAlbumIds.Add(album.AlbumId))
+                {
+                    _applicationViewModel.AnnounceAlbumToNetwork(album.AlbumId, album.Name, album.Artist);
+                }
+            }
+
+            foreach (var track in _allTrackItems.Where(t => t.IsReleased && !string.IsNullOrWhiteSpace(t.FilePath) && File.Exists(t.FilePath)))
+            {
+                if (_autoAnnouncedTrackIds.Add(track.TrackId))
+                {
+                    _applicationViewModel.AnnounceTrackToNetwork(
+                        track.TrackId,
+                        MeshWave.Common.Core.Crypto.CryptoService.ComputeFileHash(track.FilePath),
+                        track.Title,
+                        track.Artist,
+                        _allAlbumItems.FirstOrDefault(a => a.AlbumId == track.AlbumId)?.Name ?? string.Empty);
+                }
+            }
         }
 
         private IEnumerable<PlaybackTrackListItem> GetCurrentPlaybackContext(Track currentTrack)

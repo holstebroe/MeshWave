@@ -375,12 +375,19 @@
                                        FontSize="12"
                                        TextWrapping="Wrap"
                                        Margin="0,0,0,8"/>
-                            <Button Content="Refresh Diagnostics"
-                                    Command="{Binding RefreshNetworkDiagnosticsCommand}"
-                                    Style="{StaticResource PrimaryButton}"
-                                    HorizontalAlignment="Left"
-                                    Padding="12,6"
-                                    Margin="0,0,0,8"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <Button Content="Refresh Diagnostics"
+                                        Command="{Binding RefreshNetworkDiagnosticsCommand}"
+                                        Style="{StaticResource PrimaryButton}"
+                                        HorizontalAlignment="Left"
+                                        Padding="12,6"
+                                        Margin="0,0,8,0"/>
+                                <Button Content="Open Detailed Diagnostics"
+                                        Command="{Binding OpenDetailedDiagnosticsWindowCommand}"
+                                        Style="{StaticResource PrimaryButton}"
+                                        HorizontalAlignment="Left"
+                                        Padding="12,6"/>
+                            </StackPanel>
                             <TextBox Text="{Binding NetworkDiagnosticsText}"
                                      IsReadOnly="True"
                                      AcceptsReturn="True"
