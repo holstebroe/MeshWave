@@ -5,6 +5,10 @@ on:
     - cron: '0 2 * * *' # Runs daily at 02:00 UTC
   workflow_dispatch: # Allows manual trigger for testing
 
+# Force the runner to use Node.js 24 to clear deprecation warnings
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   triage-and-dispatch:
     runs-on: ubuntu-latest
@@ -27,11 +31,17 @@ jobs:
           echo "- \`ProjectPlan/Backlog.md\` (Contains immediate upcoming issues)" >> combined_triage_list.md
           echo "- \`ProjectPlan/Roadmap.md\` (Contains macro features/epics)" >> combined_triage_list.md
 
-      # Step 3: Run Jules with updated analytical instructions
+      # Step 3: Strip out the local network git rules before invoking Jules
+      - name: Reset Git Global Config Overrides
+        run: |
+          git config --global --unset-all url.http://git@192.168.0.1:8080/.insteadOf || true
+
+      # Step 4: Run Jules with updated analytical instructions
       - name: Run Jules Fleet Planner
-        uses: google-labs-code/jules-invoke@v1
+        uses: google-labs-code/jules-invoke@v1.0.0
         with:
           jules_api_key: ${{ secrets.JULES_API_KEY }}
+          starting_branch: master
           prompt: |
             You are acting as the Lead Systems Architect and Product Manager for the MeshWave workspace.
             
