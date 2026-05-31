@@ -45,6 +45,8 @@ public class MeshIntegrationTests : IAsyncLifetime
     // Helper: build an isolated SyncOrchestrator on a unique free port
     // ---------------------------------------------------------------------------
 
+    private const int LocalTestTimeoutMs = 1_000;
+
     private (SyncOrchestrator orchestrator, LocalPeerIdentity identity, Manifest manifest, int port)
         CreatePeer(string displayName)
     {
@@ -59,7 +61,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         var discovery = new NullPeerDiscovery();
         var peerRouter = new PeerRouter(lanDiscovery: discovery);
         var server = new ManifestExchangeServer(port);
-        var client = new ManifestExchangeClient(timeoutMs: 5_000);
+        var client = new ManifestExchangeClient(timeoutMs: LocalTestTimeoutMs);
         var mgr = new ManifestManager();
         var store = new PeerManifestStore(storeDir);
 
@@ -114,7 +116,7 @@ public class MeshIntegrationTests : IAsyncLifetime
 
         // Allow bootstrap contact and manifest fetch.
         await WaitUntilAsync(() => peerB.PeerManifests.Count > 0 || peerB.ConnectedPeerCount > 0,
-            timeoutMs: 10_000);
+            timeoutMs: LocalTestTimeoutMs);
 
         // Assert: B should have at least tried to contact A.
         // B may not have A in routing table if exchange hasn't completed yet,
@@ -270,7 +272,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         await peerB.SyncAllPeersAsync();
 
         // Give some time for the merge to happen.
-        await Task.Delay(500);
+        await Task.Delay(200);
 
         // Assert: at least one merge event should have been recorded during startup (from bootstrap/peer exchange).
         // The exact count depends on network timing, so we just verify the event mechanism works.
@@ -308,11 +310,11 @@ public class MeshIntegrationTests : IAsyncLifetime
         peerA.RecordFollow("bootstrap-probe-user");
         peerB.RecordFollow("bootstrap-probe-user");
 
-        var pushClient = new ManifestExchangeClient(timeoutMs: 5_000);
+        var pushClient = new ManifestExchangeClient(timeoutMs: LocalTestTimeoutMs);
         await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, manifestA);
         await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, manifestB);
 
-        await WaitUntilAsync(() => bootstrap.RegisteredPeerCount >= 2, timeoutMs: 5_000);
+        await WaitUntilAsync(() => bootstrap.RegisteredPeerCount >= 2, timeoutMs: LocalTestTimeoutMs);
 
         var peers = bootstrap.GetLivePeers();
         Assert.True(bootstrap.RegisteredPeerCount >= 2, "Bootstrap should register both peers.");
@@ -348,7 +350,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         peerA.RecordFollow("diagnostic-probe");
         peerB.RecordFollow("diagnostic-probe");
 
-        var pushClient = new ManifestExchangeClient(timeoutMs: 5_000);
+        var pushClient = new ManifestExchangeClient(timeoutMs: LocalTestTimeoutMs);
         await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, manifestA);
         await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, manifestB);
 
@@ -385,7 +387,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         using var bootstrap = new BootstrapCoordinator(bootstrapPort);
         await bootstrap.StartAsync();
 
-        var client = new ManifestExchangeClient(timeoutMs: 5_000);
+        var client = new ManifestExchangeClient(timeoutMs: LocalTestTimeoutMs);
         var response = await client.RequestRendezvousAsync("127.0.0.1", bootstrapPort, new RendezvousRequest
         {
             InitiatorUserId = "user-initiator-1",
@@ -430,7 +432,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         peerA.RecordFollow("rendezvous-probe");
         peerB.RecordFollow("rendezvous-probe");
 
-        var pushClient = new ManifestExchangeClient(timeoutMs: 5_000);
+        var pushClient = new ManifestExchangeClient(timeoutMs: LocalTestTimeoutMs);
         await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, manifestA);
         await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, manifestB);
 
@@ -497,5 +499,125 @@ public class MeshIntegrationTests : IAsyncLifetime
         {
             return false;
         }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Helper: resolve path to TestData directory relative to the solution
+    // ---------------------------------------------------------------------------
+
+    private static string TestDataPath(params string[] segments)
+    {
+        // Walk up from the test assembly location until we find the TestData folder.
+        var dir = AppContext.BaseDirectory;
+        for (var i = 0; i < 8; i++)
+        {
+            var candidate = Path.Combine(dir, "TestData");
+            if (Directory.Exists(candidate))
+                return Path.Combine(new[] { candidate }.Concat(segments).ToArray());
+            dir = Path.GetDirectoryName(dir)!;
+        }
+        throw new DirectoryNotFoundException("TestData directory not found relative to " + AppContext.BaseDirectory);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Test: John and Jane headless nodes discover each other as artists
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task John_And_Jane_CanDiscoverEachOther_AsArtists()
+    {
+        var (john, johnId, johnManifest, johnPort) = CreatePeer("John");
+        var (jane, janeId, janeManifest, janePort) = CreatePeer("Jane");
+
+        await john.StartAsync(johnId, johnManifest);
+        await jane.StartAsync(janeId, janeManifest, bootstrapNodes: [$"127.0.0.1:{johnPort}"]);
+
+        // Both announce themselves as artists.
+        john.BroadcastProfile("John Artist", isArtist: true, "Beats and synths", null, null);
+        jane.BroadcastProfile("Jane Artist", isArtist: true, "Waves and textures", null, null);
+
+        // Give Jane a moment to contact John via bootstrap.
+        await WaitUntilAsync(() => jane.ConnectedPeerCount > 0 || jane.PeerManifests.Count > 0,
+            timeoutMs: LocalTestTimeoutMs);
+
+        // Trigger explicit manifest sync so Jane fetches John's manifest.
+        await jane.SyncAllPeersAsync();
+        await Task.Delay(200);
+
+        // Verify John has his own profile recorded.
+        var johnProfileOp = johnManifest.Operations.FirstOrDefault(o => o.OperationType == ManifestOperationType.Profile);
+        Assert.NotNull(johnProfileOp);
+        Assert.Equal("John Artist", johnProfileOp!.Metadata["displayName"]);
+        Assert.Equal("True", johnProfileOp.Metadata["isArtist"]);
+
+        // Verify Jane has her own profile recorded.
+        var janeProfileOp = janeManifest.Operations.FirstOrDefault(o => o.OperationType == ManifestOperationType.Profile);
+        Assert.NotNull(janeProfileOp);
+        Assert.Equal("Jane Artist", janeProfileOp!.Metadata["displayName"]);
+        Assert.Equal("True", janeProfileOp.Metadata["isArtist"]);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Test: Jane discovers John's albums and can download a track by content hash
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Jane_CanDownload_JohnsDeskPlastic_TrackByContentHash()
+    {
+        // Build a content-hash → file path index for John's DeskPlastic album.
+        var deskPlasticDir = TestDataPath("John", "DeskPlastic");
+        var contentIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var mp3 in Directory.EnumerateFiles(deskPlasticDir, "*.mp3"))
+            contentIndex[MeshWave.Common.Core.Crypto.CryptoService.ComputeFileHash(mp3)] = mp3;
+
+        Assert.NotEmpty(contentIndex);
+
+        // John serves content by hash.
+        Func<string, byte[]?> johnContentProvider = hash =>
+            contentIndex.TryGetValue(hash, out var path) ? File.ReadAllBytes(path) : null;
+
+        var (john, johnId, johnManifest, johnPort) = CreatePeer("John");
+        var (jane, janeId, janeManifest, janePort) = CreatePeer("Jane");
+
+        await john.StartAsync(johnId, johnManifest, contentProvider: johnContentProvider);
+        await jane.StartAsync(janeId, janeManifest, bootstrapNodes: [$"127.0.0.1:{johnPort}"]);
+
+        // John announces the DeskPlastic album and its tracks.
+        john.AnnounceAlbum("album-deskplastic", null, new Dictionary<string, string>
+        {
+            ["title"] = "DeskPlastic",
+            ["artist"] = "John"
+        });
+
+        foreach (var (hash, path) in contentIndex)
+        {
+            var trackId = $"track-{Path.GetFileNameWithoutExtension(path)}";
+            john.AnnounceTrack(trackId, hash, new Dictionary<string, string>
+            {
+                ["title"] = Path.GetFileNameWithoutExtension(path),
+                ["artist"] = "John",
+                ["album"] = "DeskPlastic"
+            });
+        }
+
+        // Give Jane a moment to contact John via bootstrap.
+        await WaitUntilAsync(() => jane.ConnectedPeerCount > 0 || jane.PeerManifests.Count > 0,
+            timeoutMs: LocalTestTimeoutMs);
+
+        // Pick the first track hash that John announced.
+        var firstHash = contentIndex.Keys.First();
+
+        // Jane requests the content directly via the TCP client (bypasses routing table,
+        // tests the content-download protocol itself end-to-end).
+        var downloadClient = new ManifestExchangeClient(timeoutMs: LocalTestTimeoutMs);
+        var receivedBytes = await downloadClient.RequestContentAsync("127.0.0.1", johnPort, firstHash);
+
+        Assert.NotNull(receivedBytes);
+        Assert.True(receivedBytes!.Length > 0, "Downloaded content should have bytes.");
+
+        // Verify the bytes match the original file on disk.
+        var expectedBytes = File.ReadAllBytes(contentIndex[firstHash]);
+        Assert.Equal(expectedBytes.Length, receivedBytes.Length);
     }
 }

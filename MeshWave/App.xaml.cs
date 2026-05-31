@@ -90,14 +90,26 @@ namespace MeshWave
                 vm.PersistPlaybackState();
         }
 
-        internal void ExitApplication()
+        internal async void ExitApplication()
         {
             _isExiting = true;
             _trayIcon?.Dispose();
             _trayIcon = null;
 
             if (MainWindow?.DataContext is ApplicationViewModel vm)
-                vm.ShutdownAsync().GetAwaiter().GetResult();
+            {
+                try
+                {
+                    var shutdownTask = vm.ShutdownAsync();
+                    var completed = await Task.WhenAny(shutdownTask, Task.Delay(2000));
+                    if (completed == shutdownTask)
+                        await shutdownTask;
+                }
+                catch
+                {
+                    // best effort shutdown path for tray quit
+                }
+            }
 
             Shutdown();
         }

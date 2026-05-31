@@ -482,6 +482,8 @@
                                         <MultiDataTrigger.Conditions>
                                             <Condition Binding="{Binding IsTabDiscover}" Value="True"/>
                                             <Condition Binding="{Binding IsSearching}" Value="False"/>
+                                            <Condition Binding="{Binding SearchResults.Count}" Value="0"/>
+                                            <Condition Binding="{Binding GroupResults.Count}" Value="0"/>
                                         </MultiDataTrigger.Conditions>
                                         <Setter Property="Visibility" Value="Visible"/>
                                     </MultiDataTrigger>
@@ -493,10 +495,13 @@
                             <TextBlock Text="Search for users or groups by name or UserId."
                                        FontSize="14" HorizontalAlignment="Center"
                                        Foreground="{StaticResource TextSecondaryColor}"/>
-                            <TextBlock Text="Connect to the mesh first to enable live peer discovery."
+                            <TextBlock Text="{Binding DiscoverHintText}"
                                        FontSize="12" HorizontalAlignment="Center"
                                        Foreground="{StaticResource TextDimColor}"
-                                       Margin="0,4,0,0"/>
+                                       Margin="0,4,0,0"
+                                       TextAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       MaxWidth="520"/>
                         </StackPanel>
                     </Border>
 

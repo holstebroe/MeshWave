@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net;
+using MeshWave.Common.Core.Models;
 using MeshWave.Synchronizer;
 
 namespace MeshWave.Bootstrap.Core;
@@ -88,10 +89,17 @@ public sealed class BootstrapCoordinator : IDisposable
         if (!IPAddress.TryParse(e.PeerAddress, out _))
             return;
 
+        var latestProfile = manifest.Operations
+            .Where(op => op.OperationType == ManifestOperationType.Profile)
+            .OrderByDescending(op => op.SequenceNumber)
+            .FirstOrDefault();
+
+        var displayName = latestProfile?.Metadata.GetValueOrDefault("displayName");
+
         var peer = new PeerInfo
         {
             UserId = manifest.UserId,
-            DisplayName = SecurityLimits.Truncate(manifest.UserId, SecurityLimits.MaxDisplayNameLength),
+            DisplayName = SecurityLimits.Truncate(string.IsNullOrWhiteSpace(displayName) ? manifest.UserId : displayName, SecurityLimits.MaxDisplayNameLength),
             Address = e.PeerAddress,
             Port = ManifestExchangeServer.DefaultPort,
             LastSeen = DateTime.UtcNow

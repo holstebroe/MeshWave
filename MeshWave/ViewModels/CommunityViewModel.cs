@@ -32,6 +32,7 @@ public class CommunityViewModel : ViewModelBase
     private int _newReleaseCount;
     private readonly Dictionary<string, int> _lastFeedReleaseSequenceByPeer = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, int> _trackLikes = new(StringComparer.OrdinalIgnoreCase);
+    private string _discoverHintText = "Search for users by name or peer id.";
 
     public CommunityViewModel(SyncOrchestrator? sync = null)
     {
@@ -49,6 +50,9 @@ public class CommunityViewModel : ViewModelBase
             ActiveTab = Enum.Parse<CommunityTab>(tab);
             if (ActiveTab == CommunityTab.Feed)
                 NewReleaseCount = 0;   // clear badge when user opens the Feed tab
+
+            if (ActiveTab == CommunityTab.Discover)
+                RefreshDiscoverResults(SearchQuery);
         });
         RefreshFeedCommand = new RelayCommand(_ => RefreshFeed());
         AddToLibraryCommand = new RelayCommand<ReleaseFeedItem>(AddToLibrary, r => r != null && !string.IsNullOrWhiteSpace(r.ContentHash));
@@ -57,7 +61,13 @@ public class CommunityViewModel : ViewModelBase
         if (_sync != null)
         {
             _sync.ManifestMerged += OnManifestMerged;
+            _sync.PeerCountChanged += OnPeerCountChanged;
             RefreshFeed();
+            RefreshDiscoverResults();
+        }
+        else
+        {
+            UpdateDiscoverHint(0, false, string.Empty);
         }
     }
 
@@ -134,6 +144,12 @@ public class CommunityViewModel : ViewModelBase
     public bool IsTabFriends   => ActiveTab == CommunityTab.Friends;
     public bool IsTabFollowing => ActiveTab == CommunityTab.Following;
     public bool IsTabGroups    => ActiveTab == CommunityTab.Groups;
+
+    public string DiscoverHintText
+    {
+        get => _discoverHintText;
+        private set => SetProperty(ref _discoverHintText, value);
+    }
 
     public ObservableCollection<CommunityUserItem> SearchResults
     {
@@ -244,22 +260,10 @@ public class CommunityViewModel : ViewModelBase
 
     private void Search()
     {
-        // TODO (Milestone D): query P2P manifest store for peers matching SearchQuery
-        // For now show a placeholder status so the UI is exercisable.
         IsSearching = true;
-        SearchStatus = "Searching… (P2P search not yet connected)";
-        SearchResults = [];
-        GroupResults = [];
-
-        // Simulate async: reset after brief delay using a background task
-        _ = Task.Delay(600).ContinueWith(_ =>
-        {
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
-            {
-                IsSearching = false;
-                SearchStatus = $"No results for \"{SearchQuery}\" — peer search will be available once connected to the mesh.";
-            });
-        });
+        SearchStatus = "Searching peers…";
+        RefreshDiscoverResults(SearchQuery);
+        IsSearching = false;
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -331,10 +335,18 @@ public class CommunityViewModel : ViewModelBase
     {
         if (_sync == null) return;
         var followedIds = Following.Select(u => u.UserId).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (!followedIds.Contains(e.UserId)) return;
+        if (!followedIds.Contains(e.UserId))
+        {
+            System.Windows.Application.Current.Dispatcher.Invoke(() => RefreshDiscoverResults(SearchQuery));
+            return;
+        }
 
         var manifest = _sync.GetPeerManifest(e.UserId);
-        if (manifest == null) return;
+        if (manifest == null)
+        {
+            System.Windows.Application.Current.Dispatcher.Invoke(() => RefreshDiscoverResults(SearchQuery));
+            return;
+        }
 
         var latestCreateSequence = manifest.Operations
             .Where(op => op.OperationType == ManifestOperationType.Create)
@@ -352,7 +364,11 @@ public class CommunityViewModel : ViewModelBase
             }
         }
 
-        System.Windows.Application.Current.Dispatcher.Invoke(RefreshFeed);
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            RefreshFeed();
+            RefreshDiscoverResults(SearchQuery);
+        });
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -532,6 +548,139 @@ public class CommunityViewModel : ViewModelBase
 
         var result = sb.ToString().Trim();
         return string.IsNullOrWhiteSpace(result) ? fallback : result;
+    }
+
+    private void OnPeerCountChanged(object? sender, EventArgs e)
+    {
+        if (System.Windows.Application.Current?.Dispatcher == null)
+            return;
+
+        System.Windows.Application.Current.Dispatcher.Invoke(() => RefreshDiscoverResults(SearchQuery));
+    }
+
+    private void RefreshDiscoverResults(string? query = null)
+    {
+        if (_sync == null || !_sync.IsRunning)
+        {
+            SearchResults = [];
+            GroupResults = [];
+            UpdateDiscoverHint(0, false, query ?? string.Empty);
+            return;
+        }
+
+        var filter = (query ?? string.Empty).Trim();
+        var peersByUserId = _sync.GetPeers()
+            .Where(p => !p.UserId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase))
+            .GroupBy(p => p.UserId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(p => p.LastSeen).First(), StringComparer.OrdinalIgnoreCase);
+
+        var manifests = _sync.PeerManifests
+            .GroupBy(m => m.UserId, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .ToList();
+
+        foreach (var manifest in manifests)
+        {
+            if (!peersByUserId.ContainsKey(manifest.UserId))
+            {
+                peersByUserId[manifest.UserId] = new PeerInfo
+                {
+                    UserId = manifest.UserId,
+                    DisplayName = manifest.UserId,
+                    Address = string.Empty,
+                    Port = 0,
+                    LastSeen = DateTime.UtcNow
+                };
+            }
+        }
+
+        var users = new List<CommunityUserItem>();
+        foreach (var peer in peersByUserId.Values.OrderByDescending(p => p.LastSeen).Take(50))
+        {
+            var manifest = manifests.FirstOrDefault(m => string.Equals(m.UserId, peer.UserId, StringComparison.OrdinalIgnoreCase));
+            var profileOp = manifest?.Operations
+                .Where(op => op.OperationType == ManifestOperationType.Profile)
+                .OrderByDescending(op => op.SequenceNumber)
+                .FirstOrDefault();
+
+            var displayName = profileOp?.Metadata.GetValueOrDefault("displayName")
+                              ?? (!string.IsNullOrWhiteSpace(peer.DisplayName) ? peer.DisplayName : peer.UserId);
+            var isArtist = bool.TryParse(profileOp?.Metadata.GetValueOrDefault("isArtist"), out var parsedIsArtist) && parsedIsArtist;
+            var bio = profileOp?.Metadata.GetValueOrDefault("bio") ?? string.Empty;
+            var website = profileOp?.Metadata.GetValueOrDefault("website") ?? string.Empty;
+
+            var trackCount = manifest?.Operations.Count(op =>
+                op.OperationType == ManifestOperationType.Create
+                && string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase)) ?? 0;
+
+            var followerCount = _sync.PeerManifests.Count(pm =>
+            {
+                var lastFollowState = pm.Operations
+                    .Where(op => string.Equals(op.TargetType, "User", StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(op.TargetId, peer.UserId, StringComparison.OrdinalIgnoreCase)
+                        && (op.OperationType == ManifestOperationType.Follow || op.OperationType == ManifestOperationType.Unfollow))
+                    .OrderByDescending(op => op.SequenceNumber)
+                    .FirstOrDefault();
+
+                return lastFollowState?.OperationType == ManifestOperationType.Follow;
+            });
+
+            users.Add(new CommunityUserItem
+            {
+                UserId = peer.UserId,
+                DisplayName = displayName,
+                AvatarIconPath = profileOp?.Metadata.GetValueOrDefault("iconPath") ?? string.Empty,
+                TrackCount = trackCount,
+                FollowerCount = followerCount,
+                IsArtist = isArtist,
+                Bio = bio,
+                Website = website,
+                IsFollowing = Following.Any(f => string.Equals(f.UserId, peer.UserId, StringComparison.OrdinalIgnoreCase)),
+                IsFriend = Friends.Any(f => string.Equals(f.UserId, peer.UserId, StringComparison.OrdinalIgnoreCase))
+            });
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter))
+        {
+            users = users
+                .Where(u =>
+                    u.DisplayName.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                    || u.UserId.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                    || u.Bio.Contains(filter, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        SearchResults = new ObservableCollection<CommunityUserItem>(users);
+        GroupResults = [];
+
+        SearchStatus = string.IsNullOrWhiteSpace(filter)
+            ? $"Showing {users.Count} recent peer{(users.Count == 1 ? string.Empty : "s")}."
+            : users.Count == 0
+                ? $"No users matched \"{filter}\"."
+                : $"Found {users.Count} user result{(users.Count == 1 ? string.Empty : "s")} for \"{filter}\".";
+
+        UpdateDiscoverHint(users.Count, true, filter);
+    }
+
+    private void UpdateDiscoverHint(int resultCount, bool isConnected, string query)
+    {
+        if (!isConnected)
+        {
+            DiscoverHintText = "Connect to the mesh first to enable live peer discovery.";
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            DiscoverHintText = resultCount == 0
+                ? $"No users matched \"{query}\"."
+                : $"Showing {resultCount} result{(resultCount == 1 ? string.Empty : "s")} for \"{query}\".";
+            return;
+        }
+
+        DiscoverHintText = resultCount == 0
+            ? "Connected, but no peer profiles have been discovered yet."
+            : "Showing the most recently connected users from your mesh.";
     }
 }
 

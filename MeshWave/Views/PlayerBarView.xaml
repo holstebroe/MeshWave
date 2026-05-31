@@ -58,10 +58,14 @@
                                    Foreground="Black"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center"
-                                   Margin="-1,-1,0,0"/>
+                                   Margin="2,-1,0,0"/>
                     </Button.Content>
                 </Button>
-                <Button Content="⏭"
+                <Button Content="&#x23ED;&#xFE0E;"
+                        Style="{StaticResource PlayerIconButton}"
+                        Command="{Binding NextTrackCommand}"
+                        FontSize="18" Margin="4,0,0,0"/>
+                <Button Content="X"
                         Style="{StaticResource PlayerIconButton}"
                         Command="{Binding NextTrackCommand}"
                         FontSize="18" Margin="4,0,0,0"/>

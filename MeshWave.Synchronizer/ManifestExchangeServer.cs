@@ -23,6 +23,7 @@ public class ManifestExchangeServer : IDisposable
     private Func<Manifest?>? _localManifestProvider;
     private Func<IReadOnlyList<PeerInfo>>? _peersProvider;
     private Func<RendezvousRequest, RendezvousResponse?>? _rendezvousProvider;
+    private Func<string, byte[]?>? _contentProvider;
 
     public ManifestExchangeServer(int port = DefaultPort)
     {
@@ -41,11 +42,13 @@ public class ManifestExchangeServer : IDisposable
         Func<Manifest?> localManifestProvider,
         Func<IReadOnlyList<PeerInfo>>? peersProvider = null,
         Func<RendezvousRequest, RendezvousResponse?>? rendezvousProvider = null,
+        Func<string, byte[]?>? contentProvider = null,
         CancellationToken cancellationToken = default)
     {
         _localManifestProvider = localManifestProvider;
         _peersProvider = peersProvider;
         _rendezvousProvider = rendezvousProvider;
+        _contentProvider = contentProvider;
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         _listener = new TcpListener(IPAddress.Any, _port);
@@ -141,6 +144,17 @@ public class ManifestExchangeServer : IDisposable
                         await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
                         break;
                     }
+                    case ManifestRequestType.RequestContent when !string.IsNullOrWhiteSpace(request.ContentHash):
+                    {
+                        var bytes = _contentProvider?.Invoke(request.ContentHash);
+                        var response = new ManifestResponse
+                        {
+                            Acknowledged = bytes != null && bytes.Length > 0,
+                            ContentBytes = bytes
+                        };
+                        await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
+                        break;
+                    }
                 }
             }
             catch { /* ignore per-client errors */ }
@@ -189,7 +203,8 @@ internal enum ManifestRequestType
     GetManifest,
     PushManifest,
     GetPeers,
-    RequestRendezvous
+    RequestRendezvous,
+    RequestContent
 }
 
 internal class ManifestRequest
@@ -197,6 +212,7 @@ internal class ManifestRequest
     public ManifestRequestType Type { get; set; }
     public Manifest? Manifest { get; set; }
     public RendezvousRequest? Rendezvous { get; set; }
+    public string? ContentHash { get; set; }
 }
 
 internal class ManifestResponse
@@ -205,6 +221,7 @@ internal class ManifestResponse
     public bool Acknowledged { get; set; }
     public List<PeerInfo> Peers { get; set; } = [];
     public RendezvousResponse? Rendezvous { get; set; }
+    public byte[]? ContentBytes { get; set; }
 }
 
 public class RendezvousRequest

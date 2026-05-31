@@ -27,6 +27,7 @@ public class SyncOrchestrator : IDisposable
     private PeerConnectionAttemptReport? _lastConnectionReport;
     private int _inboundManifestPushCount;
     private int _outboundManifestFetchCount;
+    private Func<string, byte[]?>? _contentProvider;
 
     // Tracks which trackIds have already had a Play op recorded in this process session.
     private readonly HashSet<string> _playedThisSession = new(StringComparer.OrdinalIgnoreCase);
@@ -82,15 +83,21 @@ public class SyncOrchestrator : IDisposable
     /// <summary>
     /// Starts P2P sync: LAN discovery, bootstrap node connections, PEX, and manifest exchange server.
     /// </summary>
+    /// <param name="contentProvider">
+    /// Optional callback that returns raw file bytes for a given content hash.
+    /// When provided, this node will serve file download requests from peers.
+    /// </param>
     public async Task StartAsync(
         LocalPeerIdentity identity,
         Manifest localManifest,
         IReadOnlyList<string>? bootstrapNodes = null,
         bool actAsListener = true,
+        Func<string, byte[]?>? contentProvider = null,
         CancellationToken cancellationToken = default)
     {
         _identity = identity;
         _localManifest = localManifest;
+        _contentProvider = contentProvider;
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         _router.PeerAdded += OnPeerAdded;
@@ -106,6 +113,7 @@ public class SyncOrchestrator : IDisposable
                 () => _localManifest,
                 () => _router.GetPeersForExchange(),
                 rendezvousProvider: null,
+                contentProvider: _contentProvider,
                 cancellationToken: _cts.Token);
 
             await _natTraversal.StartAsync(identity.ManifestPort, _cts.Token);
@@ -239,7 +247,7 @@ public class SyncOrchestrator : IDisposable
             }
         }
 
-        var bytes = await _contentExchange.RequestContentAsync(peer.Address, peer.Port, contentHash);
+        var bytes = await _client.RequestContentAsync(peer.Address, peer.Port, contentHash);
         var succeeded = bytes != null && bytes.Length > 0;
         report.Attempts.Add(new PeerConnectionAttemptResult(
             "content-request",
