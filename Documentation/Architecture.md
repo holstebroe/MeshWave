@@ -79,7 +79,7 @@ The current design relies on full-manifest exchange and an ever-accumulating lis
 #### Necessary Evolutions
 To support large mesh networks with many users and files, the architecture must move toward:
 1.  **Delta Synchronization**: Requesting only operations after a specific sequence number (e.g., "Give me everything after Seq 450").
-2.  **Compaction/Snapshotting**: "Squashing" old operations (e.g., multiple `Update` or `Profile` ops) into a single state snapshot, potentially signed as a "checkpoint."
+2.  **Compaction/Snapshotting**: "Squashing" old operations (e.g., multiple `Update` or `Profile` ops) into a single state snapshot, potentially signed as a "checkpoint." It is not important to preserve the full history of every play or comment indefinitely, but it is important to preserve the current state (e.g., "I have played Track X 5 times, and my profile name is Y").
 3.  **Binary Wire Formats**: Moving away from JSON to a more compact format (e.g., Protobuf) to reduce transmission size.
 
 ## Current UI Architecture
