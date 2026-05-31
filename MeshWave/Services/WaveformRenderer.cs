@@ -14,11 +14,11 @@ namespace MeshWave.Services;
 public static class WaveformRenderer
 {
     // ─── shared colour tokens ───────────────────────────────────────────────
-    private static readonly Color PrimaryBlue    = Color.FromRgb(33,  150, 243);
-    private static readonly Color CoolTeal       = Color.FromRgb(0,   188, 212);
+    private static readonly Color PrimaryBlue    = Color.FromRgb(64,  128, 192); // Less saturated
+    private static readonly Color CoolTeal       = Color.FromRgb(72,  160, 176);
     private static readonly Color NeonCyan       = Color.FromRgb(0,   255, 255);
-    private static readonly Color NeonGlow       = Color.FromArgb(60, 0,   255, 255);
-    private static readonly Color MirrorDim      = Color.FromArgb(179, 33,  150, 243); // 70 % opacity blue
+    private static readonly Color NeonGlow       = Color.FromArgb(80, 0,   255, 255);
+    private static readonly Color MirrorDim      = Color.FromArgb(120, 64,  128, 192); // Lower opacity
 
     // Smooth gradient stops
     private static readonly Color SmoothTop      = Color.FromArgb(0,   100, 200, 255); // transparent sky-blue
@@ -76,32 +76,34 @@ public static class WaveformRenderer
     private static List<UIElement> RenderCloudy(float[] samples, double w, double h)
     {
         var elements = new List<UIElement>();
-        int  count    = Math.Max(samples.Length, 1);
-        var  barW     = w / count;
+        const double targetBarW = 3.0; // Fixed pixel width
+        const double targetGapW = 1.0;
+        const double stride     = targetBarW + targetGapW;
+
+        int barCount = (int)Math.Floor(w / stride);
+        if (barCount <= 0) return elements;
 
         var upperBrush = new SolidColorBrush(PrimaryBlue);
-        var lowerBrush = new SolidColorBrush(CoolTeal) { Opacity = 0.55 };
+        var lowerBrush = new SolidColorBrush(CoolTeal) { Opacity = 0.4 };
 
-        const double centreMaskHalf = 2.0;
+        const double centreMaskHalf = 0.75; // Thinner dividing bar (total 1.5px)
         double centre = h / 2.0;
 
-        for (int i = 0; i < count; i++)
+        for (int i = 0; i < barCount; i++)
         {
+            // Skip every 3rd bar in pixel-scale
             if (i % 3 == 2) continue;
 
-            double amp    = Amplitude(samples, i);
-            double halfMax = (h / 2.0) - centreMaskHalf;
+            double sampleIdx = (double)i / barCount * (samples.Length - 1);
+            double amp       = Amplitude(samples, (int)sampleIdx);
+            double halfMax   = (h / 2.0) - centreMaskHalf;
 
             double upperH   = Math.Max(2, amp * halfMax);
             double upperTop = centre - centreMaskHalf - upperH;
-            elements.Add(Bar(Math.Floor(i * barW), upperTop,
-                Math.Max(1, Math.Ceiling((i + 1) * barW) - Math.Floor(i * barW) - 1),
-                upperH, upperBrush));
+            elements.Add(Bar(i * stride, upperTop, targetBarW, upperH, upperBrush));
 
             double lowerH   = Math.Max(1, (amp * halfMax) * 0.5);
-            elements.Add(Bar(Math.Floor(i * barW), centre + centreMaskHalf,
-                Math.Max(1, Math.Ceiling((i + 1) * barW) - Math.Floor(i * barW) - 1),
-                lowerH, lowerBrush));
+            elements.Add(Bar(i * stride, centre + centreMaskHalf, targetBarW, lowerH, lowerBrush));
         }
 
         var mask = new Rectangle
@@ -127,7 +129,13 @@ public static class WaveformRenderer
         var  barW     = w / count;
 
         var upperBrush = new SolidColorBrush(PrimaryBlue);
-        var lowerBrush = new SolidColorBrush(MirrorDim);
+        var lowerGradient = new LinearGradientBrush
+        {
+            StartPoint = new Point(0, 0),
+            EndPoint   = new Point(0, 1)
+        };
+        lowerGradient.GradientStops.Add(new GradientStop(MirrorDim, 0.0));
+        lowerGradient.GradientStops.Add(new GradientStop(Color.FromArgb(0, 64, 128, 192), 1.0));
 
         double centre = h / 2.0;
 
@@ -138,7 +146,7 @@ public static class WaveformRenderer
             double bw      = Math.Max(1, Math.Ceiling((i + 1) * barW) - Math.Floor(i * barW));
 
             elements.Add(Bar(Math.Floor(i * barW), centre - barHalf, bw, barHalf, upperBrush));
-            elements.Add(Bar(Math.Floor(i * barW), centre,           bw, barHalf, lowerBrush));
+            elements.Add(Bar(Math.Floor(i * barW), centre,           bw, barHalf, lowerGradient));
         }
         return elements;
     }
@@ -151,8 +159,8 @@ public static class WaveformRenderer
         int  count    = Math.Max(samples.Length, 1);
         var  barW     = w / count;
 
-        var glowBrush  = new SolidColorBrush(NeonGlow);
-        var coreBrush  = new SolidColorBrush(NeonCyan);
+        var glowBrush = new SolidColorBrush(NeonGlow);
+        var coreBrush = new SolidColorBrush(NeonCyan);
 
         double centre = h / 2.0;
 
@@ -161,13 +169,22 @@ public static class WaveformRenderer
             double amp     = Amplitude(samples, i);
             double barHalf = Math.Max(3, amp * centre);
             double left    = Math.Floor(i * barW);
-            double coreW   = Math.Max(1, barW * 0.35);
-            double glowW   = Math.Max(2, barW * 0.85);
-            double coreX   = left + (barW - coreW) / 2.0;
-            double glowX   = left + (barW - glowW) / 2.0;
 
-            elements.Add(Bar(glowX, centre - barHalf, glowW, barHalf * 2, glowBrush));
-            elements.Add(Bar(coreX, centre - barHalf, coreW, barHalf * 2, coreBrush));
+            // Core bar
+            double coreW   = Math.Max(1.5, barW * 0.3);
+            double coreX   = left + (barW - coreW) / 2.0;
+            var coreBar = Bar(coreX, centre - barHalf, coreW, barHalf * 2, coreBrush);
+
+            // Neon glow using BlurEffect
+            coreBar.Effect = new System.Windows.Media.Effects.BlurEffect
+            {
+                Radius = 4,
+                KernelType = System.Windows.Media.Effects.KernelType.Gaussian
+            };
+
+            elements.Add(Bar(coreX, centre - barHalf, coreW, barHalf * 2, glowBrush)); // Background glow
+            elements.Add(coreBar); // Blurred core for bloom
+            elements.Add(Bar(coreX, centre - barHalf, Math.Max(0.5, coreW * 0.5), barHalf * 2, coreBrush)); // Sharp center
         }
         return elements;
     }

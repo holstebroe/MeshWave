@@ -43,28 +43,60 @@
         <!-- ===== Centre: Controls + progress ===== -->
         <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center" MinWidth="400" MaxWidth="600">
             <!-- Transport buttons -->
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,6">
-                <Button Content="⏮"
-                        Style="{StaticResource PlayerIconButton}"
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,6">
+                <Button Style="{StaticResource PlayerIconButton}"
                         Command="{Binding PreviousTrackCommand}"
-                        FontSize="18" Margin="0,0,4,0"/>
-                <Button Command="{Binding PlayPauseToggleCommand}"
-                        Width="36" Height="36" Margin="8,0"
-                        Style="{StaticResource PlayerCircleButton}">
-                    <Button.Content>
-                        <TextBlock Text="{Binding PlayPauseIcon}"
-                                   FontSize="17"
-                                   FontWeight="Bold"
-                                   Foreground="Black"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
-                                   Margin="2,-1,0,0"/>
-                    </Button.Content>
+                        Margin="0,0,4,0">
+                    <Path Data="M11,18V6l-8.5,6 8.5,6zm.5-6l8.5,6V6l-8.5,6z"
+                          Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                          Stretch="Uniform" Width="16" Height="16"/>
                 </Button>
-                <Button Content="&#x23ED;&#xFE0E;"
-                        Style="{StaticResource PlayerIconButton}"
+
+                <Button Command="{Binding PlayPauseToggleCommand}"
+                        Margin="12,0"
+                        Style="{StaticResource PlayerCircleButton}">
+                    <Grid>
+                        <!-- Play Icon -->
+                        <Path Data="M8,5.14V19.14L19,12.14L8,5.14Z"
+                              Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              Stretch="Uniform" Width="18" Height="18"
+                              Margin="2,0,0,0">
+                            <Path.Style>
+                                <Style TargetType="Path">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsPlaying}" Value="False">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Path.Style>
+                        </Path>
+                        <!-- Pause Icon -->
+                        <Path Data="M14,19H18V5H14M6,19H10V5H6V19Z"
+                              Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              Stretch="Uniform" Width="18" Height="18">
+                            <Path.Style>
+                                <Style TargetType="Path">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsPlaying}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Path.Style>
+                        </Path>
+                    </Grid>
+                </Button>
+
+                <Button Style="{StaticResource PlayerIconButton}"
                         Command="{Binding NextTrackCommand}"
-                        FontSize="18" Margin="4,0,0,0"/>
+                        Margin="4,0,0,0">
+                    <Path Data="M4,18l8.5-6L4,6v12zm9-12v12l8.5-6L13,6z"
+                          Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                          Stretch="Uniform" Width="16" Height="16"/>
+                </Button>
             </StackPanel>
 
             <!-- Progress row -->

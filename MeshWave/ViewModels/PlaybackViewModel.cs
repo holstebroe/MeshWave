@@ -165,6 +165,16 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         }
     }
 
+    public bool HasMultipleVersions
+    {
+        get
+        {
+            if (TimelineMarkers.Count == 0) return false;
+            var versions = TimelineMarkers.Select(m => m.TrackVersion <= 0 ? 1 : m.TrackVersion).Distinct().ToList();
+            return versions.Count > 1;
+        }
+    }
+
     public double Volume
     {
         get => _volume;
@@ -405,7 +415,15 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
                 SetProperty(ref _currentPosition, pos, nameof(CurrentPosition));
                 _isUpdatingPosition = false;
             };
-            _audioService.PlaybackStopped += (s, e) => IsPlaying = false;
+            _audioService.PlaybackStopped += (s, e) =>
+            {
+                IsPlaying = false;
+                // Ensure the playhead is at the very end when playing stops naturally
+                if (Duration > TimeSpan.Zero)
+                {
+                    CurrentPosition = Duration;
+                }
+            };
             _audioService.LoadFile(filePath);
             Duration = _audioService.Duration;
             if (autoPlay)
@@ -550,6 +568,8 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
 
     private void RebuildComments()
     {
+        OnPropertyChanged(nameof(HasMultipleVersions));
+
         var visibleMarkers = (ShowOnlyCurrentVersionComments
             ? TimelineMarkers.Where(m => (m.TrackVersion <= 0 ? 1 : m.TrackVersion) == CurrentTrackVersion)
             : TimelineMarkers).ToList();
