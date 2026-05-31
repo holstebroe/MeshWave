@@ -3,6 +3,7 @@ using System.IO;
 using System.Text.Json;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Microsoft.Win32;
 using MeshWave.Models;
 
 namespace MeshWave.Services
@@ -34,6 +35,15 @@ namespace MeshWave.Services
                 // fall through to defaults
             }
 
+            var installerUsername = GetInstallerDefaultString("Username");
+            if (!string.IsNullOrWhiteSpace(installerUsername))
+            {
+                return new UserProfile
+                {
+                    DisplayName = installerUsername
+                };
+            }
+
             return new UserProfile();
         }
 
@@ -55,6 +65,19 @@ namespace MeshWave.Services
 
             var json = JsonSerializer.Serialize(profile, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(ProfileFilePath, json);
+        }
+
+        private static string GetInstallerDefaultString(string valueName)
+        {
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(@"Software\MeshWave\Installer");
+                return key?.GetValue(valueName)?.ToString() ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
 
         private string GenerateRoundedIcon(string sourceImagePath)

@@ -18,6 +18,9 @@ namespace MeshWave
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
+            // Persist playback state before close-to-tray or exit.
+            ViewModel.PersistPlaybackState(force: true);
+
             // Intercept close: minimise to tray unless the app is explicitly quitting.
             if (Application.Current is App app && !app._IsExiting)
             {
@@ -65,36 +68,43 @@ namespace MeshWave
 
         private void HomeMenu_Click(object sender, RoutedEventArgs e)
         {
+            ViewModel.PersistPlaybackState();
             ViewModel.NavigateToHome();
         }
 
         private void LibraryMenu_Click(object sender, RoutedEventArgs e)
         {
+            ViewModel.PersistPlaybackState();
             ViewModel.NavigateToLibrary();
         }
 
         private void MyMusicMenu_Click(object sender, RoutedEventArgs e)
         {
+            ViewModel.PersistPlaybackState();
             ViewModel.NavigateToMyMusic();
         }
 
         private void PlaybackMenu_Click(object sender, RoutedEventArgs e)
         {
+            ViewModel.PersistPlaybackState();
             ViewModel.NavigateToPlayback();
         }
 
         private void SettingsMenu_Click(object sender, RoutedEventArgs e)
         {
+            ViewModel.PersistPlaybackState();
             ViewModel.NavigateToSettings();
         }
 
         private void BrowseMenu_Click(object sender, RoutedEventArgs e)
         {
+            ViewModel.PersistPlaybackState();
             ViewModel.NavigateToBrowse();
         }
 
         private void CommunityMenu_Click(object sender, RoutedEventArgs e)
         {
+            ViewModel.PersistPlaybackState();
             ViewModel.NavigateToCommunity();
         }
     }

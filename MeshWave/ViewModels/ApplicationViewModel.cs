@@ -1,4 +1,5 @@
 using System.Net.Sockets;
+using MeshWave.Models;
 using MeshWave.Mvvm;
 using MeshWave.Common.Core.Models;
 using MeshWave.Services;
@@ -23,6 +24,7 @@ public class ApplicationViewModel : ViewModelBase
     private readonly P2PIdentityService _identityService = new();
     private readonly ManifestManager _manifestManager = new();
     private readonly SyncOrchestrator _syncOrchestrator = new();
+    private bool _resumeStateDirty;
 
     private MeshWave.Common.Core.Models.Manifest? _localManifest;
     private bool _p2pIsConnected;
@@ -40,6 +42,23 @@ public class ApplicationViewModel : ViewModelBase
         var savedSettings = _settingsService.LoadSettings();
         if (Enum.TryParse<WaveformStyle>(savedSettings.Playback.WaveformStyle, out var savedStyle))
             _playbackViewModel.WaveformStyle = savedStyle;
+
+        _playbackViewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PlaybackViewModel.CurrentTrackTitle)
+                || e.PropertyName == nameof(PlaybackViewModel.CurrentPosition)
+                || e.PropertyName == nameof(PlaybackViewModel.IsPlaying)
+                || e.PropertyName == nameof(PlaybackViewModel.Duration)
+                || e.PropertyName == nameof(PlaybackViewModel.SelectedAlbumTrack)
+                || e.PropertyName == nameof(PlaybackViewModel.AlbumTracks)
+                || e.PropertyName == nameof(PlaybackViewModel.TrackContextTitle)
+                || e.PropertyName == nameof(PlaybackViewModel.TrackContextIconPath))
+            {
+                _resumeStateDirty = true;
+            }
+        };
+
+        RestorePlaybackState(savedSettings);
 
         ConnectP2PCommand = new RelayCommand(_ => _ = ConnectP2PAsync(), _ => !P2PIsConnected);
         DisconnectP2PCommand = new RelayCommand(_ => _ = DisconnectP2PAsync(), _ => P2PIsConnected);
@@ -170,6 +189,8 @@ public class ApplicationViewModel : ViewModelBase
 
         _playbackViewModel.Stop();
         _playbackViewModel.LoadTrack(trackTitle, artist, duration, filePath);
+        _resumeStateDirty = true;
+        PersistPlaybackState();
         CurrentViewModel = _playbackViewModel;
     }
 
@@ -205,6 +226,7 @@ public class ApplicationViewModel : ViewModelBase
     /// </summary>
     public async Task ShutdownAsync()
     {
+        PersistPlaybackState(force: true);
         await _syncOrchestrator.StopAsync();
     }
 
@@ -365,5 +387,30 @@ public class ApplicationViewModel : ViewModelBase
         }
 
         return false;
+    }
+
+    private void RestorePlaybackState(AppSettings settings)
+    {
+        var resume = settings.Playback.ResumeState;
+        if (resume == null || string.IsNullOrWhiteSpace(resume.TrackFilePath))
+            return;
+
+        _playbackViewModel.RestoreFromResumeState(resume);
+    }
+
+    public void PersistPlaybackState(bool force = false)
+    {
+        if (!force && !_resumeStateDirty)
+            return;
+
+        var settings = _settingsService.LoadSettings();
+
+        if (_playbackViewModel.HasTrackLoaded)
+            settings.Playback.ResumeState = _playbackViewModel.BuildResumeState();
+        else
+            settings.Playback.ResumeState = new PlaybackResumeState();
+
+        _settingsService.SaveSettings(settings);
+        _resumeStateDirty = false;
     }
 }

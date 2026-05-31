@@ -31,8 +31,7 @@ namespace MeshWave
         private void InitializeTrayIcon()
         {
             // Load tray icon from the embedded ICO file.
-            var iconStream = GetResourceStream(new Uri("pack://application:,,,/MeshWaveIcon128.ico"))?.Stream
-                          ?? GetResourceStream(new Uri("pack://application:,,,/Assets/MeshWaveIcon128.png"))?.Stream;
+            var iconStream = GetResourceStream(new Uri("pack://application:,,,/MeshWaveIcon128.ico"))?.Stream;
 
             System.Drawing.Icon? icon = null;
             if (iconStream != null)
@@ -86,6 +85,9 @@ namespace MeshWave
             MainWindow.Show();
             MainWindow.WindowState = WindowState.Normal;
             MainWindow.Activate();
+
+            if (MainWindow.DataContext is ApplicationViewModel vm)
+                vm.PersistPlaybackState();
         }
 
         internal void ExitApplication()

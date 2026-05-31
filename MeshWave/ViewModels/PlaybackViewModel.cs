@@ -1,5 +1,6 @@
 using MeshWave.Common.Core.Models;
 using MeshWave.LibraryManager;
+using MeshWave.Models;
 using MeshWave.Mvvm;
 using MeshWave.Services;
 using MeshWave.Synchronizer;
@@ -74,6 +75,8 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     public ICommand ToggleMuteCommand { get; }
 
     public string PlayPauseIcon => IsPlaying ? "⏸" : "▶";
+
+    public bool HasTrackLoaded => !string.IsNullOrWhiteSpace(_currentFilePath) && !string.IsNullOrWhiteSpace(CurrentTrackTitle);
 
     public WaveformStyle WaveformStyle
     {
@@ -365,7 +368,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         }
     }
 
-    public void LoadTrack(string trackTitle, string artist, TimeSpan duration, string? filePath = null)
+    public void LoadTrack(string trackTitle, string artist, TimeSpan duration, string? filePath = null, bool autoPlay = true, bool incrementPlayCount = true)
     {
         CurrentTrackTitle = trackTitle;
         CurrentArtist = artist;
@@ -388,7 +391,8 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             CurrentTrackVersion = myMusicMeta.Version <= 0 ? 1 : myMusicMeta.Version;
             OnPropertyChanged(nameof(IsOwnedTrack));
 
-            _myMusicMetadataService.IncrementPlayCount(filePath);
+            if (incrementPlayCount)
+                _myMusicMetadataService.IncrementPlayCount(filePath);
 
             LoadTimelineMarkers();
             SyncCommentsFromPeerManifests();
@@ -404,7 +408,10 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             _audioService.PlaybackStopped += (s, e) => IsPlaying = false;
             _audioService.LoadFile(filePath);
             Duration = _audioService.Duration;
-            Play();
+            if (autoPlay)
+                Play();
+            else
+                Pause();
 
             var remapped = AlbumTracks.Select(t => new PlaybackTrackListItem
             {
@@ -733,6 +740,91 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             return parsed;
 
         return Math.Max(0, timestamp.ToUniversalTime().TimeOfDay.TotalSeconds);
+    }
+
+    public PlaybackResumeState BuildResumeState()
+    {
+        var contextTracks = AlbumTracks
+            .Where(t => !string.IsNullOrWhiteSpace(t.FilePath))
+            .Select(t => new PlaybackResumeTrack
+            {
+                TrackId = t.TrackId,
+                Title = t.Title,
+                Artist = t.Artist,
+                DurationSeconds = t.Duration.TotalSeconds,
+                FilePath = t.FilePath,
+                TrackNumber = t.TrackNumber,
+                PlayCount = t.PlayCount
+            })
+            .ToList();
+
+        return new PlaybackResumeState
+        {
+            TrackFilePath = _currentFilePath ?? string.Empty,
+            TrackTitle = CurrentTrackTitle,
+            Artist = CurrentArtist,
+            DurationSeconds = Duration.TotalSeconds,
+            PositionSeconds = CurrentPosition.TotalSeconds,
+            WasPlaying = IsPlaying,
+            SelectedTrackId = SelectedAlbumTrack?.TrackId ?? CurrentTrackId,
+            ContextTitle = TrackContextTitle,
+            ContextIconPath = TrackContextIconPath,
+            ContextTracks = contextTracks
+        };
+    }
+
+    public void RestoreFromResumeState(PlaybackResumeState? state)
+    {
+        if (state == null || string.IsNullOrWhiteSpace(state.TrackFilePath) || !File.Exists(state.TrackFilePath))
+            return;
+
+        var context = state.ContextTracks
+            .Where(t => !string.IsNullOrWhiteSpace(t.FilePath) && File.Exists(t.FilePath))
+            .Select(t => new PlaybackTrackListItem
+            {
+                TrackId = t.TrackId,
+                Title = t.Title,
+                Artist = t.Artist,
+                Duration = TimeSpan.FromSeconds(Math.Max(0, t.DurationSeconds)),
+                FilePath = t.FilePath,
+                TrackNumber = t.TrackNumber,
+                PlayCount = t.PlayCount
+            })
+            .ToList();
+
+        if (context.Count > 0)
+            SetAlbumTrackContext(context, state.SelectedTrackId, state.ContextTitle, state.ContextIconPath);
+
+        var duration = state.DurationSeconds > 0
+            ? TimeSpan.FromSeconds(state.DurationSeconds)
+            : TimeSpan.FromMinutes(3);
+
+        LoadTrack(
+            string.IsNullOrWhiteSpace(state.TrackTitle) ? Path.GetFileNameWithoutExtension(state.TrackFilePath) : state.TrackTitle,
+            string.IsNullOrWhiteSpace(state.Artist) ? "Unknown Artist" : state.Artist,
+            duration,
+            state.TrackFilePath,
+            autoPlay: false,
+            incrementPlayCount: false);
+
+        var targetPosition = TimeSpan.FromSeconds(Math.Max(0, state.PositionSeconds));
+        if (Duration.TotalSeconds > 1)
+        {
+            var maxPosition = Duration - TimeSpan.FromMilliseconds(250);
+            if (maxPosition < TimeSpan.Zero)
+                maxPosition = TimeSpan.Zero;
+
+            if (targetPosition > maxPosition)
+                targetPosition = maxPosition;
+        }
+
+        if (targetPosition > TimeSpan.Zero)
+            Seek(targetPosition);
+
+        if (state.WasPlaying)
+            Play();
+        else
+            Pause();
     }
 
     public void Dispose()

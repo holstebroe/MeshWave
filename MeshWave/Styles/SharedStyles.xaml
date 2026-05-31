@@ -342,6 +342,15 @@
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryColor}"/>
     </Style>
 
+    <Style TargetType="ToolTip">
+        <Setter Property="Background" Value="#FF232323"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryColor}"/>
+        <Setter Property="BorderBrush" Value="#FF4A4A4A"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="8,5"/>
+        <Setter Property="FontSize" Value="12"/>
+    </Style>
+
     <Style TargetType="TextBox">
         <Setter Property="Margin" Value="0,0,0,10"/>
         <Setter Property="Padding" Value="6,2"/>

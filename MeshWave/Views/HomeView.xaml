@@ -29,7 +29,7 @@
                             <DropShadowEffect Color="Black" BlurRadius="10" ShadowDepth="2" Opacity="0.8"/>
                         </TextBlock.Effect>
                     </TextBlock>
-                    <TextBlock Text="Decentralized music sharing with a modern local-first workflow"
+                    <TextBlock Text="Decentralized music sharing for musicians"
                                FontSize="16"
                                Foreground="#DDDDDD"
                                Margin="0,8,0,0">

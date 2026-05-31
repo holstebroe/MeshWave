@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using Microsoft.Win32;
 using MeshWave.Models;
 
 namespace MeshWave.Services
@@ -44,6 +45,16 @@ namespace MeshWave.Services
             if (_currentSettings.SupportedExtensions == null || _currentSettings.SupportedExtensions.Count == 0)
             {
                 _currentSettings.SupportedExtensions = [".mp3", ".flac", ".wav", ".ogg", ".m4a"];
+            }
+
+            _currentSettings.P2P ??= new P2PSettings();
+            _currentSettings.Playback ??= new PlaybackSettings();
+            _currentSettings.Playback.ResumeState ??= new PlaybackResumeState();
+            _currentSettings.Storage ??= new StorageSettings();
+
+            if (string.IsNullOrWhiteSpace(_currentSettings.BaseFolder))
+            {
+                _currentSettings.BaseFolder = DefaultBaseFolder;
             }
 
             return _currentSettings;
@@ -111,9 +122,11 @@ namespace MeshWave.Services
 
         private AppSettings CreateDefaultSettings()
         {
+            var installerBaseFolder = GetInstallerDefaultString("BaseFolder");
+
             return new AppSettings
             {
-                BaseFolder = DefaultBaseFolder,
+                BaseFolder = string.IsNullOrWhiteSpace(installerBaseFolder) ? DefaultBaseFolder : installerBaseFolder,
                 Theme = "Dark",
                 AudioDevice = "Default",
                 SupportedExtensions = [".mp3", ".flac", ".wav", ".ogg", ".m4a"],
@@ -123,6 +136,19 @@ namespace MeshWave.Services
                     RegisterPlayAt = 0.5
                 }
             };
+        }
+
+        private static string GetInstallerDefaultString(string valueName)
+        {
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(@"Software\MeshWave\Installer");
+                return key?.GetValue(valueName)?.ToString() ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
     }
 }
