@@ -51,7 +51,7 @@ public class CommunityViewModel : ViewModelBase
         LeaveGroupCommand = new RelayCommand<CommunityGroupItem>(LeaveGroup, g => g != null && g.IsMember);
         SetTabCommand = new RelayCommand<string>(tab =>
         {
-            ActiveTab = Enum.Parse<CommunityTab>(tab);
+            ActiveTab = Enum.Parse<CommunityTab>(tab ?? "Feed");
             if (ActiveTab == CommunityTab.Feed)
                 NewReleaseCount = 0;   // clear badge when user opens the Feed tab
 

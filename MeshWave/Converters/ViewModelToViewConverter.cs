@@ -47,7 +47,7 @@ namespace MeshWave.Converters
                 view.DataContext = vm6;
                 return view;
             }
-            return null;
+            return null!;
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

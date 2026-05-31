@@ -160,23 +160,16 @@ public class ManifestExchangeClient
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(_timeoutMs);
 
-        try
-        {
-            using var client = new TcpClient();
-            await client.ConnectAsync(address, port, cts.Token);
+        using var client = new TcpClient();
+        await client.ConnectAsync(address, port, cts.Token);
 
-            var stream = client.GetStream();
-            var request = new ManifestRequest { Type = ManifestRequestType.RequestRendezvous, Rendezvous = rendezvous };
-            await ManifestExchangeServer.WriteMessageAsync(stream, JsonSerializer.Serialize(request), cts.Token);
+        var stream = client.GetStream();
+        var request = new ManifestRequest { Type = ManifestRequestType.RequestRendezvous, Rendezvous = rendezvous };
+        await ManifestExchangeServer.WriteMessageAsync(stream, JsonSerializer.Serialize(request), cts.Token);
 
-            var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
-            var response = JsonSerializer.Deserialize<ManifestResponse>(responseJson);
-            return response?.Rendezvous;
-        }
-        catch
-        {
-            return null;
-        }
+        var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
+        var response = JsonSerializer.Deserialize<ManifestResponse>(responseJson);
+        return response?.Rendezvous;
     }
 }
 

@@ -6,7 +6,7 @@ namespace MeshWave.Synchronizer.Tests;
 
 public class ManifestExchangeTests : IAsyncDisposable
 {
-    private const int TestPort = 39980;
+    private const int TestPort = 44100;
     private readonly ManifestExchangeServer _server = new(TestPort);
     private readonly ManifestExchangeClient _client = new(timeoutMs: 5000);
     private readonly ManifestManager _manager = new();
@@ -51,7 +51,8 @@ public class ManifestExchangeTests : IAsyncDisposable
 
             var completed = await Task.WhenAny(receivedManifest.Task, Task.Delay(5000));
             Assert.True(receivedManifest.Task.IsCompleted);
-            Assert.Equal("user-sender", receivedManifest.Task.Result.UserId);
+            var result = await receivedManifest.Task;
+            Assert.Equal("user-sender", result.UserId);
         }
         finally
         {
