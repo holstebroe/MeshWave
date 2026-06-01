@@ -604,9 +604,13 @@ public class SettingsViewModel : ViewModelBase
         if (!Directory.Exists(rootFolder))
             return;
 
-        foreach (var file in Directory.EnumerateFiles(rootFolder, "*.waveform.json", SearchOption.AllDirectories))
+        // Clean up both old and new format during transition
+        foreach (var file in Directory.EnumerateFiles(rootFolder, "*.waveform*", SearchOption.AllDirectories))
         {
-            File.Delete(file);
+            if (file.EndsWith(".waveform") || file.EndsWith(".waveform.json"))
+            {
+                File.Delete(file);
+            }
         }
     }
 
@@ -616,8 +620,11 @@ public class SettingsViewModel : ViewModelBase
             return 0;
 
         long total = 0;
-        foreach (var file in Directory.EnumerateFiles(rootFolder, "*.waveform.json", SearchOption.AllDirectories))
+        foreach (var file in Directory.EnumerateFiles(rootFolder, "*.waveform*", SearchOption.AllDirectories))
         {
+            if (!file.EndsWith(".waveform") && !file.EndsWith(".waveform.json"))
+                continue;
+
             try
             {
                 total += new FileInfo(file).Length;

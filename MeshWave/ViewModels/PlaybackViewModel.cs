@@ -486,7 +486,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     {
         try
         {
-            var samples = WaveformService.GenerateWaveform(filePath, 1024);
+            var samples = WaveformService.GenerateWaveform(filePath, 4096);
             if (samples.Length == 0)
             {
                 return;
@@ -499,8 +499,8 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
                 Directory.CreateDirectory(cacheFolder);
             }
 
-            var json = JsonSerializer.Serialize(samples);
-            File.WriteAllText(cachePath, json);
+            var binaryData = WaveformBinaryFormat.Encode(samples);
+            File.WriteAllBytes(cachePath, binaryData);
 
             if (string.Equals(_currentFilePath, filePath, StringComparison.OrdinalIgnoreCase))
             {
