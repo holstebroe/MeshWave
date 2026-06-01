@@ -2,7 +2,7 @@
 
 ## Current Priorities (ordered)
 
-### 1) Community Browse + Shared Catalogue (TOP PRIORITY)
+### [1) Community Browse + Shared Catalogue (TOP PRIORITY)](https://github.com/holstebroe/MeshWave/milestone/1)
 - Decide catalogue architecture (ADR):
   - Replicated metadata to all peers
   - Distributed query/search over mesh
@@ -13,13 +13,13 @@
 - Add play-while-downloading capability (buffer then start playback)
 - Add pending downloads UI (queue, per-item progress, retry/error)
 
-### 2) Search in Library + Local Music
+### [2) Search in Library + Local Music](https://github.com/holstebroe/MeshWave/milestone/2)
 - Define local search behavior for track/album/artist/playlist fields
 - Implement search in Local Music (replace "coming soon")
 - Implement search in Library (replace "coming soon")
 - Add empty-result UX and clear-search behavior
 
-### 3) Library download lifecycle
+### [3) Library download lifecycle](https://github.com/holstebroe/MeshWave/milestone/3)
 - Show pending downloads in Library views with progress indicators
 - Remove-from-library keeps item visible in list as "Not Downloaded" state
 - Define final wording/state model for non-local items
@@ -28,7 +28,7 @@
 - Optional relay fallback (opt-in) only when direct + rendezvous fail
 - Symmetric-NAT focused integration tests
 
-## In Progress: Milestone D remainder (Community Sync)
+## [In Progress: Milestone D remainder (Community Sync)](https://github.com/holstebroe/MeshWave/milestone/5)
 
 ### Done
 - P2P foundation + signing + PeerRouter/PEX/bootstrap
@@ -52,7 +52,7 @@
 - Mobile app (player-only): community playback + community interaction, recent-play cache policy
 - Web frontend phase 1 (playback-focused), optional backend for user-owned file storage later
 
-## Trust & Integrity (Milestone E)
+## [Trust & Integrity (Milestone E)](https://github.com/holstebroe/MeshWave/milestone/6)
 - Sybil-resistance research spike
 - Audit/replay verification for play-count integrity
 - Per-user contribution-cap UI
