@@ -96,6 +96,131 @@ public class BrowseViewModelTests
         Assert.Equal("jane", vm.Tracks[0].ArtistUserId);
     }
 
+    [Fact]
+    public void Refresh_DiscoversPlaylists()
+    {
+        var john = new Manifest
+        {
+            UserId = "john",
+            Operations =
+            [
+                new ManifestOperation
+                {
+                    OperationId = "p1", OperationType = ManifestOperationType.Create,
+                    TargetId = "playlist-1", TargetType = "Playlist", Signature = "sig", SequenceNumber = 0,
+                    Metadata = new Dictionary<string, string> { ["name"] = "My Hits" }
+                }
+            ]
+        };
+
+        var sync = new Mock<ISyncBrowseClient>();
+        sync.SetupGet(s => s.IsRunning).Returns(true);
+        sync.SetupGet(s => s.PeerManifests).Returns(new List<Manifest> { john });
+        sync.SetupGet(s => s.LocalManifest).Returns((Manifest?)null);
+        sync.Setup(s => s.GetPeers()).Returns(Array.Empty<PeerInfo>());
+
+        var vm = new BrowseViewModel(sync.Object, new DownloadQueueService());
+
+        Assert.Single(vm.Playlists);
+        Assert.Equal("My Hits", vm.Playlists[0].Name);
+    }
+
+    [Fact]
+    public void NavigateToAlbum_FiltersTracksToThatArtistAndAlbum()
+    {
+        var john = new Manifest
+        {
+            UserId = "john",
+            Operations =
+            [
+                new ManifestOperation
+                {
+                    OperationId = "t1", OperationType = ManifestOperationType.Create,
+                    TargetId = "track-1", TargetType = "Track", ContentHash = "h1", Signature = "sig", SequenceNumber = 0,
+                    Metadata = new Dictionary<string, string> { ["title"] = "T1", ["album"] = "AlbumA" }
+                }
+            ]
+        };
+        var jane = new Manifest
+        {
+            UserId = "jane",
+            Operations =
+            [
+                new ManifestOperation
+                {
+                    OperationId = "t2", OperationType = ManifestOperationType.Create,
+                    TargetId = "track-2", TargetType = "Track", ContentHash = "h2", Signature = "sig", SequenceNumber = 0,
+                    Metadata = new Dictionary<string, string> { ["title"] = "T2", ["album"] = "AlbumA" } // Same name, different artist
+                }
+            ]
+        };
+
+        var sync = new Mock<ISyncBrowseClient>();
+        sync.SetupGet(s => s.IsRunning).Returns(true);
+        sync.SetupGet(s => s.PeerManifests).Returns(new List<Manifest> { john, jane });
+        sync.SetupGet(s => s.LocalManifest).Returns((Manifest?)null);
+        sync.Setup(s => s.GetPeers()).Returns(Array.Empty<PeerInfo>());
+
+        var vm = new BrowseViewModel(sync.Object, new DownloadQueueService());
+
+        vm.NavigateToAlbum("AlbumA", "john");
+
+        Assert.Single(vm.Tracks);
+        Assert.Equal("track-1", vm.Tracks[0].TrackId);
+        Assert.Equal("john", vm.Tracks[0].ArtistUserId);
+    }
+
+    [Fact]
+    public void Playlist_CanContainTracksFromMultipleArtists()
+    {
+        var john = new Manifest
+        {
+            UserId = "john",
+            Operations =
+            [
+                new ManifestOperation
+                {
+                    OperationId = "p1", OperationType = ManifestOperationType.Create,
+                    TargetId = "playlist-1", TargetType = "Playlist", Signature = "sig", SequenceNumber = 0,
+                    Metadata = new Dictionary<string, string> { ["name"] = "Mix", ["trackIds"] = "t-john,t-jane" }
+                },
+                new ManifestOperation
+                {
+                    OperationId = "t-john", OperationType = ManifestOperationType.Create,
+                    TargetId = "t-john", TargetType = "Track", ContentHash = "hj", Signature = "sig", SequenceNumber = 1,
+                    Metadata = new Dictionary<string, string> { ["title"] = "TJ" }
+                }
+            ]
+        };
+        var jane = new Manifest
+        {
+            UserId = "jane",
+            Operations =
+            [
+                new ManifestOperation
+                {
+                    OperationId = "t-jane", OperationType = ManifestOperationType.Create,
+                    TargetId = "t-jane", TargetType = "Track", ContentHash = "hn", Signature = "sig", SequenceNumber = 0,
+                    Metadata = new Dictionary<string, string> { ["title"] = "TN" }
+                }
+            ]
+        };
+
+        var sync = new Mock<ISyncBrowseClient>();
+        sync.SetupGet(s => s.IsRunning).Returns(true);
+        sync.SetupGet(s => s.PeerManifests).Returns(new List<Manifest> { john, jane });
+        sync.SetupGet(s => s.LocalManifest).Returns((Manifest?)null);
+        sync.Setup(s => s.GetPeers()).Returns(Array.Empty<PeerInfo>());
+
+        var vm = new BrowseViewModel(sync.Object, new DownloadQueueService());
+
+        vm.NavigateToPlaylist("playlist-1", "john");
+
+        Assert.Equal(2, vm.Tracks.Count);
+        Assert.Contains(vm.Tracks, t => t.TrackId == "t-john");
+        Assert.Contains(vm.Tracks, t => t.TrackId == "t-jane");
+    }
+
     private static Manifest BuildArtistManifest(string userId, string displayName, string trackId, string hash)
     {
         return new Manifest

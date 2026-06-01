@@ -32,11 +32,13 @@ public static class SecurityLimits
     public const int MaxUserDescriptionLength = 512;
     public const int MaxTrackTitleLength = 256;
     public const int MaxAlbumNameLength = 256;
+    public const int MaxPlaylistNameLength = 256;
     public const int MaxArtistNameLength = 256;
     public const int MaxCommentTextLength = 2_000;
     public const int MaxVersionStringLength = 32;
     public const int MaxContentHashLength = 128;
     public const int MaxOperationIdLength = 64;
+    public const int MaxPlaylistDescriptionLength = 1000;
     public const int MaxTargetTypeLength = 32;
     public const int MaxTargetIdLength = 64;
     public const int MaxMetadataKeyLength = 64;
