@@ -88,6 +88,7 @@ Milestone D remainder -- Community Sync (in progress), with priority ordered as:
   snapshot feed unexpectedly returns empty list
 - **Content serving hardening**: local content provider now ignores zero-length files for matched hashes to
   reduce false `content-request: fail` outcomes
+- **Manifest compaction/snapshotting**: implemented signed state snapshots to squash historical operations (plays, follows, etc.) while preserving comments; updated merge logic to support snapshot-based sync
 
 ## Open Work (next execution items)
 

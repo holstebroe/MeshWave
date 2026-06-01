@@ -110,21 +110,14 @@ public class PlayCountTests
         for (int i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay - 1; i++)
             AppendPlayAt(local, "track-c", DateTime.UtcNow, priv);
 
-        // Remote has 3 plays starting from the next sequence number
+        // Remote must be a valid full manifest (or at least continuous from 0 if no snapshot)
         var remote = _manager.CreateManifest("user-merge-3");
+        // Add same initial plays
+        for (int i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay - 1; i++)
+            AppendPlayAt(remote, "track-c", DateTime.UtcNow, priv);
+        // Add 3 new ones
         for (int i = 0; i < 3; i++)
             AppendPlayAt(remote, "track-c", DateTime.UtcNow, priv);
-
-        // Renumber remote ops to continue after local — must re-sign with new seq
-        int baseSeq = local.Operations.Count;
-        for (int i = 0; i < remote.Operations.Count; i++)
-        {
-            var op  = remote.Operations[i];
-            int seq = baseSeq + i;
-            op.SequenceNumber = seq;
-            var payload = $"{op.OperationId}|{op.OperationType}|{op.TargetId}|{op.TargetType}||{seq}|{op.Timestamp.Ticks}";
-            op.Signature = CryptoService.SignData(payload, priv);
-        }
 
         var added = _manager.MergeManifest(local, remote, pub);
 
