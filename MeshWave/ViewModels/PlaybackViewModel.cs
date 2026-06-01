@@ -417,11 +417,22 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             };
             _audioService.PlaybackStopped += (s, e) =>
             {
+                // In NAudio, natural completion triggers PlaybackStopped with a clean exit code.
+                // Manual stops also trigger this. We use IsPlaying to guard state.
+                if (!IsPlaying) return;
+
                 IsPlaying = false;
+
                 // Ensure the playhead is at the very end when playing stops naturally
                 if (Duration > TimeSpan.Zero)
                 {
                     CurrentPosition = Duration;
+                }
+
+                // Auto-advance to the next track if we were playing and reached the end
+                if (CanGoToNextTrack)
+                {
+                    PlayNextTrack();
                 }
             };
             _audioService.LoadFile(filePath);

@@ -37,7 +37,8 @@
                     <TextBlock Text="♪" FontSize="26"
                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                Foreground="{StaticResource TextSecondaryColor}"/>
-                    <Image Source="{Binding CoverImagePath}" Stretch="UniformToFill"/>
+                    <Image Source="{Binding CoverImagePath}" Stretch="UniformToFill"
+                           RenderOptions.BitmapScalingMode="HighQuality"/>
                 </Grid>
             </Border>
 
