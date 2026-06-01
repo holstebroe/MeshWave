@@ -50,7 +50,7 @@ namespace MeshWave.ViewModels
             set => SetProperty(ref _isAlbumEditor, value);
         }
 
-        public string EditorTitle => IsAlbumEditor ? "✏️ My Music Album Metadata Editor" : "✏️ My Music Track Metadata Editor";
+        public string EditorTitle => IsAlbumEditor ? "✏️ Local Music Album Metadata Editor" : "✏️ Local Music Track Metadata Editor";
 
         public string Title
         {

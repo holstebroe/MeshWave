@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Text.Json;
 using MeshWave.Common.Core;
 using MeshWave.Common.Core.Models;
+using MeshWave.Common.Core.Storage;
 
 namespace MeshWave.Synchronizer;
 
@@ -34,6 +35,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
     private readonly Lock _diagnosticsLock = new();
     private readonly Dictionary<string, Queue<PeerMessageLogEntry>> _peerMessageLogs = new(StringComparer.OrdinalIgnoreCase);
+    private UserRepository? _userRepository;
     private const int MaxMessageLogEntriesPerPeer = 100;
 
     // Tracks which trackIds have already had a Play op recorded in this process session.
@@ -56,6 +58,9 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
     /// <summary>Read-only view of all peer manifests received and persisted so far.</summary>
     public IReadOnlyCollection<Manifest> PeerManifests => _peerStore.GetAll();
+
+    /// <summary>The community user repository for profile lookup.</summary>
+    public UserRepository? UserRepository => _userRepository;
 
     /// <summary>Last peer connection attempt report from RequestContentAsync, if any.</summary>
     public PeerConnectionAttemptReport? LastConnectionAttemptReport => _lastConnectionReport;
@@ -126,16 +131,28 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         ManifestManager? manifestManager = null,
         PeerManifestStore? peerManifestStore = null,
         ContentExchange? contentExchange = null,
-        NatTraversalService? natTraversal = null)
+        NatTraversalService? natTraversal = null,
+        UserRepository? userRepository = null)
     {
         _router = router ?? new PeerRouter();
         _server = server;
         _client = client ?? new ManifestExchangeClient(timeoutMs: SecurityLimits.ConnectTimeoutMs);
         _manifestManager = manifestManager ?? new ManifestManager();
-        _peerStore = peerManifestStore ?? new PeerManifestStore();
+        _userRepository = userRepository;
+
+        if (peerManifestStore == null && _userRepository != null)
+            _peerStore = PeerManifestStore.CreateAtBase(_userRepository.BaseDataFolder);
+        else
+            _peerStore = peerManifestStore ?? new PeerManifestStore();
+
         _contentExchange = contentExchange ?? new ContentExchange();
         _natTraversal = natTraversal ?? new NatTraversalService();
         _peerStore.LoadAll();
+    }
+
+    public void SetUserRepository(UserRepository repo)
+    {
+        _userRepository = repo;
     }
 
     /// <summary>
@@ -229,7 +246,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// Loads a previously persisted local manifest for the given userId.
     /// Returns null if no persisted manifest exists.
     /// </summary>
-    public static Manifest? LoadLocalManifest(string userId)
+    public Manifest? LoadLocalManifest(string userId)
     {
         var path = BuildLocalManifestPath(userId);
         if (!File.Exists(path)) return null;
@@ -241,10 +258,13 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         catch { return null; }
     }
 
-    private static string BuildLocalManifestPath(string userId)
+    private string BuildLocalManifestPath(string userId)
     {
         var safeName = string.Concat(userId.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
-        return MeshWaveEnvironment.CombineInAppData("LocalManifests", $"{safeName}.json");
+        var baseFolder = _userRepository?.BaseDataFolder ?? MeshWaveEnvironment.GetAppDataRoot();
+        var dir = Path.Combine(baseFolder, "LocalManifests");
+        Directory.CreateDirectory(dir);
+        return Path.Combine(dir, $"{safeName}.json");
     }
 
     /// <summary>
@@ -1038,7 +1058,19 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
         var added = _peerStore.MergeAndSave(remote, publicKeyPem, _manifestManager);
         if (added > 0)
+        {
+            var profileOp = remote.Operations
+                .Where(op => op.OperationType == ManifestOperationType.Profile)
+                .OrderByDescending(op => op.SequenceNumber)
+                .FirstOrDefault();
+
+            if (profileOp != null)
+            {
+                _userRepository?.UpdateProfile(remote.UserId, profileOp.Metadata);
+            }
+
             ManifestMerged?.Invoke(this, new ManifestMergedEventArgs(remote.UserId, added));
+        }
     }
 
     private void PersistAndFanoutLocalManifest()

@@ -1,7 +1,7 @@
 # MeshWave — Library Management Design
 
 ## Library Folders
-- **My Music**: User's personal music files. Can be updated by adding/removing files in the folder. Indexed and scanned for metadata by the app.
+- **Local Music**: User's personal music files. Can be updated by adding/removing files in the folder. Indexed and scanned for metadata by the app.
 - **Community Music**: Files received from the MeshWave network. Managed and updated only by the app (not directly by the user).
 
 ## Scanning and Indexing
@@ -11,11 +11,11 @@
 - Community music is updated only by the synchronizer and not by direct file changes.
 
 ## Planned Features
-- File watchers for incremental updates in My Music.
-- Drag-and-drop import for My Music.
+- File watchers for incremental updates in Local Music.
+- Drag-and-drop import for Local Music.
 - Community music sync and update via P2P only.
 
 ## Implementation Notes
 - Track and album lists in the UI are updated after scanning.
-- Only My Music can be updated by the user directly.
+- Only Local Music can be updated by the user directly.
 - Community music is read-only from the user's perspective.

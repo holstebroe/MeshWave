@@ -73,7 +73,7 @@
                         </Style>
                     </Border.Style>
                     <StackPanel>
-                        <TextBlock Text="🔥 My Music" Style="{StaticResource SectionHeader}"/>
+                        <TextBlock Text="🔥 Local Music" Style="{StaticResource SectionHeader}"/>
                         <TextBlock Text="Import, organize, and manage your own tracks." Foreground="{StaticResource TextSecondaryColor}" TextWrapping="Wrap"/>
                     </StackPanel>
                 </Border>

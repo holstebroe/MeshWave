@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using MeshWave.Bootstrap.Core;
 using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
+using MeshWave.Common.Core.Storage;
 using MeshWave.Synchronizer;
 using Xunit;
 
@@ -63,9 +64,10 @@ public class MeshIntegrationTests : IAsyncLifetime
         var server = new ManifestExchangeServer(port);
         var client = new ManifestExchangeClient(timeoutMs: LocalTestTimeoutMs);
         var mgr = new ManifestManager();
-        var store = new PeerManifestStore(storeDir);
+        var userRepo = new UserRepository(tempDir);
+        var store = PeerManifestStore.CreateAtBase(tempDir);
 
-        var orchestrator = new SyncOrchestrator(peerRouter, server, client, mgr, store);
+        var orchestrator = new SyncOrchestrator(peerRouter, server, client, mgr, store, userRepository: userRepo);
         _orchestrators.Add(orchestrator);
 
         var (privKey, pubKey) = CryptoService.GenerateKeyPair();
@@ -641,7 +643,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         var contentIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var mp3 in Directory.EnumerateFiles(deskPlasticDir, "*.mp3"))
-            contentIndex[MeshWave.Common.Core.Crypto.CryptoService.ComputeFileHash(mp3)] = mp3;
+            contentIndex[CryptoService.ComputeFileHash(mp3)] = mp3;
 
         Assert.NotEmpty(contentIndex);
 

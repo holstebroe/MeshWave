@@ -442,7 +442,7 @@ public class CommunityViewModel : ViewModelBase
 
             _settingsService.EnsureFoldersExist();
             var settings = _settingsService.LoadSettings();
-            var otherMusicFolder = _settingsService.GetOtherMusicFolder();
+            var otherMusicFolder = _settingsService.GetPeerMusicFolder();
             Directory.CreateDirectory(otherMusicFolder);
 
             var safeArtist = SanitizeForPath(item.ArtistDisplayName, "Unknown Artist");
@@ -452,7 +452,7 @@ public class CommunityViewModel : ViewModelBase
             File.WriteAllBytes(tempFile, bytes);
 
             var imported = LocalLibraryManager.ImportSingleFileToOrganizedStructure(tempFile, settings.BaseFolder != string.Empty
-                ? _settingsService.GetOtherMusicFolder()
+                ? _settingsService.GetPeerMusicFolder()
                 : otherMusicFolder,
                 settings.SupportedExtensions);
 
@@ -464,11 +464,11 @@ public class CommunityViewModel : ViewModelBase
                 if (!string.IsNullOrWhiteSpace(fallbackFolder))
                     Directory.CreateDirectory(fallbackFolder);
                 File.WriteAllBytes(fallbackPath, bytes);
-                SearchStatus = $"Added \"{item.Title}\" to Other Music (raw file fallback).";
+                SearchStatus = $"Added \"{item.Title}\" to Peer Music (raw file fallback).";
             }
             else
             {
-                SearchStatus = $"Added \"{item.Title}\" to Other Music.";
+                SearchStatus = $"Added \"{item.Title}\" to Peer Music.";
             }
 
             try { File.Delete(tempFile); } catch { }
@@ -732,7 +732,7 @@ public class CommunityViewModel : ViewModelBase
 
                 _settingsService.EnsureFoldersExist();
                 var settings = _settingsService.LoadSettings();
-                var otherMusicFolder = _settingsService.GetOtherMusicFolder();
+                var otherMusicFolder = _settingsService.GetPeerMusicFolder();
                 Directory.CreateDirectory(otherMusicFolder);
 
                 var extension = ResolveFileExtension(bytes, item.Title);
@@ -741,7 +741,7 @@ public class CommunityViewModel : ViewModelBase
 
                 var imported = LocalLibraryManager.ImportSingleFileToOrganizedStructure(
                     tempFile,
-                    _settingsService.GetOtherMusicFolder(),
+                    _settingsService.GetPeerMusicFolder(),
                     settings.SupportedExtensions);
 
                 if (!imported)
@@ -768,7 +768,7 @@ public class CommunityViewModel : ViewModelBase
                     {
                         item.State = DownloadState.Done;
                         item.ProgressPercent = 100;
-                        item.StatusMessage = "Imported to Other Music.";
+                        item.StatusMessage = "Imported to Peer Music.";
                         SearchStatus = $"Downloaded \"{item.Title}\" to Library.";
                     });
                 }

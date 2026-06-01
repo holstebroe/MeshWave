@@ -226,11 +226,54 @@ public class LocalLibraryManager
 
         WriteMetadataCache(destinationFile, metadata);
         EnsureCoverCached(destinationFile);
+        UpdateMappingFiles(myMusicBaseFolder, destinationFile, metadata);
         return imported;
+    }
+
+    private static void UpdateMappingFiles(string myMusicBaseFolder, string trackFilePath, CachedTrackMetadata metadata)
+    {
+        try
+        {
+            var artistFolder = Path.Combine(myMusicBaseFolder, metadata.Artist);
+            var albumFolder = Path.Combine(artistFolder, metadata.Album);
+            var trackId = ComputeStableId(trackFilePath);
+            var albumId = ComputeStableId($"{metadata.Artist}|{metadata.Album}");
+
+            // Artist level: map album IDs to names
+            var artistMapPath = Path.Combine(artistFolder, "album_map.json");
+            var artistMap = LoadMap(artistMapPath);
+            artistMap[albumId] = metadata.Album;
+            SaveMap(artistMapPath, artistMap);
+
+            // Album level: map track IDs to names and versions
+            var albumMapPath = Path.Combine(albumFolder, "track_map.json");
+            var albumMap = LoadMap(albumMapPath);
+            albumMap[trackId] = $"{metadata.Title}|1"; // Default version 1
+            SaveMap(albumMapPath, albumMap);
+        }
+        catch { }
+    }
+
+    private static Dictionary<string, string> LoadMap(string path)
+    {
+        if (!File.Exists(path)) return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var json = File.ReadAllText(path);
+            return JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+        catch { return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); }
+    }
+
+    private static void SaveMap(string path, Dictionary<string, string> map)
+    {
+        var json = JsonSerializer.Serialize(map, new JsonSerializerOptions { WriteIndented = true });
+        File.WriteAllText(path, json);
     }
 
     public IEnumerable<Track> GetAllTracks() => _tracks;
     public IEnumerable<Album> GetAllAlbums() => _albums;
+
 
     public string GetTrackCoverPath(string filePath)
     {

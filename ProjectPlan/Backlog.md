@@ -10,9 +10,9 @@
 - [ ] Implement play-while-downloading flow (buffered start)
 - [ ] Add global pending downloads queue UI with per-item progress/state
 
-### P1 -- Library/My Music search (replace "coming soon")
+### P1 -- Library/Local Music search (replace "coming soon")
 - [ ] Define local search behavior (fields, tokenization, matching, ranking, empty-state UX)
-- [ ] Implement My Music search for tracks/albums/artists
+- [ ] Implement Local Music search for tracks/albums/artists
 - [ ] Implement Library search for tracks/albums/artists/playlists
 
 ### P1 -- Library download lifecycle UX
@@ -36,7 +36,7 @@
 - [x] Waveform style selector in Settings
 
 ## Milestone B: Library Management (done)
-- [x] File scanner (My Music / Other Music folders)
+- [x] File scanner (Local Music / Peer Music folders)
 - [x] Album/track list views with .mymusic.json sidecar metadata
 - [x] Library ViewModel + View
 
@@ -48,7 +48,7 @@
 ## Milestone D: Community Sync
 - [x] P2P foundation: PeerDiscovery, ManifestExchangeServer/Client, SyncOrchestrator
 - [ ] Implement delta manifest synchronization (request operations by `SequenceNumber` range)
-- [ ] Implement manifest compaction/snapshotting (signed state checkpoints to squash old operations)
+- [ ] Implement manifest compaction/snapshotting (signed state checkpoints to squash old operations, especially operations where the exact history is unimportant. Play count, etc.)
 - [ ] Migrate manifest wire format to a compact binary format (e.g., Protobuf or MessagePack)
 - [x] Manifest signing + verification using RSA
 - [x] SecurityLimits -- central constants enforced at TCP layer and manifest merge
@@ -60,7 +60,7 @@
 - [x] Per-peer manifest disk persistence (PeerManifestStore)
 - [x] Play count sync -- signed Play ops, session rate cap, RecordPlay on IsPlaying
 - [x] Play count consensus -- MergeManifest enforces MaxPlaysPerUserPerTrackPerDay=3
-- [x] Community library ingestion flow (Other Music) driven by peer manifests
+- [x] Community library ingestion flow (Peer Music) driven by peer manifests
 - [x] Comment sync via manifest operations (signed, author-owned; ReplyToId threading)
 - [ ] Comment moderation sync (owner soft-delete ops)
 - [x] Social graph sync (friends, groups, follows as signed manifest ops)
@@ -90,7 +90,7 @@
 - [x] Release timestamp -- ReleasedAt: DateTime? field on Track and Album models; stamped by AnnounceTrack/AnnounceAlbum into manifest metadata
 - [x] Release feed panel in CommunityView -- Feed tab: lists ReleaseFeedItem entries ordered newest-first; Refresh button; empty state; "Add to Library" button (action stub)
 - [x] Artist profile card view -- Following tab upgraded to full artist cards: banner strip, rounded avatar, ARTIST badge, bio, website, track/follower counts, Unfollow button; Discover cards also show ARTIST badge + bio snippet
-- [x] Add to Library flow -- triggers content exchange request; places files in Other Music folder
+- [x] Add to Library flow -- triggers content exchange request; places files in Peer Music folder
 - [x] Follow notifications -- badge on Community nav item when followed artist has new Create ops since last sync
 - [x] Persist follow list as signed Follow manifest ops (social graph)
 - [x] User profile sync op -- broadcast IsArtist, Bio, BannerImageHash, Website as signed Profile manifest op
@@ -181,7 +181,7 @@ Example groups: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone Col
 
 ## Milestone H: Settings Storage and Housekeeping Tab (DONE)
 - [x] Storage tab added to Settings (alongside General/Profile/Artist/Appearance/Network)
-- [x] Show used/free disk space and per-category breakdown: My Music, Other Music, Manifests, Cache
+- [x] Show used/free disk space and per-category breakdown: Local Music, Peer Music, Manifests, Cache
 - [x] Visual progress bar per category (green < 70%, amber < 90%, red >= 90%)
 - [x] Clear cached peer manifests button -- deletes PeerManifests/ folder contents and reloads store
 - [x] Clear waveform cache button (future use)

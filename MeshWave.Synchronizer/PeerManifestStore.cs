@@ -21,7 +21,13 @@ public class PeerManifestStore
 
     public PeerManifestStore(string? storeDirectory = null)
     {
-        _storeDirectory = storeDirectory ?? MeshWaveEnvironment.CombineInAppData("PeerManifests");
+        _storeDirectory = storeDirectory ?? Path.Combine(MeshWaveEnvironment.GetAppDataRoot(), "PeerManifests");
+        Directory.CreateDirectory(_storeDirectory);
+    }
+
+    public static PeerManifestStore CreateAtBase(string baseFolder)
+    {
+        return new PeerManifestStore(Path.Combine(baseFolder, "PeerManifests"));
     }
 
     /// <summary>
