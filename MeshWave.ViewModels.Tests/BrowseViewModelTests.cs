@@ -96,6 +96,95 @@ public class BrowseViewModelTests
         Assert.Equal("jane", vm.Tracks[0].ArtistUserId);
     }
 
+    [Fact]
+    public void Refresh_DiscoversPlaylists_FromManifest()
+    {
+        var artistId = "artist-1";
+        var trackIds = new List<string> { "track-1", "track-2" };
+        var trackIdsJson = System.Text.Json.JsonSerializer.Serialize(trackIds);
+
+        var manifest = new Manifest
+        {
+            UserId = artistId,
+            Operations =
+            [
+                new ManifestOperation
+                {
+                    OperationId = "p1", OperationType = ManifestOperationType.Create,
+                    TargetId = "playlist-1", TargetType = "Playlist", Signature = "sig", SequenceNumber = 0,
+                    Metadata = new Dictionary<string, string>
+                    {
+                        ["name"] = "My Favorites",
+                        ["description"] = "Best tracks",
+                        ["trackIds"] = trackIdsJson,
+                        ["releasedAt"] = DateTime.UtcNow.ToString("O")
+                    }
+                }
+            ]
+        };
+
+        var sync = new Mock<ISyncBrowseClient>();
+        sync.SetupGet(s => s.IsRunning).Returns(true);
+        sync.SetupGet(s => s.PeerManifests).Returns(new List<Manifest> { manifest });
+        sync.Setup(s => s.GetPeers()).Returns(Array.Empty<PeerInfo>());
+
+        var vm = new BrowseViewModel(sync.Object, new DownloadQueueService());
+
+        Assert.Single(vm.Playlists);
+        var pl = vm.Playlists[0];
+        Assert.Equal("My Favorites", pl.Name);
+        Assert.Equal("Best tracks", pl.Description);
+        Assert.Equal(2, pl.TrackCount);
+        Assert.Equal(trackIds, pl.TrackIds);
+    }
+
+    [Fact]
+    public void DownloadPlaylistCommand_EnqueuesTracksInPlaylist()
+    {
+        var artistId = "artist-1";
+        var trackIds = new List<string> { "track-1" };
+        var trackIdsJson = System.Text.Json.JsonSerializer.Serialize(trackIds);
+
+        var manifest = new Manifest
+        {
+            UserId = artistId,
+            Operations =
+            [
+                new ManifestOperation
+                {
+                    OperationId = "t1", OperationType = ManifestOperationType.Create,
+                    TargetId = "track-1", TargetType = "Track", ContentHash = "hash-1", Signature = "sig",
+                    Metadata = new Dictionary<string, string> { ["title"] = "Track 1", ["album"] = "Album A" }
+                },
+                new ManifestOperation
+                {
+                    OperationId = "p1", OperationType = ManifestOperationType.Create,
+                    TargetId = "playlist-1", TargetType = "Playlist", Signature = "sig",
+                    Metadata = new Dictionary<string, string>
+                    {
+                        ["name"] = "Playlist",
+                        ["trackIds"] = trackIdsJson
+                    }
+                }
+            ]
+        };
+
+        var sync = new Mock<ISyncBrowseClient>();
+        sync.SetupGet(s => s.IsRunning).Returns(true);
+        sync.SetupGet(s => s.PeerManifests).Returns(new List<Manifest> { manifest });
+        sync.Setup(s => s.GetPeers()).Returns(Array.Empty<PeerInfo>());
+
+        var downloadQueue = new DownloadQueueService();
+        var vm = new BrowseViewModel(sync.Object, downloadQueue);
+
+        Assert.Empty(downloadQueue.AllItems);
+
+        vm.DownloadPlaylistCommand.Execute(vm.Playlists[0]);
+
+        Assert.Single(downloadQueue.AllItems);
+        Assert.Equal("hash-1", downloadQueue.AllItems[0].ContentHash);
+    }
+
     private static Manifest BuildArtistManifest(string userId, string displayName, string trackId, string hash)
     {
         return new Manifest

@@ -6,7 +6,7 @@
 - [ ] Write architecture decision: replicated metadata index vs distributed search vs hybrid model
 - [ ] Define shared catalogue schema for Artist/Album/Track/Playlist metadata and peer availability
 - [ ] Implement catalogue sync/index pipeline (ingest, dedupe, staleness rules)
-- [ ] Build Browse UI for artists/albums/tracks/playlists with download actions
+- [x] Build Browse UI for artists/albums/tracks/playlists with download actions
 - [ ] Implement play-while-downloading flow (buffered start)
 - [ ] Add global pending downloads queue UI with per-item progress/state
 
