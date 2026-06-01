@@ -15,7 +15,7 @@ Build your own library, play tracks with rich visuals, and connect to a communit
 ## Why musicians love MeshWave
 
 - 🎧 **Beautiful playback experience** with waveform view, comments, and timeline interaction
-- 📀 **My Music workspace** to organize tracks and albums with metadata editing
+- 📀 **Local Music workspace** to organize tracks and albums with metadata editing
 - 🌐 **Community sharing** across a decentralized peer-to-peer mesh
 - 💬 **Track conversations** with version-aware comments
 - ❤️ **Like, follow, and discover** music in a social, artist-friendly flow

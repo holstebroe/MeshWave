@@ -3,6 +3,7 @@ using System.IO;
 using System.Text.Json;
 using Microsoft.Win32;
 using MeshWave.Common.Core;
+using MeshWave.Common.Core.Models;
 using MeshWave.Models;
 
 namespace MeshWave.Services
@@ -87,16 +88,16 @@ namespace MeshWave.Services
             }
         }
 
-        public string GetMyMusicFolder()
+        public string GetLocalMusicFolder()
         {
             var settings = LoadSettings();
-            return Path.Combine(settings.BaseFolder, "My Music");
+            return Path.Combine(settings.BaseFolder, "Local Music");
         }
 
-        public string GetOtherMusicFolder()
+        public string GetPeerMusicFolder()
         {
             var settings = LoadSettings();
-            return Path.Combine(settings.BaseFolder, "Other Music");
+            return Path.Combine(settings.BaseFolder, "Peer Music");
         }
 
         public void EnsureFoldersExist()
@@ -108,16 +109,16 @@ namespace MeshWave.Services
                 Directory.CreateDirectory(settings.BaseFolder);
             }
 
-            var myMusic = GetMyMusicFolder();
-            if (!Directory.Exists(myMusic))
+            var localMusic = GetLocalMusicFolder();
+            if (!Directory.Exists(localMusic))
             {
-                Directory.CreateDirectory(myMusic);
+                Directory.CreateDirectory(localMusic);
             }
 
-            var otherMusic = GetOtherMusicFolder();
-            if (!Directory.Exists(otherMusic))
+            var peerMusic = GetPeerMusicFolder();
+            if (!Directory.Exists(peerMusic))
             {
-                Directory.CreateDirectory(otherMusic);
+                Directory.CreateDirectory(peerMusic);
             }
         }
 

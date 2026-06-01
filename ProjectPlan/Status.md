@@ -13,7 +13,7 @@
 
 Milestone D remainder -- Community Sync (in progress), with priority ordered as:
 1. Browse + shared catalogue architecture and implementation
-2. Library/My Music search implementation
+2. Library/Local Music search implementation
 3. Download lifecycle UX (pending/progress/not-downloaded states)
 4. Relay fallback hardening
 5. NAT: outbound-only peer manifest push (peer without open port should push to listener)
@@ -47,7 +47,7 @@ Milestone D remainder -- Community Sync (in progress), with priority ordered as:
   best-effort push to discovered peers
 - **New integration test**: `AnnouncedTracks_ArePushedToPeers_WithoutManualManifestPush` reproduces
   bootstrap-assisted discovery + manifest propagation path and now passes
-- **Automatic release publish on connect/load**: My Music now auto-announces album/track items marked
+- **Automatic release publish on connect/load**: Local Music now auto-announces album/track items marked
   released (`IsReleased=true`) when P2P is connected, reducing the chance of artist peers showing 0 tracks
 - **Detailed diagnostics window**: Settings → Network now includes "Open Detailed Diagnostics" showing
   local published counts, per-peer published album/track counts, online status/endpoints, and recent
@@ -62,7 +62,7 @@ Milestone D remainder -- Community Sync (in progress), with priority ordered as:
   announced hashes to file bytes (fixes direct probe success but content request failure)
 - **Download UX consistency and resilience**: Community Feed action label now matches Browse (`Download`),
   feed downloads use the shared queue path, and failed queue items auto-retry after delay
-- **Library pending placeholder visibility**: Library (Other Music) now shows queued/downloading/failed placeholders
+- **Library pending placeholder visibility**: Library (Peer Music) now shows queued/downloading/failed placeholders
   immediately with status badges and disabled playback until download completes
 - **Display-name fallback hardening**: Browse and follow/friend lists now prefer profile displayName,
   then routed peer display name, before GUID fallback
@@ -76,7 +76,7 @@ Milestone D remainder -- Community Sync (in progress), with priority ordered as:
   and track rows show album name + download status badge for placeholders
 - **Download icon polish**: Browse download labels now use explicit state icons (`⬇`, `⏳`, `✅`) for
   faster visual scanning of download state
-- **Remove lifecycle completed**: Other Music tracks can now be removed via context menu while remaining
+- **Remove lifecycle completed**: Peer Music tracks can now be removed via context menu while remaining
   discoverable as `Not Downloaded` placeholders; state persists via appdata-backed removal markers and
   auto-clears when a track is downloaded again
 - **Library organization fix for pending/removed tracks**: pending and removed placeholder tracks now
@@ -93,7 +93,7 @@ Milestone D remainder -- Community Sync (in progress), with priority ordered as:
 
 - Shared catalogue strategy decision (replicated vs distributed vs hybrid)
 - Browse protocol/storage/UI implementation based on that decision
-- Replace "coming soon" search in Library and My Music (Assigned to Jules Fleet)
+- Replace "coming soon" search in Library and Local Music (Assigned to Jules Fleet)
 - Pending downloads/progress visibility in Browse + Library
 - Remove-from-library while preserving list membership as "Not Downloaded"
 - Optional relay fallback after direct+rendezvous failure

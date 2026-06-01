@@ -6,7 +6,7 @@ Top menu:
 
 - Home
 - Library (community)
-- My Music (your local managed collection)
+- Local Music (your local managed collection)
 - Playback
 - Settings
 
@@ -18,10 +18,10 @@ In Settings you can:
 - Configure supported audio extensions (persisted)
 - Save settings to `%APPDATA%\MeshWave\settings.json`
 
-## My Music Import
+## Local Music Import
 
-1. Open **My Music**
-2. Click **Import My Music**
+1. Open **Local Music**
+2. Click **Import Local Music**
 3. Select source folder
 4. Watch import progress (current file, total, remaining)
 5. Cancel import if needed
@@ -30,7 +30,7 @@ Imported files are copied and organized automatically by artist/album.
 
 ## Library Browsing
 
-Both Library and My Music support hierarchy:
+Both Library and Local Music support hierarchy:
 
 1. Select artist
 2. Select album
@@ -51,5 +51,5 @@ Lists are scrollable when content is larger than the panel.
 
 ## Notes
 
-- `Other Music` is intended for community-managed content.
+- `Peer Music` is intended for community-managed content.
 - Some social/profile and sync features are still in progress.

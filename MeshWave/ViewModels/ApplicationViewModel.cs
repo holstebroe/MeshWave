@@ -2,7 +2,9 @@ using System.Net.Sockets;
 using MeshWave.LibraryManager;
 using MeshWave.Models;
 using MeshWave.Mvvm;
+using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
+using MeshWave.Common.Core.Storage;
 using MeshWave.Services;
 using MeshWave.Synchronizer;
 using System.Collections.Generic;
@@ -25,11 +27,13 @@ public class ApplicationViewModel : ViewModelBase
     private readonly UserProfileService _profileService = new();
     private readonly P2PIdentityService _identityService = new();
     private readonly ManifestManager _manifestManager = new();
-    private readonly SyncOrchestrator _syncOrchestrator = new();
+    private readonly SyncOrchestrator _syncOrchestrator;
     private readonly DownloadQueueService _downloadQueue = new();
+    private readonly UserRepository _userRepository;
+    private readonly MetadataLookupRepository _metadataLookup;
     private bool _resumeStateDirty;
 
-    private MeshWave.Common.Core.Models.Manifest? _localManifest;
+    private Manifest? _localManifest;
     private bool _p2pIsConnected;
     private string _p2pStatusText = "Disconnected";
     private int _p2pPeerCount;
@@ -38,11 +42,16 @@ public class ApplicationViewModel : ViewModelBase
 
     public ApplicationViewModel()
     {
-        _playbackViewModel = new PlaybackViewModel(_syncOrchestrator);
+        var settings = _settingsService.LoadSettings();
+        _userRepository = new UserRepository(settings.BaseFolder);
+        _metadataLookup = new MetadataLookupRepository(_settingsService.GetLocalMusicFolder());
+        _syncOrchestrator = new SyncOrchestrator(userRepository: _userRepository);
+
+        _playbackViewModel = new PlaybackViewModel(_syncOrchestrator, _userRepository, _metadataLookup);
         _currentViewModel = new HomeViewModel();
 
         // Apply persisted waveform style immediately
-        var savedSettings = _settingsService.LoadSettings();
+        var savedSettings = settings;
         if (Enum.TryParse<WaveformStyle>(savedSettings.Playback.WaveformStyle, out var savedStyle))
             _playbackViewModel.WaveformStyle = savedStyle;
 
@@ -303,7 +312,7 @@ public class ApplicationViewModel : ViewModelBase
                 }
             }
 
-            _localManifest ??= SyncOrchestrator.LoadLocalManifest(identity.UserId)
+            _localManifest ??= _syncOrchestrator.LoadLocalManifest(identity.UserId)
                                ?? _manifestManager.CreateManifest(identity.UserId);
 
             await _syncOrchestrator.StartAsync(
@@ -414,8 +423,8 @@ public class ApplicationViewModel : ViewModelBase
 
             var roots = new[]
             {
-                _settingsService.GetMyMusicFolder(),
-                _settingsService.GetOtherMusicFolder()
+                _settingsService.GetLocalMusicFolder(),
+                _settingsService.GetPeerMusicFolder()
             }
             .Where(static p => !string.IsNullOrWhiteSpace(p))
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -431,7 +440,7 @@ public class ApplicationViewModel : ViewModelBase
                     if (!supportedExtensions.Contains(Path.GetExtension(file)))
                         continue;
 
-                    var hash = MeshWave.Common.Core.Crypto.CryptoService.ComputeFileHash(file);
+                    var hash = CryptoService.ComputeFileHash(file);
                     if (!string.Equals(hash, contentHash, StringComparison.OrdinalIgnoreCase))
                         continue;
 
@@ -496,7 +505,7 @@ public class ApplicationViewModel : ViewModelBase
         {
             var metadataService = new MyMusicMetadataService();
             var settings = _settingsService.LoadSettings();
-            var myMusicFolder = _settingsService.GetMyMusicFolder();
+            var myMusicFolder = _settingsService.GetLocalMusicFolder();
             if (!Directory.Exists(myMusicFolder))
                 return;
 
@@ -539,7 +548,7 @@ public class ApplicationViewModel : ViewModelBase
                     continue;
 
                 var albumTitle = albums.FirstOrDefault(a => string.Equals(a.AlbumId, track.AlbumId, StringComparison.OrdinalIgnoreCase))?.Title ?? string.Empty;
-                _syncOrchestrator.AnnounceTrack(track.TrackId, MeshWave.Common.Core.Crypto.CryptoService.ComputeFileHash(track.FilePath), new Dictionary<string, string>
+                _syncOrchestrator.AnnounceTrack(track.TrackId, CryptoService.ComputeFileHash(track.FilePath), new Dictionary<string, string>
                 {
                     ["title"] = SecurityLimits.Truncate(track.Title, SecurityLimits.MaxTrackTitleLength),
                     ["artist"] = SecurityLimits.Truncate(track.Description ?? string.Empty, SecurityLimits.MaxArtistNameLength),

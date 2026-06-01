@@ -18,7 +18,7 @@
 
         <StackPanel Grid.Row="0">
             <StackPanel Orientation="Horizontal">
-                <Button Content="Import My Music Folder" 
+                <Button Content="Import Local Music Folder"
                         Click="ImportMyMusic_Click"
                         Visibility="{Binding CanImportMyMusic, Converter={StaticResource BoolToVisibilityConverter}}"
                         Style="{StaticResource PrimaryButton}"

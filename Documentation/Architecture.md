@@ -13,7 +13,7 @@ MeshWave is organized into these projects:
 
 ### AppData (application state)
 
-`%APPDATA%\MeshWave\`
+`the base data folder\`
 
 - `settings.json` (persisted app settings)
 - profile/settings-related files (planned expansion)
@@ -22,8 +22,8 @@ MeshWave is organized into these projects:
 
 `{BaseFolder}` (configured in Settings)
 
-- `My Music/` (user-managed music)
-- `Other Music/` (community-managed music)
+- `Local Music/` (user-managed music)
+- `Peer Music/` (community-managed music)
 
 Music is organized as:
 
@@ -56,7 +56,7 @@ A `Manifest` is a collection of `ManifestOperation` entries associated with a `U
 ### Lifecycle and Management
 
 1.  **Creation and Signing**: When a user performs an action (e.g., plays a track or follows a peer), the `ManifestManager` creates a new operation, assigns the next `SequenceNumber`, and signs it using the user's RSA private key.
-2.  **Persistence**: The local manifest is persisted to `%APPDATA%\MeshWave\LocalManifests\{UserId}.json`. Remote peer manifests are stored in `%APPDATA%\MeshWave\PeerManifests\{UserId}.json`.
+2.  **Persistence**: The local manifest is persisted to `the base data folder\LocalManifests\{UserId}.json`. Remote peer manifests are stored in `the base data folder\PeerManifests\{UserId}.json`.
 3.  **Discovery and Exchange**: Peers discover each other via `PeerRouter` (LAN, Bootstrap, PEX). Once connected, they exchange manifests over TCP using `ManifestExchangeClient` and `ManifestExchangeServer`.
     - **Push**: A peer can proactively push its manifest to known peers.
     - **Fetch**: A peer can request the full manifest from another peer.
@@ -87,10 +87,10 @@ To support large mesh networks with many users and files, the architecture must 
 - Shared playback session is managed centrally so playback continues while navigating tabs.
 - Library UI is split into:
   - Community Library
-  - My Music (with import workflow)
+  - Local Music (with import workflow)
 - Hierarchical browsing flow:
   - Artist -> Album -> Track
-- Double-click track starts playback from both Library and My Music.
+- Double-click track starts playback from both Library and Local Music.
 
 ## Caching Strategy
 
