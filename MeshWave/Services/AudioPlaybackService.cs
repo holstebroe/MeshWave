@@ -85,6 +85,8 @@ namespace MeshWave.Services
         private void OnPlaybackStopped(object? sender, StoppedEventArgs e)
         {
             _positionTimer?.Stop();
+            // Ensure we notify the final position at the end of the track
+            PositionChanged?.Invoke(this, Duration);
             PlaybackStopped?.Invoke(this, EventArgs.Empty);
         }
 

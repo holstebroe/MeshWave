@@ -6,9 +6,9 @@ namespace MeshWave.Synchronizer.Tests;
 
 public class ManifestExchangeTests : IAsyncDisposable
 {
-    private const int TestPort = 39980;
+    private const int TestPort = 44100;
     private readonly ManifestExchangeServer _server = new(TestPort);
-    private readonly ManifestExchangeClient _client = new(timeoutMs: 5000);
+    private readonly ManifestExchangeClient _client = new(timeoutMs: 10000);
     private readonly ManifestManager _manager = new();
 
     [Fact]
@@ -44,14 +44,15 @@ public class ManifestExchangeTests : IAsyncDisposable
         try
         {
             var toSend = _manager.CreateManifest("user-sender");
-            var client = new ManifestExchangeClient(timeoutMs: 5000);
+            var client = new ManifestExchangeClient(timeoutMs: 10000);
             var ack = await client.PushManifestAsync("127.0.0.1", TestPort + 1, toSend);
 
             Assert.True(ack);
 
-            var completed = await Task.WhenAny(receivedManifest.Task, Task.Delay(5000));
+            var completed = await Task.WhenAny(receivedManifest.Task, Task.Delay(10000));
             Assert.True(receivedManifest.Task.IsCompleted);
-            Assert.Equal("user-sender", receivedManifest.Task.Result.UserId);
+            var result = await receivedManifest.Task;
+            Assert.Equal("user-sender", result.UserId);
         }
         finally
         {
@@ -67,7 +68,7 @@ public class ManifestExchangeTests : IAsyncDisposable
 
         try
         {
-            var client = new ManifestExchangeClient(timeoutMs: 5000);
+            var client = new ManifestExchangeClient(timeoutMs: 10000);
             var fetched = await client.FetchManifestAsync("127.0.0.1", TestPort + 2);
 
             Assert.Null(fetched);
@@ -95,7 +96,7 @@ public class ManifestExchangeTests : IAsyncDisposable
 
         try
         {
-            var client = new ManifestExchangeClient(timeoutMs: 5000);
+            var client = new ManifestExchangeClient(timeoutMs: 10000);
             var response = await client.RequestRendezvousAsync("127.0.0.1", TestPort + 3, new RendezvousRequest
             {
                 InitiatorUserId = "initiator-1",

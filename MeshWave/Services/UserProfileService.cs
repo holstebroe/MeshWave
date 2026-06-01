@@ -82,8 +82,9 @@ namespace MeshWave.Services
         private string GenerateRoundedIcon(string sourceImagePath)
         {
             var appDataFolder = MeshWaveEnvironment.GetAppDataRoot();
-            var iconPath = Path.Combine(appDataFolder, "user_icon.png");
-            var tempPath = iconPath + ".tmp";
+            // Use a unique filename to avoid locking issues (WPF might still hold the old file).
+            var timestamp = DateTime.Now.Ticks;
+            var iconPath = Path.Combine(appDataFolder, $"user_icon_{timestamp}.png");
 
             var bitmap = new BitmapImage();
             bitmap.BeginInit();
@@ -97,6 +98,9 @@ namespace MeshWave.Services
             var visual = new DrawingVisual();
             using (var ctx = visual.RenderOpen())
             {
+                // Request high quality scaling
+                RenderOptions.SetBitmapScalingMode(visual, BitmapScalingMode.HighQuality);
+
                 var rect = new System.Windows.Rect(0, 0, 64, 64);
                 var clip = new RectangleGeometry(rect, 12, 12);
                 ctx.PushClip(clip);
@@ -110,13 +114,21 @@ namespace MeshWave.Services
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(rtb));
 
-            // Write to a temp file first so we never overwrite a file
-            // that is currently held open by a WPF BitmapImage binding.
-            using (var stream = File.Create(tempPath))
+            using (var stream = File.Create(iconPath))
                 encoder.Save(stream);
 
-            // Atomically replace the final file.
-            File.Move(tempPath, iconPath, overwrite: true);
+            // Cleanup old icons
+            try
+            {
+                foreach (var file in Directory.EnumerateFiles(appDataFolder, "user_icon_*.png"))
+                {
+                    if (Path.GetFileName(file) != Path.GetFileName(iconPath))
+                    {
+                        File.Delete(file);
+                    }
+                }
+            }
+            catch { /* best effort cleanup */ }
 
             return iconPath;
         }
