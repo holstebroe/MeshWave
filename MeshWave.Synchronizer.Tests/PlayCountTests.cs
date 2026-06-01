@@ -41,8 +41,8 @@ public class PlayCountTests
             SequenceNumber = seq,
             Metadata     = new Dictionary<string, string> { ["title"] = "Test Track" }
         };
-        // Build payload exactly as ManifestManager does, then sign
-        var payload = $"{op.OperationId}|{op.OperationType}|{op.TargetId}|{op.TargetType}||{seq}|{op.Timestamp.Ticks}";
+        // Use ManifestManager to build the signable payload to ensure consistency.
+        var payload = ManifestManager.BuildSignablePayload(op);
         op.Signature = CryptoService.SignData(payload, privateKeyPem);
         manifest.Operations.Add(op);
         manifest.Version++;

@@ -362,7 +362,7 @@ public class ManifestManager
         return true;
     }
 
-    private static string BuildSignablePayload(ManifestOperation op)
+    public static string BuildSignablePayload(ManifestOperation op)
     {
         var sb = new StringBuilder();
         sb.Append(op.OperationId);
@@ -381,7 +381,7 @@ public class ManifestManager
         return sb.ToString();
     }
 
-    private static string BuildSnapshotSignablePayload(ManifestSnapshot snapshot)
+    public static string BuildSnapshotSignablePayload(ManifestSnapshot snapshot)
     {
         var sb = new StringBuilder();
         sb.Append(snapshot.LastSequenceNumber);

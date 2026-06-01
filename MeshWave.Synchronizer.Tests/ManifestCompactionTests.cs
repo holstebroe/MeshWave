@@ -87,7 +87,8 @@ public class ManifestCompactionTests
 
         Assert.Equal(2, added);
         Assert.NotNull(local.Snapshot);
-        Assert.Equal(remote.Snapshot.LastSequenceNumber, local.Snapshot.LastSequenceNumber);
+        Assert.NotNull(remote.Snapshot);
+        Assert.Equal(remote.Snapshot!.LastSequenceNumber, local.Snapshot!.LastSequenceNumber);
         Assert.Equal(2, local.Operations.Count);
         Assert.True(_manager.VerifyManifest(local, publicKey));
     }
