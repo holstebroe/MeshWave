@@ -5,7 +5,7 @@ namespace MeshWave.Services
 {
     public static class WaveformService
     {
-        public static float[] GenerateWaveform(string filePath, int points = 1024)
+        public static float[] GenerateWaveform(string filePath, int points = 4096)
         {
             if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath) || points <= 0)
             {

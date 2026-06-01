@@ -184,7 +184,8 @@ Example groups: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone Col
 - [x] Show used/free disk space and per-category breakdown: Local Music, Peer Music, Manifests, Cache
 - [x] Visual progress bar per category (green < 70%, amber < 90%, red >= 90%)
 - [x] Clear cached peer manifests button -- deletes PeerManifests/ folder contents and reloads store
-- [x] Clear waveform cache button (future use)
+- [x] Clear waveform cache button
+- [x] High-resolution binary waveform cache format (4096 samples, 8-bit quantization)
 - [x] Configurable storage quota warning threshold (default 10 GB)
 
 ## Milestone I: Mesh Resilience and Background Mode (COMPLETE)

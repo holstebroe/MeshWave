@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using MeshWave.Common.Core.Models;
+using MeshWave.Common.Core.Storage;
 
 namespace MeshWave.LibraryManager;
 
@@ -306,8 +307,8 @@ public class LocalLibraryManager
 
         try
         {
-            var json = System.IO.File.ReadAllText(waveformPath);
-            var waveform = JsonSerializer.Deserialize<float[]>(json);
+            var data = System.IO.File.ReadAllBytes(waveformPath);
+            var waveform = WaveformBinaryFormat.Decode(data);
             return waveform ?? [];
         }
         catch
@@ -414,7 +415,7 @@ public class LocalLibraryManager
     {
         var fileName = NormalizeFolderName(Path.GetFileNameWithoutExtension(filePath));
         var albumFolder = Path.GetDirectoryName(filePath) ?? string.Empty;
-        return Path.Combine(albumFolder, ".cache", $"{fileName}.waveform.json");
+        return Path.Combine(albumFolder, ".cache", $"{fileName}.waveform");
     }
 
     private static void EnsureCoverCached(string filePath)
