@@ -54,13 +54,17 @@ jobs:
             variable TEST_TOKEN to let me verify that I could pass variables to you.
             
             EXECUTION STEPS:
-            1. Download open issues with the `gh` command (with a reasonable limit) to a temp markdown file also download. Hint: use `run_in_bash_session`
-            milestones into another temp markdown file.
-            2. Open and thoroughly parse `ProjectPlan/Backlog.md` and `ProjectPlan/Roadmap.md` 
+            * Download open issues with the `gh` command (with a reasonable limit) to a temp markdown file also download milestones into another temp markdown file.. Hint: use `run_in_bash_session`
+            * Check pending PR to ensure that we are not choosing issues that have already been
+            resolved.                        
+            * Open and thoroughly parse `ProjectPlan/Backlog.md` and `ProjectPlan/Roadmap.md` 
             compare backlog and roadmap with the GitHub issues and milestones and up to 5 new GitHub
             issues if they are missing and up to 3 missing milestones.
-            3. Among the issues choose up to 3 distinct, unresolved isolated engineering tasks.
-            4. Each issue MUST have the label `jules-task` to automatically trigger an development agent workflow. Add the label to the chosen GitHub issues.
-            5. Ensure the issue body contains the detailed technical instructions you've drafted for the task, including context and success criteria.
-            6. Update `ProjectPlan/Backlog.md`, `ProjectPlan/Roadmap.md` and `ProjectPlan/Status.md` to reflect the current status.
-            7. Cleanup temp files
+            * Among the issues choose up to 3 distinct, unresolved isolated engineering tasks.
+            Make an analysis in the codebase if the issues are still relevant.
+            * Update the GitHub issues descriptions with well analyzed descriptions of the chosen
+            tasks.
+            * Ensure the issue body contains the detailed technical instructions you've drafted for the task, including context and success criteria.
+            * Each chosen issue MUST have the label `jules-task` to automatically trigger an development agent workflow. Add the label to the chosen GitHub issues.            
+            * Update `ProjectPlan/Backlog.md`, `ProjectPlan/Roadmap.md` and `ProjectPlan/Status.md` to reflect the current status.
+            * Cleanup temp files
