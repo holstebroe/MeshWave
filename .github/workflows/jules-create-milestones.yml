@@ -1,0 +1,36 @@
+name: One-Time Milestone & Issue Migration
+
+on:
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  migrate-markdown:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Migration Agent
+        uses: google-labs-code/jules-invoke@v1.0.0
+        with:
+          jules_api_key: ${{ secrets.JULES_API_KEY }}
+          starting_branch: master
+          prompt: |
+            You are acting as a Technical Project Migration Assistant.
+            
+            Your objective is to migrate open tasks from our markdown files into GitHub Milestones and linked GitHub Issues.
+            
+            EXECUTION INSTRUCTIONS:
+            1. Read `ProjectPlan/Roadmap.md` and `ProjectPlan/Backlog.md`.
+            2. Identify logical groupings of work. Headers containing the word "Milestone" (e.g., "Milestone D: Community Sync") or major feature Epics (e.g., "1) Community Browse + Shared Catalogue") should be treated as target Milestones.
+            3. Identify all uncompleted tasks under these headers (indicated by `- [ ]`).
+            4. Write a brief Python or Bash script in the runner that uses the `gh` CLI tool to:
+               - Create the Milestone in the repository and capture its resulting integer ID. (Use `gh api repos/{owner}/{repo}/milestones -f title="..." --jq .number`).
+               - Iterate through the open tasks belonging to that Milestone and create GitHub Issues, passing the captured Milestone ID (using `gh issue create --title "..." --milestone <ID>`).
+            5. Execute the script using the provided token environment variable.
+            6. Update the original markdown files with references to the GitHub issues and milestones such that it is clear which issues are now also registered as issues and milestones in GitHub.
+        env:
+          GH_TOKEN: ${{ secrets.JULES_AUTOMATION_TOKEN }}

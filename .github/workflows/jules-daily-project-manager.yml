@@ -49,6 +49,6 @@ jobs:
             5a. For each chosen task not already an GitHub issue, you must use the `run_in_bash_session` tool to create a new GitHub Issue using the `gh issue create` command.
             5b. For each chosen task that is already an GitHub issue, you must use the `run_in_bash_session` tool to update the issue instead by updating the description or add comments.
             6. Each issue MUST have the label `jules-task` to trigger the Fleet Worker workflow. 
-			   Add to existing GitHub issues if the label is not already there.
+            Add to existing GitHub issues if the label is not already there.
             7. Ensure the issue body contains the detailed technical instructions you've drafted for the task, including context and success criteria.
             8. Update `ProjectPlan/Status.md` to list the newly created issue numbers.
