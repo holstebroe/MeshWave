@@ -20,6 +20,7 @@ Milestone D remainder -- Community Sync (in progress), with priority ordered as:
 
 ## Recently Completed
 
+- **Architecture Decision Record (ADR 0001) for Shared Catalogue**: Defined a hybrid replication/distributed search strategy for the mesh catalogue.
 - **Content download protocol wired end-to-end**: `ManifestExchangeClient.RequestContentAsync`,
   `SyncOrchestrator.StartAsync` content provider parameter, `ManifestExchangeServer` `RequestContent`
   type + `ContentBytes` response field
@@ -91,8 +92,7 @@ Milestone D remainder -- Community Sync (in progress), with priority ordered as:
 
 ## Open Work (next execution items)
 
-- Shared catalogue strategy decision (replicated vs distributed vs hybrid)
-- Browse protocol/storage/UI implementation based on that decision
+- Browse protocol/storage/UI implementation based on ADR 0001
 - Replace "coming soon" search in Library and Local Music (Assigned to Jules Fleet)
 - Pending downloads/progress visibility in Browse + Library
 - Remove-from-library while preserving list membership as "Not Downloaded"
