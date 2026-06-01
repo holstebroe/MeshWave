@@ -11,7 +11,7 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        configuration: [Debug, Release]
+        configuration: [Release] # Just build Release
     env:
       Solution_Name: MeshWave.slnx
 
