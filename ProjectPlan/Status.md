@@ -11,6 +11,14 @@
 
 ## Current Focus
 
+Selected tasks for 2026-06-01:
+1. **Issue #9**: Fix track selection bug in player.
+   - *Success Criteria*: Double-clicking a track in the list correctly plays that track instead of jumping to the end.
+2. **Issue #17**: Architecture decision for shared catalogue.
+   - *Success Criteria*: A written decision (ADR) comparing replicated vs distributed vs hybrid models.
+3. **Issue #31**: Implement manifest compaction/snapshotting.
+   - *Success Criteria*: Protocol support for signed state checkpoints to reduce sync bandwidth.
+
 Milestone D remainder -- Community Sync (in progress), with priority ordered as:
 1. Browse + shared catalogue architecture and implementation
 2. Library/Local Music search implementation

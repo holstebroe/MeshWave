@@ -1,6 +1,7 @@
 # MeshWave Backlog
 
 ## Priority Now (clear execution order)
+- [ ] [HIGH PRIORITY BUG] [Issue #9: Track selection broken in player](https://github.com/holstebroe/MeshWave/issues/9)
 
 ### [P0 -- Community Browse + Shared Catalogue (highest)](https://github.com/holstebroe/MeshWave/milestone/1)
 - [ ] [Write architecture decision: replicated metadata index vs distributed search vs hybrid model](https://github.com/holstebroe/MeshWave/issues/17)
