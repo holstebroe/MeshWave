@@ -16,55 +16,11 @@ jobs:
       issues: write
       contents: write
     steps:
-      # Clone the MeshWave repo (giving access to ProjectPlan/ files)
-      - name: Checkout Code
-        uses: actions/checkout@v4
-     
-      - name: Inject Secret for Jules
-        run: |
-          mkdir -p .julestemp
-          echo "${{ secrets.JULES_AUTOMATION_TOKEN }}" > .julestemp/JULES_AUTOMATION_TOKEN
-          
-          # Crucial: Prevent Jules from accidentally tracking/committing this secret back
-          echo ".jules_secrets" >> .gitignore
-
       # Run Jules with analytical instructions
       - name: Run Jules Fleet Planner
         uses: google-labs-code/jules-invoke@v1.0.0
-        env:
-          GH_TOKEN: ${{ secrets.JULES_AUTOMATION_TOKEN }}
-          TEST_TOKEN: TESTMESH
         with:
           jules_api_key: ${{ secrets.JULES_API_KEY }}
           starting_branch: master
           prompt: |
-            You are acting as the Lead Systems Architect and Product Manager for the MeshWave workspace.
-            
-            Your goal is to cross-reference our internal project documents and open GitHub issues and
-            milestones to choose 3 high-priority tasks to work on today.
-            You should strive to keep focus on milestones, unless you find high priority issues.
-            A high priority issue would be severe bugs or changes to the data structures or network protocol,
-            that needs to be completed before a release.
-            
-            In the project folder there is an ignored folder called .julestemp that can be used
-            to download issues and milestones from github.
-            To do this you need a GitHub API token, which has been temporarily placed in 
-            .julestemp/JULES_AUTOMATION_TOKEN
-            If this does not work, try reading environment variable GH_TOKEN and print environment
-            variable TEST_TOKEN to let me verify that I could pass variables to you.
-            
-            EXECUTION STEPS:
-            * Download open issues with the `gh` command (with a reasonable limit) to a temp markdown file also download milestones into another temp markdown file.. Hint: use `run_in_bash_session`
-            * Check pending PR to ensure that we are not choosing issues that have already been
-            resolved.                        
-            * Open and thoroughly parse `ProjectPlan/Backlog.md` and `ProjectPlan/Roadmap.md` 
-            compare backlog and roadmap with the GitHub issues and milestones and up to 5 new GitHub
-            issues if they are missing and up to 3 missing milestones.
-            * Among the issues choose up to 3 distinct, unresolved isolated engineering tasks.
-            Make an analysis in the codebase if the issues are still relevant.
-            * Update the GitHub issues descriptions with well analyzed descriptions of the chosen
-            tasks.
-            * Ensure the issue body contains the detailed technical instructions you've drafted for the task, including context and success criteria.
-            * Each chosen issue MUST have the label `jules-task` to automatically trigger an development agent workflow. Add the label to the chosen GitHub issues.            
-            * Update `ProjectPlan/Backlog.md`, `ProjectPlan/Roadmap.md` and `ProjectPlan/Status.md` to reflect the current status.
-            * Cleanup temp files
+${{DAILY_JULES_PROJECT_MANAGER_PROMPT}}

@@ -1030,7 +1030,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// Broadcasts the user's current profile as a signed Profile op.
     /// Peers receiving this op can update their local view of the user's identity.
     /// </summary>
-    public void BroadcastProfile(string displayName, bool isArtist, string bio, string website, string? bannerImageHash)
+    public void BroadcastProfile(string displayName, bool isArtist, string bio, string? website, string? bannerImageHash)
     {
         if (_localManifest == null || _identity == null) return;
         var meta = new Dictionary<string, string>

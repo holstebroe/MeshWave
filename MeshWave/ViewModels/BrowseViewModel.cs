@@ -9,7 +9,7 @@ using System.Windows.Input;
 
 namespace MeshWave.ViewModels;
 
-public enum BrowseTab { Artists, Albums, Tracks, Downloads }
+public enum BrowseTab { Artists, Albums, Tracks, Playlists, Downloads }
 
 // ─────────────────────────────────────────────────────────────────────────
 // Data items
@@ -34,6 +34,19 @@ public class BrowseAlbumItem : ViewModelBase
     public int TrackCount { get; set; }
     public DateTime? ReleasedAt { get; set; }
     public string ReleasedAtDisplay => ReleasedAt.HasValue ? ReleasedAt.Value.ToLocalTime().ToString("MMM yyyy") : string.Empty;
+}
+
+public class BrowsePlaylistItem : ViewModelBase
+{
+    public string PlaylistId { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string ArtistUserId { get; set; } = string.Empty;
+    public string ArtistDisplayName { get; set; } = string.Empty;
+    public int TrackCount { get; set; }
+    public List<string> TrackIds { get; set; } = [];
+    public DateTime? ReleasedAt { get; set; }
+    public string ReleasedAtDisplay => ReleasedAt.HasValue ? ReleasedAt.Value.ToLocalTime().ToString("MMM d, yyyy") : string.Empty;
 }
 
 public class BrowseTrackItem : ViewModelBase
@@ -98,6 +111,7 @@ public class BrowseViewModel : ViewModelBase
     private ObservableCollection<BrowseArtistItem> _artists = [];
     private ObservableCollection<BrowseAlbumItem> _albums = [];
     private ObservableCollection<BrowseTrackItem> _tracks = [];
+    private ObservableCollection<BrowsePlaylistItem> _playlists = [];
 
     public BrowseViewModel(ISyncBrowseClient? sync = null, DownloadQueueService? downloadQueue = null)
     {
@@ -117,6 +131,33 @@ public class BrowseViewModel : ViewModelBase
 
         DownloadTrackCommand = new RelayCommand<BrowseTrackItem>(EnqueueTrackDownload,
             t => t != null && !string.IsNullOrWhiteSpace(t.ContentHash) && !t.IsQueued);
+
+        DownloadArtistCommand = new RelayCommand<BrowseArtistItem>(a =>
+        {
+            if (a == null) return;
+            var artistTracks = Tracks.Where(t => string.Equals(t.ArtistUserId, a.UserId, StringComparison.OrdinalIgnoreCase)).ToList();
+            foreach (var track in artistTracks)
+                EnqueueTrackDownload(track);
+        }, a => a != null);
+
+        DownloadAlbumCommand = new RelayCommand<BrowseAlbumItem>(album =>
+        {
+            if (album == null) return;
+            var albumTracks = Tracks.Where(t => string.Equals(t.ArtistUserId, album.ArtistUserId, StringComparison.OrdinalIgnoreCase)
+                                            && string.Equals(t.Album, album.Name, StringComparison.OrdinalIgnoreCase)).ToList();
+            foreach (var track in albumTracks)
+                EnqueueTrackDownload(track);
+        }, album => album != null);
+
+        DownloadPlaylistCommand = new RelayCommand<BrowsePlaylistItem>(p =>
+        {
+            if (p == null) return;
+            foreach (var trackId in p.TrackIds)
+            {
+                var track = Tracks.FirstOrDefault(t => string.Equals(t.TrackId, trackId, StringComparison.OrdinalIgnoreCase));
+                if (track != null) EnqueueTrackDownload(track);
+            }
+        }, p => p != null);
 
         CancelDownloadCommand = new RelayCommand<DownloadQueueItem>(item =>
         {
@@ -161,6 +202,9 @@ public class BrowseViewModel : ViewModelBase
     public ICommand SetTabCommand { get; }
     public ICommand ViewArtistCommand { get; }
     public ICommand DownloadTrackCommand { get; }
+    public ICommand DownloadArtistCommand { get; }
+    public ICommand DownloadAlbumCommand { get; }
+    public ICommand DownloadPlaylistCommand { get; }
     public ICommand CancelDownloadCommand { get; }
     public ICommand RetryDownloadCommand { get; }
     public ICommand ClearCompletedCommand { get; }
@@ -194,6 +238,7 @@ public class BrowseViewModel : ViewModelBase
             OnPropertyChanged(nameof(IsTabArtists));
             OnPropertyChanged(nameof(IsTabAlbums));
             OnPropertyChanged(nameof(IsTabTracks));
+            OnPropertyChanged(nameof(IsTabPlaylists));
             OnPropertyChanged(nameof(IsTabDownloads));
         }
     }
@@ -201,6 +246,7 @@ public class BrowseViewModel : ViewModelBase
     public bool IsTabArtists   => ActiveTab == BrowseTab.Artists;
     public bool IsTabAlbums    => ActiveTab == BrowseTab.Albums;
     public bool IsTabTracks    => ActiveTab == BrowseTab.Tracks;
+    public bool IsTabPlaylists => ActiveTab == BrowseTab.Playlists;
     public bool IsTabDownloads => ActiveTab == BrowseTab.Downloads;
 
     public ObservableCollection<BrowseArtistItem> Artists
@@ -219,6 +265,12 @@ public class BrowseViewModel : ViewModelBase
     {
         get => _tracks;
         private set => SetProperty(ref _tracks, value);
+    }
+
+    public ObservableCollection<BrowsePlaylistItem> Playlists
+    {
+        get => _playlists;
+        private set => SetProperty(ref _playlists, value);
     }
 
     public ObservableCollection<DownloadQueueItem> DownloadQueue => _downloadQueue.AllItems;
@@ -412,11 +464,69 @@ public class BrowseViewModel : ViewModelBase
         }
         Tracks = new ObservableCollection<BrowseTrackItem>(tracks.OrderByDescending(t => t.ReleasedAt ?? DateTime.MinValue));
 
+        // ── Playlists ──────────────────────────────────────────────────
+        var playlists = new List<BrowsePlaylistItem>();
+        foreach (var manifest in manifests)
+        {
+            if (_activeArtistUserId != null
+                && !string.Equals(manifest.UserId, _activeArtistUserId, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var artistProfileOp = manifest.Operations
+                .Where(op => op.OperationType == ManifestOperationType.Profile)
+                .OrderByDescending(op => op.SequenceNumber)
+                .FirstOrDefault();
+            var artistName = artistProfileOp?.Metadata.GetValueOrDefault("displayName")
+                ?? _sync.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, manifest.UserId, StringComparison.OrdinalIgnoreCase))?.DisplayName
+                ?? manifest.UserId;
+
+            var playlistOps = manifest.Operations
+                .Where(op => op.OperationType == ManifestOperationType.Create
+                          && string.Equals(op.TargetType, "Playlist", StringComparison.OrdinalIgnoreCase));
+
+            foreach (var op in playlistOps)
+            {
+                var name = op.Metadata.GetValueOrDefault("name") ?? op.TargetId;
+                var description = op.Metadata.GetValueOrDefault("description") ?? string.Empty;
+                var trackIdsJson = op.Metadata.GetValueOrDefault("trackIds") ?? "[]";
+                List<string> trackIds = [];
+                try
+                {
+                    trackIds = System.Text.Json.JsonSerializer.Deserialize<List<string>>(trackIdsJson) ?? [];
+                }
+                catch { }
+
+                if (!string.IsNullOrWhiteSpace(filter)
+                    && !name.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                    && !artistName.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                    && !description.Contains(filter, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                DateTime? releasedAt = null;
+                if (op.Metadata.TryGetValue("releasedAt", out var rat) && DateTime.TryParse(rat, out var dt))
+                    releasedAt = dt;
+
+                playlists.Add(new BrowsePlaylistItem
+                {
+                    PlaylistId = op.TargetId,
+                    Name = name,
+                    Description = description,
+                    ArtistUserId = manifest.UserId,
+                    ArtistDisplayName = artistName,
+                    TrackIds = trackIds,
+                    TrackCount = trackIds.Count,
+                    ReleasedAt = releasedAt
+                });
+            }
+        }
+        Playlists = new ObservableCollection<BrowsePlaylistItem>(playlists.OrderByDescending(p => p.ReleasedAt ?? DateTime.MinValue));
+
         OnPropertyChanged(nameof(ActiveArtistName));
 
         var totalArtists = Artists.Count;
         var totalTracks = Tracks.Count;
-        StatusText = $"{totalArtists} artist{(totalArtists == 1 ? "" : "s")}, {totalTracks} track{(totalTracks == 1 ? "" : "s")} discovered from the mesh.";
+        var totalPlaylists = Playlists.Count;
+        StatusText = $"{totalArtists} artist{(totalArtists == 1 ? "" : "s")}, {totalTracks} track{(totalTracks == 1 ? "" : "s")}, {totalPlaylists} playlist{(totalPlaylists == 1 ? "" : "s")} discovered from the mesh.";
     }
 
     private static List<ManifestOperation> GetLatestPublicTrackOperations(Manifest manifest)
