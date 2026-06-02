@@ -292,11 +292,67 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// <summary>
     /// Requests content bytes from a currently known peer by content hash.
     /// </summary>
-    public async Task<byte[]?> RequestContentAsync(string peerUserId, string contentHash)
+    public async Task<(Stream? Stream, long ContentLength)> RequestContentStreamAsync(string peerUserId, string contentHash)
     {
         if (string.IsNullOrWhiteSpace(peerUserId) || string.IsNullOrWhiteSpace(contentHash))
-            return null;
+            return (null, 0);
 
+        var (peer, report) = await PrepareConnectionAsync(peerUserId, contentHash);
+        if (peer == null) return (null, 0);
+
+        var (stream, length, failureReason) = await _client.RequestContentStreamAsync(peer.Address, peer.Port, contentHash);
+        var succeeded = stream != null;
+
+        if (!succeeded)
+        {
+            report.Attempts.Add(new PeerConnectionAttemptResult(
+                "content-stream-request-initial",
+                false,
+                $"Initial stream request failed: {failureReason}"));
+
+            await RefreshBootstrapAsync(report);
+            var refreshedPeer = _router.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, peerUserId, StringComparison.OrdinalIgnoreCase));
+            if (refreshedPeer != null && (!string.Equals(refreshedPeer.Address, peer.Address, StringComparison.OrdinalIgnoreCase) || refreshedPeer.Port != peer.Port))
+            {
+                report.Attempts.Add(new PeerConnectionAttemptResult(
+                    "content-stream-request-endpoint-refresh",
+                    true,
+                    $"Routing endpoint changed; retrying stream request."));
+
+                peer = refreshedPeer;
+                report.TargetAddress = peer.Address;
+                report.TargetPort = peer.Port;
+
+                (stream, length, failureReason) = await _client.RequestContentStreamAsync(peer.Address, peer.Port, contentHash);
+                succeeded = stream != null;
+            }
+        }
+
+        report.Attempts.Add(new PeerConnectionAttemptResult(
+            "content-stream-request",
+            succeeded,
+            succeeded
+                ? $"Stream opened successfully ({length} bytes expected)."
+                : $"Peer did not open content stream: {failureReason}"));
+
+        RecordPeerMessage(peer.UserId, "RequestContentStream", succeeded,
+            succeeded
+                ? $"Content stream started from {peer.Address}:{peer.Port}."
+                : $"Content stream failed from {peer.Address}:{peer.Port}. Reason: {failureReason}");
+
+        if (!succeeded)
+        {
+            report.Attempts.Add(new PeerConnectionAttemptResult(
+                "nat-guidance",
+                false,
+                BuildNatGuidance(peer.Address, peer.Port, _identity?.ManifestPort ?? 0, report.SuggestedLocalIp ?? "127.0.0.1")));
+        }
+
+        return (stream, length);
+    }
+
+    private async Task<(PeerInfo? Peer, PeerConnectionAttemptReport Report)> PrepareConnectionAsync(string peerUserId, string contentHash)
+    {
         var report = new PeerConnectionAttemptReport
         {
             PeerUserId = peerUserId,
@@ -327,7 +383,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                     "routing-table-retry",
                     false,
                     "Peer still not discoverable after bootstrap refresh."));
-                return null;
+                return (null, report);
             }
         }
 
@@ -372,6 +428,17 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                         : "No ACK during coordinated rendezvous window."));
             }
         }
+
+        return (peer, report);
+    }
+
+    public async Task<byte[]?> RequestContentAsync(string peerUserId, string contentHash)
+    {
+        if (string.IsNullOrWhiteSpace(peerUserId) || string.IsNullOrWhiteSpace(contentHash))
+            return null;
+
+        var (peer, report) = await PrepareConnectionAsync(peerUserId, contentHash);
+        if (peer == null) return null;
 
         var (bytes, failureReason) = await _client.RequestContentAsync(peer.Address, peer.Port, contentHash);
         var succeeded = bytes != null && bytes.Length > 0;
