@@ -1,7 +1,7 @@
 # MeshWave Backlog
 
 ## Priority Now (clear execution order)
-- [ ] [HIGH PRIORITY BUG] [Issue #9: Track selection broken in player](https://github.com/holstebroe/MeshWave/issues/9)
+- [x] [HIGH PRIORITY BUG] [Issue #9: Track selection broken in player](https://github.com/holstebroe/MeshWave/issues/9)
 
 ### [P0 -- Community Browse + Shared Catalogue (highest)](https://github.com/holstebroe/MeshWave/milestone/1)
 - [x] [Write architecture decision: replicated metadata index vs distributed search vs hybrid model](https://github.com/holstebroe/MeshWave/issues/17)
@@ -23,7 +23,7 @@
 - [x] Create artist/album folder placeholder on download enqueue (before bytes arrive)
 - [x] Fix pending download tracks appearing under wrong artist in Library (cross-artist album name collision)
 
-### P2 -- Artist/Album folder rename tracking
+### [P2 -- Artist/Album folder rename tracking](https://github.com/holstebroe/MeshWave/milestone/9)
 - [ ] [Design: write a small `.meshwave-id` JSON sidecar file into each artist and album folder on creation, containing a stable GUID and the original entity ID (UserId for artist, AlbumId for album)](https://github.com/holstebroe/MeshWave/issues/21)
 - [ ] [On library scan, read sidecar files to correlate folders to their peer entity even after rename](https://github.com/holstebroe/MeshWave/issues/23)
 - [ ] [When a peer profile or album name changes (manifest Profile/Update op), locate the local folder via sidecar GUID and rename it to the new readable name](https://github.com/holstebroe/MeshWave/issues/24)
@@ -49,7 +49,7 @@
 ## [Milestone D: Community Sync](https://github.com/holstebroe/MeshWave/milestone/5)
 - [x] P2P foundation: PeerDiscovery, ManifestExchangeServer/Client, SyncOrchestrator
 - [ ] [Implement delta manifest synchronization (request operations by `SequenceNumber` range)](https://github.com/holstebroe/MeshWave/issues/30)
-- [ ] [Implement manifest compaction/snapshotting (signed state checkpoints to squash old operations, especially operations where the exact history is unimportant. Play count, etc.)](https://github.com/holstebroe/MeshWave/issues/31)
+- [x] [Implement manifest compaction/snapshotting (signed state checkpoints to squash old operations, especially operations where the exact history is unimportant. Play count, etc.)](https://github.com/holstebroe/MeshWave/issues/31)
 - [ ] [Migrate manifest wire format to a compact binary format (e.g., Protobuf or MessagePack)](https://github.com/holstebroe/MeshWave/issues/32)
 - [x] Manifest signing + verification using RSA
 - [x] SecurityLimits -- central constants enforced at TCP layer and manifest merge
@@ -72,6 +72,7 @@
 - [x] Bootstrap rendezvous ("crossing hands") phase 1: explicit rendezvous session ID issuance by bootstrap coordinator
 - [x] Bootstrap rendezvous phase 2: coordinated simultaneous outbound probe window (TCP SYN + UDP punch hints)
 - [ ] [Relay fallback (opt-in): bootstrap-assisted relay only when direct methods fail](https://github.com/holstebroe/MeshWave/issues/33)
+- [ ] [NAT: Outbound-only manifest push via bootstrap](https://github.com/holstebroe/MeshWave/issues/58)
 - [x] ARM Linux bootstrap publish script baseline (`scripts/publish-bootstrap-arm.ps1`)
 - [x] Connection diagnostics panel: show per-attempt outcomes, local/remote endpoints, and recommended NAT forwarding rules
 - [x] Diagnostics consistency pass: distinguish routing peers vs mesh/bootstrap peers, show manifest availability,

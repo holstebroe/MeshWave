@@ -27,6 +27,7 @@
 
 ### 4) Transport fallback hardening
 - Optional relay fallback (opt-in) only when direct + rendezvous fail
+- NAT: Outbound-only manifest push via bootstrap
 - Symmetric-NAT focused integration tests
 
 ## [In Progress: Milestone D remainder (Community Sync)](https://github.com/holstebroe/MeshWave/milestone/5)
