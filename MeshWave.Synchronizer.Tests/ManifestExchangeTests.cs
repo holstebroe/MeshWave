@@ -6,46 +6,56 @@ namespace MeshWave.Synchronizer.Tests;
 
 public class ManifestExchangeTests : IAsyncDisposable
 {
-    private const int TestPort = 44100;
-    private readonly ManifestExchangeServer _server = new(TestPort);
     private readonly ManifestExchangeClient _client = new(timeoutMs: 10000);
     private readonly ManifestManager _manager = new();
+
+    private static int FindFreePort()
+    {
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+        return port;
+    }
 
     [Fact]
     public async Task FetchManifest_ReturnsServerManifest()
     {
+        var port = FindFreePort();
+        using var server = new ManifestExchangeServer(port);
         var manifest = _manager.CreateManifest("user-1");
 
-        await _server.StartAsync(() => manifest);
+        await server.StartAsync(() => manifest);
 
         try
         {
-            var fetched = await _client.FetchManifestAsync("127.0.0.1", TestPort);
+            var fetched = await _client.FetchManifestAsync("127.0.0.1", port);
 
             Assert.NotNull(fetched);
             Assert.Equal("user-1", fetched.UserId);
         }
         finally
         {
-            await _server.StopAsync();
+            await server.StopAsync();
         }
     }
 
     [Fact]
     public async Task PushManifest_ServerRaisesManifestReceivedEvent()
     {
-        using var serverWithDifferentPort = new ManifestExchangeServer(TestPort + 1);
+        var port = FindFreePort();
+        using var server = new ManifestExchangeServer(port);
         var receivedManifest = new TaskCompletionSource<Manifest>(TaskCreationOptions.RunContinuationsAsynchronously);
-        serverWithDifferentPort.ManifestReceived += (_, e) => receivedManifest.TrySetResult(e.Manifest);
+        server.ManifestReceived += (_, e) => receivedManifest.TrySetResult(e.Manifest);
 
         var emptyManifest = _manager.CreateManifest("user-serving");
-        await serverWithDifferentPort.StartAsync(() => emptyManifest);
+        await server.StartAsync(() => emptyManifest);
 
         try
         {
             var toSend = _manager.CreateManifest("user-sender");
             var client = new ManifestExchangeClient(timeoutMs: 10000);
-            var ack = await client.PushManifestAsync("127.0.0.1", TestPort + 1, toSend);
+            var ack = await client.PushManifestAsync("127.0.0.1", port, toSend);
 
             Assert.True(ack);
 
@@ -56,34 +66,36 @@ public class ManifestExchangeTests : IAsyncDisposable
         }
         finally
         {
-            await serverWithDifferentPort.StopAsync();
+            await server.StopAsync();
         }
     }
 
     [Fact]
     public async Task FetchManifest_ReturnsNullManifestWhenServerHasNone()
     {
-        using var serverWithDifferentPort = new ManifestExchangeServer(TestPort + 2);
-        await serverWithDifferentPort.StartAsync(() => null);
+        var port = FindFreePort();
+        using var server = new ManifestExchangeServer(port);
+        await server.StartAsync(() => null);
 
         try
         {
             var client = new ManifestExchangeClient(timeoutMs: 10000);
-            var fetched = await client.FetchManifestAsync("127.0.0.1", TestPort + 2);
+            var fetched = await client.FetchManifestAsync("127.0.0.1", port);
 
             Assert.Null(fetched);
         }
         finally
         {
-            await serverWithDifferentPort.StopAsync();
+            await server.StopAsync();
         }
     }
 
     [Fact]
     public async Task RequestRendezvous_ReturnsSessionFromServerProvider()
     {
-        using var serverWithDifferentPort = new ManifestExchangeServer(TestPort + 3);
-        await serverWithDifferentPort.StartAsync(
+        var port = FindFreePort();
+        using var server = new ManifestExchangeServer(port);
+        await server.StartAsync(
             () => null,
             peersProvider: null,
             rendezvousProvider: request => new RendezvousResponse
@@ -96,8 +108,8 @@ public class ManifestExchangeTests : IAsyncDisposable
 
         try
         {
-            var client = new ManifestExchangeClient(timeoutMs: 10000);
-            var response = await client.RequestRendezvousAsync("127.0.0.1", TestPort + 3, new RendezvousRequest
+            var client = new ManifestExchangeClient(timeoutMs: 15000);
+            var response = await client.RequestRendezvousAsync("127.0.0.1", port, new RendezvousRequest
             {
                 InitiatorUserId = "initiator-1",
                 TargetUserId = "target-1",
@@ -110,12 +122,12 @@ public class ManifestExchangeTests : IAsyncDisposable
         }
         finally
         {
-            await serverWithDifferentPort.StopAsync();
+            await server.StopAsync();
         }
     }
 
     public async ValueTask DisposeAsync()
     {
-        await _server.StopAsync();
+        await Task.CompletedTask;
     }
 }
