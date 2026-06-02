@@ -417,15 +417,19 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             SyncCommentsFromPeerManifests();
 
             _audioService?.Dispose();
-            _audioService = new AudioPlaybackService();
-            _audioService.PositionChanged += (s, pos) =>
+            var audioService = new AudioPlaybackService();
+            _audioService = audioService;
+            audioService.PositionChanged += (s, pos) =>
             {
+                if (!ReferenceEquals(_audioService, audioService)) return;
                 _isUpdatingPosition = true;
                 SetProperty(ref _currentPosition, pos, nameof(CurrentPosition));
                 _isUpdatingPosition = false;
             };
-            _audioService.PlaybackStopped += (s, e) =>
+            audioService.PlaybackStopped += (s, e) =>
             {
+                if (!ReferenceEquals(_audioService, audioService)) return;
+
                 // In NAudio, natural completion triggers PlaybackStopped with a clean exit code.
                 // Manual stops also trigger this. We use IsPlaying to guard state.
                 if (!IsPlaying) return;
