@@ -11,13 +11,19 @@
 
 ## Current Focus
 
-Selected tasks for 2026-06-01:
-1. **Issue #9**: Fix track selection bug in player.
-   - *Success Criteria*: Double-clicking a track in the list correctly plays that track instead of jumping to the end.
-2. **Issue #17**: Architecture decision for shared catalogue.
-   - *Success Criteria*: A written decision (ADR) comparing replicated vs distributed vs hybrid models.
-3. **Issue #31**: Implement manifest compaction/snapshotting.
-   - *Success Criteria*: Protocol support for signed state checkpoints to reduce sync bandwidth.
+Selected tasks for 2026-06-02:
+1. **Issue #15**: Implement catalogue sync/index pipeline.
+   - *Success Criteria*: Concrete `CatalogueService` implementation that ingests manifests, handles staleness via sequence numbers, and provides keyword search.
+2. **Issue #58**: NAT: Outbound-only manifest push via bootstrap.
+   - *Success Criteria*: Non-listening peers can push their manifest to a bootstrap node, which then relays it to other peers.
+3. **Issue #16**: Implement play-while-downloading flow.
+   - *Success Criteria*: Audio playback starts before the full file is downloaded by using a streaming buffer/growing file.
+
+Recently completed:
+- **Issue #9**: Fix track selection bug in player.
+- **Issue #17**: Architecture decision for shared catalogue (ADR 0001).
+- **Issue #31**: Implement manifest compaction/snapshotting.
+- **Issue #30**: Implement delta manifest synchronization.
 
 Milestone D remainder -- Community Sync (in progress), with priority ordered as:
 1. Browse + shared catalogue architecture and implementation
