@@ -9,13 +9,12 @@ namespace MeshWave.Synchronizer;
 /// PeerDiscovery handles discovery of peers on the local network using UDP broadcast.
 /// Peers announce themselves with identity info; listeners maintain a live peer table.
 /// </summary>
-public class PeerDiscovery : IDisposable
+public class PeerDiscovery(int listenPort = PeerDiscovery.DefaultDiscoveryPort) : IDisposable
 {
     public const int DefaultDiscoveryPort = 39876;
     private const int AnnouncePeriodMs = 10_000;
     private const int PeerTimeoutMs = 60_000;
 
-    private readonly int _listenPort;
     private readonly Dictionary<string, PeerInfo> _peers = new(StringComparer.OrdinalIgnoreCase);
     private readonly Lock _peersLock = new();
     private UdpClient? _udpClient;
@@ -24,13 +23,7 @@ public class PeerDiscovery : IDisposable
     private Task? _announceTask;
     private LocalPeerIdentity? _identity;
 
-    public PeerDiscovery(int listenPort = DefaultDiscoveryPort)
-    {
-        _listenPort = listenPort;
-    }
-
     public event EventHandler<PeerInfo>? PeerDiscovered;
-    public event EventHandler<string>? PeerLost;
 
     /// <summary>
     /// Starts listening for peer announcements and broadcasting this peer's own presence.
@@ -42,7 +35,7 @@ public class PeerDiscovery : IDisposable
 
         _udpClient = new UdpClient();
         _udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-        _udpClient.Client.Bind(new IPEndPoint(IPAddress.Any, _listenPort));
+        _udpClient.Client.Bind(new IPEndPoint(IPAddress.Any, listenPort));
         _udpClient.EnableBroadcast = true;
 
         _listenTask = ListenLoopAsync(_cts.Token);
@@ -92,7 +85,7 @@ public class PeerDiscovery : IDisposable
         if (_identity == null || _udpClient == null) return;
 
         var announcement = BuildAnnouncement(_identity);
-        var endpoint = new IPEndPoint(IPAddress.Broadcast, _listenPort);
+        var endpoint = new IPEndPoint(IPAddress.Broadcast, listenPort);
 
         while (!ct.IsCancellationRequested)
         {
