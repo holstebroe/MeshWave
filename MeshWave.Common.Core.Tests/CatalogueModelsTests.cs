@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using MeshWave.Common.Core.Models;
 using Xunit;
 
@@ -14,17 +12,18 @@ public class CatalogueModelsTests
         {
             PlaylistId = "p1",
             OwnerUserId = "u1",
-            Name = "My Playlist",
+            Title = "My Playlist",
             Description = "A cool playlist",
-            TrackReferences = new List<string> { "u1:t1", "u2:t2" }
+            TrackIds = ["u1:t1", "u2:t2"],
+            Signature = "signature"
         };
 
         Assert.Equal("p1", playlist.PlaylistId);
         Assert.Equal("u1", playlist.OwnerUserId);
-        Assert.Equal("My Playlist", playlist.Name);
+        Assert.Equal("My Playlist", playlist.Title);
         Assert.Equal("A cool playlist", playlist.Description);
-        Assert.Equal(2, playlist.TrackReferences.Count);
-        Assert.Contains("u1:t1", playlist.TrackReferences);
+        Assert.Equal(2, playlist.TrackIds.Count);
+        Assert.Contains("u1:t1", playlist.TrackIds);
     }
 
     [Fact]
@@ -65,7 +64,7 @@ public class CatalogueModelsTests
         var availability = new PeerAvailability
         {
             ContentHash = "hash123",
-            PeerUserIds = new HashSet<string> { "u1", "u2" }
+            PeerUserIds = ["u1", "u2"]
         };
 
         Assert.Equal("hash123", availability.ContentHash);

@@ -1,12 +1,32 @@
+<<<<<<< HEAD
+using System;
+using System.Collections.Generic;
+
+namespace MeshWave.Common.Core.Models;
+
+/// <summary>
+/// Represents a playlist in the MeshWave network.
+=======
 namespace MeshWave.Common.Core.Models;
 
 /// <summary>
 /// Represents a playlist (collection of tracks) in the MeshWave network.
+>>>>>>> origin/master
 /// </summary>
 public class Playlist
 {
     public required string PlaylistId { get; set; }
     public required string OwnerUserId { get; set; }
+<<<<<<< HEAD
+    public required string Name { get; set; }
+    public string? Description { get; set; }
+    /// <summary>
+    /// List of track references in the format "ArtistUserId:TrackId".
+    /// </summary>
+    public List<string> TrackReferences { get; set; } = [];
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+=======
     public required string Title { get; set; }
     public string? Description { get; set; }
     public List<string> TrackIds { get; set; } = [];
@@ -16,4 +36,5 @@ public class Playlist
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     /// <summary>UTC timestamp when this playlist was first announced to the network. Null = not yet shared.</summary>
     public DateTime? ReleasedAt { get; set; }
+>>>>>>> origin/master
 }

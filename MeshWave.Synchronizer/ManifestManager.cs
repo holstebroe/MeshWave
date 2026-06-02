@@ -44,7 +44,7 @@ public class ManifestManager
             TargetId = targetId,
             TargetType = targetType,
             ContentHash = contentHash,
-            SequenceNumber = manifest.Operations.Count,
+            SequenceNumber = GetNextSequenceNumber(manifest),
             Metadata = metadata ?? [],
             Timestamp = DateTime.UtcNow,
             Signature = string.Empty
@@ -66,8 +66,146 @@ public class ManifestManager
     /// </summary>
     public void AppendOperation(Manifest manifest, ManifestOperation operation)
     {
-        operation.SequenceNumber = manifest.Operations.Count;
+        operation.SequenceNumber = GetNextSequenceNumber(manifest);
         manifest.Operations.Add(operation);
+        manifest.Version++;
+        manifest.LastUpdated = DateTime.UtcNow;
+    }
+
+    private static int GetNextSequenceNumber(Manifest manifest)
+    {
+        if (manifest.Snapshot != null)
+            return manifest.Snapshot.LastSequenceNumber + 1 + manifest.Operations.Count;
+        return manifest.Operations.Count;
+    }
+
+    /// <summary>
+    /// Creates a signed snapshot of the manifest state up to a certain sequence number.
+    /// Squashes redundant operations (Play, Follow, Like, etc.) and keeps latest entity metadata.
+    /// </summary>
+    public ManifestSnapshot CreateSnapshot(Manifest manifest, int upToSequenceNumber, string privateKeyPem)
+    {
+        var playCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var followed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var liked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var friends = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var groups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var entities = new Dictionary<(string Id, string Type), SnapshotStateEntry>();
+        var persistent = new List<ManifestOperation>();
+
+        // Start with existing snapshot if any
+        if (manifest.Snapshot != null && manifest.Snapshot.LastSequenceNumber <= upToSequenceNumber)
+        {
+            foreach (var kv in manifest.Snapshot.PlayCounts) playCounts[kv.Key] = kv.Value;
+            foreach (var id in manifest.Snapshot.FollowedUserIds) followed.Add(id);
+            foreach (var id in manifest.Snapshot.LikedTrackIds) liked.Add(id);
+            foreach (var id in manifest.Snapshot.FriendUserIds) friends.Add(id);
+            foreach (var id in manifest.Snapshot.GroupIds) groups.Add(id);
+            foreach (var ent in manifest.Snapshot.EntityStates) entities[(ent.TargetId, ent.TargetType)] = ent;
+            persistent.AddRange(manifest.Snapshot.PersistentOperations);
+        }
+
+        // Process operations in order
+        foreach (var op in manifest.Operations.OrderBy(o => o.SequenceNumber))
+        {
+            if (op.SequenceNumber > upToSequenceNumber) break;
+
+            switch (op.OperationType)
+            {
+                case ManifestOperationType.Play:
+                    playCounts[op.TargetId] = playCounts.GetValueOrDefault(op.TargetId) + 1;
+                    break;
+                case ManifestOperationType.Follow:
+                    followed.Add(op.TargetId);
+                    break;
+                case ManifestOperationType.Unfollow:
+                    followed.Remove(op.TargetId);
+                    break;
+                case ManifestOperationType.Like:
+                    liked.Add(op.TargetId);
+                    break;
+                case ManifestOperationType.Unlike:
+                    liked.Remove(op.TargetId);
+                    break;
+                case ManifestOperationType.FriendAdd:
+                    friends.Add(op.TargetId);
+                    break;
+                case ManifestOperationType.FriendRemove:
+                    friends.Remove(op.TargetId);
+                    break;
+                case ManifestOperationType.GroupJoin:
+                    groups.Add(op.TargetId);
+                    break;
+                case ManifestOperationType.GroupLeave:
+                    groups.Remove(op.TargetId);
+                    break;
+                case ManifestOperationType.Create:
+                case ManifestOperationType.Update:
+                case ManifestOperationType.Profile:
+                    entities[(op.TargetId, op.TargetType)] = new SnapshotStateEntry
+                    {
+                        TargetId = op.TargetId,
+                        TargetType = op.TargetType,
+                        ContentHash = op.ContentHash,
+                        Metadata = new Dictionary<string, string>(op.Metadata)
+                    };
+                    break;
+                case ManifestOperationType.Delete:
+                    entities.Remove((op.TargetId, op.TargetType));
+                    break;
+                case ManifestOperationType.Comment:
+                    persistent.Add(op);
+                    break;
+                case ManifestOperationType.CommentDelete:
+                    var commentIdToDelete = op.Metadata.GetValueOrDefault("commentOperationId");
+                    if (!string.IsNullOrEmpty(commentIdToDelete))
+                    {
+                        persistent.RemoveAll(o => o.OperationId == commentIdToDelete);
+                    }
+                    break;
+            }
+        }
+
+        var snapshot = new ManifestSnapshot
+        {
+            LastSequenceNumber = upToSequenceNumber,
+            Timestamp = DateTime.UtcNow,
+            PlayCounts = playCounts,
+            FollowedUserIds = followed.ToList(),
+            LikedTrackIds = liked.ToList(),
+            FriendUserIds = friends.ToList(),
+            GroupIds = groups.ToList(),
+            EntityStates = entities.Values.ToList(),
+            PersistentOperations = persistent,
+            Signature = string.Empty
+        };
+
+        var signable = BuildSnapshotSignablePayload(snapshot);
+        snapshot.Signature = CryptoService.SignData(signable, privateKeyPem);
+
+        return snapshot;
+    }
+
+    /// <summary>
+    /// Compacts the manifest if it exceeds the specified threshold.
+    /// Squashes old operations into a signed snapshot, keeping only the most recent operations.
+    /// </summary>
+    public void Compact(Manifest manifest, string privateKeyPem, int threshold = 500, int keepRecent = 100)
+    {
+        if (manifest.Operations.Count < threshold) return;
+
+        // Snapshot everything except the last 'keepRecent' operations
+        int lastToSnapshot = manifest.Operations.OrderBy(o => o.SequenceNumber)
+            .ElementAt(manifest.Operations.Count - keepRecent - 1).SequenceNumber;
+
+        var snapshot = CreateSnapshot(manifest, lastToSnapshot, privateKeyPem);
+
+        manifest.Snapshot = snapshot;
+        manifest.Operations = manifest.Operations
+            .Where(o => o.SequenceNumber > lastToSnapshot)
+            .OrderBy(o => o.SequenceNumber)
+            .ToList();
+
         manifest.Version++;
         manifest.LastUpdated = DateTime.UtcNow;
     }
@@ -75,14 +213,34 @@ public class ManifestManager
     /// <summary>
     /// Verifies the integrity and authenticity of a manifest.
     /// Checks monotonic sequence numbers and each operation's RSA signature.
+    /// Supports manifests starting from a snapshot.
     /// </summary>
     public bool VerifyManifest(Manifest manifest, string userPublicKey)
     {
+        int expectedSeq = 0;
+
+        if (manifest.Snapshot != null)
+        {
+            var snapshotSignable = BuildSnapshotSignablePayload(manifest.Snapshot);
+            if (!CryptoService.VerifySignature(snapshotSignable, manifest.Snapshot.Signature, userPublicKey))
+                return false;
+
+            // Verify persistent operations in the snapshot
+            foreach (var op in manifest.Snapshot.PersistentOperations)
+            {
+                var signable = BuildSignablePayload(op);
+                if (!CryptoService.VerifySignature(signable, op.Signature, userPublicKey))
+                    return false;
+            }
+
+            expectedSeq = manifest.Snapshot.LastSequenceNumber + 1;
+        }
+
         for (int i = 0; i < manifest.Operations.Count; i++)
         {
             var op = manifest.Operations[i];
 
-            if (op.SequenceNumber != i)
+            if (op.SequenceNumber != expectedSeq + i)
                 return false;
 
             var signable = BuildSignablePayload(op);
@@ -96,6 +254,7 @@ public class ManifestManager
     /// Merges a remote manifest into a local one, appending any operations the local copy lacks.
     /// Only operations that pass signature verification are accepted.
     /// Rejects manifests that exceed security limits.
+    /// Supports merging manifests with snapshots.
     /// Play operations are capped at <see cref="SecurityLimits.MaxPlaysPerUserPerTrackPerDay"/> per track per UTC day.
     /// Returns the number of new operations added.
     /// </summary>
@@ -107,16 +266,40 @@ public class ManifestManager
         if (remote.Operations.Count > SecurityLimits.MaxManifestOperations)
             throw new InvalidDataException($"Remote manifest exceeds operation limit ({remote.Operations.Count}).");
 
+        // 1. Verify remote manifest integrity before merging
+        if (!VerifyManifest(remote, remoteUserPublicKey))
+            throw new InvalidDataException("Remote manifest failed signature or continuity verification.");
+
+        // 2. Handle Snapshot merge
+        // If remote has a NEWER snapshot, we adopt it and discard local operations that are now squashed.
+        if (remote.Snapshot != null)
+        {
+            int localMaxSeq = (local.Snapshot?.LastSequenceNumber ?? -1) + local.Operations.Count;
+            if (remote.Snapshot.LastSequenceNumber > (local.Snapshot?.LastSequenceNumber ?? -1))
+            {
+                // Remote snapshot is more recent than ours.
+                // We keep only the remote snapshot and remote operations.
+                local.Snapshot = remote.Snapshot;
+                local.Operations = new List<ManifestOperation>(remote.Operations);
+                local.Version = Math.Max(local.Version, remote.Version);
+                local.LastUpdated = DateTime.UtcNow;
+
+                // Since we replaced the whole state, we "added" as many ops as the remote currently has
+                return remote.Operations.Count;
+            }
+        }
+
+        // 3. Merge individual operations
         // Build existing play counts per (trackId, utcDate) from the local manifest so we
         // know how much headroom remains before merging remote play ops.
         var playCounts = BuildPlayCounts(local.Operations);
 
         int added = 0;
-        var localSeq = local.Operations.Count;
+        int localMaxSeqNum = (local.Snapshot?.LastSequenceNumber ?? -1) + local.Operations.Count;
 
         foreach (var op in remote.Operations.OrderBy(o => o.SequenceNumber))
         {
-            if (op.SequenceNumber < localSeq)
+            if (op.SequenceNumber <= localMaxSeqNum)
                 continue;
 
             if (!IsOperationWithinLimits(op))
@@ -132,14 +315,13 @@ public class ManifestManager
                 playCounts[key] = existing + 1;
             }
 
-            var signable = BuildSignablePayload(op);
-            if (!CryptoService.VerifySignature(signable, op.Signature, remoteUserPublicKey))
-                continue;
+            // We already verified all signatures in VerifyManifest call above,
+            // but we can re-verify if we want to be paranoid or if VerifyManifest was skipped.
+            // For performance, we trust the previous VerifyManifest(remote) call.
 
             local.Operations.Add(op);
             local.Version = Math.Max(local.Version, remote.Version);
             local.LastUpdated = DateTime.UtcNow;
-            localSeq++;
             added++;
         }
 
@@ -180,7 +362,7 @@ public class ManifestManager
         return true;
     }
 
-    private static string BuildSignablePayload(ManifestOperation op)
+    public static string BuildSignablePayload(ManifestOperation op)
     {
         var sb = new StringBuilder();
         sb.Append(op.OperationId);
@@ -196,6 +378,87 @@ public class ManifestManager
         sb.Append(op.SequenceNumber);
         sb.Append('|');
         sb.Append(op.Timestamp.Ticks);
+        return sb.ToString();
+    }
+
+    public static string BuildSnapshotSignablePayload(ManifestSnapshot snapshot)
+    {
+        var sb = new StringBuilder();
+        sb.Append(snapshot.LastSequenceNumber);
+        sb.Append('|');
+        sb.Append(snapshot.Timestamp.Ticks);
+        sb.Append('|');
+
+        // Sorted PlayCounts
+        foreach (var kv in snapshot.PlayCounts.OrderBy(k => k.Key))
+        {
+            sb.Append(kv.Key);
+            sb.Append(':');
+            sb.Append(kv.Value);
+            sb.Append(',');
+        }
+        sb.Append('|');
+
+        // Sorted FollowedUserIds
+        foreach (var id in snapshot.FollowedUserIds.OrderBy(s => s))
+        {
+            sb.Append(id);
+            sb.Append(',');
+        }
+        sb.Append('|');
+
+        // Sorted LikedTrackIds
+        foreach (var id in snapshot.LikedTrackIds.OrderBy(s => s))
+        {
+            sb.Append(id);
+            sb.Append(',');
+        }
+        sb.Append('|');
+
+        // Sorted FriendUserIds
+        foreach (var id in snapshot.FriendUserIds.OrderBy(s => s))
+        {
+            sb.Append(id);
+            sb.Append(',');
+        }
+        sb.Append('|');
+
+        // Sorted GroupIds
+        foreach (var id in snapshot.GroupIds.OrderBy(s => s))
+        {
+            sb.Append(id);
+            sb.Append(',');
+        }
+        sb.Append('|');
+
+        // Sorted EntityStates
+        foreach (var entity in snapshot.EntityStates.OrderBy(e => e.TargetId).ThenBy(e => e.TargetType))
+        {
+            sb.Append(entity.TargetId);
+            sb.Append(':');
+            sb.Append(entity.TargetType);
+            sb.Append(':');
+            sb.Append(entity.ContentHash ?? string.Empty);
+            sb.Append(':');
+            // Sorted Metadata
+            foreach (var kv in entity.Metadata.OrderBy(k => k.Key))
+            {
+                sb.Append(kv.Key);
+                sb.Append('=');
+                sb.Append(kv.Value);
+                sb.Append(';');
+            }
+            sb.Append(',');
+        }
+        sb.Append('|');
+
+        // Sorted PersistentOperations
+        foreach (var op in snapshot.PersistentOperations.OrderBy(o => o.SequenceNumber))
+        {
+            sb.Append(op.OperationId);
+            sb.Append(',');
+        }
+
         return sb.ToString();
     }
 }

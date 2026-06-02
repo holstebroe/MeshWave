@@ -7,7 +7,7 @@
 - [x] [Write architecture decision: replicated metadata index vs distributed search vs hybrid model](https://github.com/holstebroe/MeshWave/issues/17)
 - [x] [Define shared catalogue schema for Artist/Album/Track/Playlist metadata and peer availability](https://github.com/holstebroe/MeshWave/issues/14)
 - [ ] [Implement catalogue sync/index pipeline (ingest, dedupe, staleness rules)](https://github.com/holstebroe/MeshWave/issues/15)
-- [ ] [Build Browse UI for artists/albums/tracks/playlists with download actions](https://github.com/holstebroe/MeshWave/issues/13)
+- [x] [Build Browse UI for artists/albums/tracks/playlists with download actions](https://github.com/holstebroe/MeshWave/issues/13)
 - [ ] [Implement play-while-downloading flow (buffered start)](https://github.com/holstebroe/MeshWave/issues/16)
 - [ ] [Add global pending downloads queue UI with per-item progress/state](https://github.com/holstebroe/MeshWave/issues/12)
 
@@ -49,7 +49,7 @@
 ## [Milestone D: Community Sync](https://github.com/holstebroe/MeshWave/milestone/5)
 - [x] P2P foundation: PeerDiscovery, ManifestExchangeServer/Client, SyncOrchestrator
 - [ ] [Implement delta manifest synchronization (request operations by `SequenceNumber` range)](https://github.com/holstebroe/MeshWave/issues/30)
-- [ ] [Implement manifest compaction/snapshotting (signed state checkpoints to squash old operations, especially operations where the exact history is unimportant. Play count, etc.)](https://github.com/holstebroe/MeshWave/issues/31)
+- [x] [Implement manifest compaction/snapshotting (signed state checkpoints to squash old operations, especially operations where the exact history is unimportant. Play count, etc.)](https://github.com/holstebroe/MeshWave/issues/31)
 - [ ] [Migrate manifest wire format to a compact binary format (e.g., Protobuf or MessagePack)](https://github.com/holstebroe/MeshWave/issues/32)
 - [x] Manifest signing + verification using RSA
 - [x] SecurityLimits -- central constants enforced at TCP layer and manifest merge
