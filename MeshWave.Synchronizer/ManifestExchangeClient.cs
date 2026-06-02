@@ -20,7 +20,12 @@ public class ManifestExchangeClient
     /// Fetches the manifest from a remote peer.
     /// Returns null if the peer is unreachable or returns no manifest.
     /// </summary>
-    public async Task<Manifest?> FetchManifestAsync(string address, int port, CancellationToken cancellationToken = default)
+    public async Task<Manifest?> FetchManifestAsync(
+        string address,
+        int port,
+        int startSequenceNumber = 0,
+        int? endSequenceNumber = null,
+        CancellationToken cancellationToken = default)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(_timeoutMs);
@@ -29,7 +34,12 @@ public class ManifestExchangeClient
         await client.ConnectAsync(address, port, cts.Token);
 
         var stream = client.GetStream();
-        var request = new ManifestRequest { Type = ManifestRequestType.GetManifest };
+        var request = new ManifestRequest
+        {
+            Type = ManifestRequestType.GetManifest,
+            StartSequenceNumber = startSequenceNumber,
+            EndSequenceNumber = endSequenceNumber
+        };
         await ManifestExchangeServer.WriteMessageAsync(stream, JsonSerializer.Serialize(request), cts.Token);
 
         var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
