@@ -2,7 +2,8 @@
 
 ## Current Priorities (ordered)
 
-### [1) Community Browse + Shared Catalogue (TOP PRIORITY)](https://github.com/holstebroe/MeshWave/milestone/1)
+### [1) Community Browse + Shared Catalogue (TOP PRIORITY)]
+- [ ] [Issue #17: Architecture decision](https://github.com/holstebroe/MeshWave/issues/17) (IN PROGRESS)(https://github.com/holstebroe/MeshWave/milestone/1)
 - Decide catalogue architecture (ADR):
   - Replicated metadata to all peers
   - Distributed query/search over mesh

@@ -13,6 +13,7 @@ namespace MeshWave.Services
         private AudioFileReader? _audioFile;
         private DispatcherTimer? _positionTimer;
         private string? _currentFilePath;
+        private bool _isDisposed;
 
         public event EventHandler<TimeSpan>? PositionChanged;
         public event EventHandler? PlaybackStopped;
@@ -85,6 +86,9 @@ namespace MeshWave.Services
         private void OnPlaybackStopped(object? sender, StoppedEventArgs e)
         {
             _positionTimer?.Stop();
+
+            if (_isDisposed) return;
+
             // Ensure we notify the final position at the end of the track
             PositionChanged?.Invoke(this, Duration);
             PlaybackStopped?.Invoke(this, EventArgs.Empty);
@@ -92,12 +96,18 @@ namespace MeshWave.Services
 
         public void Dispose()
         {
+            if (_isDisposed) return;
+            _isDisposed = true;
+
             _positionTimer?.Stop();
             _waveOut?.Stop();
             _audioFile?.Dispose();
             _waveOut?.Dispose();
             _audioFile = null;
             _waveOut = null;
+
+            PositionChanged = null;
+            PlaybackStopped = null;
         }
     }
 }

@@ -11,6 +11,14 @@
 
 ## Current Focus
 
+Selected tasks for 2026-06-01:
+1. **Issue #9**: Fix track selection bug in player.
+   - *Success Criteria*: Double-clicking a track in the list correctly plays that track instead of jumping to the end.
+2. **Issue #17**: Architecture decision for shared catalogue.
+   - *Success Criteria*: A written decision (ADR) comparing replicated vs distributed vs hybrid models.
+3. **Issue #31**: Implement manifest compaction/snapshotting.
+   - *Success Criteria*: Protocol support for signed state checkpoints to reduce sync bandwidth.
+
 Milestone D remainder -- Community Sync (in progress), with priority ordered as:
 1. Browse + shared catalogue architecture and implementation
 2. Library/Local Music search implementation
@@ -20,6 +28,7 @@ Milestone D remainder -- Community Sync (in progress), with priority ordered as:
 
 ## Recently Completed
 
+- **Architecture Decision Record (ADR 0001) for Shared Catalogue**: Defined a hybrid replication/distributed search strategy for the mesh catalogue.
 - **Content download protocol wired end-to-end**: `ManifestExchangeClient.RequestContentAsync`,
   `SyncOrchestrator.StartAsync` content provider parameter, `ManifestExchangeServer` `RequestContent`
   type + `ContentBytes` response field
@@ -89,11 +98,13 @@ Milestone D remainder -- Community Sync (in progress), with priority ordered as:
 - **Content serving hardening**: local content provider now ignores zero-length files for matched hashes to
   reduce false `content-request: fail` outcomes
 - **Manifest compaction/snapshotting**: implemented signed state snapshots to squash historical operations (plays, follows, etc.) while preserving comments; updated merge logic to support snapshot-based sync
+- **Track selection fix**: Resolved a race condition where double-clicking a track caused a cascade of
+  automatic advances to the end of the list; implemented disposal guards in `AudioPlaybackService` and
+  instance validation in `PlaybackViewModel`.
 
 ## Open Work (next execution items)
 
-- Shared catalogue strategy decision (replicated vs distributed vs hybrid)
-- Browse protocol/storage/UI implementation based on that decision
+- Browse protocol/storage/UI implementation based on ADR 0001
 - Replace "coming soon" search in Library and Local Music (Assigned to Jules Fleet)
 - Pending downloads/progress visibility in Browse + Library
 - Remove-from-library while preserving list membership as "Not Downloaded"
