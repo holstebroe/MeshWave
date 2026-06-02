@@ -23,4 +23,4 @@ jobs:
           jules_api_key: ${{ secrets.JULES_API_KEY }}
           starting_branch: master
           prompt: |
-${{DAILY_JULES_PROJECT_MANAGER_PROMPT}}
+            ${{vars.DAILY_JULES_PROJECT_MANAGER_PROMPT}}
