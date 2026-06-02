@@ -1,4 +1,5 @@
 using System.Net.Sockets;
+using MeshWave.Common.Core;
 using MeshWave.LibraryManager;
 using MeshWave.Models;
 using MeshWave.Mvvm;
@@ -45,7 +46,8 @@ public class ApplicationViewModel : ViewModelBase
         var settings = _settingsService.LoadSettings();
         _userRepository = new UserRepository(settings.BaseFolder);
         _metadataLookup = new MetadataLookupRepository(_settingsService.GetLocalMusicFolder());
-        _syncOrchestrator = new SyncOrchestrator(userRepository: _userRepository);
+        var catalogueService = new CatalogueService();
+        _syncOrchestrator = new SyncOrchestrator(userRepository: _userRepository, catalogueService: catalogueService);
 
         _playbackViewModel = new PlaybackViewModel(_syncOrchestrator, _userRepository, _metadataLookup);
         _currentViewModel = new HomeViewModel();
