@@ -129,7 +129,8 @@ public class ManifestExchangeTests : IAsyncDisposable
     [Fact]
     public async Task FetchManifest_WithRange_ReturnsFilteredOperations()
     {
-        using var serverWithDifferentPort = new ManifestExchangeServer(TestPort + 4);
+        var port = FindFreePort();
+        using var server = new ManifestExchangeServer(port);
         var manifest = _manager.CreateManifest("user-range");
         for (int i = 0; i < 5; i++)
         {
@@ -145,14 +146,14 @@ public class ManifestExchangeTests : IAsyncDisposable
             });
         }
 
-        await serverWithDifferentPort.StartAsync(() => manifest);
+        await server.StartAsync(() => manifest);
 
         try
         {
             var client = new ManifestExchangeClient(timeoutMs: 10000);
 
             // Request middle range (2, 3)
-            var fetched = await client.FetchManifestAsync("127.0.0.1", TestPort + 4, startSequenceNumber: 2, endSequenceNumber: 3);
+            var fetched = await client.FetchManifestAsync("127.0.0.1", port, startSequenceNumber: 2, endSequenceNumber: 3);
 
             Assert.NotNull(fetched);
             Assert.Equal(2, fetched.Operations.Count);
@@ -160,14 +161,14 @@ public class ManifestExchangeTests : IAsyncDisposable
             Assert.Equal(3, fetched.Operations[1].SequenceNumber);
 
             // Request from 4 onwards
-            var fetched2 = await client.FetchManifestAsync("127.0.0.1", TestPort + 4, startSequenceNumber: 4);
+            var fetched2 = await client.FetchManifestAsync("127.0.0.1", port, startSequenceNumber: 4);
             Assert.NotNull(fetched2);
             Assert.Single(fetched2.Operations);
             Assert.Equal(4, fetched2.Operations[0].SequenceNumber);
         }
         finally
         {
-            await serverWithDifferentPort.StopAsync();
+            await server.StopAsync();
         }
     }
 

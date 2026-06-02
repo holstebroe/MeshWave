@@ -507,7 +507,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         try
         {
             var existing = _peerStore.Get(peer.UserId);
-            var startSeq = existing?.Operations.Count ?? 0;
+            var startSeq = (existing?.Snapshot?.LastSequenceNumber ?? -1) + 1 + (existing?.Operations.Count ?? 0);
 
             var remoteManifest = await _client.FetchManifestAsync(peer.Address, peer.Port, startSeq, null, ct);
             if (remoteManifest == null)

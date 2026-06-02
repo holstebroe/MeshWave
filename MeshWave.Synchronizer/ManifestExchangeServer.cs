@@ -119,6 +119,7 @@ public class ManifestExchangeServer : IDisposable
                                 UserId = manifest.UserId,
                                 Version = manifest.Version,
                                 LastUpdated = manifest.LastUpdated,
+                                Snapshot = manifest.Snapshot,
                                 Operations = filteredOps
                             };
                         }

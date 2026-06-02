@@ -236,15 +236,16 @@ public class ManifestManager
             expectedSeq = manifest.Snapshot.LastSequenceNumber + 1;
         }
 
+        if (manifest.Snapshot == null && manifest.Operations.Count > 0)
+        {
+            expectedSeq = manifest.Operations[0].SequenceNumber;
+        }
+
         for (int i = 0; i < manifest.Operations.Count; i++)
         {
             var op = manifest.Operations[i];
 
-            var expectedSeq = manifest.Operations.Count > 0
-                ? manifest.Operations[0].SequenceNumber + i
-                : i;
-
-            if (op.SequenceNumber != expectedSeq)
+            if (op.SequenceNumber != expectedSeq + i)
                 return false;
 
             var signable = BuildSignablePayload(op);
