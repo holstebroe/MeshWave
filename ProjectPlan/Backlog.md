@@ -6,7 +6,7 @@
 ### [P0 -- Community Browse + Shared Catalogue (highest)](https://github.com/holstebroe/MeshWave/milestone/1)
 - [x] [Write architecture decision: replicated metadata index vs distributed search vs hybrid model](https://github.com/holstebroe/MeshWave/issues/17)
 - [x] [Define shared catalogue schema for Artist/Album/Track/Playlist metadata and peer availability](https://github.com/holstebroe/MeshWave/issues/14)
-- [ ] [Implement catalogue sync/index pipeline (ingest, dedupe, staleness rules)](https://github.com/holstebroe/MeshWave/issues/15) [IN PROGRESS]
+- [x] [Implement catalogue sync/index pipeline (ingest, dedupe, staleness rules)](https://github.com/holstebroe/MeshWave/issues/15)
 - [x] [Build Browse UI for artists/albums/tracks/playlists with download actions](https://github.com/holstebroe/MeshWave/issues/13)
 - [ ] [Implement play-while-downloading flow (buffered start)](https://github.com/holstebroe/MeshWave/issues/16) [IN PROGRESS]
 - [ ] [Add global pending downloads queue UI with per-item progress/state](https://github.com/holstebroe/MeshWave/issues/12)
@@ -72,7 +72,7 @@
 - [x] Bootstrap rendezvous ("crossing hands") phase 1: explicit rendezvous session ID issuance by bootstrap coordinator
 - [x] Bootstrap rendezvous phase 2: coordinated simultaneous outbound probe window (TCP SYN + UDP punch hints)
 - [ ] [Relay fallback (opt-in): bootstrap-assisted relay only when direct methods fail](https://github.com/holstebroe/MeshWave/issues/33)
-- [ ] [NAT: Outbound-only manifest push via bootstrap](https://github.com/holstebroe/MeshWave/issues/58) [IN PROGRESS]
+- [ ] [NAT: Outbound-only manifest push via bootstrap](https://github.com/holstebroe/MeshWave/issues/58)
 - [x] ARM Linux bootstrap publish script baseline (`scripts/publish-bootstrap-arm.ps1`)
 - [x] Connection diagnostics panel: show per-attempt outcomes, local/remote endpoints, and recommended NAT forwarding rules
 - [x] Diagnostics consistency pass: distinguish routing peers vs mesh/bootstrap peers, show manifest availability,

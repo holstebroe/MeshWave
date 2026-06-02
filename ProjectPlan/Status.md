@@ -24,6 +24,12 @@ Recently completed:
 - **Issue #17**: Architecture decision for shared catalogue (ADR 0001).
 - **Issue #31**: Implement manifest compaction/snapshotting.
 - **Issue #30**: Implement delta manifest synchronization.
+1. **Issue #14**: Define shared catalogue schema for Artist/Album/Track/Playlist metadata and peer availability.
+   - *Success Criteria*: Define `CatalogueEntry` and `PeerAvailability` models; implement `ICatalogueService` stub.
+2. **Issue #30**: Implement delta manifest synchronization (request operations by `SequenceNumber` range).
+   - *Success Criteria*: Update protocol and `SyncOrchestrator` to support range-based sync requests.
+3. **Issue #18**: Define local search behavior (fields, tokenization, matching, ranking, empty-state UX).
+   - *Success Criteria*: Define scoring algorithm and tokenization logic for Library and Browse search.
 
 Milestone D remainder -- Community Sync (in progress), with priority ordered as:
 1. Browse + shared catalogue architecture and implementation
@@ -34,6 +40,8 @@ Milestone D remainder -- Community Sync (in progress), with priority ordered as:
 
 ## Recently Completed
 
+- **Issue #9: Fix track selection bug in player**: Resolved race condition in `PlaybackViewModel` that caused incorrect track selection and unexpected auto-advance.
+- **Issue #31: Implement manifest compaction/snapshotting**: Implemented `ManifestSnapshot` and compaction logic in `ManifestManager` to reduce manifest size.
 - **Architecture Decision Record (ADR 0001) for Shared Catalogue**: Defined a hybrid replication/distributed search strategy for the mesh catalogue.
 - **Content download protocol wired end-to-end**: `ManifestExchangeClient.RequestContentAsync`,
   `SyncOrchestrator.StartAsync` content provider parameter, `ManifestExchangeServer` `RequestContent`

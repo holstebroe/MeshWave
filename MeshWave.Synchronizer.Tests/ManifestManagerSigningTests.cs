@@ -119,6 +119,31 @@ public class ManifestManagerSigningTests
     }
 
     [Fact]
+    public void VerifyManifest_WorksWithDeltas()
+    {
+        var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
+        var manifest = _manager.CreateManifest("user-delta");
+
+        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create,
+            "track-0", "Track", "hash0", null, privateKey);
+        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create,
+            "track-1", "Track", "hash1", null, privateKey);
+        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create,
+            "track-2", "Track", "hash2", null, privateKey);
+
+        // Create a delta manifest containing only seq 1 and 2
+        var delta = new Manifest
+        {
+            UserId = manifest.UserId,
+            Operations = manifest.Operations.Skip(1).ToList(),
+            Version = manifest.Version,
+            LastUpdated = manifest.LastUpdated
+        };
+
+        Assert.True(_manager.VerifyManifest(delta, publicKey));
+    }
+
+    [Fact]
     public void MergeManifest_ThrowsForDifferentUser()
     {
         var localManifest = _manager.CreateManifest("user-A");

@@ -236,6 +236,11 @@ public class ManifestManager
             expectedSeq = manifest.Snapshot.LastSequenceNumber + 1;
         }
 
+        if (manifest.Snapshot == null && manifest.Operations.Count > 0)
+        {
+            expectedSeq = manifest.Operations[0].SequenceNumber;
+        }
+
         for (int i = 0; i < manifest.Operations.Count; i++)
         {
             var op = manifest.Operations[i];

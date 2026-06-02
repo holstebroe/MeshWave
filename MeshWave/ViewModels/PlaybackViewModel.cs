@@ -26,6 +26,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     private TimeSpan _currentPosition;
     private TimeSpan _duration;
     private bool _isPlaying = false;
+    private bool _isBuffering = false;
     private double _volume = 1.0;
     private ObservableCollection<string> _comments = [];
     private ObservableCollection<TimelineCommentMarker> _timelineMarkers = [];
@@ -168,6 +169,12 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
                 OnPropertyChanged(nameof(PlayPauseIcon));
             }
         }
+    }
+
+    public bool IsBuffering
+    {
+        get => _isBuffering;
+        set => SetProperty(ref _isBuffering, value);
     }
 
     public bool HasMultipleVersions
@@ -387,7 +394,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         }
     }
 
-    public void LoadTrack(string trackTitle, string artist, TimeSpan duration, string? filePath = null, bool autoPlay = true, bool incrementPlayCount = true)
+    public void LoadTrack(string trackTitle, string artist, TimeSpan duration, string? filePath = null, bool autoPlay = true, bool incrementPlayCount = true, long remoteContentLength = 0)
     {
         CurrentTrackTitle = trackTitle;
         CurrentArtist = artist;
@@ -426,6 +433,11 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
                 SetProperty(ref _currentPosition, pos, nameof(CurrentPosition));
                 _isUpdatingPosition = false;
             };
+            audioService.BufferingChanged += (s, buffering) =>
+            {
+                if (!ReferenceEquals(_audioService, audioService)) return;
+                IsBuffering = buffering;
+            };
             audioService.PlaybackStopped += (s, e) =>
             {
                 if (!ReferenceEquals(_audioService, audioService)) return;
@@ -448,8 +460,19 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
                     PlayNextTrack();
                 }
             };
-            _audioService.LoadFile(filePath);
-            Duration = _audioService.Duration;
+
+            if (remoteContentLength > 0)
+            {
+                _ = Task.Run(() => audioService.LoadGrowingFileAsync(filePath, remoteContentLength));
+                // Note: Duration might be zero until LoadGrowingFileAsync completes enough to parse header
+                // and we might need to rely on the passed-in duration.
+            }
+            else
+            {
+                _audioService.LoadFile(filePath);
+                Duration = _audioService.Duration;
+            }
+
             if (autoPlay)
                 Play();
             else
