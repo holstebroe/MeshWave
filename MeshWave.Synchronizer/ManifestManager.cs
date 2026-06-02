@@ -82,7 +82,11 @@ public class ManifestManager
         {
             var op = manifest.Operations[i];
 
-            if (op.SequenceNumber != i)
+            var expectedSeq = manifest.Operations.Count > 0
+                ? manifest.Operations[0].SequenceNumber + i
+                : i;
+
+            if (op.SequenceNumber != expectedSeq)
                 return false;
 
             var signable = BuildSignablePayload(op);

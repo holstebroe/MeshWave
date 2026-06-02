@@ -506,7 +506,10 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
         try
         {
-            var remoteManifest = await _client.FetchManifestAsync(peer.Address, peer.Port, ct);
+            var existing = _peerStore.Get(peer.UserId);
+            var startSeq = existing?.Operations.Count ?? 0;
+
+            var remoteManifest = await _client.FetchManifestAsync(peer.Address, peer.Port, startSeq, null, ct);
             if (remoteManifest == null)
             {
                 RecordPeerMessage(peer.UserId, "FetchManifest", success: false,
@@ -516,7 +519,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
             Interlocked.Increment(ref _outboundManifestFetchCount);
             RecordPeerMessage(peer.UserId, "FetchManifest", success: true,
-                $"Fetched manifest with {remoteManifest.Operations.Count} operation(s) from {peer.Address}:{peer.Port}.");
+                $"Fetched manifest with {remoteManifest.Operations.Count} operation(s) from {peer.Address}:{peer.Port} (delta sync from seq {startSeq}).");
             TryMerge(remoteManifest, peer.PublicKeyPem);
         }
         catch (Exception ex)

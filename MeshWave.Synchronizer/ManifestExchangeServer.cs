@@ -107,6 +107,22 @@ public class ManifestExchangeServer : IDisposable
                     case ManifestRequestType.GetManifest:
                     {
                         var manifest = _localManifestProvider?.Invoke();
+                        if (manifest != null && (request.StartSequenceNumber > 0 || request.EndSequenceNumber != null))
+                        {
+                            var filteredOps = manifest.Operations
+                                .Where(op => op.SequenceNumber >= request.StartSequenceNumber &&
+                                            (request.EndSequenceNumber == null || op.SequenceNumber <= request.EndSequenceNumber))
+                                .ToList();
+
+                            manifest = new Manifest
+                            {
+                                UserId = manifest.UserId,
+                                Version = manifest.Version,
+                                LastUpdated = manifest.LastUpdated,
+                                Operations = filteredOps
+                            };
+                        }
+
                         var response = new ManifestResponse { Manifest = manifest };
                         await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
                         break;
@@ -221,6 +237,8 @@ public class ManifestRequest
     public RendezvousRequest? Rendezvous { get; set; }
     public string? ContentHash { get; set; }
     public PeerInfo? AnnouncingPeer { get; set; }
+    public int StartSequenceNumber { get; set; }
+    public int? EndSequenceNumber { get; set; }
 }
 
 public class ManifestResponse
