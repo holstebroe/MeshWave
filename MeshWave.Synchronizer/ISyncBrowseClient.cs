@@ -1,3 +1,4 @@
+using MeshWave.Common.Core;
 using MeshWave.Common.Core.Models;
 
 namespace MeshWave.Synchronizer;
@@ -11,6 +12,7 @@ public interface ISyncBrowseClient
     bool IsRunning { get; }
     IReadOnlyCollection<Manifest> PeerManifests { get; }
     Manifest? LocalManifest { get; }
+    ICatalogueService Catalogue { get; }
     PeerConnectionAttemptReport? LastConnectionAttemptReport { get; }
     IEnumerable<PeerInfo> GetPeers();
     event EventHandler<ManifestMergedEventArgs>? ManifestMerged;
