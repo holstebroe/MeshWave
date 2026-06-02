@@ -19,10 +19,10 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     private ManifestExchangeServer? _server;
     private readonly ManifestExchangeClient _client;
     private readonly ManifestManager _manifestManager;
-    private readonly ICatalogueService _catalogueService;
     private readonly PeerManifestStore _peerStore;
     private readonly ContentExchange _contentExchange;
     private readonly NatTraversalService _natTraversal;
+    private readonly ICatalogueService _catalogueService;
 
     private LocalPeerIdentity? _identity;
     private Manifest? _localManifest;
@@ -57,9 +57,6 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// <summary>Current local manifest containing this node's signed operations.</summary>
     public Manifest? LocalManifest => _localManifest;
 
-    /// <summary>The shared catalogue service for mesh-wide content discovery.</summary>
-    public ICatalogueService Catalogue => _catalogueService;
-
     /// <summary>Read-only view of all peer manifests received and persisted so far.</summary>
     public IReadOnlyCollection<Manifest> PeerManifests => _peerStore.GetAll();
 
@@ -68,6 +65,9 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
     /// <summary>Last peer connection attempt report from RequestContentAsync, if any.</summary>
     public PeerConnectionAttemptReport? LastConnectionAttemptReport => _lastConnectionReport;
+
+    /// <summary>The shared catalogue service for global metadata lookup.</summary>
+    public ICatalogueService CatalogueService => _catalogueService;
 
     public int LocalPublishedTrackCount => CountPublishedItems(_localManifest, "Track");
     public int LocalPublishedAlbumCount => CountPublishedItems(_localManifest, "Album");
@@ -143,8 +143,8 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         _server = server;
         _client = client ?? new ManifestExchangeClient(timeoutMs: SecurityLimits.ConnectTimeoutMs);
         _manifestManager = manifestManager ?? new ManifestManager();
-        _catalogueService = catalogueService ?? new CatalogueService();
         _userRepository = userRepository;
+        _catalogueService = catalogueService ?? new CatalogueService();
 
         if (peerManifestStore == null && _userRepository != null)
             _peerStore = PeerManifestStore.CreateAtBase(_userRepository.BaseDataFolder);
@@ -203,14 +203,9 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
         await _router.StartAsync(identity, _bootstrapNodes, _cts.Token);
 
-        // Ingest existing manifests into catalogue
-        foreach (var manifest in _peerStore.GetAll())
-        {
-            _ = _catalogueService.IngestAsync(manifest);
-        }
         if (_localManifest != null)
         {
-            _ = _catalogueService.IngestAsync(_localManifest);
+            await _catalogueService.IngestAsync(_localManifest);
         }
     }
 
@@ -1078,9 +1073,6 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         var added = _peerStore.MergeAndSave(remote, publicKeyPem, _manifestManager);
         if (added > 0)
         {
-            // Update shared catalogue
-            _ = _catalogueService.IngestAsync(remote);
-
             var profileOp = remote.Operations
                 .Where(op => op.OperationType == ManifestOperationType.Profile)
                 .OrderByDescending(op => op.SequenceNumber)
@@ -1090,6 +1082,8 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             {
                 _userRepository?.UpdateProfile(remote.UserId, profileOp.Metadata);
             }
+
+            _ = _catalogueService.IngestAsync(remote);
 
             ManifestMerged?.Invoke(this, new ManifestMergedEventArgs(remote.UserId, added));
         }
@@ -1101,6 +1095,8 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
         if (_localManifest == null)
             return;
+
+        _ = _catalogueService.IngestAsync(_localManifest);
 
         _ = Task.Run(async () =>
         {

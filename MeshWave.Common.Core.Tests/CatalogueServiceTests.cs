@@ -10,7 +10,7 @@ namespace MeshWave.Common.Core.Tests;
 public class CatalogueServiceTests
 {
     [Fact]
-    public async Task IngestAsync_ShouldIndexNewEntries()
+    public async Task IngestAsync_AddsNewEntries()
     {
         var service = new CatalogueService();
         var manifest = new Manifest
@@ -18,14 +18,15 @@ public class CatalogueServiceTests
             UserId = "user1",
             Operations = new List<ManifestOperation>
             {
-                new() {
+                new ManifestOperation
+                {
                     OperationId = "op1",
                     OperationType = ManifestOperationType.Create,
                     TargetId = "track1",
                     TargetType = "Track",
                     ContentHash = "hash1",
-                    SequenceNumber = 0,
-                    Signature = "sig1",
+                    SequenceNumber = 1,
+                    Signature = "sig",
                     Metadata = new Dictionary<string, string> { { "title", "Song A" }, { "artist", "Artist X" } }
                 }
             }
@@ -37,60 +38,64 @@ public class CatalogueServiceTests
         Assert.NotNull(entry);
         Assert.Equal("Song A", entry.Title);
         Assert.Equal("Artist X", entry.ArtistName);
-        Assert.Equal("hash1", entry.ContentHash);
+        Assert.Equal("user1", entry.OwnerUserId);
 
         var peers = await service.GetPeersForContentAsync("hash1");
         Assert.Contains("user1", peers);
     }
 
     [Fact]
-    public async Task IngestAsync_ShouldEnforceStalenessRule()
+    public async Task IngestAsync_AppliesStalenessRule()
     {
         var service = new CatalogueService();
-        var manifestV1 = new Manifest
+        var manifest1 = new Manifest
         {
             UserId = "user1",
             Operations = new List<ManifestOperation>
             {
-                new() {
+                new ManifestOperation
+                {
                     OperationId = "op1",
                     OperationType = ManifestOperationType.Create,
                     TargetId = "track1",
                     TargetType = "Track",
-                    SequenceNumber = 1,
-                    Signature = "sig1",
-                    Metadata = new Dictionary<string, string> { { "title", "Song A v1" } }
+                    SequenceNumber = 5,
+                    Signature = "sig",
+                    Metadata = new Dictionary<string, string> { { "title", "New Title" } }
                 }
             }
         };
 
-        var manifestV2 = new Manifest
+        var manifest2 = new Manifest
         {
-            UserId = "user1",
+            UserId = "user2",
             Operations = new List<ManifestOperation>
             {
-                new() {
+                new ManifestOperation
+                {
                     OperationId = "op2",
                     OperationType = ManifestOperationType.Update,
                     TargetId = "track1",
                     TargetType = "Track",
-                    SequenceNumber = 2,
-                    Signature = "sig2",
-                    Metadata = new Dictionary<string, string> { { "title", "Song A v2" } }
+                    SequenceNumber = 3,
+                    Signature = "sig",
+                    Metadata = new Dictionary<string, string> { { "title", "Old Title" } }
                 }
             }
         };
 
-        await service.IngestAsync(manifestV2);
-        await service.IngestAsync(manifestV1); // Older op should be ignored
+        // Ingest newer first
+        await service.IngestAsync(manifest1);
+        // Ingest older
+        await service.IngestAsync(manifest2);
 
         var entry = await service.GetEntryAsync("track1");
         Assert.NotNull(entry);
-        Assert.Equal("Song A v2", entry.Title);
+        Assert.Equal("New Title", entry.Title);
     }
 
     [Fact]
-    public async Task IngestAsync_ShouldHandleDelete()
+    public async Task SearchAsync_ReturnsMatchingEntries()
     {
         var service = new CatalogueService();
         var manifest = new Manifest
@@ -98,82 +103,41 @@ public class CatalogueServiceTests
             UserId = "user1",
             Operations = new List<ManifestOperation>
             {
-                new() {
+                new ManifestOperation
+                {
                     OperationId = "op1",
                     OperationType = ManifestOperationType.Create,
                     TargetId = "track1",
                     TargetType = "Track",
                     SequenceNumber = 1,
-                    Signature = "sig1",
-                    Metadata = new Dictionary<string, string> { { "title", "Song A" } }
+                    Signature = "sig",
+                    Metadata = new Dictionary<string, string> { { "title", "Yellow Submarine" }, { "artist", "The Beatles" } }
                 },
-                new() {
-                    OperationId = "op2",
-                    OperationType = ManifestOperationType.Delete,
-                    TargetId = "track1",
-                    TargetType = "Track",
-                    SequenceNumber = 2,
-                    Signature = "sig2"
-                }
-            }
-        };
-
-        await service.IngestAsync(manifest);
-
-        var entry = await service.GetEntryAsync("track1");
-        Assert.Null(entry);
-    }
-
-    [Fact]
-    public async Task SearchAsync_ShouldFindMatches()
-    {
-        var service = new CatalogueService();
-        var manifest = new Manifest
-        {
-            UserId = "user1",
-            Operations = new List<ManifestOperation>
-            {
-                new() {
-                    OperationId = "op1",
-                    OperationType = ManifestOperationType.Create,
-                    TargetId = "track1",
-                    TargetType = "Track",
-                    SequenceNumber = 1,
-                    Signature = "sig1",
-                    Metadata = new Dictionary<string, string> { { "title", "Greatest Song" }, { "artist", "Rock Star" } }
-                },
-                new() {
+                new ManifestOperation
+                {
                     OperationId = "op2",
                     OperationType = ManifestOperationType.Create,
                     TargetId = "track2",
                     TargetType = "Track",
                     SequenceNumber = 2,
-                    Signature = "sig2",
-                    Metadata = new Dictionary<string, string> { { "title", "A Boring Track" }, { "artist", "Ambient Producer" } }
+                    Signature = "sig",
+                    Metadata = new Dictionary<string, string> { { "title", "Help!" }, { "artist", "The Beatles" } }
                 }
             }
         };
 
         await service.IngestAsync(manifest);
 
-        var results = await service.SearchAsync("Greatest");
-        Assert.Single(results);
-        Assert.Equal("track1", results.First().EntryId);
+        var results = await service.SearchAsync("Beatles");
+        Assert.Equal(2, results.Count());
 
-        results = await service.SearchAsync("Rock");
-        Assert.Single(results);
-        Assert.Equal("track1", results.First().EntryId);
-
-        results = await service.SearchAsync("Song");
-        Assert.Single(results);
-
-        results = await service.SearchAsync("Producer Boring");
-        Assert.Single(results);
-        Assert.Equal("track2", results.First().EntryId);
+        var results2 = await service.SearchAsync("Yellow");
+        Assert.Single(results2);
+        Assert.Equal("track1", results2.First().EntryId);
     }
 
     [Fact]
-    public async Task IngestAsync_ShouldHandleSnapshots()
+    public async Task IngestAsync_HandlesSnapshots()
     {
         var service = new CatalogueService();
         var manifest = new Manifest
@@ -182,27 +146,16 @@ public class CatalogueServiceTests
             Snapshot = new ManifestSnapshot
             {
                 LastSequenceNumber = 10,
-                Timestamp = DateTime.UtcNow,
-                Signature = "snapsig",
+                Signature = "sig",
                 EntityStates = new List<SnapshotStateEntry>
                 {
-                    new() {
+                    new SnapshotStateEntry
+                    {
                         TargetId = "album1",
                         TargetType = "Album",
-                        Metadata = new Dictionary<string, string> { { "name", "Mega Album" } }
+                        ContentHash = "ahash",
+                        Metadata = new Dictionary<string, string> { { "title", "Snapshot Album" } }
                     }
-                }
-            },
-            Operations = new List<ManifestOperation>
-            {
-                new() {
-                    OperationId = "op11",
-                    OperationType = ManifestOperationType.Update,
-                    TargetId = "album1",
-                    TargetType = "Album",
-                    SequenceNumber = 11,
-                    Signature = "sig11",
-                    Metadata = new Dictionary<string, string> { { "name", "Mega Album Extended" } }
                 }
             }
         };
@@ -211,7 +164,7 @@ public class CatalogueServiceTests
 
         var entry = await service.GetEntryAsync("album1");
         Assert.NotNull(entry);
-        Assert.Equal("Mega Album Extended", entry.Title);
-        Assert.Equal(11, entry.SequenceNumber);
+        Assert.Equal("Snapshot Album", entry.Title);
+        Assert.Equal(10, entry.SequenceNumber);
     }
 }

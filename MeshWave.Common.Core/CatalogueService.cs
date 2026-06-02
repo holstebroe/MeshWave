@@ -8,14 +8,15 @@ using MeshWave.Common.Core.Models;
 namespace MeshWave.Common.Core;
 
 /// <summary>
-/// Thread-safe implementation of ICatalogueService for indexing and searching shared mesh content.
+/// Implementation of ICatalogueService providing a searchable, deduplicated index of shared metadata.
 /// </summary>
 public class CatalogueService : ICatalogueService
 {
     private readonly ConcurrentDictionary<string, CatalogueEntry> _entries = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, HashSet<string>> _availability = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, int> _lastSequenceNumbers = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, bool>> _peerAvailability = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _lock = new();
 
-    /// <inheritdoc />
     public Task IngestAsync(Manifest manifest)
     {
         if (manifest == null) return Task.CompletedTask;
@@ -23,14 +24,14 @@ public class CatalogueService : ICatalogueService
         // 1. Process Snapshot if present
         if (manifest.Snapshot != null)
         {
-            foreach (var entity in manifest.Snapshot.EntityStates)
+            foreach (var state in manifest.Snapshot.EntityStates)
             {
-                ProcessEntry(
+                UpdateEntry(
                     manifest.UserId,
-                    entity.TargetId,
-                    entity.TargetType,
-                    entity.ContentHash,
-                    entity.Metadata,
+                    state.TargetId,
+                    state.TargetType,
+                    state.ContentHash,
+                    state.Metadata,
                     manifest.Snapshot.LastSequenceNumber,
                     manifest.Snapshot.Timestamp,
                     isDelete: false);
@@ -38,14 +39,13 @@ public class CatalogueService : ICatalogueService
         }
 
         // 2. Process Operations
-        foreach (var op in (manifest.Operations ?? Enumerable.Empty<ManifestOperation>()).OrderBy(o => o.SequenceNumber))
+        foreach (var op in manifest.Operations)
         {
             if (op.OperationType == ManifestOperationType.Create ||
                 op.OperationType == ManifestOperationType.Update ||
-                op.OperationType == ManifestOperationType.Delete ||
-                op.OperationType == ManifestOperationType.Profile)
+                op.OperationType == ManifestOperationType.Delete)
             {
-                ProcessEntry(
+                UpdateEntry(
                     manifest.UserId,
                     op.TargetId,
                     op.TargetType,
@@ -53,139 +53,127 @@ public class CatalogueService : ICatalogueService
                     op.Metadata,
                     op.SequenceNumber,
                     op.Timestamp,
-                    isDelete: op.OperationType == ManifestOperationType.Delete);
+                    op.OperationType == ManifestOperationType.Delete);
             }
         }
 
         return Task.CompletedTask;
     }
 
-    private void ProcessEntry(
-        string userId,
-        string targetId,
-        string targetType,
-        string? contentHash,
-        Dictionary<string, string> metadata,
-        int sequenceNumber,
-        DateTime timestamp,
-        bool isDelete)
-    {
-        // Map targetType string to CatalogueEntryType enum
-        CatalogueEntryType? entryType = targetType.ToLowerInvariant() switch
-        {
-            "track" => CatalogueEntryType.Track,
-            "album" => CatalogueEntryType.Album,
-            "artist" => CatalogueEntryType.Artist,
-            "playlist" => CatalogueEntryType.Playlist,
-            "user" => metadata.GetValueOrDefault("isArtist") == "True" ? CatalogueEntryType.Artist : null,
-            _ => null
-        };
-
-        if (entryType == null) return;
-
-        string entryId = targetId;
-
-        if (isDelete)
-        {
-            // If it's a delete operation, we only remove if it's the latest operation.
-            if (_entries.TryGetValue(entryId, out var existing) && sequenceNumber > existing.SequenceNumber)
-            {
-                _entries.TryRemove(entryId, out _);
-            }
-            return;
-        }
-
-        // Update Availability
-        if (!string.IsNullOrWhiteSpace(contentHash))
-        {
-            var peers = _availability.GetOrAdd(contentHash, _ => new HashSet<string>(StringComparer.OrdinalIgnoreCase));
-            lock (peers)
-            {
-                peers.Add(userId);
-            }
-        }
-
-        // Staleness Rule: Only apply changes if incoming SequenceNumber is strictly greater than existing.
-        if (_entries.TryGetValue(entryId, out var existingEntry))
-        {
-            if (sequenceNumber <= existingEntry.SequenceNumber)
-                return;
-        }
-
-        var entry = new CatalogueEntry
-        {
-            EntryId = entryId,
-            Type = entryType.Value,
-            OwnerUserId = userId,
-            Title = GetTitle(entryType.Value, metadata, targetId),
-            ArtistName = metadata.GetValueOrDefault("artist") ?? metadata.GetValueOrDefault("displayName"),
-            AlbumName = metadata.GetValueOrDefault("album") ?? metadata.GetValueOrDefault("name"),
-            ContentHash = contentHash,
-            SequenceNumber = sequenceNumber,
-            Timestamp = timestamp,
-            Genre = metadata.GetValueOrDefault("genre")
-        };
-
-        if (metadata.TryGetValue("duration", out var dStr) && TimeSpan.TryParse(dStr, out var duration))
-            entry.Duration = duration;
-
-        if (metadata.TryGetValue("releasedAt", out var rStr) && DateTime.TryParse(rStr, out var releaseDate))
-            entry.ReleaseDate = releaseDate;
-
-        _entries[entryId] = entry;
-    }
-
-    private static string GetTitle(CatalogueEntryType type, Dictionary<string, string> metadata, string targetId)
-    {
-        return type switch
-        {
-            CatalogueEntryType.Track => metadata.GetValueOrDefault("title") ?? targetId,
-            CatalogueEntryType.Album => metadata.GetValueOrDefault("name") ?? targetId,
-            CatalogueEntryType.Artist => metadata.GetValueOrDefault("displayName") ?? targetId,
-            CatalogueEntryType.Playlist => metadata.GetValueOrDefault("title") ?? targetId,
-            _ => targetId
-        };
-    }
-
-    /// <inheritdoc />
     public Task<IEnumerable<CatalogueEntry>> SearchAsync(string query)
     {
         if (string.IsNullOrWhiteSpace(query))
-            return Task.FromResult(_entries.Values.AsEnumerable());
+            return Task.FromResult(Enumerable.Empty<CatalogueEntry>());
 
-        var keywords = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var results = _entries.Values.Where(e =>
-            keywords.All(k =>
-                (e.Title?.Contains(k, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (e.ArtistName?.Contains(k, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (e.AlbumName?.Contains(k, StringComparison.OrdinalIgnoreCase) ?? false)
-            )
-        );
+            (e.Title?.Contains(query, StringComparison.OrdinalIgnoreCase) == true) ||
+            (e.ArtistName?.Contains(query, StringComparison.OrdinalIgnoreCase) == true) ||
+            (e.AlbumName?.Contains(query, StringComparison.OrdinalIgnoreCase) == true)
+        ).ToList();
 
-        return Task.FromResult(results);
+        return Task.FromResult<IEnumerable<CatalogueEntry>>(results);
     }
 
-    /// <inheritdoc />
     public Task<CatalogueEntry?> GetEntryAsync(string entryId)
     {
+        if (string.IsNullOrWhiteSpace(entryId)) return Task.FromResult<CatalogueEntry?>(null);
         _entries.TryGetValue(entryId, out var entry);
         return Task.FromResult(entry);
     }
 
-    /// <inheritdoc />
     public Task<IEnumerable<string>> GetPeersForContentAsync(string contentHash)
     {
         if (string.IsNullOrWhiteSpace(contentHash))
             return Task.FromResult(Enumerable.Empty<string>());
 
-        if (_availability.TryGetValue(contentHash, out var peers))
+        if (_peerAvailability.TryGetValue(contentHash, out var peers))
         {
-            lock (peers)
-            {
-                return Task.FromResult(peers.ToList().AsEnumerable());
-            }
+            return Task.FromResult<IEnumerable<string>>(peers.Keys.ToList());
         }
 
         return Task.FromResult(Enumerable.Empty<string>());
+    }
+
+    private void UpdateEntry(string userId, string targetId, string targetType, string? contentHash, Dictionary<string, string> metadata, int sequenceNumber, DateTime timestamp, bool isDelete)
+    {
+        if (string.IsNullOrWhiteSpace(targetId)) return;
+        if (targetType != "Artist" && targetType != "Album" && targetType != "Track" && targetType != "Playlist") return;
+
+        lock (_lock)
+        {
+            // Staleness Rule: Only apply if incoming SequenceNumber is greater than existing for this TargetId
+            if (_lastSequenceNumbers.TryGetValue(targetId, out var existingSeq) && sequenceNumber <= existingSeq)
+                return;
+
+            _lastSequenceNumbers[targetId] = sequenceNumber;
+
+            if (isDelete)
+            {
+                _entries.TryRemove(targetId, out _);
+            }
+            else
+            {
+                var entry = new CatalogueEntry
+                {
+                    EntryId = targetId,
+                    Type = MapType(targetType),
+                    OwnerUserId = userId,
+                    Title = GetTitle(targetId, metadata),
+                    ArtistName = metadata.GetValueOrDefault("artist") ?? metadata.GetValueOrDefault("artistName"),
+                    AlbumName = metadata.GetValueOrDefault("album") ?? metadata.GetValueOrDefault("albumName"),
+                    Duration = ParseDuration(metadata.GetValueOrDefault("duration")),
+                    ContentHash = contentHash,
+                    ReleaseDate = ParseDate(metadata.GetValueOrDefault("releasedAt") ?? metadata.GetValueOrDefault("releaseDate")),
+                    Genre = metadata.GetValueOrDefault("genre"),
+                    SequenceNumber = sequenceNumber,
+                    Timestamp = timestamp
+                };
+                _entries[targetId] = entry;
+            }
+
+            // Update Peer Availability
+            if (!string.IsNullOrEmpty(contentHash))
+            {
+                var peers = _peerAvailability.GetOrAdd(contentHash, _ => new ConcurrentDictionary<string, bool>(StringComparer.OrdinalIgnoreCase));
+                if (isDelete)
+                    peers.TryRemove(userId, out _);
+                else
+                    peers.TryAdd(userId, true);
+            }
+        }
+    }
+
+    private static CatalogueEntryType MapType(string targetType)
+    {
+        return targetType switch
+        {
+            "Artist" => CatalogueEntryType.Artist,
+            "Album" => CatalogueEntryType.Album,
+            "Playlist" => CatalogueEntryType.Playlist,
+            _ => CatalogueEntryType.Track
+        };
+    }
+
+    private static string GetTitle(string targetId, Dictionary<string, string> metadata)
+    {
+        if (metadata.TryGetValue("title", out var title) && !string.IsNullOrWhiteSpace(title)) return title;
+        if (metadata.TryGetValue("displayName", out var dn) && !string.IsNullOrWhiteSpace(dn)) return dn;
+        if (metadata.TryGetValue("name", out var name) && !string.IsNullOrWhiteSpace(name)) return name;
+        return targetId;
+    }
+
+    private static TimeSpan? ParseDuration(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return null;
+        if (TimeSpan.TryParse(value, out var ts)) return ts;
+        if (double.TryParse(value, out var seconds)) return TimeSpan.FromSeconds(seconds);
+        return null;
+    }
+
+    private static DateTime? ParseDate(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return null;
+        if (DateTime.TryParse(value, out var dt)) return dt;
+        return null;
     }
 }
