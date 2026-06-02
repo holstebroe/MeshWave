@@ -8,7 +8,7 @@
 - [x] [Define shared catalogue schema for Artist/Album/Track/Playlist metadata and peer availability](https://github.com/holstebroe/MeshWave/issues/14)
 - [x] [Implement catalogue sync/index pipeline (ingest, dedupe, staleness rules)](https://github.com/holstebroe/MeshWave/issues/15)
 - [x] [Build Browse UI for artists/albums/tracks/playlists with download actions](https://github.com/holstebroe/MeshWave/issues/13)
-- [ ] [Implement play-while-downloading flow (buffered start)](https://github.com/holstebroe/MeshWave/issues/16)
+- [ ] [Implement play-while-downloading flow (buffered start)](https://github.com/holstebroe/MeshWave/issues/16) [IN PROGRESS]
 - [ ] [Add global pending downloads queue UI with per-item progress/state](https://github.com/holstebroe/MeshWave/issues/12)
 
 ### [P1 -- Library/Local Music search (replace "coming soon")](https://github.com/holstebroe/MeshWave/milestone/2)
@@ -23,7 +23,7 @@
 - [x] Create artist/album folder placeholder on download enqueue (before bytes arrive)
 - [x] Fix pending download tracks appearing under wrong artist in Library (cross-artist album name collision)
 
-### [P2 -- Artist/Album folder rename tracking](https://github.com/holstebroe/MeshWave/milestone/9)
+### [P2 -- Artist/Album folder rename tracking](https://github.com/holstebroe/MeshWave/milestone/14)
 - [ ] [Design: write a small `.meshwave-id` JSON sidecar file into each artist and album folder on creation, containing a stable GUID and the original entity ID (UserId for artist, AlbumId for album)](https://github.com/holstebroe/MeshWave/issues/21)
 - [ ] [On library scan, read sidecar files to correlate folders to their peer entity even after rename](https://github.com/holstebroe/MeshWave/issues/23)
 - [ ] [When a peer profile or album name changes (manifest Profile/Update op), locate the local folder via sidecar GUID and rename it to the new readable name](https://github.com/holstebroe/MeshWave/issues/24)

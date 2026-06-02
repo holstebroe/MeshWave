@@ -3,7 +3,9 @@
 ## Current Priorities (ordered)
 
 ### [1) Community Browse + Shared Catalogue (TOP PRIORITY)]
-- [ ] [Issue #17: Architecture decision](https://github.com/holstebroe/MeshWave/issues/17) (IN PROGRESS)(https://github.com/holstebroe/MeshWave/milestone/1)
+- [x] [Issue #17: Architecture decision](https://github.com/holstebroe/MeshWave/issues/17)
+- [ ] [Issue #15: Catalogue sync pipeline](https://github.com/holstebroe/MeshWave/issues/15) (IN PROGRESS)
+- [ ] [Issue #16: Play-while-downloading](https://github.com/holstebroe/MeshWave/issues/16) (IN PROGRESS)
 - Decide catalogue architecture (ADR):
   - Replicated metadata to all peers
   - Distributed query/search over mesh
@@ -40,6 +42,7 @@
 - Network diagnostics in Settings (attempt details + counters)
 
 ### Remaining
+- [ ] [Issue #58: NAT: Outbound-only manifest push via bootstrap](https://github.com/holstebroe/MeshWave/issues/58) (IN PROGRESS)
 - Relay fallback (opt-in)
 - Comment moderation sync (owner soft-delete)
 - Comment permission enforcement
