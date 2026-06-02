@@ -127,6 +127,19 @@
                     </Style>
                 </Button.Style>
             </Button>
+            <Button Content="Playlists" Command="{Binding SetTabCommand}" CommandParameter="Playlists" Padding="14,7" Margin="0,0,6,0">
+                <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                        <Setter Property="Margin" Value="0,0,6,0"/>
+                        <Setter Property="Opacity" Value="0.5"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsTabPlaylists}" Value="True">
+                                <Setter Property="Opacity" Value="1"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
             <Button Content="Downloads" Command="{Binding SetTabCommand}" CommandParameter="Downloads" Padding="14,7">
                 <Button.Style>
                     <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
@@ -201,17 +214,28 @@
                                             </TextBlock>
                                         </StackPanel>
                                     </StackPanel>
-                                    <Button Grid.Column="2"
-                                            Content="View Tracks →"
-                                            Command="{Binding DataContext.ViewArtistCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                            CommandParameter="{Binding}"
-                                            Padding="10,5" VerticalAlignment="Center">
-                                        <Button.Style>
-                                            <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
-                                                <Setter Property="Margin" Value="0"/>
-                                            </Style>
-                                        </Button.Style>
-                                    </Button>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Button Content="⬇ Download All"
+                                                Command="{Binding DataContext.DownloadArtistCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                Padding="10,5" Margin="0,0,8,0">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                                    <Setter Property="Margin" Value="0,0,8,0"/>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                        <Button Content="View Tracks →"
+                                                Command="{Binding DataContext.ViewArtistCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                Padding="10,5">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                                    <Setter Property="Margin" Value="0"/>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                    </StackPanel>
                                 </Grid>
                             </Border>
                         </DataTemplate>
@@ -249,11 +273,82 @@
                                             <Run Text="{Binding ArtistDisplayName, Mode=OneWay}" FontWeight="SemiBold"/>
                                         </TextBlock>
                                     </StackPanel>
-                                    <TextBlock Grid.Column="1"
-                                               Text="{Binding ReleasedAtDisplay, Mode=OneWay}"
-                                               FontSize="12"
-                                               Foreground="{StaticResource TextSecondaryColor}"
-                                               VerticalAlignment="Center" Margin="16,0,0,0"/>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding ReleasedAtDisplay, Mode=OneWay}"
+                                                   FontSize="12"
+                                                   Foreground="{StaticResource TextSecondaryColor}"
+                                                   VerticalAlignment="Center" Margin="16,0,16,0"/>
+                                        <Button Content="⬇ Download All"
+                                                Command="{Binding DataContext.DownloadAlbumCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                Padding="10,5" VerticalAlignment="Center">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                                    <Setter Property="Margin" Value="0"/>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- ── Playlists tab ───────────────────────────────────── -->
+                <ItemsControl ItemsSource="{Binding Playlists}">
+                    <ItemsControl.Style>
+                        <Style TargetType="ItemsControl">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsTabPlaylists}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ItemsControl.Style>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{StaticResource SurfaceColor}"
+                                    CornerRadius="8" Padding="16,12" Margin="0,0,0,8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Name}"
+                                                   FontWeight="SemiBold" FontSize="15"
+                                                   Foreground="{StaticResource TextPrimaryColor}"/>
+                                        <TextBlock Text="{Binding Description}"
+                                                   FontSize="12" FontStyle="Italic"
+                                                   Foreground="{StaticResource TextSecondaryColor}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   MaxWidth="400" Margin="0,2,0,0"/>
+                                        <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryColor}" Margin="0,3,0,0">
+                                            <Run Text="by"/>
+                                            <Run Text="{Binding ArtistDisplayName}" FontWeight="SemiBold"/>
+                                            <Run Text=" · "/>
+                                            <Run Text="{Binding TrackCount}"/>
+                                            <Run Text=" tracks"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding ReleasedAtDisplay}"
+                                                   FontSize="12"
+                                                   Foreground="{StaticResource TextSecondaryColor}"
+                                                   VerticalAlignment="Center" Margin="16,0,16,0"/>
+                                        <Button Content="⬇ Download All"
+                                                Command="{Binding DataContext.DownloadPlaylistCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                Padding="10,5" VerticalAlignment="Center">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                                    <Setter Property="Margin" Value="0"/>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                    </StackPanel>
                                 </Grid>
                             </Border>
                         </DataTemplate>
@@ -300,18 +395,29 @@
                                                FontSize="12"
                                                Foreground="{StaticResource TextSecondaryColor}"
                                                VerticalAlignment="Center"/>
-                                    <Button Grid.Column="3"
-                                            Content="{Binding DownloadButtonLabel}"
-                                            Command="{Binding DataContext.DownloadTrackCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                            CommandParameter="{Binding}"
-                                            IsEnabled="{Binding CanDownload}"
-                                            Padding="10,4" VerticalAlignment="Center">
-                                        <Button.Style>
-                                            <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
-                                                <Setter Property="Margin" Value="0"/>
-                                            </Style>
-                                        </Button.Style>
-                                    </Button>
+                                    <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Button Content="▶ Play"
+                                                Command="{Binding DataContext.PlayRemoteTrackCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                Padding="10,4" Margin="0,0,8,0">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                                    <Setter Property="Margin" Value="0,0,8,0"/>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                        <Button Content="{Binding DownloadButtonLabel}"
+                                                Command="{Binding DataContext.DownloadTrackCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                IsEnabled="{Binding CanDownload}"
+                                                Padding="10,4">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                                    <Setter Property="Margin" Value="0"/>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                    </StackPanel>
                                 </Grid>
                             </Border>
                         </DataTemplate>

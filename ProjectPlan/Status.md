@@ -99,6 +99,10 @@ Milestone D remainder -- Community Sync (in progress), with priority ordered as:
   snapshot feed unexpectedly returns empty list
 - **Content serving hardening**: local content provider now ignores zero-length files for matched hashes to
   reduce false `content-request: fail` outcomes
+- **Manifest compaction/snapshotting**: implemented signed state snapshots to squash historical operations (plays, follows, etc.) while preserving comments; updated merge logic to support snapshot-based sync
+- **Track selection fix**: Resolved a race condition where double-clicking a track caused a cascade of
+  automatic advances to the end of the list; implemented disposal guards in `AudioPlaybackService` and
+  instance validation in `PlaybackViewModel`.
 
 ## Open Work (next execution items)
 

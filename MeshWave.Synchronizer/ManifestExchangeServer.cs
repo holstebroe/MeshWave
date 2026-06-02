@@ -107,6 +107,23 @@ public class ManifestExchangeServer : IDisposable
                     case ManifestRequestType.GetManifest:
                     {
                         var manifest = _localManifestProvider?.Invoke();
+                        if (manifest != null && (request.StartSequenceNumber > 0 || request.EndSequenceNumber != null))
+                        {
+                            var filteredOps = manifest.Operations
+                                .Where(op => op.SequenceNumber >= request.StartSequenceNumber &&
+                                            (request.EndSequenceNumber == null || op.SequenceNumber <= request.EndSequenceNumber))
+                                .ToList();
+
+                            manifest = new Manifest
+                            {
+                                UserId = manifest.UserId,
+                                Version = manifest.Version,
+                                LastUpdated = manifest.LastUpdated,
+                                Snapshot = manifest.Snapshot,
+                                Operations = filteredOps
+                            };
+                        }
+
                         var response = new ManifestResponse { Manifest = manifest };
                         await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
                         break;
@@ -150,9 +167,14 @@ public class ManifestExchangeServer : IDisposable
                         var response = new ManifestResponse
                         {
                             Acknowledged = bytes != null && bytes.Length > 0,
-                            ContentBytes = bytes
+                            ContentLength = bytes?.Length ?? 0
                         };
                         await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
+                        if (bytes != null && bytes.Length > 0)
+                        {
+                            await stream.WriteAsync(bytes, ct);
+                            await stream.FlushAsync(ct);
+                        }
                         break;
                     }
                     default:
@@ -221,6 +243,8 @@ public class ManifestRequest
     public RendezvousRequest? Rendezvous { get; set; }
     public string? ContentHash { get; set; }
     public PeerInfo? AnnouncingPeer { get; set; }
+    public int StartSequenceNumber { get; set; }
+    public int? EndSequenceNumber { get; set; }
 }
 
 public class ManifestResponse
@@ -230,6 +254,7 @@ public class ManifestResponse
     public List<PeerInfo> Peers { get; set; } = [];
     public RendezvousResponse? Rendezvous { get; set; }
     public byte[]? ContentBytes { get; set; }
+    public long ContentLength { get; set; }
 }
 
 public class RendezvousRequest

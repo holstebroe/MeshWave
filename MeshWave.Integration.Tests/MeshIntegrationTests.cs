@@ -218,7 +218,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         await peerA.StartAsync(identityA, manifestA);
 
         // Alice broadcasts her artist profile.
-        peerA.BroadcastProfile("Alice Artist", isArtist: true, "My bio", "https://alice.example", null);
+        peerA.BroadcastProfile("Alice Artist", isArtist: true, "My bio", "https://alice.example", null!);
 
         // Assert: profile operation is in her manifest.
         var manifest = manifestA;
@@ -472,7 +472,7 @@ public class MeshIntegrationTests : IAsyncLifetime
 
         // Assert: the operation's signature is no longer valid for the tampered content.
         // The signature was computed on "legit-hash" but now points to "tampered-hash".
-        Assert.NotEqual(originalSig, ""); // Ensure signature was actually created.
+        Assert.NotEqual("", originalSig); // Ensure signature was actually created.
         Assert.Equal("tampered-hash", fakeManifest.Operations[0].ContentHash);
         // Note: actual verification happens when the manifest is merged; here we just verify
         // that tampering is detectable by signature mismatch.
@@ -548,8 +548,8 @@ public class MeshIntegrationTests : IAsyncLifetime
         await jane.StartAsync(janeId, janeManifest, bootstrapNodes: [$"127.0.0.1:{johnPort}"]);
 
         // Both announce themselves as artists.
-        john.BroadcastProfile("John Artist", isArtist: true, "Beats and synths", null, null);
-        jane.BroadcastProfile("Jane Artist", isArtist: true, "Waves and textures", null, null);
+        john.BroadcastProfile("John Artist", isArtist: true, "Beats and synths", "", null!);
+        jane.BroadcastProfile("Jane Artist", isArtist: true, "Waves and textures", "", null!);
 
         // Give Jane a moment to contact John via bootstrap.
         await WaitUntilAsync(() => jane.ConnectedPeerCount > 0 || jane.PeerManifests.Count > 0,

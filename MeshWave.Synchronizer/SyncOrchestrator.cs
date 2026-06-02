@@ -22,6 +22,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     private readonly PeerManifestStore _peerStore;
     private readonly ContentExchange _contentExchange;
     private readonly NatTraversalService _natTraversal;
+    private readonly ICatalogueService _catalogueService;
 
     private LocalPeerIdentity? _identity;
     private Manifest? _localManifest;
@@ -64,6 +65,9 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
     /// <summary>Last peer connection attempt report from RequestContentAsync, if any.</summary>
     public PeerConnectionAttemptReport? LastConnectionAttemptReport => _lastConnectionReport;
+
+    /// <summary>The shared catalogue service for global metadata lookup.</summary>
+    public ICatalogueService CatalogueService => _catalogueService;
 
     public int LocalPublishedTrackCount => CountPublishedItems(_localManifest, "Track");
     public int LocalPublishedAlbumCount => CountPublishedItems(_localManifest, "Album");
@@ -132,13 +136,15 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         PeerManifestStore? peerManifestStore = null,
         ContentExchange? contentExchange = null,
         NatTraversalService? natTraversal = null,
-        UserRepository? userRepository = null)
+        UserRepository? userRepository = null,
+        ICatalogueService? catalogueService = null)
     {
         _router = router ?? new PeerRouter();
         _server = server;
         _client = client ?? new ManifestExchangeClient(timeoutMs: SecurityLimits.ConnectTimeoutMs);
         _manifestManager = manifestManager ?? new ManifestManager();
         _userRepository = userRepository;
+        _catalogueService = catalogueService ?? new CatalogueService();
 
         if (peerManifestStore == null && _userRepository != null)
             _peerStore = PeerManifestStore.CreateAtBase(_userRepository.BaseDataFolder);
@@ -196,6 +202,11 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         }
 
         await _router.StartAsync(identity, _bootstrapNodes, _cts.Token);
+
+        if (_localManifest != null)
+        {
+            await _catalogueService.IngestAsync(_localManifest);
+        }
     }
 
     /// <summary>
@@ -281,11 +292,67 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// <summary>
     /// Requests content bytes from a currently known peer by content hash.
     /// </summary>
-    public async Task<byte[]?> RequestContentAsync(string peerUserId, string contentHash)
+    public async Task<(Stream? Stream, long ContentLength)> RequestContentStreamAsync(string peerUserId, string contentHash)
     {
         if (string.IsNullOrWhiteSpace(peerUserId) || string.IsNullOrWhiteSpace(contentHash))
-            return null;
+            return (null, 0);
 
+        var (peer, report) = await PrepareConnectionAsync(peerUserId, contentHash);
+        if (peer == null) return (null, 0);
+
+        var (stream, length, failureReason) = await _client.RequestContentStreamAsync(peer.Address, peer.Port, contentHash);
+        var succeeded = stream != null;
+
+        if (!succeeded)
+        {
+            report.Attempts.Add(new PeerConnectionAttemptResult(
+                "content-stream-request-initial",
+                false,
+                $"Initial stream request failed: {failureReason}"));
+
+            await RefreshBootstrapAsync(report);
+            var refreshedPeer = _router.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, peerUserId, StringComparison.OrdinalIgnoreCase));
+            if (refreshedPeer != null && (!string.Equals(refreshedPeer.Address, peer.Address, StringComparison.OrdinalIgnoreCase) || refreshedPeer.Port != peer.Port))
+            {
+                report.Attempts.Add(new PeerConnectionAttemptResult(
+                    "content-stream-request-endpoint-refresh",
+                    true,
+                    $"Routing endpoint changed; retrying stream request."));
+
+                peer = refreshedPeer;
+                report.TargetAddress = peer.Address;
+                report.TargetPort = peer.Port;
+
+                (stream, length, failureReason) = await _client.RequestContentStreamAsync(peer.Address, peer.Port, contentHash);
+                succeeded = stream != null;
+            }
+        }
+
+        report.Attempts.Add(new PeerConnectionAttemptResult(
+            "content-stream-request",
+            succeeded,
+            succeeded
+                ? $"Stream opened successfully ({length} bytes expected)."
+                : $"Peer did not open content stream: {failureReason}"));
+
+        RecordPeerMessage(peer.UserId, "RequestContentStream", succeeded,
+            succeeded
+                ? $"Content stream started from {peer.Address}:{peer.Port}."
+                : $"Content stream failed from {peer.Address}:{peer.Port}. Reason: {failureReason}");
+
+        if (!succeeded)
+        {
+            report.Attempts.Add(new PeerConnectionAttemptResult(
+                "nat-guidance",
+                false,
+                BuildNatGuidance(peer.Address, peer.Port, _identity?.ManifestPort ?? 0, report.SuggestedLocalIp ?? "127.0.0.1")));
+        }
+
+        return (stream, length);
+    }
+
+    private async Task<(PeerInfo? Peer, PeerConnectionAttemptReport Report)> PrepareConnectionAsync(string peerUserId, string contentHash)
+    {
         var report = new PeerConnectionAttemptReport
         {
             PeerUserId = peerUserId,
@@ -316,7 +383,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                     "routing-table-retry",
                     false,
                     "Peer still not discoverable after bootstrap refresh."));
-                return null;
+                return (null, report);
             }
         }
 
@@ -361,6 +428,17 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                         : "No ACK during coordinated rendezvous window."));
             }
         }
+
+        return (peer, report);
+    }
+
+    public async Task<byte[]?> RequestContentAsync(string peerUserId, string contentHash)
+    {
+        if (string.IsNullOrWhiteSpace(peerUserId) || string.IsNullOrWhiteSpace(contentHash))
+            return null;
+
+        var (peer, report) = await PrepareConnectionAsync(peerUserId, contentHash);
+        if (peer == null) return null;
 
         var (bytes, failureReason) = await _client.RequestContentAsync(peer.Address, peer.Port, contentHash);
         var succeeded = bytes != null && bytes.Length > 0;
@@ -506,7 +584,10 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
         try
         {
-            var remoteManifest = await _client.FetchManifestAsync(peer.Address, peer.Port, ct);
+            var existing = _peerStore.Get(peer.UserId);
+            var startSeq = (existing?.Snapshot?.LastSequenceNumber ?? -1) + 1 + (existing?.Operations.Count ?? 0);
+
+            var remoteManifest = await _client.FetchManifestAsync(peer.Address, peer.Port, startSeq, null, ct);
             if (remoteManifest == null)
             {
                 RecordPeerMessage(peer.UserId, "FetchManifest", success: false,
@@ -516,7 +597,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
             Interlocked.Increment(ref _outboundManifestFetchCount);
             RecordPeerMessage(peer.UserId, "FetchManifest", success: true,
-                $"Fetched manifest with {remoteManifest.Operations.Count} operation(s) from {peer.Address}:{peer.Port}.");
+                $"Fetched manifest with {remoteManifest.Operations.Count} operation(s) from {peer.Address}:{peer.Port} (delta sync from seq {startSeq}).");
             TryMerge(remoteManifest, peer.PublicKeyPem);
         }
         catch (Exception ex)
@@ -1027,7 +1108,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// Broadcasts the user's current profile as a signed Profile op.
     /// Peers receiving this op can update their local view of the user's identity.
     /// </summary>
-    public void BroadcastProfile(string displayName, bool isArtist, string bio, string website, string? bannerImageHash)
+    public void BroadcastProfile(string displayName, bool isArtist, string bio, string? website, string? bannerImageHash)
     {
         if (_localManifest == null || _identity == null) return;
         var meta = new Dictionary<string, string>
@@ -1069,6 +1150,8 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                 _userRepository?.UpdateProfile(remote.UserId, profileOp.Metadata);
             }
 
+            _ = _catalogueService.IngestAsync(remote);
+
             ManifestMerged?.Invoke(this, new ManifestMergedEventArgs(remote.UserId, added));
         }
     }
@@ -1079,6 +1162,8 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
         if (_localManifest == null)
             return;
+
+        _ = _catalogueService.IngestAsync(_localManifest);
 
         _ = Task.Run(async () =>
         {

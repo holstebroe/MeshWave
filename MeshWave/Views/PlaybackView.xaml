@@ -111,6 +111,29 @@
             </StackPanel>
         </Grid>
 
+        <!-- Buffering Indicator Overlay -->
+        <Border Grid.Row="1" Grid.Column="0"
+                Panel.ZIndex="100"
+                Background="#99000000"
+                CornerRadius="8"
+                IsHitTestVisible="False"
+                Margin="0,0,0,16">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsBuffering}" Value="True">
+                            <Setter Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                <TextBlock Text="⌛" FontSize="32" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                <TextBlock Text="Buffering..." Foreground="White" FontWeight="SemiBold"/>
+            </StackPanel>
+        </Border>
+
         <!-- Waveform with played-region overlay + cursor -->
         <Border Grid.Row="1" Grid.Column="0"
                 Background="{StaticResource SurfaceColor}"
