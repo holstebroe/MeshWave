@@ -167,9 +167,14 @@ public class ManifestExchangeServer : IDisposable
                         var response = new ManifestResponse
                         {
                             Acknowledged = bytes != null && bytes.Length > 0,
-                            ContentBytes = bytes
+                            ContentLength = bytes?.Length ?? 0
                         };
                         await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
+                        if (bytes != null && bytes.Length > 0)
+                        {
+                            await stream.WriteAsync(bytes, ct);
+                            await stream.FlushAsync(ct);
+                        }
                         break;
                     }
                     default:
@@ -249,6 +254,7 @@ public class ManifestResponse
     public List<PeerInfo> Peers { get; set; } = [];
     public RendezvousResponse? Rendezvous { get; set; }
     public byte[]? ContentBytes { get; set; }
+    public long ContentLength { get; set; }
 }
 
 public class RendezvousRequest

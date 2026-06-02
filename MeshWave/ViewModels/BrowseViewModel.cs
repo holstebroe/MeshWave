@@ -113,7 +113,7 @@ public class BrowseViewModel : ViewModelBase
     private ObservableCollection<BrowseTrackItem> _tracks = [];
     private ObservableCollection<BrowsePlaylistItem> _playlists = [];
 
-    public BrowseViewModel(ISyncBrowseClient? sync = null, DownloadQueueService? downloadQueue = null)
+    public BrowseViewModel(ISyncBrowseClient? sync = null, DownloadQueueService? downloadQueue = null, Action<string, string, TimeSpan, string, long>? onPlayRemote = null)
     {
         _sync = sync;
         _downloadQueue = downloadQueue ?? new DownloadQueueService();
@@ -131,6 +131,48 @@ public class BrowseViewModel : ViewModelBase
 
         DownloadTrackCommand = new RelayCommand<BrowseTrackItem>(EnqueueTrackDownload,
             t => t != null && !string.IsNullOrWhiteSpace(t.ContentHash) && !t.IsQueued);
+
+        PlayRemoteTrackCommand = new RelayCommand<BrowseTrackItem>(async t =>
+        {
+            if (t == null || string.IsNullOrWhiteSpace(t.ContentHash)) return;
+            if (_sync == null) return;
+
+            // Trigger download + stream playback
+            _settingsService.EnsureFoldersExist();
+            var tempRoot = Path.Combine(Path.GetTempPath(), "MeshWave", "Streaming");
+            Directory.CreateDirectory(tempRoot);
+
+            var extension = ".mp3"; // default
+            if (!string.IsNullOrWhiteSpace(t.Title) && Path.HasExtension(t.Title))
+                extension = Path.GetExtension(t.Title);
+
+            var tempPath = Path.Combine(tempRoot, t.ContentHash + extension);
+
+            // If it already exists in Library, just play it
+            // (A more robust check would be to see if it's already fully downloaded)
+
+            var (stream, length) = await _sync.RequestContentStreamAsync(t.ArtistUserId, t.ContentHash);
+            if (stream == null) return;
+
+            // Start writing to temp file in background
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    using (stream)
+                    using (var fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.Read))
+                    {
+                        await stream.CopyToAsync(fs);
+                    }
+                }
+                catch { }
+            });
+
+            // Signal to ApplicationViewModel to load this into PlaybackViewModel
+            // Attempt to resolve duration if the manifest provides it, or use a 3-min default for remote
+            var duration = TimeSpan.FromMinutes(3);
+            onPlayRemote?.Invoke(t.Title, t.ArtistDisplayName, duration, tempPath, length);
+        }, t => t != null && !string.IsNullOrWhiteSpace(t.ContentHash));
 
         DownloadArtistCommand = new RelayCommand<BrowseArtistItem>(a =>
         {
@@ -202,6 +244,7 @@ public class BrowseViewModel : ViewModelBase
     public ICommand SetTabCommand { get; }
     public ICommand ViewArtistCommand { get; }
     public ICommand DownloadTrackCommand { get; }
+    public ICommand PlayRemoteTrackCommand { get; }
     public ICommand DownloadArtistCommand { get; }
     public ICommand DownloadAlbumCommand { get; }
     public ICommand DownloadPlaylistCommand { get; }

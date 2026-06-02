@@ -17,4 +17,5 @@ public interface ISyncBrowseClient
     IEnumerable<PeerInfo> GetPeers();
     event EventHandler<ManifestMergedEventArgs>? ManifestMerged;
     Task<byte[]?> RequestContentAsync(string peerUserId, string contentHash);
+    Task<(Stream? Stream, long ContentLength)> RequestContentStreamAsync(string peerUserId, string contentHash);
 }

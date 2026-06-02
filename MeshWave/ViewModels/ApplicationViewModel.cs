@@ -200,7 +200,13 @@ public class ApplicationViewModel : ViewModelBase
 
     public void NavigateToBrowse(string? artistUserId = null)
     {
-        var vm = new BrowseViewModel(_syncOrchestrator, _downloadQueue);
+        var vm = new BrowseViewModel(_syncOrchestrator, _downloadQueue,
+            (title, artist, duration, filePath, length) =>
+            {
+                _playbackViewModel.Stop();
+                _playbackViewModel.LoadTrack(title, artist, duration, filePath, remoteContentLength: length);
+                CurrentViewModel = _playbackViewModel;
+            });
         if (!string.IsNullOrWhiteSpace(artistUserId))
             vm.NavigateToArtist(artistUserId);
         CurrentViewModel = vm;
