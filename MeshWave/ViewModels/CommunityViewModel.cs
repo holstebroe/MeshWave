@@ -898,6 +898,7 @@ public class CommunityViewModel : ViewModelBase
             var trackCount = manifest != null ? CountPublicTracks(manifest) : 0;
 
             // Count followers: scan all peer manifests + local manifest
+            if (_sync == null) continue;
             var allManifests = _sync.PeerManifests.Concat(
                 _sync.LocalManifest != null ? [_sync.LocalManifest] : []);
 

@@ -86,9 +86,12 @@ public sealed class BootstrapCoordinator : IDisposable
             try
             {
                 var (host, port) = ParseEndpoint(seed, Port);
-                var peers = await client.FetchPeersAsync(host, port, ct);
-                foreach (var p in peers)
-                    RegisterPeer(p);
+                var peers = await client.FetchPeersAsync(host, port, cancellationToken: ct);
+                if (peers != null)
+                {
+                    foreach (var p in peers)
+                        RegisterPeer(p);
+                }
             }
             catch
             {

@@ -1,5 +1,6 @@
 using MeshWave.Common.Core;
 using MeshWave.Common.Core.Models;
+using MeshWave.Common.Core.Storage;
 
 namespace MeshWave.Synchronizer;
 
@@ -18,4 +19,5 @@ public interface ISyncBrowseClient
     event EventHandler<ManifestMergedEventArgs>? ManifestMerged;
     Task<byte[]?> RequestContentAsync(string peerUserId, string contentHash);
     Task<(Stream? Stream, long ContentLength)> RequestContentStreamAsync(string peerUserId, string contentHash);
+    UserRepository? UserRepository { get; }
 }

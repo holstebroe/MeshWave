@@ -560,11 +560,19 @@ public class ApplicationViewModel : ViewModelBase
                 if (!albumMeta.IsReleased)
                     continue;
 
+                var coverPath = manager.GetTrackCoverPath(firstPath);
+                string? coverHash = null;
+                if (!string.IsNullOrWhiteSpace(coverPath) && File.Exists(coverPath))
+                {
+                    coverHash = CryptoService.ComputeFileHash(coverPath);
+                }
+
                 var artistName = tracksInAlbum.FirstOrDefault()?.Description ?? string.Empty;
-                _syncOrchestrator.AnnounceAlbum(album.AlbumId, null, new Dictionary<string, string>
+                _syncOrchestrator.AnnounceAlbum(album.AlbumId, coverHash, new Dictionary<string, string>
                 {
                     ["name"] = SecurityLimits.Truncate(album.Title, SecurityLimits.MaxAlbumNameLength),
-                    ["artist"] = SecurityLimits.Truncate(artistName, SecurityLimits.MaxArtistNameLength)
+                    ["artist"] = SecurityLimits.Truncate(artistName, SecurityLimits.MaxArtistNameLength),
+                    ["isIcon"] = "True"
                 });
             }
 

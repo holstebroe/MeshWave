@@ -406,7 +406,7 @@ public class BrowseViewModel : ViewModelBase
             {
                 UserId = manifest.UserId,
                 DisplayName = displayName,
-                AvatarIconPath = _syncOrchestrator.UserRepository?.GetUserIconPath(manifest.UserId) ?? string.Empty,
+                AvatarIconPath = _sync?.UserRepository?.GetUserIconPath(manifest.UserId) ?? string.Empty,
                 Bio = bio,
                 TrackCount = trackCount,
                 AlbumCount = albumCount,
