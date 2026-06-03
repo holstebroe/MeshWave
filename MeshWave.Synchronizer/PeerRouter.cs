@@ -164,17 +164,20 @@ public class PeerRouter : IDisposable
         try
         {
             var peers = await _exchangeClient.FetchPeersAsync(host, port, ct);
-            LearnPeers(peers);
-
-            // The bootstrap node itself is a potential peer
-            var bootstrapPeer = new PeerInfo
+            if (peers != null)
             {
-                UserId = $"bootstrap:{host}:{port}",
-                DisplayName = $"Bootstrap ({host})",
-                Address = host,
-                Port = port
-            };
-            AddOrRefreshPeer(bootstrapPeer);
+                LearnPeers(peers);
+
+                // The bootstrap node itself is a potential peer
+                var bootstrapPeer = new PeerInfo
+                {
+                    UserId = $"bootstrap:{host}:{port}",
+                    DisplayName = $"Bootstrap ({host})",
+                    Address = host,
+                    Port = port
+                };
+                AddOrRefreshPeer(bootstrapPeer);
+            }
         }
         catch { /* node unreachable – skip silently */ }
     }
@@ -207,7 +210,10 @@ public class PeerRouter : IDisposable
                     try
                     {
                         var discovered = await _exchangeClient.FetchPeersAsync(peer.Address, peer.Port, ct);
-                        LearnPeers(discovered);
+                        if (discovered != null)
+                        {
+                            LearnPeers(discovered);
+                        }
                     }
                     catch { }
                 }

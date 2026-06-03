@@ -335,6 +335,11 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             }
         }
 
+        if (!succeeded)
+        {
+            Logger.Warn("Content stream request failed for peer {0}: {1}", peerUserId, failureReason);
+        }
+
         report.Attempts.Add(new PeerConnectionAttemptResult(
             "content-stream-request",
             succeeded,
@@ -474,6 +479,11 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                 (bytes, failureReason) = await _client.RequestContentAsync(peer.Address, peer.Port, contentHash);
                 succeeded = bytes != null && bytes.Length > 0;
             }
+        }
+
+        if (!succeeded)
+        {
+            Logger.Warn("Content request failed for peer {0}: {1}", peerUserId, failureReason);
         }
 
         report.Attempts.Add(new PeerConnectionAttemptResult(
@@ -678,12 +688,22 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             try
             {
                 var peers = await _client.FetchPeersAsync(host, port);
-                _router.LearnPeers(peers);
-                refreshed = true;
-                report.Attempts.Add(new PeerConnectionAttemptResult(
-                    "bootstrap-refresh",
-                    true,
-                    $"Fetched {peers.Count} peers from bootstrap {host}:{port}."));
+                if (peers != null)
+                {
+                    _router.LearnPeers(peers);
+                    refreshed = true;
+                    report.Attempts.Add(new PeerConnectionAttemptResult(
+                        "bootstrap-refresh",
+                        true,
+                        $"Fetched {peers.Count} peers from bootstrap {host}:{port}."));
+                }
+                else
+                {
+                    report.Attempts.Add(new PeerConnectionAttemptResult(
+                        "bootstrap-refresh",
+                        false,
+                        $"Failed to reach bootstrap {host}:{port}."));
+                }
             }
             catch (Exception ex)
             {

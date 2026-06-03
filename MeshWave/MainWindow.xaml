@@ -95,18 +95,8 @@
                     <Border Background="{StaticResource SurfaceLightColor}" CornerRadius="8" Padding="12,10">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                <Ellipse Width="8" Height="8" Margin="0,0,6,0" VerticalAlignment="Center">
-                                    <Ellipse.Style>
-                                        <Style TargetType="Ellipse">
-                                            <Setter Property="Fill" Value="#555555"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding P2PIsConnected}" Value="True">
-                                                    <Setter Property="Fill" Value="#1DB954"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Ellipse.Style>
-                                </Ellipse>
+                                <Ellipse Width="8" Height="8" Margin="0,0,6,0" VerticalAlignment="Center"
+                                         Fill="{Binding P2PStatusColor}"/>
                                 <TextBlock Text="{Binding P2PStatusText}"
                                            Foreground="{StaticResource TextSecondaryColor}"
                                            FontSize="12"
