@@ -38,37 +38,56 @@ public static class WaveformRenderer
     {
         return style switch
         {
-            WaveformStyle.Filled  => RenderFilled(samples, canvasWidth, canvasHeight),
+            WaveformStyle.Filled  => RenderSolidPolygon(samples, canvasWidth, canvasHeight),
             WaveformStyle.Cloudy  => RenderCloudy(samples, canvasWidth, canvasHeight),
-            WaveformStyle.Mirror  => RenderMirror(samples, canvasWidth, canvasHeight),
-            WaveformStyle.Neon    => RenderNeon  (samples, canvasWidth, canvasHeight),
+            WaveformStyle.Mirror  => RenderSolidPolygon(samples, canvasWidth, canvasHeight),
+            WaveformStyle.Neon    => RenderSolidPolygon(samples, canvasWidth, canvasHeight),
             WaveformStyle.Smooth  => RenderSmooth(samples, canvasWidth, canvasHeight),
-            _                     => RenderFilled(samples, canvasWidth, canvasHeight),
+            _                     => RenderSolidPolygon(samples, canvasWidth, canvasHeight),
         };
     }
 
-    // ─── Filled ──────────────────────────────────────────────────────────────
+    // ─── Solid Polygon (used for Filled, Mirror, Neon) ───────────────────────
 
-    private static Geometry RenderFilled(float[] samples, double w, double h)
+    private static Geometry RenderSolidPolygon(float[] samples, double w, double h)
     {
         var geometry = new StreamGeometry();
         using (var ctx = geometry.Open())
         {
             int  count    = Math.Max(samples.Length, 1);
             var  barW     = w / count;
+            double centre = h / 2.0;
 
-            for (int i = 0; i < count; i++)
+            if (count > 0)
             {
-                double amp       = Amplitude(samples, i);
-                double barHeight = Math.Max(4, amp * h);
-                double left      = Math.Floor(i * barW);
-                double top       = (h - barHeight) / 2.0;
-                double width     = Math.Max(1, Math.Ceiling((i + 1) * barW) - Math.Floor(i * barW));
+                // Start at the left midline
+                ctx.BeginFigure(new Point(0, centre), true, true);
 
-                ctx.BeginFigure(new Point(left, top), true, true);
-                ctx.LineTo(new Point(left + width, top), true, false);
-                ctx.LineTo(new Point(left + width, top + barHeight), true, false);
-                ctx.LineTo(new Point(left, top + barHeight), true, false);
+                // Top edge (left to right)
+                for (int i = 0; i < count; i++)
+                {
+                    double amp       = Amplitude(samples, i);
+                    double barHeight = Math.Max(4, amp * h);
+                    double left      = Math.Floor(i * barW);
+                    double top       = (h - barHeight) / 2.0;
+                    double width     = Math.Max(1, Math.Ceiling((i + 1) * barW) - Math.Floor(i * barW));
+
+                    ctx.LineTo(new Point(left, top), true, false);
+                    ctx.LineTo(new Point(left + width, top), true, false);
+                }
+
+                // Bottom edge (right to left)
+                for (int i = count - 1; i >= 0; i--)
+                {
+                    double amp       = Amplitude(samples, i);
+                    double barHeight = Math.Max(4, amp * h);
+                    double left      = Math.Floor(i * barW);
+                    double bottom    = (h + barHeight) / 2.0;
+                    double width     = Math.Max(1, Math.Ceiling((i + 1) * barW) - Math.Floor(i * barW));
+
+                    ctx.LineTo(new Point(left + width, bottom), true, false);
+                    ctx.LineTo(new Point(left, bottom), true, false);
+                }
             }
         }
         geometry.Freeze();
@@ -119,76 +138,6 @@ public static class WaveformRenderer
                 ctx.LineTo(new Point(left + targetBarW, lowerTop), true, false);
                 ctx.LineTo(new Point(left + targetBarW, lowerTop + lowerH), true, false);
                 ctx.LineTo(new Point(left, lowerTop + lowerH), true, false);
-            }
-        }
-        geometry.Freeze();
-        return geometry;
-    }
-
-    // ─── Mirror ──────────────────────────────────────────────────────────────
-
-    private static Geometry RenderMirror(float[] samples, double w, double h)
-    {
-        var geometry = new StreamGeometry();
-        using (var ctx = geometry.Open())
-        {
-            int  count    = Math.Max(samples.Length, 1);
-            var  barW     = w / count;
-            double centre = h / 2.0;
-
-            for (int i = 0; i < count; i++)
-            {
-                double amp     = Amplitude(samples, i);
-                double barHalf = Math.Max(3, amp * centre);
-                double bw      = Math.Max(1, Math.Ceiling((i + 1) * barW) - Math.Floor(i * barW));
-                double left    = Math.Floor(i * barW);
-
-                // Upper bar
-                ctx.BeginFigure(new Point(left, centre - barHalf), true, true);
-                ctx.LineTo(new Point(left + bw, centre - barHalf), true, false);
-                ctx.LineTo(new Point(left + bw, centre), true, false);
-                ctx.LineTo(new Point(left, centre), true, false);
-
-                // Lower bar
-                ctx.BeginFigure(new Point(left, centre), true, true);
-                ctx.LineTo(new Point(left + bw, centre), true, false);
-                ctx.LineTo(new Point(left + bw, centre + barHalf), true, false);
-                ctx.LineTo(new Point(left, centre + barHalf), true, false);
-            }
-        }
-        geometry.Freeze();
-        return geometry;
-    }
-
-    // ─── Neon ────────────────────────────────────────────────────────────────
-
-    private static Geometry RenderNeon(float[] samples, double w, double h)
-    {
-        // Neon is tricky because of the blur.
-        // For optimization, we'll simplify it to a single geometry for now,
-        // but it might lose the blur effect if we don't handle it carefully.
-        // Actually, the original implementation added multiple rectangles per bar.
-
-        var geometry = new StreamGeometry();
-        using (var ctx = geometry.Open())
-        {
-            int  count    = Math.Max(samples.Length, 1);
-            var  barW     = w / count;
-            double centre = h / 2.0;
-
-            for (int i = 0; i < count; i++)
-            {
-                double amp     = Amplitude(samples, i);
-                double barHalf = Math.Max(3, amp * centre);
-                double left    = Math.Floor(i * barW);
-
-                double coreW   = Math.Max(1.5, barW * 0.3);
-                double coreX   = left + (barW - coreW) / 2.0;
-
-                ctx.BeginFigure(new Point(coreX, centre - barHalf), true, true);
-                ctx.LineTo(new Point(coreX + coreW, centre - barHalf), true, false);
-                ctx.LineTo(new Point(coreX + coreW, centre + barHalf), true, false);
-                ctx.LineTo(new Point(coreX, centre + barHalf), true, false);
             }
         }
         geometry.Freeze();

@@ -123,15 +123,16 @@ namespace MeshWave.Views
                         StartPoint = new Point(0, 0),
                         EndPoint = new Point(0, 1)
                     };
+                    mirrorBrush.GradientStops.Add(new GradientStop(Color.FromRgb(64, 128, 192), 0.0));
                     mirrorBrush.GradientStops.Add(new GradientStop(Color.FromRgb(64, 128, 192), 0.5));
                     mirrorBrush.GradientStops.Add(new GradientStop(Color.FromArgb(120, 64, 128, 192), 0.5));
+                    mirrorBrush.GradientStops.Add(new GradientStop(Color.FromArgb(0, 64, 128, 192), 1.0));
                     WaveformPath.Fill = mirrorBrush;
                     WaveformPath.Opacity = 1.0;
                     break;
                 case WaveformStyle.Neon:
                     WaveformPath.Fill = new SolidColorBrush(Color.FromRgb(0, 255, 255));
                     WaveformPath.Opacity = 0.8;
-                    // Note: BlurEffect could be added here if needed, but for performance we might skip it or keep it simple
                     break;
                 case WaveformStyle.Smooth:
                     var smoothBrush = new LinearGradientBrush
@@ -165,6 +166,7 @@ namespace MeshWave.Views
 
             var appVm = Application.Current.MainWindow.DataContext as ApplicationViewModel;
             var userRepo = appVm?.SyncOrchestrator?.UserRepository;
+            var userIconConverter = new Converters.UserIconConverter();
 
             foreach (var marker in vm.TimelineMarkers)
             {
@@ -182,8 +184,7 @@ namespace MeshWave.Views
                 };
 
                 var iconPath = userRepo?.GetUserIconPath(marker.UserId);
-                var converter = new Converters.UserIconConverter();
-                var iconSource = converter.Convert(iconPath, typeof(System.Windows.Media.ImageSource), null, System.Globalization.CultureInfo.CurrentCulture) as System.Windows.Media.ImageSource;
+                var iconSource = userIconConverter.Convert(iconPath, typeof(System.Windows.Media.ImageSource), null, System.Globalization.CultureInfo.CurrentCulture) as System.Windows.Media.ImageSource;
 
                 if (iconSource != null)
                 {
