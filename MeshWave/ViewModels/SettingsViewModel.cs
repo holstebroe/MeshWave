@@ -40,6 +40,8 @@ public class SettingsViewModel : ViewModelBase
 
     // P2P settings
     private bool _p2pEnabled;
+    private bool _p2pLoggingEnabled;
+    private bool _p2pLoggingVerbose;
     private bool _p2pActAsListener = true;
     private int _p2pPort = 39877;
     private int _p2pMaxPeers = 50;
@@ -74,6 +76,8 @@ public class SettingsViewModel : ViewModelBase
         OpenDetailedDiagnosticsWindowCommand = new RelayCommand(_ => OpenDetailedDiagnosticsWindow(), _ => _sync != null);
         ClearPeerManifestCacheCommand = new RelayCommand(_ => ClearPeerManifestCache());
         ClearWaveformCacheCommand = new RelayCommand(_ => ClearWaveformCache());
+        OpenLogFolderCommand = new RelayCommand(_ => OpenLogFolder());
+        CopyLogsToClipboardCommand = new RelayCommand(_ => CopyLogsToClipboard());
     }
 
     public ICommand SaveCommand { get; }
@@ -86,6 +90,8 @@ public class SettingsViewModel : ViewModelBase
     public ICommand OpenDetailedDiagnosticsWindowCommand { get; }
     public ICommand ClearPeerManifestCacheCommand { get; }
     public ICommand ClearWaveformCacheCommand { get; }
+    public ICommand OpenLogFolderCommand { get; }
+    public ICommand CopyLogsToClipboardCommand { get; }
 
     public string BaseFolder
     {
@@ -174,6 +180,18 @@ public class SettingsViewModel : ViewModelBase
     {
         get => _p2pEnabled;
         set => SetProperty(ref _p2pEnabled, value);
+    }
+
+    public bool P2PLoggingEnabled
+    {
+        get => _p2pLoggingEnabled;
+        set => SetProperty(ref _p2pLoggingEnabled, value);
+    }
+
+    public bool P2PLoggingVerbose
+    {
+        get => _p2pLoggingVerbose;
+        set => SetProperty(ref _p2pLoggingVerbose, value);
     }
 
     public bool P2PActAsListener
@@ -287,6 +305,8 @@ public class SettingsViewModel : ViewModelBase
         BannerImagePath = profile.BannerImagePath;
 
         P2PEnabled = settings.P2P.Enabled;
+        P2PLoggingEnabled = settings.Logging.Enabled;
+        P2PLoggingVerbose = settings.Logging.Verbose;
         P2PActAsListener = settings.P2P.ActAsListener;
         P2PPort = settings.P2P.Port;
         P2PMaxPeers = Math.Min(settings.P2P.MaxPeers, SecurityLimits.MaxRoutingTableSize);
@@ -408,11 +428,17 @@ public class SettingsViewModel : ViewModelBase
             Storage = new StorageSettings
             {
                 QuotaWarningGb = Math.Clamp(StorageQuotaWarningGb, 1, 5000)
+            },
+            Logging = new LoggingSettings
+            {
+                Enabled = P2PLoggingEnabled,
+                Verbose = P2PLoggingVerbose
             }
         };
 
         _settingsService.SaveSettings(settings);
         _settingsService.EnsureFoldersExist();
+        LoggingConfiguration.Configure(settings.Logging);
 
         _profileService.SaveProfile(new UserProfile
         {
@@ -582,6 +608,36 @@ public class SettingsViewModel : ViewModelBase
             Owner = Application.Current.MainWindow
         };
         win.Show();
+    }
+
+    private void OpenLogFolder()
+    {
+        try
+        {
+            var folder = LoggingConfiguration.GetLogsFolder();
+            if (!Directory.Exists(folder))
+                Directory.CreateDirectory(folder);
+
+            System.Diagnostics.Process.Start("explorer.exe", folder);
+        }
+        catch (Exception ex)
+        {
+            StorageStatusMessage = $"Failed to open log folder: {ex.Message}";
+        }
+    }
+
+    private void CopyLogsToClipboard()
+    {
+        try
+        {
+            var logs = LoggingConfiguration.GetRecentLogs();
+            System.Windows.Clipboard.SetText(logs);
+            StorageStatusMessage = "Recent logs copied to clipboard.";
+        }
+        catch (Exception ex)
+        {
+            StorageStatusMessage = $"Failed to copy logs to clipboard: {ex.Message}";
+        }
     }
 
     private void ClearWaveformCache()

@@ -15,6 +15,7 @@ namespace MeshWave.Models
         public P2PSettings P2P { get; set; } = new();
         public PlaybackSettings Playback { get; set; } = new();
         public StorageSettings Storage { get; set; } = new();
+        public LoggingSettings Logging { get; set; } = new();
     }
 
     public class P2PSettings
@@ -51,5 +52,11 @@ namespace MeshWave.Models
     public class StorageSettings
     {
         public double QuotaWarningGb { get; set; } = 10;
+    }
+
+    public class LoggingSettings
+    {
+        public bool Enabled { get; set; } = false;
+        public bool Verbose { get; set; } = false;
     }
 }
