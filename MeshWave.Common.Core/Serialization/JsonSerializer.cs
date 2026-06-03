@@ -77,4 +77,24 @@ public class JsonSerializer
     {
         return System.Text.Json.JsonSerializer.Deserialize<Community>(json, Options);
     }
+
+    public static string SerializeGroupManifest(GroupManifest manifest)
+    {
+        return System.Text.Json.JsonSerializer.Serialize(manifest, Options);
+    }
+
+    public static GroupManifest? DeserializeGroupManifest(string json)
+    {
+        return System.Text.Json.JsonSerializer.Deserialize<GroupManifest>(json, Options);
+    }
+
+    public static string SerializeChannel(Channel channel)
+    {
+        return System.Text.Json.JsonSerializer.Serialize(channel, Options);
+    }
+
+    public static Channel? DeserializeChannel(string json)
+    {
+        return System.Text.Json.JsonSerializer.Deserialize<Channel>(json, Options);
+    }
 }
