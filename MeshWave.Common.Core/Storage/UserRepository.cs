@@ -25,6 +25,27 @@ public class UserRepository
         LoadProfiles();
     }
 
+    public void RegisterLocalUser(string userId, string displayName, string? iconPath = null)
+    {
+        var profile = _profiles.GetOrAdd(userId, id => new UserProfileData { UserId = id });
+        profile.DisplayName = displayName;
+
+        if (!string.IsNullOrWhiteSpace(iconPath) && File.Exists(iconPath))
+        {
+            try
+            {
+                var targetPath = Path.Combine(_cacheDirectory, $"{userId}.png");
+                if (iconPath != targetPath)
+                {
+                    File.Copy(iconPath, targetPath, true);
+                }
+            }
+            catch { }
+        }
+
+        SaveProfile(profile);
+    }
+
     public void UpdateProfile(string userId, Dictionary<string, string> metadata)
     {
         var profile = _profiles.GetOrAdd(userId, id => new UserProfileData { UserId = id });

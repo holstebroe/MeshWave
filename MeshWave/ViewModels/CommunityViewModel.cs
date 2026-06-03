@@ -558,15 +558,15 @@ public class CommunityViewModel : ViewModelBase
         var trackCount = manifest != null ? CountPublicTracks(manifest) : 0;
         var routedName = _sync?.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, userId, StringComparison.OrdinalIgnoreCase))?.DisplayName;
 
-        var profileName = profileOp?.Metadata.GetValueOrDefault("displayName");
+        var profileName = _sync?.UserRepository?.GetDisplayName(userId);
 
         return new CommunityUserItem
         {
             UserId = userId,
-            DisplayName = !string.IsNullOrWhiteSpace(profileName)
+            DisplayName = !string.IsNullOrWhiteSpace(profileName) && profileName != userId
                 ? profileName
                 : (!string.IsNullOrWhiteSpace(routedName) ? routedName : userId),
-            AvatarIconPath = profileOp?.Metadata.GetValueOrDefault("iconPath") ?? string.Empty,
+            AvatarIconPath = _sync?.UserRepository?.GetUserIconPath(userId) ?? string.Empty,
             IsArtist = bool.TryParse(profileOp?.Metadata.GetValueOrDefault("isArtist"), out var ia) && ia,
             Bio = profileOp?.Metadata.GetValueOrDefault("bio") ?? string.Empty,
             Website = profileOp?.Metadata.GetValueOrDefault("website") ?? string.Empty,

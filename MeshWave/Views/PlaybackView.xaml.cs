@@ -77,8 +77,6 @@ namespace MeshWave.Views
 
         private void DrawWaveform()
         {
-            WaveformCanvas.Children.Clear();
-
             var width  = WaveformCanvas.ActualWidth > 0 ? WaveformCanvas.ActualWidth : 800;
             var height = WaveformCanvas.Height;
 
@@ -91,22 +89,75 @@ namespace MeshWave.Views
                 style   = vm.WaveformStyle;
             }
 
-            // Add waveform bars from renderer
-            foreach (var element in WaveformRenderer.Render(samples, width, height, style))
-                WaveformCanvas.Children.Add(element);
+            WaveformPath.Data = WaveformRenderer.Render(samples, width, height, style);
+            UpdateWaveformBrush(style);
 
             // Timeline markers on top of bars (but below overlay/cursor)
             DrawTimelineMarkers(width, height);
 
-            // Overlay first, seek preview above it, cursor on top
-            WaveformCanvas.Children.Add(PlayedOverlay);
-            WaveformCanvas.Children.Add(SeekPreviewOverlay);
-            WaveformCanvas.Children.Add(PlaybackCursor);
             UpdatePlaybackCursor();
+        }
+
+        private void UpdateWaveformBrush(WaveformStyle style)
+        {
+            switch (style)
+            {
+                case WaveformStyle.Filled:
+                    WaveformPath.Fill = (Brush)FindResource("PrimaryColor");
+                    WaveformPath.Opacity = 1.0;
+                    break;
+                case WaveformStyle.Cloudy:
+                    var cloudyBrush = new LinearGradientBrush
+                    {
+                        StartPoint = new Point(0, 0),
+                        EndPoint = new Point(0, 1)
+                    };
+                    cloudyBrush.GradientStops.Add(new GradientStop(Color.FromRgb(64, 128, 192), 0.45));
+                    cloudyBrush.GradientStops.Add(new GradientStop(Color.FromArgb(102, 72, 160, 176), 0.55));
+                    WaveformPath.Fill = cloudyBrush;
+                    WaveformPath.Opacity = 1.0;
+                    break;
+                case WaveformStyle.Mirror:
+                    var mirrorBrush = new LinearGradientBrush
+                    {
+                        StartPoint = new Point(0, 0),
+                        EndPoint = new Point(0, 1)
+                    };
+                    mirrorBrush.GradientStops.Add(new GradientStop(Color.FromRgb(64, 128, 192), 0.5));
+                    mirrorBrush.GradientStops.Add(new GradientStop(Color.FromArgb(120, 64, 128, 192), 0.5));
+                    WaveformPath.Fill = mirrorBrush;
+                    WaveformPath.Opacity = 1.0;
+                    break;
+                case WaveformStyle.Neon:
+                    WaveformPath.Fill = new SolidColorBrush(Color.FromRgb(0, 255, 255));
+                    WaveformPath.Opacity = 0.8;
+                    // Note: BlurEffect could be added here if needed, but for performance we might skip it or keep it simple
+                    break;
+                case WaveformStyle.Smooth:
+                    var smoothBrush = new LinearGradientBrush
+                    {
+                        StartPoint = new Point(0, 0),
+                        EndPoint = new Point(0, 1)
+                    };
+                    smoothBrush.GradientStops.Add(new GradientStop(Color.FromArgb(0, 100, 200, 255), 0.0));
+                    smoothBrush.GradientStops.Add(new GradientStop(Color.FromRgb(80, 180, 255), 0.45));
+                    smoothBrush.GradientStops.Add(new GradientStop(Color.FromRgb(80, 180, 255), 0.55));
+                    smoothBrush.GradientStops.Add(new GradientStop(Color.FromArgb(0, 100, 200, 255), 1.0));
+                    WaveformPath.Fill = smoothBrush;
+                    WaveformPath.Opacity = 1.0;
+                    break;
+            }
         }
 
         private void DrawTimelineMarkers(double width, double height)
         {
+            // Clear existing markers (ellipses) before redrawing.
+            // We keep the first 4 fixed children: WaveformPath, PlayedOverlay, SeekPreviewOverlay, PlaybackCursor.
+            while (WaveformCanvas.Children.Count > 4)
+            {
+                WaveformCanvas.Children.RemoveAt(4);
+            }
+
             if (DataContext is not PlaybackViewModel vm || vm.Duration.TotalSeconds <= 0)
             {
                 return;
@@ -131,19 +182,15 @@ namespace MeshWave.Views
                 };
 
                 var iconPath = userRepo?.GetUserIconPath(marker.UserId);
-                if (!string.IsNullOrWhiteSpace(iconPath) && File.Exists(iconPath))
+                var converter = new Converters.UserIconConverter();
+                var iconSource = converter.Convert(iconPath, typeof(System.Windows.Media.ImageSource), null, System.Globalization.CultureInfo.CurrentCulture) as System.Windows.Media.ImageSource;
+
+                if (iconSource != null)
                 {
-                    try
+                    markerIcon.Fill = new ImageBrush(iconSource)
                     {
-                        markerIcon.Fill = new ImageBrush(new System.Windows.Media.Imaging.BitmapImage(new Uri(iconPath, UriKind.Absolute)))
-                        {
-                            Stretch = Stretch.UniformToFill
-                        };
-                    }
-                    catch
-                    {
-                        markerIcon.Fill = Brushes.Orange;
-                    }
+                        Stretch = Stretch.UniformToFill
+                    };
                 }
                 else
                 {
@@ -318,6 +365,8 @@ namespace MeshWave.Views
                 Owner = Application.Current.MainWindow,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner
             };
+
+            editorVm.RequestClose += (_, _) => window.Close();
 
             window.ShowDialog();
         }

@@ -123,6 +123,9 @@ namespace MeshWave.ViewModels
 
         public void LoadLibrary(string folderPath, IEnumerable<string>? supportedExtensions = null)
         {
+            var previousArtistName = SelectedArtist?.Name;
+            var previousAlbumId = SelectedAlbum?.AlbumId;
+
             _folderWatcher?.Dispose();
             _libraryManager = new LocalLibraryManager(folderPath, supportedExtensions);
             _libraryManager.IndexLibrary();
@@ -189,9 +192,24 @@ namespace MeshWave.ViewModels
                 .ToList();
 
             Artists = artistItems;
-            SelectedArtist = artistItems.FirstOrDefault();
+
+            if (previousArtistName != null)
+            {
+                SelectedArtist = artistItems.FirstOrDefault(a => a.Name == previousArtistName) ?? artistItems.FirstOrDefault();
+            }
+            else
+            {
+                SelectedArtist = artistItems.FirstOrDefault();
+            }
+
             _allAlbumItems = albumItems;
             _allTrackItems = trackItems;
+
+            if (previousAlbumId != null)
+            {
+                SelectedAlbum = _allAlbumItems.FirstOrDefault(a => a.AlbumId == previousAlbumId);
+            }
+
             RefreshAlbumAndTrackSelection();
 
             AnnounceReleasedContentToMesh();

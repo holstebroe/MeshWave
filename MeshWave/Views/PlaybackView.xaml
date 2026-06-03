@@ -147,6 +147,8 @@
                         MouseMove="WaveformCanvas_MouseMove"
                         MouseLeave="WaveformCanvas_MouseLeave">
                     <!-- Waveform bars, markers and cursor drawn in code-behind -->
+                    <Path x:Name="WaveformPath" Fill="{StaticResource PrimaryColor}" IsHitTestVisible="False"/>
+
                     <!-- Played-region dim overlay (drawn over waveform, under cursor) -->
                     <Rectangle x:Name="PlayedOverlay"
                                Height="120"
