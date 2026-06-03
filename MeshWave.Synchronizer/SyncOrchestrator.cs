@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text.Json;
+using NLog;
 using MeshWave.Common.Core;
 using MeshWave.Common.Core.Models;
 using MeshWave.Common.Core.Storage;
@@ -15,6 +16,7 @@ namespace MeshWave.Synchronizer;
 /// </summary>
 public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 {
+    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private readonly PeerRouter _router;
     private ManifestExchangeServer? _server;
     private readonly ManifestExchangeClient _client;
@@ -176,6 +178,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         Func<string, byte[]?>? contentProvider = null,
         CancellationToken cancellationToken = default)
     {
+        Logger.Info("Starting SyncOrchestrator for user {0} (listener={1})", identity.UserId, actAsListener);
         _identity = identity;
         _localManifest = localManifest;
         _localManifestPath = BuildLocalManifestPath(identity.UserId);
@@ -214,6 +217,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// </summary>
     public async Task StopAsync()
     {
+        Logger.Info("Stopping SyncOrchestrator");
         _router.PeerAdded -= OnPeerAdded;
         _router.PeerRemoved -= OnPeerRemoved;
         if (_server != null)
@@ -294,6 +298,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// </summary>
     public async Task<(Stream? Stream, long ContentLength)> RequestContentStreamAsync(string peerUserId, string contentHash)
     {
+        Logger.Debug("RequestContentStreamAsync: peer={0}, hash={1}", peerUserId, contentHash);
         if (string.IsNullOrWhiteSpace(peerUserId) || string.IsNullOrWhiteSpace(contentHash))
             return (null, 0);
 
@@ -353,6 +358,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
     private async Task<(PeerInfo? Peer, PeerConnectionAttemptReport Report)> PrepareConnectionAsync(string peerUserId, string contentHash)
     {
+        Logger.Info("Preparing connection to peer {0} for content {1}", peerUserId, contentHash);
         var report = new PeerConnectionAttemptReport
         {
             PeerUserId = peerUserId,
@@ -1137,6 +1143,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     {
         if (remote.UserId == _identity?.UserId) return;
 
+        Logger.Debug("Attempting merge of manifest from peer {0} ({1} ops)", remote.UserId, remote.Operations.Count);
         var added = _peerStore.MergeAndSave(remote, publicKeyPem, _manifestManager);
         if (added > 0)
         {
