@@ -28,8 +28,11 @@
 - Define final wording/state model for non-local items
 
 ### 4) Transport fallback hardening
-- Optional relay fallback (opt-in) only when direct + rendezvous fail
-- NAT: Outbound-only manifest push via bootstrap
+- [ ] [Issue #33: Optional relay fallback (opt-in)](https://github.com/holstebroe/MeshWave/issues/33)
+- [ ] [Issue #58: NAT: Outbound-only manifest push via bootstrap](https://github.com/holstebroe/MeshWave/issues/58)
+- [ ] [Issue #83: Network Health Indicator UI](https://github.com/holstebroe/MeshWave/issues/83)
+- [ ] [Issue #84: Automated UPnP/NAT-PMP Mapping](https://github.com/holstebroe/MeshWave/issues/84)
+- [ ] [Issue #85: Interactive NAT Troubleshooting Guide](https://github.com/holstebroe/MeshWave/issues/85)
 - Symmetric-NAT focused integration tests
 
 ## [In Progress: Milestone D remainder (Community Sync)](https://github.com/holstebroe/MeshWave/milestone/5)
@@ -54,8 +57,14 @@
 - ARM publish helper script (`scripts/publish-bootstrap-arm.ps1`)
 
 ### Planned
-- Mobile app (player-only): community playback + community interaction, recent-play cache policy
-- Web frontend phase 1 (playback-focused), optional backend for user-owned file storage later
+- **Mobile app (player-only)**:
+  - [ ] [Issue #90: .NET MAUI project setup](https://github.com/holstebroe/MeshWave/issues/90)
+  - [ ] [Issue #91: Recent-play cache policy](https://github.com/holstebroe/MeshWave/issues/91)
+  - [ ] [Issue #92: Cross-platform player UI](https://github.com/holstebroe/MeshWave/issues/92)
+- **Web frontend phase 1**:
+  - [ ] [Issue #87: Baseline Blazor project](https://github.com/holstebroe/MeshWave/issues/87)
+  - [ ] [Issue #88: Catalogue browser](https://github.com/holstebroe/MeshWave/issues/88)
+  - [ ] [Issue #89: HTML5 Audio playback](https://github.com/holstebroe/MeshWave/issues/89)
 
 ## [Trust & Integrity (Milestone E)](https://github.com/holstebroe/MeshWave/milestone/6)
 - Sybil-resistance research spike
@@ -78,10 +87,18 @@
 ## Future Feature Ideas
 
 ### Chat Channels in Groups
-- Persistent text channels within a group, synced over the P2P manifest layer
-- Threaded replies via ReplyToOpId; attachment support via content hash
+- [ ] [Issue #79: Channel and PostMessage Models](https://github.com/holstebroe/MeshWave/issues/79)
+- [ ] [Issue #80: Threaded Messaging Logic](https://github.com/holstebroe/MeshWave/issues/80)
+- [ ] [Issue #81: Chat Sidebar Navigation](https://github.com/holstebroe/MeshWave/issues/81)
+- [ ] [Issue #82: Message Feed UI](https://github.com/holstebroe/MeshWave/issues/82)
 
 ### Music Competitions in Groups
+- [ ] [Issue #74: Competition Models](https://github.com/holstebroe/MeshWave/issues/74)
+- [ ] [Issue #75: Sealed Ballot Encryption](https://github.com/holstebroe/MeshWave/issues/75)
+- [ ] [Issue #76: Validation and Deadlines](https://github.com/holstebroe/MeshWave/issues/76)
+- [ ] [Issue #77: Competition Dashboard](https://github.com/holstebroe/MeshWave/issues/77)
+- [ ] [Issue #78: Submission and Voting UI](https://github.com/holstebroe/MeshWave/issues/78)
+
 A fully decentralised, sealed-ballot competition flow:
 
 1. **Setup** — A group administrator creates a Competition op specifying: title, description,
