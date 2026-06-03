@@ -243,6 +243,18 @@ public class ManifestExchangeServer : IDisposable
                     }
                 }
             }
+            catch (EndOfStreamException)
+            {
+                Logger.Debug("Client {0} disconnected before sending a complete message (expected for TCP probes).", remoteEndpoint);
+            }
+            catch (IOException ex)
+            {
+                Logger.Debug("IO error with client {0}: {1}", remoteEndpoint, ex.Message);
+            }
+            catch (OperationCanceledException)
+            {
+                Logger.Debug("Connection with {0} was canceled.", remoteEndpoint);
+            }
             catch (Exception ex)
             {
                 Logger.Warn(ex, "Error handling client {0}", remoteEndpoint);
