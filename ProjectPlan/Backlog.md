@@ -73,6 +73,9 @@
 - [x] Bootstrap rendezvous phase 2: coordinated simultaneous outbound probe window (TCP SYN + UDP punch hints)
 - [ ] [Relay fallback (opt-in): bootstrap-assisted relay only when direct methods fail](https://github.com/holstebroe/MeshWave/issues/33)
 - [ ] [NAT: Outbound-only manifest push via bootstrap](https://github.com/holstebroe/MeshWave/issues/58)
+- [ ] [Issue #83: [UI] Network Health Indicator and Connectivity Status Bar](https://github.com/holstebroe/MeshWave/issues/83)
+- [ ] [Issue #84: [Net] Automated UPnP/NAT-PMP Port Mapping Support](https://github.com/holstebroe/MeshWave/issues/84)
+- [ ] [Issue #85: [UI] Interactive NAT Troubleshooting and Configuration Guide](https://github.com/holstebroe/MeshWave/issues/85)
 - [x] ARM Linux bootstrap publish script baseline (`scripts/publish-bootstrap-arm.ps1`)
 - [x] Connection diagnostics panel: show per-attempt outcomes, local/remote endpoints, and recommended NAT forwarding rules
 - [x] Diagnostics consistency pass: distinguish routing peers vs mesh/bootstrap peers, show manifest availability,
@@ -178,8 +181,17 @@ Example groups: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone Col
 - [ ] [Open vs invite-only toggle in group settings (stored as IsPublic in group manifest)](https://github.com/holstebroe/MeshWave/issues/48)
 
 ### Future: Competition Feature (Roadmap)
-- See Roadmap.md for the full competition feature design (ballot-sealed voting, deadlines,
-  playlist lock, admin-decrypted tally)
+- [ ] [Issue #74: [Core] Define Competition Models and Operation Types](https://github.com/holstebroe/MeshWave/issues/74)
+- [ ] [Issue #75: [Security] RSA-OAEP Encryption Helpers for Sealed Ballots](https://github.com/holstebroe/MeshWave/issues/75)
+- [ ] [Issue #76: [Logic] Competition Manifest Validation and Deadline Enforcement](https://github.com/holstebroe/MeshWave/issues/76)
+- [ ] [Issue #77: [UI] Competition Dashboard and Creation Flow](https://github.com/holstebroe/MeshWave/issues/77)
+- [ ] [Issue #78: [UI] Competition Submission and Voting Interface](https://github.com/holstebroe/MeshWave/issues/78)
+
+### Future: Chat Channels in Groups
+- [ ] [Issue #79: [Core] Group Chat Channel and PostMessage Models](https://github.com/holstebroe/MeshWave/issues/79)
+- [ ] [Issue #80: [Logic] GroupManager Threaded Messaging Logic](https://github.com/holstebroe/MeshWave/issues/80)
+- [ ] [Issue #81: [UI] Group Chat Sidebar and Channel Navigation](https://github.com/holstebroe/MeshWave/issues/81)
+- [ ] [Issue #82: [UI] Message Feed with Threaded Reply Support](https://github.com/holstebroe/MeshWave/issues/82)
 
 ## Milestone H: Settings Storage and Housekeeping Tab (DONE)
 - [x] Storage tab added to Settings (alongside General/Profile/Artist/Appearance/Network)
@@ -210,3 +222,14 @@ Example groups: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone Col
 
 ## Milestone J: Mesh Integration Tests (DONE)
 
+## Mobile and Web Expansion
+- [ ] [Issue #87: [Web] Baseline Blazor WebAssembly project and P2P client bridge](https://github.com/holstebroe/MeshWave/issues/87)
+- [ ] [Issue #88: [Web] Read-only Catalogue browser for Artists/Albums](https://github.com/holstebroe/MeshWave/issues/88)
+- [ ] [Issue #89: [Web] HTML5 Audio playback integration for remote mesh tracks](https://github.com/holstebroe/MeshWave/issues/89)
+- [ ] [Issue #90: [Mobile] .NET MAUI project setup and dependency injection container](https://github.com/holstebroe/MeshWave/issues/90)
+- [ ] [Issue #91: [Mobile] Recent-play cache policy and offline storage management](https://github.com/holstebroe/MeshWave/issues/91)
+- [ ] [Issue #92: [Mobile] Cross-platform player UI with system media controls](https://github.com/holstebroe/MeshWave/issues/92)
+
+## Metadata Editing
+- [ ] [Issue #70: Album metadata editor basic design](https://github.com/holstebroe/MeshWave/issues/70)
+- [ ] [Issue #86: [UI] Track metadata editor refinement](https://github.com/holstebroe/MeshWave/issues/86)
