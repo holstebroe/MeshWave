@@ -108,10 +108,25 @@ public class PeerRouter : IDisposable
         if (_table.TryGetValue(peer.UserId, out var existing))
         {
             existing.LastSeen = DateTime.UtcNow;
-            existing.Info.Address = peer.Address;
-            existing.Info.Port = peer.Port;
+
+            // Update address and port only if the new info is more specific
+            if (!string.IsNullOrWhiteSpace(peer.Address))
+                existing.Info.Address = peer.Address;
+
+            if (peer.Port > 0)
+                existing.Info.Port = peer.Port;
+
             if (!string.IsNullOrWhiteSpace(peer.PublicKeyPem))
                 existing.Info.PublicKeyPem = peer.PublicKeyPem;
+
+            // Sync capabilities
+            foreach (var cap in peer.Capabilities)
+            {
+                if (!existing.Info.Capabilities.Contains(cap))
+                {
+                    existing.Info.Capabilities.Add(cap);
+                }
+            }
         }
         else
         {

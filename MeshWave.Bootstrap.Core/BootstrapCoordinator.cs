@@ -12,6 +12,7 @@ public sealed class BootstrapCoordinator : IDisposable
 {
     private readonly ConcurrentDictionary<string, BootstrapPeerEntry> _peers = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, BootstrapRendezvousSession> _rendezvousSessions = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, Manifest> _relayedManifests = new(StringComparer.OrdinalIgnoreCase);
     private readonly ManifestExchangeServer _server;
 
     private int _requestCount;
@@ -39,6 +40,7 @@ public sealed class BootstrapCoordinator : IDisposable
             localManifestProvider: () => null,
             peersProvider: GetLivePeers,
             rendezvousProvider: OnRendezvousRequested,
+            relayedManifestProvider: (userId) => _relayedManifests.GetValueOrDefault(userId),
             cancellationToken: cancellationToken);
     }
 
@@ -55,7 +57,24 @@ public sealed class BootstrapCoordinator : IDisposable
         return _peers.Values
             .OrderByDescending(e => e.LastSeen)
             .Take(SecurityLimits.MaxPeersPerExchange)
-            .Select(e => e.Peer)
+            .Select(e =>
+            {
+                var p = e.Peer;
+                if (_relayedManifests.ContainsKey(p.UserId))
+                {
+                    return new PeerInfo
+                    {
+                        UserId = p.UserId,
+                        DisplayName = p.DisplayName,
+                        Address = p.Address,
+                        Port = p.Port,
+                        PublicKeyPem = p.PublicKeyPem,
+                        LastSeen = p.LastSeen,
+                        Capabilities = p.Capabilities.Contains("relay") ? p.Capabilities : [.. p.Capabilities, "relay"]
+                    };
+                }
+                return p;
+            })
             .ToList();
     }
 
@@ -113,6 +132,11 @@ public sealed class BootstrapCoordinator : IDisposable
         };
 
         RegisterPeer(peer);
+
+        if (e.IsRelay)
+        {
+            _relayedManifests[manifest.UserId] = manifest;
+        }
     }
 
     private RendezvousResponse OnRendezvousRequested(RendezvousRequest request)
@@ -205,7 +229,17 @@ public sealed class BootstrapCoordinator : IDisposable
         {
             if (_peers.TryRemove(stale.Key, out var removed))
             {
+                _relayedManifests.TryRemove(stale.Key, out _);
                 PeerDisconnected?.Invoke(this, new BootstrapPeerEventArgs(removed.Peer, "stale-timeout"));
+            }
+        }
+
+        // Also prune relayed manifests that might not have an active peer entry
+        foreach (var userId in _relayedManifests.Keys)
+        {
+            if (!_peers.ContainsKey(userId))
+            {
+                _relayedManifests.TryRemove(userId, out _);
             }
         }
     }

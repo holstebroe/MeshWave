@@ -29,6 +29,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     private LocalPeerIdentity? _identity;
     private Manifest? _localManifest;
     private string? _localManifestPath;
+    private bool _actAsListener;
     private CancellationTokenSource? _cts;
     private IReadOnlyList<string> _bootstrapNodes = [];
     private PeerConnectionAttemptReport? _lastConnectionReport;
@@ -182,6 +183,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         _identity = identity;
         _localManifest = localManifest;
         _localManifestPath = BuildLocalManifestPath(identity.UserId);
+        _actAsListener = actAsListener;
         _contentProvider = contentProvider;
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
@@ -189,7 +191,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         _router.PeerRemoved += OnPeerRemoved;
         _bootstrapNodes = bootstrapNodes ?? [];
 
-        if (actAsListener)
+        if (_actAsListener)
         {
             _server ??= new ManifestExchangeServer(identity.ManifestPort);
             _server.ManifestReceived += OnManifestReceived;
@@ -593,23 +595,56 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             var existing = _peerStore.Get(peer.UserId);
             var startSeq = (existing?.Snapshot?.LastSequenceNumber ?? -1) + 1 + (existing?.Operations.Count ?? 0);
 
-            var remoteManifest = await _client.FetchManifestAsync(peer.Address, peer.Port, startSeq, null, ct);
+            Manifest? remoteManifest = null;
+            var fetchedFromPeer = false;
+
+            try
+            {
+                if (peer.Port > 0)
+                {
+                    remoteManifest = await _client.FetchManifestAsync(peer.Address, peer.Port, startSeq, null, targetUserId: null, cancellationToken: ct);
+                    fetchedFromPeer = remoteManifest != null;
+                }
+            }
+            catch { /* fallback to relay if peer is unreachable */ }
+
+            if (remoteManifest == null && peer.Capabilities.Contains("relay"))
+            {
+                foreach (var bootstrap in _bootstrapNodes.Take(SecurityLimits.MaxBootstrapNodes))
+                {
+                    if (TryParseEndpoint(bootstrap, out var host, out var port))
+                    {
+                        try
+                        {
+                            remoteManifest = await _client.FetchManifestAsync(host, port, startSeq, null, targetUserId: peer.UserId, cancellationToken: ct);
+                            if (remoteManifest != null)
+                            {
+                                RecordPeerMessage(peer.UserId, "FetchManifestRelay", success: true,
+                                    $"Fetched manifest from bootstrap relay {host}:{port}.");
+                                break;
+                            }
+                        }
+                        catch { }
+                    }
+                }
+            }
+
             if (remoteManifest == null)
             {
                 RecordPeerMessage(peer.UserId, "FetchManifest", success: false,
-                    $"Peer {peer.Address}:{peer.Port} returned no manifest.");
+                    $"Peer {peer.Address}:{peer.Port} returned no manifest and relay fallback failed.");
                 return;
             }
 
             Interlocked.Increment(ref _outboundManifestFetchCount);
             RecordPeerMessage(peer.UserId, "FetchManifest", success: true,
-                $"Fetched manifest with {remoteManifest.Operations.Count} operation(s) from {peer.Address}:{peer.Port} (delta sync from seq {startSeq}).");
+                $"Fetched manifest with {remoteManifest.Operations.Count} operation(s) (delta sync from seq {startSeq}). FromPeer={fetchedFromPeer}");
             TryMerge(remoteManifest, peer.PublicKeyPem);
         }
         catch (Exception ex)
         {
             RecordPeerMessage(peer.UserId, "FetchManifest", success: false,
-                $"Fetch failed from {peer.Address}:{peer.Port}: {ex.Message}");
+                $"Fetch failed: {ex.Message}");
         }
     }
 
@@ -1189,6 +1224,27 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                     // best-effort push; periodic sync/merge will reconcile later
                 }
             }
+
+            if (!_actAsListener)
+            {
+                foreach (var bootstrap in _bootstrapNodes.Take(SecurityLimits.MaxBootstrapNodes))
+                {
+                    if (TryParseEndpoint(bootstrap, out var host, out var port))
+                    {
+                        try
+                        {
+                            await _client.RelayManifestPushAsync(host, port, _localManifest, BuildAnnouncingPeerInfo());
+                            RecordPeerMessage($"bootstrap:{host}:{port}", "RelayManifestPush", success: true,
+                                $"Pushed local manifest to bootstrap for relaying.");
+                        }
+                        catch (Exception ex)
+                        {
+                            RecordPeerMessage($"bootstrap:{host}:{port}", "RelayManifestPush", success: false,
+                                $"Relay push failed: {ex.Message}");
+                        }
+                    }
+                }
+            }
         });
     }
 
@@ -1199,7 +1255,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             UserId = _identity?.UserId ?? _localManifest?.UserId ?? string.Empty,
             DisplayName = SecurityLimits.Truncate(_identity?.DisplayName ?? _localManifest?.UserId ?? "peer", SecurityLimits.MaxDisplayNameLength),
             Address = string.Empty,
-            Port = _identity?.ManifestPort ?? ManifestExchangeServer.DefaultPort,
+            Port = _actAsListener ? (_identity?.ManifestPort ?? ManifestExchangeServer.DefaultPort) : 0,
             PublicKeyPem = _identity?.PublicKeyPem ?? string.Empty,
             LastSeen = DateTime.UtcNow
         };
