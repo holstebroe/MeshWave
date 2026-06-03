@@ -32,6 +32,8 @@ namespace MeshWave.ViewModels
         public ICommand ToggleReleaseCommand { get; }
         public ICommand IncrementVersionCommand { get; }
 
+        public event EventHandler? RequestClose;
+
         public string TrackFilePath
         {
             get => _trackFilePath;
@@ -175,6 +177,8 @@ namespace MeshWave.ViewModels
             {
                 _metadataService.SaveForTrack(TrackFilePath, metadata);
             }
+
+            RequestClose?.Invoke(this, EventArgs.Empty);
         }
 
         private void ToggleRelease()

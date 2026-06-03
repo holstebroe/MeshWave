@@ -323,6 +323,8 @@ public class ApplicationViewModel : ViewModelBase
             _localManifest ??= _syncOrchestrator.LoadLocalManifest(identity.UserId)
                                ?? _manifestManager.CreateManifest(identity.UserId);
 
+            _userRepository.RegisterLocalUser(identity.UserId, profile.DisplayName, profile.AvatarIconPath);
+
             await _syncOrchestrator.StartAsync(
                 identity,
                 _localManifest,

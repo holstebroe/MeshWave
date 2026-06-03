@@ -8,6 +8,7 @@
              Background="{StaticResource BackgroundColor}">
     <UserControl.Resources>
         <converters:PathToBitmapConverter x:Key="PathToBitmap"/>
+        <converters:UserIconConverter x:Key="UserIconConverter"/>
     </UserControl.Resources>
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -203,7 +204,7 @@
                                                     CornerRadius="18" ClipToBounds="True"
                                                     Background="{StaticResource SurfaceLightColor}"
                                                     VerticalAlignment="Top" Margin="0,2,0,0">
-                                                <Image Source="{Binding ArtistAvatarIconPath, Converter={StaticResource PathToBitmap}}"
+                                                <Image Source="{Binding ArtistAvatarIconPath, Converter={StaticResource UserIconConverter}}"
                                                        Stretch="UniformToFill"/>
                                             </Border>
 
@@ -318,7 +319,7 @@
                                         <Border Grid.Column="0" Width="36" Height="36"
                                                 CornerRadius="18" ClipToBounds="True"
                                                 Background="{StaticResource SurfaceLightColor}">
-                                            <Image Source="{Binding AvatarIconPath, Converter={StaticResource PathToBitmap}}" Stretch="UniformToFill"/>
+                                            <Image Source="{Binding AvatarIconPath, Converter={StaticResource UserIconConverter}}" Stretch="UniformToFill"/>
                                         </Border>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0">
                                             <StackPanel Orientation="Horizontal">
@@ -530,7 +531,7 @@
                                         <Border Grid.Column="0" Width="36" Height="36"
                                                 CornerRadius="18" ClipToBounds="True"
                                                 Background="{StaticResource SurfaceLightColor}">
-                                            <Image Source="{Binding AvatarIconPath, Converter={StaticResource PathToBitmap}}" Stretch="UniformToFill"/>
+                                            <Image Source="{Binding AvatarIconPath, Converter={StaticResource UserIconConverter}}" Stretch="UniformToFill"/>
                                         </Border>
                                         <TextBlock Grid.Column="1"
                                                    Text="{Binding DisplayName}"
@@ -608,7 +609,7 @@
                                                     CornerRadius="18" ClipToBounds="True"
                                                     Background="{StaticResource SurfaceLightColor}"
                                                     VerticalAlignment="Top">
-                                                <Image Source="{Binding AvatarIconPath, Converter={StaticResource PathToBitmap}}"
+                                                <Image Source="{Binding AvatarIconPath, Converter={StaticResource UserIconConverter}}"
                                                        Stretch="UniformToFill"/>
                                             </Border>
                                             <StackPanel Grid.Column="1" Margin="10,0">

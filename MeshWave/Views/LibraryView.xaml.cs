@@ -41,6 +41,8 @@ namespace MeshWave.Views
                 WindowStartupLocation = WindowStartupLocation.CenterOwner
             };
 
+            editorVm.RequestClose += (_, _) => window.Close();
+
             window.ShowDialog();
             if (DataContext is MeshWave.ViewModels.LibraryViewModel libraryVm)
             {
@@ -193,6 +195,8 @@ namespace MeshWave.Views
                 Owner = Application.Current.MainWindow,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner
             };
+
+            editorVm.RequestClose += (_, _) => window.Close();
 
             window.ShowDialog();
 
