@@ -49,6 +49,7 @@ public class ManifestExchangeClient
 
         var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
         var response = JsonSerializer.Deserialize<ManifestResponse>(responseJson);
+        Logger.Debug("FetchManifest from {0}:{1} outcome: {2} ops", address, port, response?.Manifest?.Operations.Count ?? 0);
         return response?.Manifest;
     }
 
@@ -73,6 +74,7 @@ public class ManifestExchangeClient
     /// </summary>
     public async Task<bool> RelayManifestPushAsync(string address, int port, Manifest manifest, PeerInfo announcingPeer, CancellationToken cancellationToken = default)
     {
+        Logger.Debug("Relaying manifest push for {0} to {1}:{2} via bootstrap", manifest.UserId, address, port);
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(_timeoutMs);
 
@@ -91,11 +93,13 @@ public class ManifestExchangeClient
 
         var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
         var response = JsonSerializer.Deserialize<ManifestResponse>(responseJson);
+        Logger.Debug("RelayManifestPush to {0}:{1} outcome: {2}", address, port, response?.Acknowledged == true);
         return response?.Acknowledged == true;
     }
 
     private async Task<bool> PushManifestCoreAsync(string address, int port, Manifest manifest, PeerInfo? announcingPeer, CancellationToken cancellationToken)
     {
+        Logger.Debug("Pushing manifest for {0} to {1}:{2}", manifest.UserId, address, port);
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(_timeoutMs);
 
@@ -114,6 +118,7 @@ public class ManifestExchangeClient
 
         var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
         var response = JsonSerializer.Deserialize<ManifestResponse>(responseJson);
+        Logger.Debug("PushManifest to {0}:{1} outcome: {2}", address, port, response?.Acknowledged == true);
         return response?.Acknowledged == true;
     }
 
@@ -123,6 +128,7 @@ public class ManifestExchangeClient
     /// </summary>
     public async Task<IReadOnlyList<PeerInfo>> FetchPeersAsync(string address, int port, CancellationToken cancellationToken = default)
     {
+        Logger.Debug("Fetching peers from {0}:{1} (PEX)", address, port);
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(_timeoutMs);
 
@@ -137,12 +143,15 @@ public class ManifestExchangeClient
 
             var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
             var response = JsonSerializer.Deserialize<ManifestResponse>(responseJson);
-            return response?.Peers
+            var peers = response?.Peers
                 .Take(SecurityLimits.MaxPeersPerExchange)
                 .ToList() ?? [];
+            Logger.Debug("Fetched {0} peers from {1}:{2}", peers.Count, address, port);
+            return peers;
         }
-        catch
+        catch (Exception ex)
         {
+            Logger.Warn("Failed to fetch peers from {0}:{1}: {2}", address, port, ex.Message);
             return [];
         }
     }
@@ -154,6 +163,7 @@ public class ManifestExchangeClient
     /// </summary>
     public async Task<(byte[]? Bytes, string FailureReason)> RequestContentAsync(string address, int port, string contentHash, CancellationToken cancellationToken = default)
     {
+        Logger.Debug("Requesting content {0} from {1}:{2}", contentHash, address, port);
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(_timeoutMs);
 
@@ -277,6 +287,7 @@ public class ManifestExchangeClient
         if (rendezvous == null)
             return null;
 
+        Logger.Debug("Requesting rendezvous from {0}:{1} for target {2}", address, port, rendezvous.TargetUserId);
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(_timeoutMs);
 
@@ -289,6 +300,7 @@ public class ManifestExchangeClient
 
         var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
         var response = JsonSerializer.Deserialize<ManifestResponse>(responseJson);
+        Logger.Debug("Rendezvous response from {0}:{1} outcome: {2}", address, port, response?.Rendezvous?.Success == true);
         return response?.Rendezvous;
     }
 }

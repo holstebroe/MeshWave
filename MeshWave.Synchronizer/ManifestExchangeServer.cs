@@ -123,7 +123,18 @@ public class ManifestExchangeServer : IDisposable
                         var manifest = !string.IsNullOrWhiteSpace(request.TargetUserId)
                             ? _relayedManifestProvider?.Invoke(request.TargetUserId)
                             : _localManifestProvider?.Invoke();
-                        Logger.Debug("Serving manifest to {0} (delta={1})", remoteEndpoint, request.StartSequenceNumber > 0);
+
+                        if (manifest == null)
+                        {
+                            Logger.Warn("Could not provide manifest for {0} (TargetUserId: {1})",
+                                remoteEndpoint, request.TargetUserId ?? "local");
+                        }
+                        else
+                        {
+                            Logger.Info("Serving manifest for {0} to {1} (delta={2}, ops={3})",
+                                manifest.UserId, remoteEndpoint, request.StartSequenceNumber > 0, manifest.Operations.Count);
+                        }
+
                         if (manifest != null && (request.StartSequenceNumber > 0 || request.EndSequenceNumber != null))
                         {
                             var filteredOps = manifest.Operations
@@ -147,10 +158,17 @@ public class ManifestExchangeServer : IDisposable
                     }
                     case ManifestRequestType.PushManifest when request.Manifest != null:
                     {
-                        if (request.Manifest.Operations.Count <= SecurityLimits.MaxManifestOperations)
+                        var opCount = request.Manifest.Operations.Count;
+                        if (opCount <= SecurityLimits.MaxManifestOperations)
                         {
                             var peerEndpoint = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString() ?? "unknown";
+                            Logger.Info("Received manifest push from {0} (User: {1}, Ops: {2})",
+                                remoteEndpoint, request.Manifest.UserId, opCount);
                             ManifestReceived?.Invoke(this, new ManifestReceivedEventArgs(request.Manifest, peerEndpoint, request.AnnouncingPeer, isRelay: false));
+                        }
+                        else
+                        {
+                            Logger.Warn("Rejected push from {0}: too many operations ({1})", remoteEndpoint, opCount);
                         }
                         var ack = new ManifestResponse { Acknowledged = true };
                         await WriteMessageAsync(stream, JsonSerializer.Serialize(ack), ct);
@@ -158,12 +176,17 @@ public class ManifestExchangeServer : IDisposable
                     }
                     case ManifestRequestType.RelayManifestPush when request.Manifest != null:
                     {
-                        if (request.Manifest.Operations.Count <= SecurityLimits.MaxManifestOperations)
+                        var opCount = request.Manifest.Operations.Count;
+                        if (opCount <= SecurityLimits.MaxManifestOperations)
                         {
                             var peerEndpoint = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString() ?? "unknown";
-                            Logger.Info("Received manifest push from {0} (User: {1}, Ops: {2})",
-                                remoteEndpoint, request.Manifest.UserId, request.Manifest.Operations.Count);
+                            Logger.Info("Received relayed manifest push from {0} (User: {1}, Ops: {2})",
+                                remoteEndpoint, request.Manifest.UserId, opCount);
                             ManifestReceived?.Invoke(this, new ManifestReceivedEventArgs(request.Manifest, peerEndpoint, request.AnnouncingPeer, isRelay: true));
+                        }
+                        else
+                        {
+                            Logger.Warn("Rejected relayed push from {0}: too many operations ({1})", remoteEndpoint, opCount);
                         }
                         var ack = new ManifestResponse { Acknowledged = true };
                         await WriteMessageAsync(stream, JsonSerializer.Serialize(ack), ct);
@@ -174,6 +197,7 @@ public class ManifestExchangeServer : IDisposable
                         var peers = _peersProvider?.Invoke()
                             .Take(SecurityLimits.MaxPeersPerExchange)
                             .ToList() ?? [];
+                        Logger.Info("Serving {0} peers to {1} (PEX)", peers.Count, remoteEndpoint);
                         var response = new ManifestResponse { Peers = peers };
                         await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
                         break;
@@ -187,14 +211,17 @@ public class ManifestExchangeServer : IDisposable
                                 Message = "Rendezvous is not enabled on this node."
                             };
 
+                        Logger.Info("Rendezvous request from {0} (Target: {1}) -> Success: {2}",
+                            remoteEndpoint, request.Rendezvous.TargetUserId, rendezvous.Success);
                         var response = new ManifestResponse { Rendezvous = rendezvous, Acknowledged = rendezvous.Success };
                         await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
                         break;
                     }
                     case ManifestRequestType.RequestContent when !string.IsNullOrWhiteSpace(request.ContentHash):
                     {
-                        Logger.Info("Content request from {0} for hash {1}", remoteEndpoint, request.ContentHash);
                         var bytes = _contentProvider?.Invoke(request.ContentHash);
+                        Logger.Info("Content request from {0} for hash {1}. Found: {2}",
+                            remoteEndpoint, request.ContentHash, bytes != null);
                         var response = new ManifestResponse
                         {
                             Acknowledged = bytes != null && bytes.Length > 0,

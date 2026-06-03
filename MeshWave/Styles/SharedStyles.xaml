@@ -211,10 +211,23 @@
                                 <Border Background="{TemplateBinding Background}"
                                         CornerRadius="4"
                                         Padding="{TemplateBinding Padding}">
-                                    <GridViewRowPresenter Content="{TemplateBinding Content}"
-                                                          Columns="{TemplateBinding GridView.ColumnCollection}"/>
+                                    <Grid>
+                                        <GridViewRowPresenter x:Name="GridViewRowPresenter"
+                                                              Content="{TemplateBinding Content}"
+                                                              Columns="{TemplateBinding GridView.ColumnCollection}"/>
+                                        <ContentPresenter x:Name="ContentPresenter"
+                                                          Visibility="Collapsed"
+                                                          Content="{TemplateBinding Content}"
+                                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
+                                    </Grid>
                                 </Border>
                                 <ControlTemplate.Triggers>
+                                    <Trigger Property="GridView.ColumnCollection" Value="{x:Null}">
+                                        <Setter TargetName="GridViewRowPresenter" Property="Visibility" Value="Collapsed"/>
+                                        <Setter TargetName="ContentPresenter" Property="Visibility" Value="Visible"/>
+                                    </Trigger>
                                     <Trigger Property="IsMouseOver" Value="True">
                                         <Setter Property="Background" Value="{DynamicResource SurfaceLightColor}"/>
                                     </Trigger>
