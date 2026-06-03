@@ -56,9 +56,25 @@ public sealed class NetworkDiagnosticsWindowViewModel : ViewModelBase
         var snapshots = _sync.GetPeerDiagnosticsSnapshots();
 
         Peers.Clear();
-        foreach (var snapshot in snapshots.Where(s => !string.IsNullOrWhiteSpace(s.UserId)))
+        foreach (var snapshot in snapshots)
         {
-            Peers.Add(new PeerDiagnosticsItemViewModel(snapshot));
+            var userId = !string.IsNullOrWhiteSpace(snapshot.UserId) ? snapshot.UserId : "(unknown id)";
+            var displayName = !string.IsNullOrWhiteSpace(snapshot.DisplayName) ? snapshot.DisplayName : userId;
+
+            Peers.Add(new PeerDiagnosticsItemViewModel(new PeerDiagnosticsSnapshot
+            {
+                UserId = userId,
+                DisplayName = displayName,
+                Address = snapshot.Address,
+                Port = snapshot.Port,
+                IsOnline = snapshot.IsOnline,
+                IsBootstrap = snapshot.IsBootstrap,
+                HasManifest = snapshot.HasManifest,
+                PublishedTrackCount = snapshot.PublishedTrackCount,
+                PublishedAlbumCount = snapshot.PublishedAlbumCount,
+                OperationCount = snapshot.OperationCount,
+                RecentMessages = snapshot.RecentMessages
+            }));
         }
 
         var deduped = Peers
@@ -76,16 +92,17 @@ public sealed class NetworkDiagnosticsWindowViewModel : ViewModelBase
 
         if (Peers.Count == 0)
         {
-            foreach (var routedPeer in _sync.GetPeers().Where(p => !string.IsNullOrWhiteSpace(p.UserId)))
+            foreach (var routedPeer in _sync.GetPeers())
             {
-                var existing = Peers.Any(p => string.Equals(p.UserId, routedPeer.UserId, StringComparison.OrdinalIgnoreCase));
+                var userId = !string.IsNullOrWhiteSpace(routedPeer.UserId) ? routedPeer.UserId : "(unknown id)";
+                var existing = Peers.Any(p => string.Equals(p.UserId, userId, StringComparison.OrdinalIgnoreCase));
                 if (existing)
                     continue;
 
                 Peers.Add(new PeerDiagnosticsItemViewModel(new PeerDiagnosticsSnapshot
                 {
-                    UserId = routedPeer.UserId,
-                    DisplayName = !string.IsNullOrWhiteSpace(routedPeer.DisplayName) ? routedPeer.DisplayName : routedPeer.UserId,
+                    UserId = userId,
+                    DisplayName = !string.IsNullOrWhiteSpace(routedPeer.DisplayName) ? routedPeer.DisplayName : userId,
                     Address = routedPeer.Address,
                     Port = routedPeer.Port,
                     IsOnline = true,
