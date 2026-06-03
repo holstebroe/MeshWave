@@ -27,6 +27,10 @@ namespace MeshWave
         {
             CommandLineOverrides.Apply(e.Args);
 
+            var settingsService = new SettingsService();
+            var settings = settingsService.LoadSettings();
+            LoggingConfiguration.Configure(settings.Logging);
+
             var mainWindow = new MainWindow();
             MainWindow = mainWindow;
             mainWindow.Show();

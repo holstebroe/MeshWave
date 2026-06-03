@@ -1,5 +1,6 @@
 using System.Net.Sockets;
 using System.Text.Json;
+using NLog;
 using MeshWave.Common.Core.Models;
 
 namespace MeshWave.Synchronizer;
@@ -9,6 +10,7 @@ namespace MeshWave.Synchronizer;
 /// </summary>
 public class ManifestExchangeClient
 {
+    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private readonly int _timeoutMs;
 
     public ManifestExchangeClient(int timeoutMs = 10_000)
@@ -28,6 +30,7 @@ public class ManifestExchangeClient
         string? targetUserId = null,
         CancellationToken cancellationToken = default)
     {
+        Logger.Debug("Fetching manifest from {0}:{1} (start={2}, end={3})", address, port, startSequenceNumber, endSequenceNumber);
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(_timeoutMs);
 
@@ -198,6 +201,7 @@ public class ManifestExchangeClient
     /// </summary>
     public async Task<(Stream? Stream, long ContentLength, string FailureReason)> RequestContentStreamAsync(string address, int port, string contentHash, CancellationToken cancellationToken = default)
     {
+        Logger.Info("Requesting content stream for hash {0} from {1}:{2}", contentHash, address, port);
         var client = new TcpClient();
         try
         {

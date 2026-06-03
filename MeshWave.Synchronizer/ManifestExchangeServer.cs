@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using NLog;
 using MeshWave.Common.Core.Models;
 
 namespace MeshWave.Synchronizer;
@@ -13,6 +14,7 @@ namespace MeshWave.Synchronizer;
 /// </summary>
 public class ManifestExchangeServer : IDisposable
 {
+    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     public const int DefaultPort = 39877;
 
     private readonly int _port;
@@ -93,6 +95,9 @@ public class ManifestExchangeServer : IDisposable
 
     private async Task HandleClientAsync(TcpClient client, CancellationToken ct)
     {
+        var remoteEndpoint = client.Client.RemoteEndPoint?.ToString() ?? "unknown";
+        Logger.Debug("Accepted connection from {0}", remoteEndpoint);
+
         using (client)
         {
             client.ReceiveTimeout = SecurityLimits.ReadTimeoutMs;
@@ -103,7 +108,13 @@ public class ManifestExchangeServer : IDisposable
                 var stream = client.GetStream();
                 var requestJson = await ReadMessageAsync(stream, ct);
                 var request = JsonSerializer.Deserialize<ManifestRequest>(requestJson);
-                if (request == null) return;
+                if (request == null)
+                {
+                    Logger.Warn("Received empty or invalid request from {0}", remoteEndpoint);
+                    return;
+                }
+
+                Logger.Debug("Received {0} request from {1}", request.Type, remoteEndpoint);
 
                 switch (request.Type)
                 {
@@ -112,7 +123,7 @@ public class ManifestExchangeServer : IDisposable
                         var manifest = !string.IsNullOrWhiteSpace(request.TargetUserId)
                             ? _relayedManifestProvider?.Invoke(request.TargetUserId)
                             : _localManifestProvider?.Invoke();
-
+                        Logger.Debug("Serving manifest to {0} (delta={1})", remoteEndpoint, request.StartSequenceNumber > 0);
                         if (manifest != null && (request.StartSequenceNumber > 0 || request.EndSequenceNumber != null))
                         {
                             var filteredOps = manifest.Operations
@@ -150,6 +161,8 @@ public class ManifestExchangeServer : IDisposable
                         if (request.Manifest.Operations.Count <= SecurityLimits.MaxManifestOperations)
                         {
                             var peerEndpoint = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString() ?? "unknown";
+                            Logger.Info("Received manifest push from {0} (User: {1}, Ops: {2})",
+                                remoteEndpoint, request.Manifest.UserId, request.Manifest.Operations.Count);
                             ManifestReceived?.Invoke(this, new ManifestReceivedEventArgs(request.Manifest, peerEndpoint, request.AnnouncingPeer, isRelay: true));
                         }
                         var ack = new ManifestResponse { Acknowledged = true };
@@ -180,6 +193,7 @@ public class ManifestExchangeServer : IDisposable
                     }
                     case ManifestRequestType.RequestContent when !string.IsNullOrWhiteSpace(request.ContentHash):
                     {
+                        Logger.Info("Content request from {0} for hash {1}", remoteEndpoint, request.ContentHash);
                         var bytes = _contentProvider?.Invoke(request.ContentHash);
                         var response = new ManifestResponse
                         {
@@ -202,7 +216,10 @@ public class ManifestExchangeServer : IDisposable
                     }
                 }
             }
-            catch { /* ignore per-client errors */ }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Error handling client {0}", remoteEndpoint);
+            }
         }
     }
 

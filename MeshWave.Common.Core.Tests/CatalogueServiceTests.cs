@@ -27,7 +27,7 @@ public class CatalogueServiceTests
                     ContentHash = "hash1",
                     SequenceNumber = 1,
                     Signature = "sig",
-                    Metadata = new Dictionary<string, string> { { "title", "Song A" }, { "artist", "Artist X" } }
+                    Metadata = new Dictionary<string, string> { { "title", "Song A" }, { "artist", "Artist X" }, { "fileSize", "1024" } }
                 }
             }
         };
@@ -39,6 +39,7 @@ public class CatalogueServiceTests
         Assert.Equal("Song A", entry.Title);
         Assert.Equal("Artist X", entry.ArtistName);
         Assert.Equal("user1", entry.OwnerUserId);
+        Assert.Equal(1024, entry.FileSize);
 
         var peers = await service.GetPeersForContentAsync("hash1");
         Assert.Contains("user1", peers);
@@ -121,7 +122,7 @@ public class CatalogueServiceTests
                     TargetType = "Track",
                     SequenceNumber = 2,
                     Signature = "sig",
-                    Metadata = new Dictionary<string, string> { { "title", "Help!" }, { "artist", "The Beatles" } }
+                    Metadata = new Dictionary<string, string> { { "title", "Help!" }, { "artist", "The Beatles" }, { "fileSize", "2048" } }
                 }
             }
         };

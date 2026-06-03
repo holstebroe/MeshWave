@@ -23,6 +23,8 @@ public class BrowseArtistItem : ViewModelBase
     public string Bio { get; set; } = string.Empty;
     public int TrackCount { get; set; }
     public int AlbumCount { get; set; }
+    public long TotalSize { get; set; }
+    public string TotalSizeDisplay { get; set; } = string.Empty;
 }
 
 public class BrowseAlbumItem : ViewModelBase
@@ -32,6 +34,8 @@ public class BrowseAlbumItem : ViewModelBase
     public string ArtistUserId { get; set; } = string.Empty;
     public string ArtistDisplayName { get; set; } = string.Empty;
     public int TrackCount { get; set; }
+    public long TotalSize { get; set; }
+    public string TotalSizeDisplay { get; set; } = string.Empty;
     public DateTime? ReleasedAt { get; set; }
     public string ReleasedAtDisplay => ReleasedAt.HasValue ? ReleasedAt.Value.ToLocalTime().ToString("MMM yyyy") : string.Empty;
 }
@@ -60,6 +64,8 @@ public class BrowseTrackItem : ViewModelBase
     public string ArtistDisplayName { get; set; } = string.Empty;
     public string Album { get; set; } = string.Empty;
     public string? ContentHash { get; set; }
+    public long FileSize { get; set; }
+    public string FileSizeDisplay { get; set; } = string.Empty;
     public DateTime? ReleasedAt { get; set; }
     public string ReleasedAtDisplay => ReleasedAt.HasValue ? ReleasedAt.Value.ToLocalTime().ToString("MMM d, yyyy") : string.Empty;
 
@@ -380,6 +386,7 @@ public class BrowseViewModel : ViewModelBase
 
             var publicTrackOps = GetLatestPublicTrackOperations(manifest);
             var trackCount = publicTrackOps.Count;
+            var artistTotalSize = publicTrackOps.Sum(op => long.TryParse(op.Metadata.GetValueOrDefault("fileSize"), out var fs) ? fs : 0);
             var albumCount = manifest.Operations.Count(op =>
                 op.OperationType == ManifestOperationType.Create
                 && string.Equals(op.TargetType, "Album", StringComparison.OrdinalIgnoreCase));
@@ -403,7 +410,9 @@ public class BrowseViewModel : ViewModelBase
                 AvatarIconPath = profileOp?.Metadata.GetValueOrDefault("iconPath") ?? string.Empty,
                 Bio = bio,
                 TrackCount = trackCount,
-                AlbumCount = albumCount
+                AlbumCount = albumCount,
+                TotalSize = artistTotalSize,
+                TotalSizeDisplay = FormatFileSize(artistTotalSize)
             });
         }
         Artists = new ObservableCollection<BrowseArtistItem>(artists.OrderByDescending(a => a.TrackCount));
@@ -431,6 +440,10 @@ public class BrowseViewModel : ViewModelBase
             foreach (var op in albumOps)
             {
                 var name = op.Metadata.GetValueOrDefault("name") ?? op.TargetId;
+                var albumTracks = GetLatestPublicTrackOperations(manifest)
+                    .Where(t => string.Equals(t.Metadata.GetValueOrDefault("album"), name, StringComparison.OrdinalIgnoreCase));
+                var albumTotalSize = albumTracks.Sum(t => long.TryParse(t.Metadata.GetValueOrDefault("fileSize"), out var fs) ? fs : 0);
+
                 if (!string.IsNullOrWhiteSpace(filter)
                     && !name.Contains(filter, StringComparison.OrdinalIgnoreCase)
                     && !artistName.Contains(filter, StringComparison.OrdinalIgnoreCase))
@@ -446,7 +459,9 @@ public class BrowseViewModel : ViewModelBase
                     Name = name,
                     ArtistUserId = manifest.UserId,
                     ArtistDisplayName = artistName,
-                    ReleasedAt = releasedAt
+                    ReleasedAt = releasedAt,
+                    TotalSize = albumTotalSize,
+                    TotalSizeDisplay = FormatFileSize(albumTotalSize)
                 });
             }
         }
@@ -490,6 +505,7 @@ public class BrowseViewModel : ViewModelBase
                     : null;
                 var isQueued = queueItem != null && (queueItem.State == DownloadState.Pending || queueItem.State == DownloadState.Downloading);
                 var isDownloaded = queueItem?.State == DownloadState.Done;
+                var fileSize = long.TryParse(op.Metadata.GetValueOrDefault("fileSize"), out var fs) ? fs : 0;
 
                 tracks.Add(new BrowseTrackItem
                 {
@@ -499,6 +515,8 @@ public class BrowseViewModel : ViewModelBase
                     ArtistDisplayName = artistName,
                     Album = album,
                     ContentHash = op.ContentHash,
+                    FileSize = fileSize,
+                    FileSizeDisplay = FormatFileSize(fileSize),
                     ReleasedAt = releasedAt,
                     IsQueued = isQueued,
                     IsDownloaded = isDownloaded
@@ -570,6 +588,20 @@ public class BrowseViewModel : ViewModelBase
         var totalTracks = Tracks.Count;
         var totalPlaylists = Playlists.Count;
         StatusText = $"{totalArtists} artist{(totalArtists == 1 ? "" : "s")}, {totalTracks} track{(totalTracks == 1 ? "" : "s")}, {totalPlaylists} playlist{(totalPlaylists == 1 ? "" : "s")} discovered from the mesh.";
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes <= 0) return "Unknown";
+        string[] units = { "B", "KB", "MB", "GB", "TB" };
+        int unitIndex = 0;
+        double size = bytes;
+        while (size >= 1024 && unitIndex < units.Length - 1)
+        {
+            size /= 1024;
+            unitIndex++;
+        }
+        return $"{size:N1} {units[unitIndex]}";
     }
 
     private static List<ManifestOperation> GetLatestPublicTrackOperations(Manifest manifest)

@@ -395,7 +395,38 @@
                                      MinHeight="160"
                                      FontFamily="Consolas"
                                      FontSize="11"
-                                     VerticalScrollBarVisibility="Auto"/>
+                                     VerticalScrollBarVisibility="Auto"
+                                     Margin="0,0,0,16"/>
+
+                            <TextBlock Text="Detailed Network Logging" Style="{StaticResource SectionHeader}" Margin="0,0,0,6"/>
+                            <TextBlock Text="Enables NLog for P2P operations. Useful for diagnosing connection issues."
+                                       Foreground="{StaticResource TextSecondaryColor}"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,8"/>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                <CheckBox IsChecked="{Binding P2PLoggingEnabled, Mode=TwoWay}"
+                                          Content="Enable file logging"
+                                          VerticalAlignment="Center"
+                                          Margin="0,0,20,0"/>
+                                <CheckBox IsChecked="{Binding P2PLoggingVerbose, Mode=TwoWay}"
+                                          Content="Verbose (Debug) level"
+                                          IsEnabled="{Binding P2PLoggingEnabled}"
+                                          VerticalAlignment="Center"/>
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <Button Content="📂 Open Logs Folder"
+                                        Command="{Binding OpenLogFolderCommand}"
+                                        Style="{StaticResource PrimaryButton}"
+                                        Padding="12,6"
+                                        Margin="0,0,8,0"/>
+                                <Button Content="📋 Copy Recent Logs"
+                                        Command="{Binding CopyLogsToClipboardCommand}"
+                                        Style="{StaticResource PrimaryButton}"
+                                        Padding="12,6"/>
+                            </StackPanel>
 
                         </StackPanel>
                     </ScrollViewer>

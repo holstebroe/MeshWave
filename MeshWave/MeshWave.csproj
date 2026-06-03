@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <PackageReference Include="NAudio" Version="2.3.0" />
+    <PackageReference Include="NLog" Version="*" />
   </ItemGroup>
 
 </Project>

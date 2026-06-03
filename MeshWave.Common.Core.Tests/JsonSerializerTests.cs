@@ -223,4 +223,89 @@ public class JsonSerializerTests
         Assert.Contains("Jazz Musicians", json);
         Assert.Contains("user-1", json);
     }
+
+    [Fact]
+    public void SerializeGroupManifest_ProducesValidJson()
+    {
+        // Arrange
+        var manifest = new GroupManifest
+        {
+            GroupId = "group-1",
+            Name = "Jazz Collective",
+            FounderUserId = "user-1",
+            Operations = new List<GroupOperation>
+            {
+                new GroupOperation
+                {
+                    SequenceNumber = 1,
+                    UserId = "user-1",
+                    OperationType = GroupOperationType.Found,
+                    Signature = "sig123",
+                    Metadata = new Dictionary<string, string> { { "key", "value" } }
+                }
+            }
+        };
+
+        // Act
+        var json = JsonSerializer.SerializeGroupManifest(manifest);
+
+        // Assert
+        Assert.NotNull(json);
+        Assert.Contains("group-1", json);
+        Assert.Contains("Jazz Collective", json);
+        Assert.Contains("Found", json);
+        Assert.Contains("sig123", json);
+    }
+
+    [Fact]
+    public void DeserializeGroupManifest_ReconstructsObject()
+    {
+        // Arrange
+        var manifest = new GroupManifest
+        {
+            GroupId = "group-1",
+            Name = "Jazz Collective",
+            FounderUserId = "user-1",
+            Operations = new List<GroupOperation>
+            {
+                new GroupOperation
+                {
+                    SequenceNumber = 1,
+                    UserId = "user-1",
+                    OperationType = GroupOperationType.Found,
+                    Signature = "sig123"
+                }
+            }
+        };
+        var json = JsonSerializer.SerializeGroupManifest(manifest);
+
+        // Act
+        var deserialized = JsonSerializer.DeserializeGroupManifest(json);
+
+        // Assert
+        Assert.NotNull(deserialized);
+        Assert.Equal(manifest.GroupId, deserialized.GroupId);
+        Assert.Single(deserialized.Operations);
+        Assert.Equal(GroupOperationType.Found, deserialized.Operations[0].OperationType);
+    }
+
+    [Fact]
+    public void SerializeChannel_ProducesValidJson()
+    {
+        // Arrange
+        var channel = new Channel
+        {
+            ChannelId = "channel-1",
+            Name = "General",
+            CreatedBy = "user-1"
+        };
+
+        // Act
+        var json = JsonSerializer.SerializeChannel(channel);
+
+        // Assert
+        Assert.NotNull(json);
+        Assert.Contains("channel-1", json);
+        Assert.Contains("General", json);
+    }
 }

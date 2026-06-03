@@ -50,6 +50,7 @@ namespace MeshWave.Services
             _currentSettings.Playback ??= new PlaybackSettings();
             _currentSettings.Playback.ResumeState ??= new PlaybackResumeState();
             _currentSettings.Storage ??= new StorageSettings();
+            _currentSettings.Logging ??= new LoggingSettings();
 
             if (string.IsNullOrWhiteSpace(_currentSettings.BaseFolder))
             {
