@@ -185,6 +185,118 @@ public class BrowseViewModelTests
         Assert.Equal("hash-1", downloadQueue.AllItems[0].ContentHash);
     }
 
+    [Fact]
+    public void Refresh_DeduplicatesAlbums_FromManifest()
+    {
+        var artistId = "artist-1";
+        var manifest = new Manifest
+        {
+            UserId = artistId,
+            Operations =
+            [
+                new ManifestOperation
+                {
+                    OperationId = "1", OperationType = ManifestOperationType.Create,
+                    TargetId = "album-1", TargetType = "Album", Signature = "sig", SequenceNumber = 1,
+                    Metadata = new Dictionary<string, string> { ["name"] = "Original Album" }
+                },
+                new ManifestOperation
+                {
+                    OperationId = "2", OperationType = ManifestOperationType.Update,
+                    TargetId = "album-1", TargetType = "Album", Signature = "sig", SequenceNumber = 2,
+                    Metadata = new Dictionary<string, string> { ["name"] = "Updated Album" }
+                }
+            ]
+        };
+
+        var sync = new Mock<ISyncBrowseClient>();
+        sync.SetupGet(s => s.IsRunning).Returns(true);
+        sync.SetupGet(s => s.PeerManifests).Returns(new List<Manifest> { manifest });
+        sync.Setup(s => s.GetPeers()).Returns(Array.Empty<PeerInfo>());
+
+        var vm = new BrowseViewModel(sync.Object, new DownloadQueueService());
+
+        Assert.Single(vm.Albums);
+        Assert.Equal("Updated Album", vm.Albums[0].Name);
+    }
+
+    [Fact]
+    public void Refresh_DeduplicatesPlaylists_FromManifest()
+    {
+        var artistId = "artist-1";
+        var manifest = new Manifest
+        {
+            UserId = artistId,
+            Operations =
+            [
+                new ManifestOperation
+                {
+                    OperationId = "p1", OperationType = ManifestOperationType.Create,
+                    TargetId = "playlist-1", TargetType = "Playlist", Signature = "sig", SequenceNumber = 1,
+                    Metadata = new Dictionary<string, string> { ["name"] = "Playlist V1" }
+                },
+                new ManifestOperation
+                {
+                    OperationId = "p2", OperationType = ManifestOperationType.Update,
+                    TargetId = "playlist-1", TargetType = "Playlist", Signature = "sig", SequenceNumber = 2,
+                    Metadata = new Dictionary<string, string> { ["name"] = "Playlist V2" }
+                }
+            ]
+        };
+
+        var sync = new Mock<ISyncBrowseClient>();
+        sync.SetupGet(s => s.IsRunning).Returns(true);
+        sync.SetupGet(s => s.PeerManifests).Returns(new List<Manifest> { manifest });
+        sync.Setup(s => s.GetPeers()).Returns(Array.Empty<PeerInfo>());
+
+        var vm = new BrowseViewModel(sync.Object, new DownloadQueueService());
+
+        Assert.Single(vm.Playlists);
+        Assert.Equal("Playlist V2", vm.Playlists[0].Name);
+    }
+
+    [Fact]
+    public void Refresh_HandlesSnapshots()
+    {
+        var artistId = "artist-1";
+        var manifest = new Manifest
+        {
+            UserId = artistId,
+            Snapshot = new ManifestSnapshot
+            {
+                LastSequenceNumber = 10,
+                Signature = "sig",
+                EntityStates =
+                [
+                    new SnapshotStateEntry
+                    {
+                        TargetId = "album-snap", TargetType = "Album",
+                        Metadata = new Dictionary<string, string> { ["name"] = "Snapshot Album" }
+                    }
+                ]
+            },
+            Operations =
+            [
+                new ManifestOperation
+                {
+                    OperationId = "11", OperationType = ManifestOperationType.Update,
+                    TargetId = "album-snap", TargetType = "Album", Signature = "sig", SequenceNumber = 11,
+                    Metadata = new Dictionary<string, string> { ["name"] = "Snapshot Album Updated" }
+                }
+            ]
+        };
+
+        var sync = new Mock<ISyncBrowseClient>();
+        sync.SetupGet(s => s.IsRunning).Returns(true);
+        sync.SetupGet(s => s.PeerManifests).Returns(new List<Manifest> { manifest });
+        sync.Setup(s => s.GetPeers()).Returns(Array.Empty<PeerInfo>());
+
+        var vm = new BrowseViewModel(sync.Object, new DownloadQueueService());
+
+        Assert.Single(vm.Albums);
+        Assert.Equal("Snapshot Album Updated", vm.Albums[0].Name);
+    }
+
     private static Manifest BuildArtistManifest(string userId, string displayName, string trackId, string hash)
     {
         return new Manifest

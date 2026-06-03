@@ -384,12 +384,11 @@ public class BrowseViewModel : ViewModelBase
             var isArtist = bool.TryParse(profileOp?.Metadata.GetValueOrDefault("isArtist"), out var ia) && ia;
             var bio = profileOp?.Metadata.GetValueOrDefault("bio") ?? string.Empty;
 
-            var publicTrackOps = GetLatestPublicTrackOperations(manifest);
-            var trackCount = publicTrackOps.Count;
-            var artistTotalSize = publicTrackOps.Sum(op => long.TryParse(op.Metadata.GetValueOrDefault("fileSize"), out var fs) ? fs : 0);
-            var albumCount = manifest.Operations.Count(op =>
-                op.OperationType == ManifestOperationType.Create
-                && string.Equals(op.TargetType, "Album", StringComparison.OrdinalIgnoreCase));
+            var resolvedTracks = GetLatestEntities(manifest, "Track");
+            var trackCount = resolvedTracks.Count;
+            var artistTotalSize = resolvedTracks.Sum(e => long.TryParse(e.Metadata.GetValueOrDefault("fileSize"), out var fs) ? fs : 0);
+            var resolvedAlbums = GetLatestEntities(manifest, "Album");
+            var albumCount = resolvedAlbums.Count;
 
             if (!isArtist && trackCount == 0 && albumCount == 0)
                 continue;
@@ -433,14 +432,13 @@ public class BrowseViewModel : ViewModelBase
                 ?? _sync.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, manifest.UserId, StringComparison.OrdinalIgnoreCase))?.DisplayName
                 ?? manifest.UserId;
 
-            var albumOps = manifest.Operations
-                .Where(op => op.OperationType == ManifestOperationType.Create
-                          && string.Equals(op.TargetType, "Album", StringComparison.OrdinalIgnoreCase));
+            var albumEntities = GetLatestEntities(manifest, "Album");
+            var trackEntities = GetLatestEntities(manifest, "Track");
 
-            foreach (var op in albumOps)
+            foreach (var entity in albumEntities)
             {
-                var name = op.Metadata.GetValueOrDefault("name") ?? op.TargetId;
-                var albumTracks = GetLatestPublicTrackOperations(manifest)
+                var name = entity.Metadata.GetValueOrDefault("name") ?? entity.TargetId;
+                var albumTracks = trackEntities
                     .Where(t => string.Equals(t.Metadata.GetValueOrDefault("album"), name, StringComparison.OrdinalIgnoreCase));
                 var albumTotalSize = albumTracks.Sum(t => long.TryParse(t.Metadata.GetValueOrDefault("fileSize"), out var fs) ? fs : 0);
 
@@ -450,12 +448,12 @@ public class BrowseViewModel : ViewModelBase
                     continue;
 
                 DateTime? releasedAt = null;
-                if (op.Metadata.TryGetValue("releasedAt", out var rat) && DateTime.TryParse(rat, out var dt))
+                if (entity.Metadata.TryGetValue("releasedAt", out var rat) && DateTime.TryParse(rat, out var dt))
                     releasedAt = dt;
 
                 albums.Add(new BrowseAlbumItem
                 {
-                    AlbumId = op.TargetId,
+                    AlbumId = entity.TargetId,
                     Name = name,
                     ArtistUserId = manifest.UserId,
                     ArtistDisplayName = artistName,
@@ -483,12 +481,12 @@ public class BrowseViewModel : ViewModelBase
                 ?? _sync.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, manifest.UserId, StringComparison.OrdinalIgnoreCase))?.DisplayName
                 ?? manifest.UserId;
 
-            var trackOps = GetLatestPublicTrackOperations(manifest);
+            var trackEntities = GetLatestEntities(manifest, "Track");
 
-            foreach (var op in trackOps)
+            foreach (var entity in trackEntities)
             {
-                var title = op.Metadata.GetValueOrDefault("title") ?? op.TargetId;
-                var album = op.Metadata.GetValueOrDefault("album") ?? string.Empty;
+                var title = entity.Metadata.GetValueOrDefault("title") ?? entity.TargetId;
+                var album = entity.Metadata.GetValueOrDefault("album") ?? string.Empty;
 
                 if (!string.IsNullOrWhiteSpace(filter)
                     && !title.Contains(filter, StringComparison.OrdinalIgnoreCase)
@@ -497,24 +495,24 @@ public class BrowseViewModel : ViewModelBase
                     continue;
 
                 DateTime? releasedAt = null;
-                if (op.Metadata.TryGetValue("releasedAt", out var rat) && DateTime.TryParse(rat, out var dt))
+                if (entity.Metadata.TryGetValue("releasedAt", out var rat) && DateTime.TryParse(rat, out var dt))
                     releasedAt = dt;
 
-                var queueItem = !string.IsNullOrWhiteSpace(op.ContentHash)
-                    ? _downloadQueue.AllItems.FirstOrDefault(i => string.Equals(i.ContentHash, op.ContentHash, StringComparison.OrdinalIgnoreCase))
+                var queueItem = !string.IsNullOrWhiteSpace(entity.ContentHash)
+                    ? _downloadQueue.AllItems.FirstOrDefault(i => string.Equals(i.ContentHash, entity.ContentHash, StringComparison.OrdinalIgnoreCase))
                     : null;
                 var isQueued = queueItem != null && (queueItem.State == DownloadState.Pending || queueItem.State == DownloadState.Downloading);
                 var isDownloaded = queueItem?.State == DownloadState.Done;
-                var fileSize = long.TryParse(op.Metadata.GetValueOrDefault("fileSize"), out var fs) ? fs : 0;
+                var fileSize = long.TryParse(entity.Metadata.GetValueOrDefault("fileSize"), out var fs) ? fs : 0;
 
                 tracks.Add(new BrowseTrackItem
                 {
-                    TrackId = op.TargetId,
+                    TrackId = entity.TargetId,
                     Title = title,
                     ArtistUserId = manifest.UserId,
                     ArtistDisplayName = artistName,
                     Album = album,
-                    ContentHash = op.ContentHash,
+                    ContentHash = entity.ContentHash,
                     FileSize = fileSize,
                     FileSizeDisplay = FormatFileSize(fileSize),
                     ReleasedAt = releasedAt,
@@ -541,15 +539,13 @@ public class BrowseViewModel : ViewModelBase
                 ?? _sync.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, manifest.UserId, StringComparison.OrdinalIgnoreCase))?.DisplayName
                 ?? manifest.UserId;
 
-            var playlistOps = manifest.Operations
-                .Where(op => op.OperationType == ManifestOperationType.Create
-                          && string.Equals(op.TargetType, "Playlist", StringComparison.OrdinalIgnoreCase));
+            var playlistEntities = GetLatestEntities(manifest, "Playlist");
 
-            foreach (var op in playlistOps)
+            foreach (var entity in playlistEntities)
             {
-                var name = op.Metadata.GetValueOrDefault("name") ?? op.TargetId;
-                var description = op.Metadata.GetValueOrDefault("description") ?? string.Empty;
-                var trackIdsJson = op.Metadata.GetValueOrDefault("trackIds") ?? "[]";
+                var name = entity.Metadata.GetValueOrDefault("name") ?? entity.TargetId;
+                var description = entity.Metadata.GetValueOrDefault("description") ?? string.Empty;
+                var trackIdsJson = entity.Metadata.GetValueOrDefault("trackIds") ?? "[]";
                 List<string> trackIds = [];
                 try
                 {
@@ -564,12 +560,12 @@ public class BrowseViewModel : ViewModelBase
                     continue;
 
                 DateTime? releasedAt = null;
-                if (op.Metadata.TryGetValue("releasedAt", out var rat) && DateTime.TryParse(rat, out var dt))
+                if (entity.Metadata.TryGetValue("releasedAt", out var rat) && DateTime.TryParse(rat, out var dt))
                     releasedAt = dt;
 
                 playlists.Add(new BrowsePlaylistItem
                 {
-                    PlaylistId = op.TargetId,
+                    PlaylistId = entity.TargetId,
                     Name = name,
                     Description = description,
                     ArtistUserId = manifest.UserId,
@@ -604,19 +600,6 @@ public class BrowseViewModel : ViewModelBase
         return $"{size:N1} {units[unitIndex]}";
     }
 
-    private static List<ManifestOperation> GetLatestPublicTrackOperations(Manifest manifest)
-    {
-        return manifest.Operations
-            .Where(op => string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase)
-                      && (op.OperationType == ManifestOperationType.Create
-                       || op.OperationType == ManifestOperationType.Update
-                       || op.OperationType == ManifestOperationType.Delete))
-            .GroupBy(op => op.TargetId, StringComparer.OrdinalIgnoreCase)
-            .Select(g => g.OrderByDescending(op => op.SequenceNumber).First())
-            .Where(op => op.OperationType != ManifestOperationType.Delete)
-            .OrderByDescending(op => op.Timestamp)
-            .ToList();
-    }
 
     // ─────────────────────────────────────────────────────────────────────
     // Download
@@ -770,5 +753,67 @@ public class BrowseViewModel : ViewModelBase
             if (!invalid.Contains(c)) sb.Append(c);
         var result = sb.ToString().Trim();
         return string.IsNullOrWhiteSpace(result) ? fallback : result;
+    }
+
+    private class ResolvedEntity
+    {
+        public string TargetId { get; set; } = string.Empty;
+        public string? ContentHash { get; set; }
+        public Dictionary<string, string> Metadata { get; set; } = [];
+        public int SequenceNumber { get; set; }
+        public DateTime Timestamp { get; set; }
+        public bool IsDeleted { get; set; }
+    }
+
+    private static List<ResolvedEntity> GetLatestEntities(Manifest manifest, string targetType)
+    {
+        var resolved = new Dictionary<string, ResolvedEntity>(StringComparer.OrdinalIgnoreCase);
+
+        // 1. Load from Snapshot
+        if (manifest.Snapshot != null)
+        {
+            foreach (var state in manifest.Snapshot.EntityStates)
+            {
+                if (string.Equals(state.TargetType, targetType, StringComparison.OrdinalIgnoreCase))
+                {
+                    resolved[state.TargetId] = new ResolvedEntity
+                    {
+                        TargetId = state.TargetId,
+                        ContentHash = state.ContentHash,
+                        Metadata = new Dictionary<string, string>(state.Metadata, StringComparer.OrdinalIgnoreCase),
+                        SequenceNumber = manifest.Snapshot.LastSequenceNumber,
+                        Timestamp = manifest.Snapshot.Timestamp,
+                        IsDeleted = false
+                    };
+                }
+            }
+        }
+
+        // 2. Apply Operations
+        foreach (var op in manifest.Operations)
+        {
+            if (!string.Equals(op.TargetType, targetType, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (op.OperationType != ManifestOperationType.Create &&
+                op.OperationType != ManifestOperationType.Update &&
+                op.OperationType != ManifestOperationType.Delete)
+                continue;
+
+            if (resolved.TryGetValue(op.TargetId, out var existing) && op.SequenceNumber <= existing.SequenceNumber)
+                continue;
+
+            resolved[op.TargetId] = new ResolvedEntity
+            {
+                TargetId = op.TargetId,
+                ContentHash = op.ContentHash,
+                Metadata = new Dictionary<string, string>(op.Metadata, StringComparer.OrdinalIgnoreCase),
+                SequenceNumber = op.SequenceNumber,
+                Timestamp = op.Timestamp,
+                IsDeleted = op.OperationType == ManifestOperationType.Delete
+            };
+        }
+
+        return resolved.Values.Where(e => !e.IsDeleted).ToList();
     }
 }
