@@ -125,6 +125,7 @@ public class CatalogueService : ICatalogueService
                     ContentHash = contentHash,
                     ReleaseDate = ParseDate(metadata.GetValueOrDefault("releasedAt") ?? metadata.GetValueOrDefault("releaseDate")),
                     Genre = metadata.GetValueOrDefault("genre"),
+                    FileSize = long.TryParse(metadata.GetValueOrDefault("fileSize"), out var fs) ? fs : 0,
                     SequenceNumber = sequenceNumber,
                     Timestamp = timestamp
                 };
