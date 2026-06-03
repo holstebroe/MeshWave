@@ -1,0 +1,74 @@
+name: Jules Lifecycle Cleanup
+
+on:
+  pull_request:
+    types: [closed, synchronized] # synchronized = new commits pushed (Jules working again)
+  issues:
+    types: [closed] # Handled if a human manually closes the issue without merging
+
+jobs:
+  manage-lifecycle:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Handle PR Updates and Closures
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const repo = context.repo;
+            let linkedIssues = [];
+
+            // Case A: Event is PR closed or PR updated (synchronized)
+            if (context.payload.pull_request) {
+              const prNumber = context.payload.pull_request.number;
+              const query = `query($owner: String!, $repo: String!, $pr: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $pr) {
+                    closingIssuesReferences(first: 5) {
+                      nodes {
+                        number
+                        labels(first: 100) { nodes { name } }
+                      }
+                    }
+                  }
+                }
+              }`;
+              const result = await github.graphql(query, { owner: repo.owner, repo: repo.repo, pr: prNumber });
+              linkedIssues = result.repository.pullRequest.closingIssuesReferences.nodes;
+            } 
+            // Case B: Direct Issue Closed event
+            else if (context.payload.issue) {
+              linkedIssues = [{
+                number: context.payload.issue.number,
+                labels: { nodes: context.payload.issue.labels }
+              }];
+            }
+
+            for (const issue of linkedIssues) {
+              const labelNames = issue.labels.nodes.map(l => l.name);
+              
+              // 1. SCENARIO: PR is updated/synchronized (Jules is working again)
+              // We put 'jules-in-progress' back and remove 'jules-under-review'
+              if (context.eventName === 'pull_request' && context.payload.action === 'synchronized') {
+                if (labelNames.includes('jules-under-review')) {
+                  await github.rest.issues.addLabels({ owner: repo.owner, repo: repo.repo, issue_number: issue.number, labels: ['jules-in-progress'] });
+                  await github.rest.issues.removeLabel({ owner: repo.owner, repo: repo.repo, issue_number: issue.number, name: 'jules-under-review' });
+                  console.log(`Issue #${issue.number} kicked back to IN-PROGRESS via PR update.`);
+                }
+              } 
+              
+              // 2. SCENARIO: The task is finished/closed (PR Merged, PR Closed, or Issue Closed)
+              // Wipe all automation labels cleanly.
+              else if (context.payload.action === 'closed') {
+                const labelsToRemove = ['jules-task', 'jules-in-progress', 'jules-under-review'];
+                for (const label of labelsToRemove) {
+                  if (labelNames.includes(label)) {
+                    await github.rest.issues.removeLabel({
+                      owner: repo.owner, repo: repo.repo, issue_number: issue.number, name: label
+                    });
+                  }
+                }
+                console.log(`Nuked all Jules tags for Issue #${issue.number} due to closure.`);
+              }
+            }

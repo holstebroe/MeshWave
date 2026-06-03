@@ -6,22 +6,23 @@ on:
 
 jobs:
   trigger-jules:
+    # ONLY run if 'jules-task' was just added
+    # AND we aren't already working on it or reviewing it
     if: >
       github.event.label.name == 'jules-task' && 
-      !contains(github.event.issue.labels.*.name, 'jules-in-progress')
+      !contains(github.event.issue.labels.*.name, 'jules-in-progress') &&
+      !contains(github.event.issue.labels.*.name, 'jules-under-review')
     runs-on: ubuntu-latest
     permissions:
       issues: write
     steps:
-      # 1. Immediately lock the issue so no duplicate runs can happen
-      - name: Add in-progress label
+      - name: Lock Issue to In-Progress
         run: |
           gh issue edit "$ISSUE_NUMBER" --add-label "jules-in-progress"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
 
-      # 2. Kick off the external Jules process
       - name: Run Jules Implementer
         uses: google-labs-code/jules-invoke@v1.0.0
         with:

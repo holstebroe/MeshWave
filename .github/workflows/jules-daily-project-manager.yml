@@ -2,7 +2,7 @@ name: Daily Jules Project Manager
 
 on:
   schedule:
-    - cron: '0 2 * * *' # Runs daily at 02:00 UTC
+    - cron: '39 2 * * *' # Runs daily at 02:33 UTC. Odd time to increase chance of GitHub actually running the script.
   workflow_dispatch: # Allows manual trigger for testing
 
 # Force the runner to use Node.js 24 to clear deprecation warnings
