@@ -164,12 +164,22 @@ public class ManifestExchangeServer : IDisposable
                     case ManifestRequestType.RequestContent when !string.IsNullOrWhiteSpace(request.ContentHash):
                     {
                         var bytes = _contentProvider?.Invoke(request.ContentHash);
-                        var response = new ManifestResponse
+                        if (bytes != null && bytes.Length > 0)
                         {
-                            Acknowledged = bytes != null && bytes.Length > 0,
-                            ContentBytes = bytes
-                        };
-                        await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
+                            var response = new ManifestResponse
+                            {
+                                Acknowledged = true,
+                                ContentLength = bytes.Length
+                            };
+                            await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
+                            await stream.WriteAsync(bytes, ct);
+                            await stream.FlushAsync(ct);
+                        }
+                        else
+                        {
+                            var response = new ManifestResponse { Acknowledged = false };
+                            await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
+                        }
                         break;
                     }
                     default:
@@ -249,6 +259,7 @@ public class ManifestResponse
     public List<PeerInfo> Peers { get; set; } = [];
     public RendezvousResponse? Rendezvous { get; set; }
     public byte[]? ContentBytes { get; set; }
+    public long? ContentLength { get; set; }
 }
 
 public class RendezvousRequest

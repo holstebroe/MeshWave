@@ -138,15 +138,22 @@ public class ManifestExchangeClient
             var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
             var response = JsonSerializer.Deserialize<ManifestResponse>(responseJson);
 
-            if (response?.ContentBytes == null || response.ContentBytes.Length == 0)
+            if (response?.Acknowledged == true && response.ContentLength > 0)
             {
-                var reason = response?.Acknowledged == false
-                    ? "Peer acknowledged the request but reported the content is not available."
-                    : "Peer returned an empty response (content may not be hosted here).";
-                return (null, reason);
+                var bytes = new byte[response.ContentLength.Value];
+                await stream.ReadExactlyAsync(bytes, cts.Token);
+                return (bytes, string.Empty);
             }
 
-            return (response.ContentBytes, string.Empty);
+            if (response?.ContentBytes != null && response.ContentBytes.Length > 0)
+            {
+                return (response.ContentBytes, string.Empty);
+            }
+
+            var reason = response?.Acknowledged == false
+                ? "Peer acknowledged the request but reported the content is not available."
+                : "Peer returned an empty response (content may not be hosted here).";
+            return (null, reason);
         }
         catch (OperationCanceledException)
         {
@@ -180,6 +187,84 @@ public class ManifestExchangeClient
         var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
         var response = JsonSerializer.Deserialize<ManifestResponse>(responseJson);
         return response?.Rendezvous;
+    }
+
+    /// <summary>
+    /// Requests a content stream from a peer.
+    /// The caller is responsible for disposing the returned stream, which will also close the underlying connection.
+    /// </summary>
+    public async Task<TcpClientStreamWrapper?> RequestContentStreamAsync(string address, int port, string contentHash, CancellationToken cancellationToken = default)
+    {
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(_timeoutMs);
+
+        var client = new TcpClient();
+        try
+        {
+            await client.ConnectAsync(address, port, cts.Token);
+            var stream = client.GetStream();
+
+            var request = new ManifestRequest { Type = ManifestRequestType.RequestContent, ContentHash = contentHash };
+            await ManifestExchangeServer.WriteMessageAsync(stream, JsonSerializer.Serialize(request), cts.Token);
+
+            var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
+            var response = JsonSerializer.Deserialize<ManifestResponse>(responseJson);
+
+            if (response?.Acknowledged != true || response.ContentLength == null)
+            {
+                client.Dispose();
+                return null;
+            }
+
+            return new TcpClientStreamWrapper(client, stream, response.ContentLength.Value);
+        }
+        catch
+        {
+            client.Dispose();
+            return null;
+        }
+    }
+}
+
+/// <summary>
+/// Wraps a TcpClient and its NetworkStream to ensure they are disposed together.
+/// Also exposes the expected content length.
+/// </summary>
+public class TcpClientStreamWrapper : Stream
+{
+    private readonly TcpClient _client;
+    private readonly NetworkStream _stream;
+    private readonly long _length;
+
+    public TcpClientStreamWrapper(TcpClient client, NetworkStream stream, long length)
+    {
+        _client = client;
+        _stream = stream;
+        _length = length;
+    }
+
+    public override bool CanRead => _stream.CanRead;
+    public override bool CanSeek => false;
+    public override bool CanWrite => false;
+    public override long Length => _length;
+    public override long Position { get => _stream.Position; set => throw new NotSupportedException(); }
+
+    public override void Flush() => _stream.Flush();
+    public override int Read(byte[] buffer, int offset, int count) => _stream.Read(buffer, offset, count);
+    public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => _stream.ReadAsync(buffer, offset, count, cancellationToken);
+    public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) => _stream.ReadAsync(buffer, cancellationToken);
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override void SetLength(long value) => throw new NotSupportedException();
+    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _stream.Dispose();
+            _client.Dispose();
+        }
+        base.Dispose(disposing);
     }
 }
 

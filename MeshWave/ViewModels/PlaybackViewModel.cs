@@ -38,6 +38,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     private float[] _waveformSamples = [];
     private string _trackDescription = string.Empty;
     private int _currentTrackVersion = 1;
+    private bool _isBuffering = false;
     private bool _isMuted = false;
     private double _preMuteVolume = 1.0;
     private ObservableCollection<PlaybackTrackListItem> _albumTracks = [];
@@ -168,6 +169,12 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
                 OnPropertyChanged(nameof(PlayPauseIcon));
             }
         }
+    }
+
+    public bool IsBuffering
+    {
+        get => _isBuffering;
+        set => SetProperty(ref _isBuffering, value);
     }
 
     public bool HasMultipleVersions
@@ -387,7 +394,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         }
     }
 
-    public void LoadTrack(string trackTitle, string artist, TimeSpan duration, string? filePath = null, bool autoPlay = true, bool incrementPlayCount = true)
+    public void LoadTrack(string trackTitle, string artist, TimeSpan duration, string? filePath = null, bool autoPlay = true, bool incrementPlayCount = true, string? peerUserId = null, string? contentHash = null)
     {
         CurrentTrackTitle = trackTitle;
         CurrentArtist = artist;
@@ -397,25 +404,8 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         _currentTrackId = Path.GetFileNameWithoutExtension(filePath ?? string.Empty) ?? string.Empty;
         RefreshCurrentTrackLikeState();
 
-        if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
+        if ((!string.IsNullOrEmpty(filePath) && File.Exists(filePath)) || (!string.IsNullOrEmpty(peerUserId) && !string.IsNullOrEmpty(contentHash)))
         {
-            var coverResolver = new LocalLibraryManager(Path.GetDirectoryName(filePath) ?? string.Empty);
-            CoverImagePath = coverResolver.GetTrackCoverPath(filePath);
-            WaveformSamples = coverResolver.GetTrackWaveform(filePath);
-
-            var myMusicMeta = _myMusicMetadataService.LoadForTrack(filePath);
-            TrackDescription = string.IsNullOrWhiteSpace(myMusicMeta.Description)
-                ? string.Empty
-                : myMusicMeta.Description;
-            CurrentTrackVersion = myMusicMeta.Version <= 0 ? 1 : myMusicMeta.Version;
-            OnPropertyChanged(nameof(IsOwnedTrack));
-
-            if (incrementPlayCount)
-                _myMusicMetadataService.IncrementPlayCount(filePath);
-
-            LoadTimelineMarkers();
-            SyncCommentsFromPeerManifests();
-
             _audioService?.Dispose();
             var audioService = new AudioPlaybackService();
             _audioService = audioService;
@@ -426,34 +416,72 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
                 SetProperty(ref _currentPosition, pos, nameof(CurrentPosition));
                 _isUpdatingPosition = false;
             };
+            audioService.IsBufferingChanged += (s, buffering) =>
+            {
+                if (!ReferenceEquals(_audioService, audioService)) return;
+                IsBuffering = buffering;
+            };
             audioService.PlaybackStopped += (s, e) =>
             {
                 if (!ReferenceEquals(_audioService, audioService)) return;
-
-                // In NAudio, natural completion triggers PlaybackStopped with a clean exit code.
-                // Manual stops also trigger this. We use IsPlaying to guard state.
                 if (!IsPlaying) return;
-
                 IsPlaying = false;
-
-                // Ensure the playhead is at the very end when playing stops naturally
-                if (Duration > TimeSpan.Zero)
-                {
-                    CurrentPosition = Duration;
-                }
-
-                // Auto-advance to the next track if we were playing and reached the end
-                if (CanGoToNextTrack)
-                {
-                    PlayNextTrack();
-                }
+                if (Duration > TimeSpan.Zero) CurrentPosition = Duration;
+                if (CanGoToNextTrack) PlayNextTrack();
             };
-            _audioService.LoadFile(filePath);
-            Duration = _audioService.Duration;
-            if (autoPlay)
-                Play();
-            else
-                Pause();
+
+            if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
+            {
+                var coverResolver = new LocalLibraryManager(Path.GetDirectoryName(filePath) ?? string.Empty);
+                CoverImagePath = coverResolver.GetTrackCoverPath(filePath);
+                WaveformSamples = coverResolver.GetTrackWaveform(filePath);
+
+                var myMusicMeta = _myMusicMetadataService.LoadForTrack(filePath);
+                TrackDescription = string.IsNullOrWhiteSpace(myMusicMeta.Description) ? string.Empty : myMusicMeta.Description;
+                CurrentTrackVersion = myMusicMeta.Version <= 0 ? 1 : myMusicMeta.Version;
+                OnPropertyChanged(nameof(IsOwnedTrack));
+
+                if (incrementPlayCount) _myMusicMetadataService.IncrementPlayCount(filePath);
+
+                LoadTimelineMarkers();
+                SyncCommentsFromPeerManifests();
+
+                audioService.LoadFile(filePath);
+                Duration = audioService.Duration;
+                if (autoPlay) Play(); else Pause();
+
+                if (WaveformSamples.Length == 0) _ = Task.Run(() => GenerateWaveformInBackground(filePath));
+            }
+            else if (_sync != null && !string.IsNullOrEmpty(peerUserId) && !string.IsNullOrEmpty(contentHash))
+            {
+                CoverImagePath = string.Empty; // P2P covers coming soon
+                WaveformSamples = [];
+                TimelineMarkers.Clear();
+                TrackDescription = string.Empty;
+                CurrentTrackVersion = 1;
+                OnPropertyChanged(nameof(IsOwnedTrack));
+
+                _ = Task.Run(async () =>
+                {
+                    var download = await _sync.DownloadContentStreamingAsync(peerUserId, contentHash, (read) =>
+                    {
+                        // Periodically refresh waveform, but not too often to avoid IO storm
+                        // Every 1MB seems reasonable for a waveform refresh
+                        if (read % (1024 * 1024) == 0)
+                            _ = Task.Run(() => GenerateWaveformInBackground(_currentFilePath ?? string.Empty));
+                    });
+
+                    if (download != null)
+                    {
+                        _currentFilePath = download.FilePath;
+                        await audioService.LoadGrowingFileAsync(download.FilePath, download.ExpectedLength, download.CompletionTask);
+                        if (autoPlay) Play();
+
+                        // Final waveform generation when done
+                        await download.CompletionTask.ContinueWith(_ => GenerateWaveformInBackground(download.FilePath ?? string.Empty));
+                    }
+                });
+            }
 
             var remapped = AlbumTracks.Select(t => new PlaybackTrackListItem
             {
@@ -464,15 +492,10 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
                 FilePath = t.FilePath,
                 TrackNumber = t.TrackNumber,
                 PlayCount = t.PlayCount,
-                IsNowPlaying = string.Equals(t.FilePath, filePath, StringComparison.OrdinalIgnoreCase)
+                IsNowPlaying = string.Equals(t.FilePath, _currentFilePath, StringComparison.OrdinalIgnoreCase)
             }).ToList();
             AlbumTracks = new ObservableCollection<PlaybackTrackListItem>(remapped);
-            SelectedAlbumTrack = AlbumTracks.FirstOrDefault(t => string.Equals(t.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
-
-            if (WaveformSamples.Length == 0)
-            {
-                _ = Task.Run(() => GenerateWaveformInBackground(filePath));
-            }
+            SelectedAlbumTrack = AlbumTracks.FirstOrDefault(t => string.Equals(t.FilePath, _currentFilePath, StringComparison.OrdinalIgnoreCase));
         }
         else
         {

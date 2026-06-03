@@ -423,6 +423,76 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         return bytes;
     }
 
+    /// <summary>
+    /// Starts a streaming download for the given content hash from a peer.
+    /// Returns a StreamingDownload object containing path, length and completion task.
+    /// </summary>
+    public async Task<StreamingDownload?> DownloadContentStreamingAsync(string peerUserId, string contentHash, Action<long>? onProgress = null)
+    {
+        if (string.IsNullOrWhiteSpace(peerUserId) || string.IsNullOrWhiteSpace(contentHash))
+            return null;
+
+        var peer = _router.GetPeers().FirstOrDefault(p =>
+            string.Equals(p.UserId, peerUserId, StringComparison.OrdinalIgnoreCase));
+
+        if (peer == null) return null;
+
+        var tempDir = Path.Combine(Path.GetTempPath(), "MeshWave", "Streaming");
+        Directory.CreateDirectory(tempDir);
+        var tempFilePath = Path.Combine(tempDir, contentHash);
+
+        // In a real scenario we'd check if it's already downloading.
+        if (File.Exists(tempFilePath) && new FileInfo(tempFilePath).Length > 0)
+        {
+            return new StreamingDownload(tempFilePath, new FileInfo(tempFilePath).Length, Task.CompletedTask);
+        }
+
+        var tcs = new TaskCompletionSource();
+        var download = new StreamingDownload(tempFilePath, 0, tcs.Task);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var streamWrapper = await _client.RequestContentStreamAsync(peer.Address, peer.Port, contentHash);
+                if (streamWrapper == null)
+                {
+                    tcs.TrySetException(new Exception("Could not establish content stream."));
+                    return;
+                }
+
+                download.ExpectedLength = streamWrapper.Length;
+
+                using var fileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite);
+                var buffer = new byte[64 * 1024];
+                int read;
+                long totalRead = 0;
+                while ((read = await streamWrapper.ReadAsync(buffer)) > 0)
+                {
+                    await fileStream.WriteAsync(buffer.AsMemory(0, read));
+                    totalRead += read;
+                    onProgress?.Invoke(totalRead);
+                }
+                await fileStream.FlushAsync();
+                tcs.TrySetResult();
+            }
+            catch (Exception ex)
+            {
+                tcs.TrySetException(ex);
+            }
+        });
+
+        // Wait a bit for the file to be created so the player can open it
+        int attempts = 0;
+        while (!File.Exists(tempFilePath) && attempts < 20)
+        {
+            await Task.Delay(100);
+            attempts++;
+        }
+
+        return download;
+    }
+
     private void OnPeerAdded(object? sender, PeerInfo peer)
     {
         PeerCountChanged?.Invoke(this, EventArgs.Empty);
@@ -1190,4 +1260,11 @@ public sealed class PeerDiagnosticsSnapshot
     public int PublishedAlbumCount { get; init; }
     public int OperationCount { get; init; }
     public IReadOnlyList<PeerMessageLogEntry> RecentMessages { get; init; } = [];
+}
+
+public class StreamingDownload(string filePath, long expectedLength, Task completionTask)
+{
+    public string FilePath { get; } = filePath;
+    public long ExpectedLength { get; internal set; } = expectedLength;
+    public Task CompletionTask { get; } = completionTask;
 }
