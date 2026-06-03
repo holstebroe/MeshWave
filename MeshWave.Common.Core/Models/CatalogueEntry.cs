@@ -17,6 +17,7 @@ public class CatalogueEntry
     public string? ContentHash { get; set; }
     public DateTime? ReleaseDate { get; set; }
     public string? Genre { get; set; }
+    public long FileSize { get; set; }
     public int SequenceNumber { get; set; }
     public DateTime Timestamp { get; set; }
 }
