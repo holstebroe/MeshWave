@@ -2,21 +2,30 @@ name: Jules Issue Developer
 
 on:
   issues:
-    types: [opened, labeled]
+    types: [labeled]
 
 jobs:
-  implement-task:
-    if: contains(github.event.issue.labels.*.name, 'jules-task')
+  trigger-jules:
+    if: >
+      github.event.label.name == 'jules-task' && 
+      !contains(github.event.issue.labels.*.name, 'jules-in-progress')
     runs-on: ubuntu-latest
     permissions:
       issues: write
-      contents: write
-      pull-requests: write
     steps:
+      # 1. Immediately lock the issue so no duplicate runs can happen
+      - name: Add in-progress label
+        run: |
+          gh issue edit "$ISSUE_NUMBER" --add-label "jules-in-progress"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+
+      # 2. Kick off the external Jules process
       - name: Run Jules Implementer
         uses: google-labs-code/jules-invoke@v1.0.0
         with:
           jules_api_key: ${{ secrets.JULES_API_KEY }}
           starting_branch: master
           prompt: |
-            ${{vars.JULES_ISSUE_DEVELOPER_PROMPT}}
+            ${{ vars.JULES_ISSUE_DEVELOPER_PROMPT }}
