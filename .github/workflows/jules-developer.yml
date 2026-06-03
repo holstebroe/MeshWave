@@ -6,8 +6,6 @@ on:
 
 jobs:
   trigger-jules:
-    # ONLY run if 'jules-task' was just added
-    # AND we aren't already working on it or reviewing it
     if: >
       github.event.label.name == 'jules-task' && 
       !contains(github.event.issue.labels.*.name, 'jules-in-progress') &&
@@ -15,7 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
+      contents: write       # Crucial: Jules needs permission to push code branches
+      pull-requests: write  # Crucial: Jules needs permission to open the PR
     steps:
+      # 1. Add the in-progress badge using the native JS API
       - name: Lock Issue to In-Progress
         uses: actions/github-script@v7
         with:
@@ -27,10 +28,19 @@ jobs:
               labels: ['jules-in-progress']
             });
             
+      # 2. Run Jules and explicitly pass the dynamic issue details!
       - name: Run Jules Implementer
         uses: google-labs-code/jules-invoke@v1.0.0
         with:
           jules_api_key: ${{ secrets.JULES_API_KEY }}
           starting_branch: master
+          # We append the unique issue context right above the system prompt instructions
           prompt: |
+            ISSUE_TITLE: ${{ github.event.issue.title }}
+            ISSUE_NUMBER: ${{ github.event.issue.number }}
+            ISSUE_BODY: |
+              ${{ github.event.issue.body }}
+            
+            --------------------------------------------------
+            SYSTEM INSTRUCTIONS:
             ${{ vars.JULES_ISSUE_DEVELOPER_PROMPT }}
