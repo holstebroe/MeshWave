@@ -25,6 +25,7 @@ public class ManifestExchangeClient
         int port,
         int startSequenceNumber = 0,
         int? endSequenceNumber = null,
+        string? targetUserId = null,
         CancellationToken cancellationToken = default)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -38,7 +39,8 @@ public class ManifestExchangeClient
         {
             Type = ManifestRequestType.GetManifest,
             StartSequenceNumber = startSequenceNumber,
-            EndSequenceNumber = endSequenceNumber
+            EndSequenceNumber = endSequenceNumber,
+            TargetUserId = targetUserId
         };
         await ManifestExchangeServer.WriteMessageAsync(stream, JsonSerializer.Serialize(request), cts.Token);
 
@@ -61,6 +63,32 @@ public class ManifestExchangeClient
     public Task<bool> PushManifestAsync(string address, int port, Manifest manifest, PeerInfo announcingPeer, CancellationToken cancellationToken = default)
     {
         return PushManifestCoreAsync(address, port, manifest, announcingPeer, cancellationToken);
+    }
+
+    /// <summary>
+    /// Pushes our manifest to a bootstrap node for relaying to NATed followers.
+    /// </summary>
+    public async Task<bool> RelayManifestPushAsync(string address, int port, Manifest manifest, PeerInfo announcingPeer, CancellationToken cancellationToken = default)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(_timeoutMs);
+
+        using var client = new TcpClient();
+        await client.ConnectAsync(address, port, cts.Token);
+
+        var stream = client.GetStream();
+
+        var request = new ManifestRequest
+        {
+            Type = ManifestRequestType.RelayManifestPush,
+            Manifest = manifest,
+            AnnouncingPeer = announcingPeer
+        };
+        await ManifestExchangeServer.WriteMessageAsync(stream, JsonSerializer.Serialize(request), cts.Token);
+
+        var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
+        var response = JsonSerializer.Deserialize<ManifestResponse>(responseJson);
+        return response?.Acknowledged == true;
     }
 
     private async Task<bool> PushManifestCoreAsync(string address, int port, Manifest manifest, PeerInfo? announcingPeer, CancellationToken cancellationToken)

@@ -24,6 +24,7 @@ public class ManifestExchangeServer : IDisposable
     private Func<IReadOnlyList<PeerInfo>>? _peersProvider;
     private Func<RendezvousRequest, RendezvousResponse?>? _rendezvousProvider;
     private Func<string, byte[]?>? _contentProvider;
+    private Func<string, Manifest?>? _relayedManifestProvider;
 
     public ManifestExchangeServer(int port = DefaultPort)
     {
@@ -43,12 +44,14 @@ public class ManifestExchangeServer : IDisposable
         Func<IReadOnlyList<PeerInfo>>? peersProvider = null,
         Func<RendezvousRequest, RendezvousResponse?>? rendezvousProvider = null,
         Func<string, byte[]?>? contentProvider = null,
+        Func<string, Manifest?>? relayedManifestProvider = null,
         CancellationToken cancellationToken = default)
     {
         _localManifestProvider = localManifestProvider;
         _peersProvider = peersProvider;
         _rendezvousProvider = rendezvousProvider;
         _contentProvider = contentProvider;
+        _relayedManifestProvider = relayedManifestProvider;
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         _listener = new TcpListener(IPAddress.Any, _port);
@@ -106,7 +109,10 @@ public class ManifestExchangeServer : IDisposable
                 {
                     case ManifestRequestType.GetManifest:
                     {
-                        var manifest = _localManifestProvider?.Invoke();
+                        var manifest = !string.IsNullOrWhiteSpace(request.TargetUserId)
+                            ? _relayedManifestProvider?.Invoke(request.TargetUserId)
+                            : _localManifestProvider?.Invoke();
+
                         if (manifest != null && (request.StartSequenceNumber > 0 || request.EndSequenceNumber != null))
                         {
                             var filteredOps = manifest.Operations
@@ -133,7 +139,18 @@ public class ManifestExchangeServer : IDisposable
                         if (request.Manifest.Operations.Count <= SecurityLimits.MaxManifestOperations)
                         {
                             var peerEndpoint = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString() ?? "unknown";
-                            ManifestReceived?.Invoke(this, new ManifestReceivedEventArgs(request.Manifest, peerEndpoint, request.AnnouncingPeer));
+                            ManifestReceived?.Invoke(this, new ManifestReceivedEventArgs(request.Manifest, peerEndpoint, request.AnnouncingPeer, isRelay: false));
+                        }
+                        var ack = new ManifestResponse { Acknowledged = true };
+                        await WriteMessageAsync(stream, JsonSerializer.Serialize(ack), ct);
+                        break;
+                    }
+                    case ManifestRequestType.RelayManifestPush when request.Manifest != null:
+                    {
+                        if (request.Manifest.Operations.Count <= SecurityLimits.MaxManifestOperations)
+                        {
+                            var peerEndpoint = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString() ?? "unknown";
+                            ManifestReceived?.Invoke(this, new ManifestReceivedEventArgs(request.Manifest, peerEndpoint, request.AnnouncingPeer, isRelay: true));
                         }
                         var ack = new ManifestResponse { Acknowledged = true };
                         await WriteMessageAsync(stream, JsonSerializer.Serialize(ack), ct);
@@ -220,11 +237,12 @@ public class ManifestExchangeServer : IDisposable
     }
 }
 
-public class ManifestReceivedEventArgs(Manifest manifest, string peerAddress, PeerInfo? announcingPeer) : EventArgs
+public class ManifestReceivedEventArgs(Manifest manifest, string peerAddress, PeerInfo? announcingPeer, bool isRelay) : EventArgs
 {
     public Manifest Manifest { get; } = manifest;
     public string PeerAddress { get; } = peerAddress;
     public PeerInfo? AnnouncingPeer { get; } = announcingPeer;
+    public bool IsRelay { get; } = isRelay;
 }
 
 public enum ManifestRequestType
@@ -233,7 +251,8 @@ public enum ManifestRequestType
     PushManifest,
     GetPeers,
     RequestRendezvous,
-    RequestContent
+    RequestContent,
+    RelayManifestPush
 }
 
 public class ManifestRequest
@@ -245,6 +264,7 @@ public class ManifestRequest
     public PeerInfo? AnnouncingPeer { get; set; }
     public int StartSequenceNumber { get; set; }
     public int? EndSequenceNumber { get; set; }
+    public string? TargetUserId { get; set; }
 }
 
 public class ManifestResponse

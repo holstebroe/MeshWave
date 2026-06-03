@@ -763,4 +763,73 @@ public class MeshIntegrationTests : IAsyncLifetime
 
         await bootstrap.StopAsync();
     }
+
+    [Fact]
+    public async Task NAT_Peer_Can_Propagate_Manifest_Via_Bootstrap()
+    {
+        const int bootstrapPort = 39877;
+        if (await CanConnectAsync("127.0.0.1", bootstrapPort)) return;
+
+        using var bootstrap = new BootstrapCoordinator(bootstrapPort);
+        await bootstrap.StartAsync();
+
+        // Alice is a NATed peer (actAsListener: false)
+        var (alice, aliceId, aliceManifest, _) = CreatePeer("Alice");
+        // Bob is a regular peer
+        var (bob, bobId, bobManifest, _) = CreatePeer("Bob");
+
+        await alice.StartAsync(aliceId, aliceManifest,
+            bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"],
+            actAsListener: false);
+
+        await bob.StartAsync(bobId, bobManifest,
+            bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"],
+            actAsListener: true);
+
+        // Alice's manifest must have some profile info for discovery to work properly in many paths
+        alice.BroadcastProfile("Alice NAT", isArtist: false, "bio", null, null);
+        alice.AnnounceTrack("nat-track-1", "nat-hash-1");
+
+        // Manually push Alice's manifest to bootstrap for the test to be deterministic
+        var pushClient = new ManifestExchangeClient(timeoutMs: LocalTestTimeoutMs);
+        var aliceAnnouncingInfo = new PeerInfo
+        {
+            UserId = aliceId.UserId,
+            DisplayName = "Alice NAT",
+            Address = "127.0.0.1",
+            Port = 0, // NATed
+            PublicKeyPem = aliceId.PublicKeyPem,
+            LastSeen = DateTime.UtcNow
+        };
+        // Relay push
+        await pushClient.RelayManifestPushAsync("127.0.0.1", bootstrapPort, aliceManifest, aliceAnnouncingInfo);
+
+        // Force Bob to learn about Alice from Bootstrap via PEX
+        await WaitUntilAsync(() => {
+            var peers = pushClient.FetchPeersAsync("127.0.0.1", bootstrapPort).GetAwaiter().GetResult();
+            if (peers.Any(p => p.UserId == aliceId.UserId && p.Capabilities.Contains("relay")))
+            {
+                var router = typeof(SyncOrchestrator).GetField("_router", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.GetValue(bob) as PeerRouter;
+                router?.LearnPeers(peers.Where(p => p.UserId == aliceId.UserId));
+                return true;
+            }
+            return false;
+        }, timeoutMs: 10_000);
+
+        var alicePeerInBob = bob.GetPeers().FirstOrDefault(p => p.UserId == aliceId.UserId);
+        Assert.NotNull(alicePeerInBob);
+        Assert.Contains("relay", alicePeerInBob!.Capabilities);
+
+        // Bob attempts to sync Alice's manifest.
+        // Since Alice is NOT a listener (port 0), Bob's direct fetch will fail, and he should fallback to bootstrap relay.
+        await bob.SyncAllPeersAsync();
+
+        await WaitUntilAsync(() => bob.GetPeerManifest(aliceId.UserId) != null, timeoutMs: 5_000);
+
+        var bobsViewOfAlice = bob.GetPeerManifest(aliceId.UserId);
+        Assert.NotNull(bobsViewOfAlice);
+        Assert.Contains(bobsViewOfAlice!.Operations, op => op.TargetId == "nat-track-1");
+
+        await bootstrap.StopAsync();
+    }
 }
