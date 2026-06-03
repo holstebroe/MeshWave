@@ -1,0 +1,24 @@
+name: Jules Backlog Grooming
+
+on:
+  schedule:
+    - cron: '37 3 * * 5' # Runs friday at 03:37 UTC
+  workflow_dispatch: # Allows manual execution for testing
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  groom-backlog:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read # To read milestones and existing issues via API
+    steps:
+      - name: Run Jules Backlog Architect
+        uses: google-labs-code/jules-invoke@v1.0.0
+        with:
+          jules_api_key: ${{ secrets.JULES_API_KEY }}
+          starting_branch: master
+          prompt: |
+            ${{ vars.JULES_BACKLOG_GROOMING_PROMPT }}
