@@ -129,18 +129,20 @@ public class ManifestExchangeClient
     /// Requests the peer's known peer list (Peer Exchange / PEX).
     /// Returns null if the peer is unreachable or an empty list if the peer does not support PEX.
     /// </summary>
-    public async Task<IReadOnlyList<PeerInfo>?> FetchPeersAsync(string address, int port, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<PeerInfo>?> FetchPeersAsync(string address, int port, string? customLabel = null, CancellationToken cancellationToken = default)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(_timeoutMs);
 
+        var label = customLabel ?? "peers";
+
         try
         {
             using var client = new TcpClient();
-            Logger.Debug("Connecting to {0}:{1}...", address, port);
+            Logger.Debug("Connecting to {0} {1}:{2}...", label, address, port);
             await client.ConnectAsync(address, port, cts.Token);
 
-            Logger.Debug("Fetching peers from {0}:{1} (PEX)", address, port);
+            Logger.Debug("Fetching {0} from {1}:{2} (PEX)", label, address, port);
             var stream = client.GetStream();
             var request = new ManifestRequest { Type = ManifestRequestType.GetPeers };
             await ManifestExchangeServer.WriteMessageAsync(stream, JsonSerializer.Serialize(request), cts.Token);
@@ -155,12 +157,12 @@ public class ManifestExchangeClient
         }
         catch (OperationCanceledException)
         {
-            Logger.Warn("Failed to fetch peers from {0}:{1}: The operation timed out after {2}ms.", address, port, _timeoutMs);
+            Logger.Warn("Failed to fetch {0} from {1}:{2}: The operation timed out after {3}ms.", label, address, port, _timeoutMs);
             return null;
         }
         catch (Exception ex)
         {
-            Logger.Warn("Failed to fetch peers from {0}:{1}: {2}", address, port, ex.Message);
+            Logger.Warn("Failed to fetch {0} from {1}:{2}: {3}", label, address, port, ex.Message);
             return null;
         }
     }

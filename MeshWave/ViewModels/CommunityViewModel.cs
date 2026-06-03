@@ -917,7 +917,7 @@ public class CommunityViewModel : ViewModelBase
             {
                 UserId = peer.UserId,
                 DisplayName = displayName,
-                AvatarIconPath = profileOp?.Metadata.GetValueOrDefault("iconPath") ?? string.Empty,
+                AvatarIconPath = _sync?.UserRepository?.GetUserIconPath(peer.UserId) ?? string.Empty,
                 TrackCount = trackCount,
                 FollowerCount = followerCount,
                 IsArtist = isArtist,

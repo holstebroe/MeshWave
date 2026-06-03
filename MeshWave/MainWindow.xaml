@@ -96,7 +96,28 @@
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                 <Ellipse Width="8" Height="8" Margin="0,0,6,0" VerticalAlignment="Center"
-                                         Fill="{Binding P2PStatusColor}"/>
+                                         Fill="{Binding P2PStatusColor}">
+                                    <Ellipse.Style>
+                                        <Style TargetType="Ellipse">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding P2PStatusText}" Value="Connecting…">
+                                                    <DataTrigger.EnterActions>
+                                                        <BeginStoryboard Name="PulseAnimation">
+                                                            <Storyboard>
+                                                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                 From="1.0" To="0.3" Duration="0:0:0.25"
+                                                                                 AutoReverse="True" RepeatBehavior="Forever"/>
+                                                            </Storyboard>
+                                                        </BeginStoryboard>
+                                                    </DataTrigger.EnterActions>
+                                                    <DataTrigger.ExitActions>
+                                                        <StopStoryboard BeginStoryboardName="PulseAnimation"/>
+                                                    </DataTrigger.ExitActions>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Ellipse.Style>
+                                </Ellipse>
                                 <TextBlock Text="{Binding P2PStatusText}"
                                            Foreground="{StaticResource TextSecondaryColor}"
                                            FontSize="12"
