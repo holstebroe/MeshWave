@@ -25,6 +25,7 @@ public class BrowseArtistItem : ViewModelBase
     public int AlbumCount { get; set; }
     public long TotalSize { get; set; }
     public string TotalSizeDisplay { get; set; } = string.Empty;
+    public bool IsLocal { get; set; }
 }
 
 public class BrowseAlbumItem : ViewModelBase
@@ -38,6 +39,7 @@ public class BrowseAlbumItem : ViewModelBase
     public string TotalSizeDisplay { get; set; } = string.Empty;
     public DateTime? ReleasedAt { get; set; }
     public string ReleasedAtDisplay => ReleasedAt.HasValue ? ReleasedAt.Value.ToLocalTime().ToString("MMM yyyy") : string.Empty;
+    public bool IsLocal { get; set; }
 }
 
 public class BrowsePlaylistItem : ViewModelBase
@@ -51,6 +53,7 @@ public class BrowsePlaylistItem : ViewModelBase
     public List<string> TrackIds { get; set; } = [];
     public DateTime? ReleasedAt { get; set; }
     public string ReleasedAtDisplay => ReleasedAt.HasValue ? ReleasedAt.Value.ToLocalTime().ToString("MMM d, yyyy") : string.Empty;
+    public bool IsLocal { get; set; }
 }
 
 public class BrowseTrackItem : ViewModelBase
@@ -447,7 +450,8 @@ public class BrowseViewModel : ViewModelBase
                 TrackCount = trackCount,
                 AlbumCount = albumCount,
                 TotalSize = artistTotalSize,
-                TotalSizeDisplay = FormatFileSize(artistTotalSize)
+                TotalSizeDisplay = FormatFileSize(artistTotalSize),
+                IsLocal = _sync?.LocalManifest != null && string.Equals(manifest.UserId, _sync.LocalManifest.UserId, StringComparison.OrdinalIgnoreCase)
             });
         }
         Artists = new ObservableCollection<BrowseArtistItem>(artists.OrderByDescending(a => a.TrackCount));
@@ -495,7 +499,8 @@ public class BrowseViewModel : ViewModelBase
                     ArtistDisplayName = artistName,
                     ReleasedAt = releasedAt,
                     TotalSize = albumTotalSize,
-                    TotalSizeDisplay = FormatFileSize(albumTotalSize)
+                    TotalSizeDisplay = FormatFileSize(albumTotalSize),
+                    IsLocal = _sync?.LocalManifest != null && string.Equals(manifest.UserId, _sync.LocalManifest.UserId, StringComparison.OrdinalIgnoreCase)
                 });
             }
         }
@@ -630,7 +635,8 @@ public class BrowseViewModel : ViewModelBase
                     ArtistDisplayName = artistName,
                     TrackIds = trackIds,
                     TrackCount = trackIds.Count,
-                    ReleasedAt = releasedAt
+                    ReleasedAt = releasedAt,
+                    IsLocal = _sync?.LocalManifest != null && string.Equals(manifest.UserId, _sync.LocalManifest.UserId, StringComparison.OrdinalIgnoreCase)
                 });
             }
         }

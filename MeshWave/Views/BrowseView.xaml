@@ -195,9 +195,24 @@
                                                Stretch="UniformToFill"/>
                                     </Border>
                                     <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding DisplayName}"
-                                                   FontWeight="SemiBold" FontSize="15"
-                                                   Foreground="{StaticResource TextPrimaryColor}"/>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding DisplayName}"
+                                                       FontWeight="SemiBold" FontSize="15"
+                                                       Foreground="{StaticResource TextPrimaryColor}"/>
+                                            <Border Background="{StaticResource AccentColor}" CornerRadius="4" Padding="6,2" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsLocal}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <TextBlock Text="Local" FontSize="10" FontWeight="Bold" Foreground="White"/>
+                                            </Border>
+                                        </StackPanel>
                                         <TextBlock Text="{Binding Bio}"
                                                    FontSize="12" FontStyle="Italic"
                                                    Foreground="{StaticResource TextSecondaryColor}"
@@ -269,9 +284,24 @@
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Name}"
-                                                   FontWeight="SemiBold" FontSize="15"
-                                                   Foreground="{StaticResource TextPrimaryColor}"/>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Name}"
+                                                       FontWeight="SemiBold" FontSize="15"
+                                                       Foreground="{StaticResource TextPrimaryColor}"/>
+                                            <Border Background="{StaticResource AccentColor}" CornerRadius="4" Padding="6,2" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsLocal}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <TextBlock Text="Local" FontSize="10" FontWeight="Bold" Foreground="White"/>
+                                            </Border>
+                                        </StackPanel>
                                         <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryColor}" Margin="0,2,0,0">
                                             <Run Text="by"/>
                                             <Run Text="{Binding ArtistDisplayName, Mode=OneWay}" FontWeight="SemiBold"/>
@@ -323,9 +353,24 @@
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Name}"
-                                                   FontWeight="SemiBold" FontSize="15"
-                                                   Foreground="{StaticResource TextPrimaryColor}"/>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Name}"
+                                                       FontWeight="SemiBold" FontSize="15"
+                                                       Foreground="{StaticResource TextPrimaryColor}"/>
+                                            <Border Background="{StaticResource AccentColor}" CornerRadius="4" Padding="6,2" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsLocal}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <TextBlock Text="Local" FontSize="10" FontWeight="Bold" Foreground="White"/>
+                                            </Border>
+                                        </StackPanel>
                                         <TextBlock Text="{Binding Description}"
                                                    FontSize="12" FontStyle="Italic"
                                                    Foreground="{StaticResource TextSecondaryColor}"
@@ -386,10 +431,25 @@
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Title}"
-                                                   FontWeight="SemiBold" FontSize="14"
-                                                   Foreground="{StaticResource TextPrimaryColor}"
-                                                   TextTrimming="CharacterEllipsis"/>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Title}"
+                                                       FontWeight="SemiBold" FontSize="14"
+                                                       Foreground="{StaticResource TextPrimaryColor}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <Border Background="{StaticResource AccentColor}" CornerRadius="4" Padding="6,2" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsLocal}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <TextBlock Text="Local" FontSize="10" FontWeight="Bold" Foreground="White"/>
+                                            </Border>
+                                        </StackPanel>
                                         <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryColor}" Margin="0,2,0,0"
                                                    TextTrimming="CharacterEllipsis">
                                             <Run Text="{Binding ArtistDisplayName}"/>
@@ -422,6 +482,7 @@
                                                 Command="{Binding DataContext.DownloadTrackCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                 CommandParameter="{Binding}"
                                                 IsEnabled="{Binding CanDownload}"
+                                                Width="120"
                                                 Padding="10,4">
                                             <Button.Style>
                                                 <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
@@ -607,4 +668,3 @@
         </ScrollViewer>
     </Grid>
 </UserControl>
-

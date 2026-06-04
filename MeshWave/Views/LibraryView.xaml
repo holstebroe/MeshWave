@@ -112,7 +112,6 @@
                                     <TextBlock Text="{Binding Name}"/>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{Binding TrackCount, StringFormat={}{0} tracks}" FontSize="11" Foreground="{StaticResource TextSecondaryColor}" Margin="0,0,8,0"/>
-                                        <TextBlock Text="{Binding ReleaseBadge}" FontSize="11" Foreground="{StaticResource TextSecondaryColor}" Margin="0,0,8,0"/>
                                         <TextBlock Text="{Binding Version, StringFormat=v{0}}" FontSize="11" Foreground="{StaticResource TextSecondaryColor}"/>
                                     </StackPanel>
                                 </StackPanel>

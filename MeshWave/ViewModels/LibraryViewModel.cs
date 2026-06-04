@@ -332,7 +332,6 @@ public sealed class LibraryAlbumItem
     public string DownloadStatusBadge => HasDownloadActivity
         ? $"Pending {PendingDownloadCount} · Downloading {DownloadingCount} · Failed {FailedDownloadCount}"
         : string.Empty;
-    public string ReleaseBadge => IsReleased ? "Public" : "Private";
     public override string ToString() => Name;
 }
 
@@ -355,8 +354,7 @@ public sealed class LibraryTrackItem
     public bool IsDownloadPlaceholder { get; set; }
     public bool IsRemovedFromLibrary { get; set; }
     public string DownloadStateLabel { get; set; } = "Downloaded";
-    public string ReleaseBadge => IsReleased ? "Public" : "Private";
-    public string StatusBadge => IsRemovedFromLibrary ? "Not Downloaded" : IsDownloadPlaceholder ? DownloadStateLabel : ReleaseBadge;
+    public string StatusBadge => IsRemovedFromLibrary ? "Not Downloaded" : IsDownloadPlaceholder ? DownloadStateLabel : string.Empty;
     public bool CanPlay => !IsDownloadPlaceholder && !IsRemovedFromLibrary && !string.IsNullOrWhiteSpace(FilePath);
     public override string ToString() => Title;
 }
