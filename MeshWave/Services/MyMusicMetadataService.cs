@@ -36,6 +36,29 @@ namespace MeshWave.Services
             SaveForTrack(filePath, meta);
         }
 
+        public void SaveCoverArt(string filePath, string sourceImagePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath) || !File.Exists(sourceImagePath))
+            {
+                return;
+            }
+
+            var albumFolder = Path.GetDirectoryName(filePath) ?? string.Empty;
+            var fileName = Path.GetFileNameWithoutExtension(filePath);
+            var coverPath = Path.Combine(albumFolder, ".cache", $"{fileName}.cover.jpg");
+
+            try
+            {
+                var cacheDir = Path.GetDirectoryName(coverPath);
+                if (!string.IsNullOrWhiteSpace(cacheDir))
+                {
+                    Directory.CreateDirectory(cacheDir);
+                }
+                File.Copy(sourceImagePath, coverPath, overwrite: true);
+            }
+            catch { }
+        }
+
         public void SaveForTrack(string filePath, MyMusicMetadata metadata)
         {
             var metaPath = GetTrackMetaPath(filePath);

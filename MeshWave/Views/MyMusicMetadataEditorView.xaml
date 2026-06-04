@@ -56,9 +56,27 @@
                                     </Style>
                                 </TextBlock.Style>
                             </TextBlock>
-                            <Image Source="{Binding CoverArtPath}" Stretch="UniformToFill"/>
+                            <Image Source="{Binding CoverArtPath}" Stretch="UniformToFill">
+                                <Image.Style>
+                                    <Style TargetType="Image">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CoverArtPath}" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding CoverArtPath}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Image.Style>
+                            </Image>
                         </Grid>
                     </Border>
+                    <Button Content="Replace image"
+                            Command="{Binding ReplaceImageCommand}"
+                            Width="120"
+                            Margin="0,12,0,0"
+                            Style="{StaticResource DiscreteIconButton}"/>
                 </StackPanel>
 
                 <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">

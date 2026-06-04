@@ -394,6 +394,30 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         }
     }
 
+    public void RefreshCurrentTrackMetadata()
+    {
+        if (string.IsNullOrWhiteSpace(_currentFilePath) || !File.Exists(_currentFilePath))
+            return;
+
+        var meta = _myMusicMetadataService.LoadForTrack(_currentFilePath);
+        CurrentTrackTitle = meta.Title;
+        CurrentArtist = meta.Artist;
+        TrackDescription = string.IsNullOrWhiteSpace(meta.Description) ? string.Empty : meta.Description;
+        CurrentTrackVersion = meta.Version <= 0 ? 1 : meta.Version;
+
+        var coverResolver = new LocalLibraryManager(Path.GetDirectoryName(_currentFilePath) ?? string.Empty);
+        CoverImagePath = coverResolver.GetTrackCoverPath(_currentFilePath);
+
+        // Also refresh the album track list if the current track is in it
+        if (SelectedAlbumTrack != null && string.Equals(SelectedAlbumTrack.FilePath, _currentFilePath, StringComparison.OrdinalIgnoreCase))
+        {
+            SelectedAlbumTrack.Title = meta.Title;
+            SelectedAlbumTrack.Artist = meta.Artist;
+            // Notify UI that SelectedAlbumTrack properties changed
+            OnPropertyChanged(nameof(SelectedAlbumTrack));
+        }
+    }
+
     public void LoadTrack(string trackTitle, string artist, TimeSpan duration, string? filePath = null, bool autoPlay = true, bool incrementPlayCount = true, long remoteContentLength = 0)
     {
         CurrentTrackTitle = trackTitle;

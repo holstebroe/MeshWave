@@ -48,6 +48,12 @@ namespace MeshWave.Views
             {
                 libraryVm.LoadFromConfiguredBaseFolder();
             }
+
+            // Also refresh ApplicationViewModel if available to update player bar
+            if (Application.Current.MainWindow.DataContext is MeshWave.ViewModels.ApplicationViewModel appVm)
+            {
+                appVm.Playback.RefreshCurrentTrackMetadata();
+            }
         }
 
         private async void ImportMyMusic_Click(object sender, System.Windows.RoutedEventArgs e)
