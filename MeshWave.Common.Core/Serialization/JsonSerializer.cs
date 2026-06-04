@@ -97,4 +97,44 @@ public class JsonSerializer
     {
         return System.Text.Json.JsonSerializer.Deserialize<Channel>(json, Options);
     }
+
+    public static string SerializeCompetition(Competition competition)
+    {
+        return System.Text.Json.JsonSerializer.Serialize(competition, Options);
+    }
+
+    public static Competition? DeserializeCompetition(string json)
+    {
+        return System.Text.Json.JsonSerializer.Deserialize<Competition>(json, Options);
+    }
+
+    public static string SerializeCompetitionSubmission(CompetitionSubmission submission)
+    {
+        return System.Text.Json.JsonSerializer.Serialize(submission, Options);
+    }
+
+    public static CompetitionSubmission? DeserializeCompetitionSubmission(string json)
+    {
+        return System.Text.Json.JsonSerializer.Deserialize<CompetitionSubmission>(json, Options);
+    }
+
+    public static string SerializeCompetitionVote(CompetitionVote vote)
+    {
+        return System.Text.Json.JsonSerializer.Serialize(vote, Options);
+    }
+
+    public static CompetitionVote? DeserializeCompetitionVote(string json)
+    {
+        return System.Text.Json.JsonSerializer.Deserialize<CompetitionVote>(json, Options);
+    }
+
+    public static string SerializeCompetitionResult(CompetitionResult result)
+    {
+        return System.Text.Json.JsonSerializer.Serialize(result, Options);
+    }
+
+    public static CompetitionResult? DeserializeCompetitionResult(string json)
+    {
+        return System.Text.Json.JsonSerializer.Deserialize<CompetitionResult>(json, Options);
+    }
 }

@@ -332,6 +332,8 @@ public sealed class LibraryAlbumItem
     public string DownloadStatusBadge => HasDownloadActivity
         ? $"Pending {PendingDownloadCount} · Downloading {DownloadingCount} · Failed {FailedDownloadCount}"
         : string.Empty;
+    public string ReleaseBadgeColor => IsReleased ? "#27AE60" : "#E67E22"; // Green for Public, Orange for Private
+    public string VersionLabel => Version > 1 ? $"v{Version}" : string.Empty;
     public override string ToString() => Name;
 }
 
@@ -355,6 +357,8 @@ public sealed class LibraryTrackItem
     public bool IsRemovedFromLibrary { get; set; }
     public string DownloadStateLabel { get; set; } = "Downloaded";
     public string StatusBadge => IsRemovedFromLibrary ? "Not Downloaded" : IsDownloadPlaceholder ? DownloadStateLabel : string.Empty;
+    public string ReleaseBadgeColor => IsReleased ? "#27AE60" : "#E67E22"; // Green for Public, Orange for Private
+    public string VersionLabel => Version > 1 ? $"v{Version}" : string.Empty;
     public bool CanPlay => !IsDownloadPlaceholder && !IsRemovedFromLibrary && !string.IsNullOrWhiteSpace(FilePath);
     public override string ToString() => Title;
 }

@@ -34,7 +34,7 @@ namespace MeshWave.Views
             var window = new Window
             {
                 Title = "Edit Local Music Metadata",
-                Width = 500,
+                Width = 700,
                 Height = 620,
                 Content = view,
                 Owner = Application.Current.MainWindow,
@@ -47,6 +47,12 @@ namespace MeshWave.Views
             if (DataContext is MeshWave.ViewModels.LibraryViewModel libraryVm)
             {
                 libraryVm.LoadFromConfiguredBaseFolder();
+            }
+
+            // Also refresh ApplicationViewModel if available to update player bar
+            if (Application.Current.MainWindow.DataContext is MeshWave.ViewModels.ApplicationViewModel appVm)
+            {
+                appVm.Playback.RefreshCurrentTrackMetadata();
             }
         }
 
@@ -189,7 +195,7 @@ namespace MeshWave.Views
             var window = new Window
             {
                 Title = $"Edit Album Metadata - {albumItem.Name}",
-                Width = 520,
+                Width = 700,
                 Height = 680,
                 Content = view,
                 Owner = Application.Current.MainWindow,

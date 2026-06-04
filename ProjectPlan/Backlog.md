@@ -9,10 +9,10 @@
 - [x] [Implement catalogue sync/index pipeline (ingest, dedupe, staleness rules)](https://github.com/holstebroe/MeshWave/issues/15)
 - [x] [Build Browse UI for artists/albums/tracks/playlists with download actions](https://github.com/holstebroe/MeshWave/issues/13)
 - [ ] [Implement play-while-downloading flow (buffered start)](https://github.com/holstebroe/MeshWave/issues/16) [IN PROGRESS]
-- [ ] [Add global pending downloads queue UI with per-item progress/state](https://github.com/holstebroe/MeshWave/issues/12)
+- [ ] [Add global pending downloads queue UI with per-item progress/state](https://github.com/holstebroe/MeshWave/issues/12) [DISPATCHED]
 
 ### [P1 -- Library/Local Music search (replace "coming soon")](https://github.com/holstebroe/MeshWave/milestone/2)
-- [ ] [Define local search behavior (fields, tokenization, matching, ranking, empty-state UX)](https://github.com/holstebroe/MeshWave/issues/18)
+- [ ] [Define local search behavior (fields, tokenization, matching, ranking, empty-state UX)](https://github.com/holstebroe/MeshWave/issues/18) [DISPATCHED]
 - [ ] [Implement Local Music search for tracks/albums/artists](https://github.com/holstebroe/MeshWave/issues/20)
 - [ ] [Implement Library search for tracks/albums/artists/playlists](https://github.com/holstebroe/MeshWave/issues/19)
 
@@ -181,7 +181,7 @@ Example groups: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone Col
 - [ ] [Open vs invite-only toggle in group settings (stored as IsPublic in group manifest)](https://github.com/holstebroe/MeshWave/issues/48)
 
 ### Future: Competition Feature (Roadmap)
-- [ ] [Issue #74: [Core] Define Competition Models and Operation Types](https://github.com/holstebroe/MeshWave/issues/74)
+- [ ] [Issue #74: [Core] Define Competition Models and Operation Types](https://github.com/holstebroe/MeshWave/issues/74) [DISPATCHED]
 - [ ] [Issue #75: [Security] RSA-OAEP Encryption Helpers for Sealed Ballots](https://github.com/holstebroe/MeshWave/issues/75)
 - [ ] [Issue #76: [Logic] Competition Manifest Validation and Deadline Enforcement](https://github.com/holstebroe/MeshWave/issues/76)
 - [ ] [Issue #77: [UI] Competition Dashboard and Creation Flow](https://github.com/holstebroe/MeshWave/issues/77)

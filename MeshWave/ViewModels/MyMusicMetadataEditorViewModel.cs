@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows.Input;
 using MeshWave.Models;
 using MeshWave.Mvvm;
@@ -20,17 +21,18 @@ namespace MeshWave.ViewModels
         private int _trackNumber;
         private bool _isReleased;
         private int _version = 1;
+        private object? _coverArtSource;
 
         public MyMusicMetadataEditorViewModel()
         {
             SaveCommand = new RelayCommand(_ => Save(), _ => IsAlbumEditor ? !string.IsNullOrWhiteSpace(AlbumFolderPath) : !string.IsNullOrWhiteSpace(TrackFilePath));
             ToggleReleaseCommand = new RelayCommand(_ => ToggleRelease());
-            IncrementVersionCommand = new RelayCommand(_ => IncrementVersion());
+            ReplaceImageCommand = new RelayCommand(_ => ReplaceImage());
         }
 
         public ICommand SaveCommand { get; }
         public ICommand ToggleReleaseCommand { get; }
-        public ICommand IncrementVersionCommand { get; }
+        public ICommand ReplaceImageCommand { get; }
 
         public event EventHandler? RequestClose;
 
@@ -114,6 +116,12 @@ namespace MeshWave.ViewModels
             set => SetProperty(ref _version, value < 1 ? 1 : value);
         }
 
+        public object? CoverArtSource
+        {
+            get => _coverArtSource;
+            set => SetProperty(ref _coverArtSource, value);
+        }
+
         public string ReleaseButtonText => IsReleased ? "Unrelease" : "Release";
 
         public void LoadTrack(string trackFilePath)
@@ -133,6 +141,7 @@ namespace MeshWave.ViewModels
             TrackNumber = metadata.TrackNumber;
             IsReleased = metadata.IsReleased;
             Version = metadata.Version <= 0 ? 1 : metadata.Version;
+            UpdateCoverArtSource(_metadataService.GetCoverArtPath(trackFilePath));
         }
 
         public void LoadAlbum(string albumFolderPath)
@@ -152,6 +161,7 @@ namespace MeshWave.ViewModels
             TrackNumber = metadata.TrackNumber;
             IsReleased = metadata.IsReleased;
             Version = metadata.Version <= 0 ? 1 : metadata.Version;
+            UpdateCoverArtSource(_metadataService.GetAlbumCoverArtPath(albumFolderPath));
         }
 
         private void Save()
@@ -172,6 +182,7 @@ namespace MeshWave.ViewModels
             if (IsAlbumEditor)
             {
                 _metadataService.SaveForAlbum(AlbumFolderPath, metadata);
+                PropagateReleaseStatusToTracks(AlbumFolderPath, IsReleased);
             }
             else
             {
@@ -181,16 +192,98 @@ namespace MeshWave.ViewModels
             RequestClose?.Invoke(this, EventArgs.Empty);
         }
 
+        private void PropagateReleaseStatusToTracks(string albumFolder, bool isReleased)
+        {
+            if (string.IsNullOrWhiteSpace(albumFolder) || !Directory.Exists(albumFolder))
+            {
+                return;
+            }
+
+            var supportedExtensions = new HashSet<string>(MeshWave.LibraryManager.LocalLibraryManager.SupportedExtensions, StringComparer.OrdinalIgnoreCase);
+            var tracks = Directory.EnumerateFiles(albumFolder, "*.*", SearchOption.TopDirectoryOnly)
+                .Where(f => supportedExtensions.Contains(Path.GetExtension(f)));
+
+            foreach (var trackPath in tracks)
+            {
+                var trackMeta = _metadataService.LoadForTrack(trackPath);
+                if (trackMeta.IsReleased != isReleased)
+                {
+                    trackMeta.IsReleased = isReleased;
+                    _metadataService.SaveForTrack(trackPath, trackMeta);
+                }
+            }
+        }
+
         private void ToggleRelease()
         {
             IsReleased = !IsReleased;
             Save();
         }
 
-        private void IncrementVersion()
+        private void ReplaceImage()
         {
-            Version += 1;
-            Save();
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Filter = "Image Files|*.jpg;*.jpeg;*.png;*.webp|All Files|*.*",
+                Title = "Select New Album Art"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                var filePath = IsAlbumEditor ? GetFirstTrackPath(AlbumFolderPath) : TrackFilePath;
+                if (!string.IsNullOrWhiteSpace(filePath))
+                {
+                    _metadataService.SaveCoverArt(filePath, dialog.FileName);
+
+                    if (IsAlbumEditor)
+                    {
+                        // Update all tracks in the album to use the same cover
+                        var supportedExtensions = new HashSet<string>(MeshWave.LibraryManager.LocalLibraryManager.SupportedExtensions, StringComparer.OrdinalIgnoreCase);
+                        var tracks = Directory.EnumerateFiles(AlbumFolderPath, "*.*", SearchOption.TopDirectoryOnly)
+                            .Where(f => supportedExtensions.Contains(Path.GetExtension(f)));
+
+                        foreach (var trackPath in tracks)
+                        {
+                            _metadataService.SaveCoverArt(trackPath, dialog.FileName);
+                        }
+                    }
+
+                    UpdateCoverArtSource(_metadataService.GetCoverArtPath(filePath));
+                }
+            }
+        }
+
+        private void UpdateCoverArtSource(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            {
+                CoverArtSource = null;
+                return;
+            }
+
+            try
+            {
+                var bitmap = new System.Windows.Media.Imaging.BitmapImage();
+                bitmap.BeginInit();
+                bitmap.UriSource = new Uri(path, UriKind.Absolute);
+                bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                bitmap.CreateOptions = System.Windows.Media.Imaging.BitmapCreateOptions.IgnoreImageCache;
+                bitmap.EndInit();
+                bitmap.Freeze(); // Crucial for cross-thread UI access
+                CoverArtSource = bitmap;
+            }
+            catch
+            {
+                CoverArtSource = null;
+            }
+        }
+
+        private string GetFirstTrackPath(string folderPath)
+        {
+            if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath)) return string.Empty;
+            var supportedExtensions = new HashSet<string>(MeshWave.LibraryManager.LocalLibraryManager.SupportedExtensions, StringComparer.OrdinalIgnoreCase);
+            return Directory.EnumerateFiles(folderPath, "*.*", SearchOption.TopDirectoryOnly)
+                .FirstOrDefault(f => supportedExtensions.Contains(Path.GetExtension(f))) ?? string.Empty;
         }
     }
 }

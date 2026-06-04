@@ -751,7 +751,7 @@ public class BrowseViewModel : ViewModelBase
                 ExecuteOnUiOrCurrent(() =>
                 {
                     item.State = DownloadState.Done;
-                    item.ProgressPercent = 100;
+                    item.PercentComplete = 100;
                     item.StatusMessage = destPath;
                     track.IsQueued = false;
                     track.IsDownloaded = true;

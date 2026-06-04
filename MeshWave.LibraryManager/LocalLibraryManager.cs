@@ -72,7 +72,7 @@ public class LocalLibraryManager
                     {
                         AlbumId = albumId,
                         OwnerUserId = "local",
-                        Title = $"{metadata.Artist} - {metadata.Album}",
+                        Title = metadata.Album,
                         CoverImageHash = null,
                         Description = null,
                         Signature = "local"
