@@ -34,7 +34,7 @@ namespace MeshWave.Views
             var window = new Window
             {
                 Title = "Edit Local Music Metadata",
-                Width = 500,
+                Width = 700,
                 Height = 620,
                 Content = view,
                 Owner = Application.Current.MainWindow,
@@ -189,7 +189,7 @@ namespace MeshWave.Views
             var window = new Window
             {
                 Title = $"Edit Album Metadata - {albumItem.Name}",
-                Width = 520,
+                Width = 700,
                 Height = 680,
                 Content = view,
                 Owner = Application.Current.MainWindow,

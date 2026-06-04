@@ -8,23 +8,25 @@ namespace MeshWave.Services
     {
         public MyMusicMetadata LoadForTrack(string filePath)
         {
-            var fallback = ExtractFromFileTags(filePath);
             var metaPath = GetTrackMetaPath(filePath);
-            if (string.IsNullOrWhiteSpace(metaPath) || !File.Exists(metaPath))
+            MyMusicMetadata? cached = null;
+            if (!string.IsNullOrWhiteSpace(metaPath) && File.Exists(metaPath))
+            {
+                try
+                {
+                    var json = File.ReadAllText(metaPath);
+                    cached = JsonSerializer.Deserialize<MyMusicMetadata>(json);
+                }
+                catch { }
+            }
+
+            var fallback = ExtractFromFileTags(filePath);
+            if (cached == null)
             {
                 return fallback;
             }
 
-            try
-            {
-                var json = File.ReadAllText(metaPath);
-                var cached = JsonSerializer.Deserialize<MyMusicMetadata>(json) ?? new MyMusicMetadata();
-                return MergeWithFallback(cached, fallback);
-            }
-            catch
-            {
-                return fallback;
-            }
+            return MergeWithFallback(cached, fallback);
         }
 
         public void IncrementPlayCount(string filePath)
@@ -57,20 +59,102 @@ namespace MeshWave.Services
         public MyMusicMetadata LoadForAlbum(string albumFolder)
         {
             var metaPath = GetAlbumMetaPath(albumFolder);
-            if (string.IsNullOrWhiteSpace(metaPath) || !File.Exists(metaPath))
+            MyMusicMetadata? cached = null;
+            if (!string.IsNullOrWhiteSpace(metaPath) && File.Exists(metaPath))
+            {
+                try
+                {
+                    var json = File.ReadAllText(metaPath);
+                    cached = JsonSerializer.Deserialize<MyMusicMetadata>(json);
+                }
+                catch { }
+            }
+
+            var fallback = ExtractAlbumFallback(albumFolder);
+            if (cached == null)
+            {
+                return fallback;
+            }
+
+            return MergeWithFallback(cached, fallback);
+        }
+
+        private MyMusicMetadata ExtractAlbumFallback(string albumFolder)
+        {
+            if (string.IsNullOrWhiteSpace(albumFolder) || !Directory.Exists(albumFolder))
             {
                 return new MyMusicMetadata();
             }
 
+            var supportedExtensions = new HashSet<string>(MeshWave.LibraryManager.LocalLibraryManager.SupportedExtensions, StringComparer.OrdinalIgnoreCase);
+            var firstTrack = Directory.EnumerateFiles(albumFolder, "*.*", SearchOption.TopDirectoryOnly)
+                .FirstOrDefault(f => supportedExtensions.Contains(Path.GetExtension(f)));
+
+            if (firstTrack == null)
+            {
+                return new MyMusicMetadata { Title = Path.GetFileName(albumFolder) ?? "Unknown Album" };
+            }
+
+            var meta = ExtractFromFileTags(firstTrack);
+            return new MyMusicMetadata
+            {
+                Title = !string.IsNullOrWhiteSpace(meta.Album) ? meta.Album : Path.GetFileName(albumFolder) ?? "Unknown Album",
+                Artist = meta.Artist,
+                Genre = meta.Genre,
+                Year = meta.Year
+            };
+        }
+
+        public string GetCoverArtPath(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+            {
+                return string.Empty;
+            }
+
+            var albumFolder = Path.GetDirectoryName(filePath) ?? string.Empty;
+            var fileName = Path.GetFileNameWithoutExtension(filePath);
+            var coverPath = Path.Combine(albumFolder, ".cache", $"{fileName}.cover.jpg");
+
+            if (File.Exists(coverPath))
+            {
+                return coverPath;
+            }
+
             try
             {
-                var json = File.ReadAllText(metaPath);
-                return JsonSerializer.Deserialize<MyMusicMetadata>(json) ?? new MyMusicMetadata();
+                using var tagFile = TagLib.File.Create(filePath);
+                var picture = tagFile.Tag.Pictures?.FirstOrDefault(p => p.Type == TagLib.PictureType.FrontCover)
+                           ?? tagFile.Tag.Pictures?.FirstOrDefault();
+
+                if (picture != null && picture.Data != null && picture.Data.Count > 0)
+                {
+                    var cacheDir = Path.GetDirectoryName(coverPath);
+                    if (!string.IsNullOrWhiteSpace(cacheDir))
+                    {
+                        Directory.CreateDirectory(cacheDir);
+                    }
+                    File.WriteAllBytes(coverPath, picture.Data.Data);
+                    return coverPath;
+                }
             }
-            catch
+            catch { }
+
+            return string.Empty;
+        }
+
+        public string GetAlbumCoverArtPath(string albumFolder)
+        {
+            if (string.IsNullOrWhiteSpace(albumFolder) || !Directory.Exists(albumFolder))
             {
-                return new MyMusicMetadata();
+                return string.Empty;
             }
+
+            var supportedExtensions = new HashSet<string>(MeshWave.LibraryManager.LocalLibraryManager.SupportedExtensions, StringComparer.OrdinalIgnoreCase);
+            var firstTrack = Directory.EnumerateFiles(albumFolder, "*.*", SearchOption.TopDirectoryOnly)
+                .FirstOrDefault(f => supportedExtensions.Contains(Path.GetExtension(f)));
+
+            return firstTrack != null ? GetCoverArtPath(firstTrack) : string.Empty;
         }
 
         public void SaveForAlbum(string albumFolder, MyMusicMetadata metadata)

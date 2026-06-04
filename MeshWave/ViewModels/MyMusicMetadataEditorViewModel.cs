@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows.Input;
 using MeshWave.Models;
 using MeshWave.Mvvm;
@@ -20,17 +21,16 @@ namespace MeshWave.ViewModels
         private int _trackNumber;
         private bool _isReleased;
         private int _version = 1;
+        private string _coverArtPath = string.Empty;
 
         public MyMusicMetadataEditorViewModel()
         {
             SaveCommand = new RelayCommand(_ => Save(), _ => IsAlbumEditor ? !string.IsNullOrWhiteSpace(AlbumFolderPath) : !string.IsNullOrWhiteSpace(TrackFilePath));
             ToggleReleaseCommand = new RelayCommand(_ => ToggleRelease());
-            IncrementVersionCommand = new RelayCommand(_ => IncrementVersion());
         }
 
         public ICommand SaveCommand { get; }
         public ICommand ToggleReleaseCommand { get; }
-        public ICommand IncrementVersionCommand { get; }
 
         public event EventHandler? RequestClose;
 
@@ -114,6 +114,12 @@ namespace MeshWave.ViewModels
             set => SetProperty(ref _version, value < 1 ? 1 : value);
         }
 
+        public string CoverArtPath
+        {
+            get => _coverArtPath;
+            set => SetProperty(ref _coverArtPath, value);
+        }
+
         public string ReleaseButtonText => IsReleased ? "Unrelease" : "Release";
 
         public void LoadTrack(string trackFilePath)
@@ -133,6 +139,7 @@ namespace MeshWave.ViewModels
             TrackNumber = metadata.TrackNumber;
             IsReleased = metadata.IsReleased;
             Version = metadata.Version <= 0 ? 1 : metadata.Version;
+            CoverArtPath = _metadataService.GetCoverArtPath(trackFilePath);
         }
 
         public void LoadAlbum(string albumFolderPath)
@@ -152,6 +159,7 @@ namespace MeshWave.ViewModels
             TrackNumber = metadata.TrackNumber;
             IsReleased = metadata.IsReleased;
             Version = metadata.Version <= 0 ? 1 : metadata.Version;
+            CoverArtPath = _metadataService.GetAlbumCoverArtPath(albumFolderPath);
         }
 
         private void Save()
@@ -172,6 +180,7 @@ namespace MeshWave.ViewModels
             if (IsAlbumEditor)
             {
                 _metadataService.SaveForAlbum(AlbumFolderPath, metadata);
+                PropagateReleaseStatusToTracks(AlbumFolderPath, IsReleased);
             }
             else
             {
@@ -181,15 +190,31 @@ namespace MeshWave.ViewModels
             RequestClose?.Invoke(this, EventArgs.Empty);
         }
 
+        private void PropagateReleaseStatusToTracks(string albumFolder, bool isReleased)
+        {
+            if (string.IsNullOrWhiteSpace(albumFolder) || !Directory.Exists(albumFolder))
+            {
+                return;
+            }
+
+            var supportedExtensions = new HashSet<string>(MeshWave.LibraryManager.LocalLibraryManager.SupportedExtensions, StringComparer.OrdinalIgnoreCase);
+            var tracks = Directory.EnumerateFiles(albumFolder, "*.*", SearchOption.TopDirectoryOnly)
+                .Where(f => supportedExtensions.Contains(Path.GetExtension(f)));
+
+            foreach (var trackPath in tracks)
+            {
+                var trackMeta = _metadataService.LoadForTrack(trackPath);
+                if (trackMeta.IsReleased != isReleased)
+                {
+                    trackMeta.IsReleased = isReleased;
+                    _metadataService.SaveForTrack(trackPath, trackMeta);
+                }
+            }
+        }
+
         private void ToggleRelease()
         {
             IsReleased = !IsReleased;
-            Save();
-        }
-
-        private void IncrementVersion()
-        {
-            Version += 1;
             Save();
         }
     }
