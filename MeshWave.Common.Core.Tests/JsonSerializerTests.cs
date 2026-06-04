@@ -308,4 +308,95 @@ public class JsonSerializerTests
         Assert.Contains("channel-1", json);
         Assert.Contains("General", json);
     }
+
+    [Fact]
+    public void DeserializeCompetition_ReconstructsObject()
+    {
+        // Arrange
+        var competition = new Competition
+        {
+            CompetitionId = Guid.NewGuid(),
+            GroupId = "group-1",
+            Title = "Summer Remix Contest",
+            Description = "Remix the summer hit!",
+            SubmissionDeadline = DateTime.UtcNow.AddDays(7),
+            VotingDeadline = DateTime.UtcNow.AddDays(14),
+            AdministratorUserId = "admin-1",
+            IsResultsPublicBeforeReveal = false
+        };
+        var json = JsonSerializer.SerializeCompetition(competition);
+
+        // Act
+        var deserialized = JsonSerializer.DeserializeCompetition(json);
+
+        // Assert
+        Assert.NotNull(deserialized);
+        Assert.Equal(competition.CompetitionId, deserialized.CompetitionId);
+        Assert.Equal(competition.Title, deserialized.Title);
+        Assert.Equal(competition.AdministratorUserId, deserialized.AdministratorUserId);
+    }
+
+    [Fact]
+    public void DeserializeCompetitionSubmission_ReconstructsObject()
+    {
+        // Arrange
+        var submission = new CompetitionSubmission
+        {
+            TrackId = "track-123",
+            UserId = "user-456",
+            SubmissionTimestamp = DateTime.UtcNow
+        };
+        var json = JsonSerializer.SerializeCompetitionSubmission(submission);
+
+        // Act
+        var deserialized = JsonSerializer.DeserializeCompetitionSubmission(json);
+
+        // Assert
+        Assert.NotNull(deserialized);
+        Assert.Equal(submission.TrackId, deserialized.TrackId);
+        Assert.Equal(submission.UserId, deserialized.UserId);
+    }
+
+    [Fact]
+    public void DeserializeCompetitionVote_ReconstructsObject()
+    {
+        // Arrange
+        var vote = new CompetitionVote
+        {
+            VoterUserId = "voter-1",
+            EncryptedVotePayload = "BASE64_ENCRYPTED_DATA",
+            VoteTimestamp = DateTime.UtcNow
+        };
+        var json = JsonSerializer.SerializeCompetitionVote(vote);
+
+        // Act
+        var deserialized = JsonSerializer.DeserializeCompetitionVote(json);
+
+        // Assert
+        Assert.NotNull(deserialized);
+        Assert.Equal(vote.VoterUserId, deserialized.VoterUserId);
+        Assert.Equal(vote.EncryptedVotePayload, deserialized.EncryptedVotePayload);
+    }
+
+    [Fact]
+    public void DeserializeCompetitionResult_ReconstructsObject()
+    {
+        // Arrange
+        var result = new CompetitionResult
+        {
+            OrderedTrackIds = new List<string> { "track-1", "track-3", "track-2" },
+            TallyTimestamp = DateTime.UtcNow,
+            AdministratorSignature = "SIG_123"
+        };
+        var json = JsonSerializer.SerializeCompetitionResult(result);
+
+        // Act
+        var deserialized = JsonSerializer.DeserializeCompetitionResult(json);
+
+        // Assert
+        Assert.NotNull(deserialized);
+        Assert.Equal(result.OrderedTrackIds.Count, deserialized.OrderedTrackIds.Count);
+        Assert.Equal(result.OrderedTrackIds[1], deserialized.OrderedTrackIds[1]);
+        Assert.Equal(result.AdministratorSignature, deserialized.AdministratorSignature);
+    }
 }

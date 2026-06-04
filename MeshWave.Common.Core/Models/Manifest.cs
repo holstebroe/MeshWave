@@ -45,7 +45,15 @@ public enum ManifestOperationType
     /// <summary>Signed user reaction operation: like a track.</summary>
     Like,
     /// <summary>Signed user reaction operation: remove like from a track.</summary>
-    Unlike
+    Unlike,
+    /// <summary>Signed administrative operation to start a new competition.</summary>
+    CreateCompetition,
+    /// <summary>Signed member operation to submit a track to a competition.</summary>
+    CompetitionSubmit,
+    /// <summary>Signed member operation to cast a sealed vote in a competition.</summary>
+    CompetitionCastVote,
+    /// <summary>Signed administrative operation to reveal and certify competition results.</summary>
+    CompetitionRevealResults
 }
 
 /// <summary>
