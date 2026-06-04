@@ -173,8 +173,32 @@ namespace MeshWave.Services
                 return string.Empty;
             }
 
+            // 1. Check for common cover image files in the folder
+            var imageFiles = new[] { "cover.jpg", "cover.png", "folder.jpg", "folder.png", "album.jpg", "album.png" };
+            foreach (var name in imageFiles)
+            {
+                var path = Path.Combine(albumFolder, name);
+                if (File.Exists(path))
+                {
+                    // Copy to .cache to ensure it can be served as an icon later if needed
+                    var cachePath = Path.Combine(albumFolder, ".cache", "album.cover.jpg");
+                    try
+                    {
+                        var cacheDir = Path.GetDirectoryName(cachePath);
+                        if (!string.IsNullOrWhiteSpace(cacheDir)) Directory.CreateDirectory(cacheDir);
+                        if (!File.Exists(cachePath) || File.GetLastWriteTimeUtc(path) > File.GetLastWriteTimeUtc(cachePath))
+                        {
+                            File.Copy(path, cachePath, true);
+                        }
+                        return cachePath;
+                    }
+                    catch { }
+                }
+            }
+
+            // 2. Fallback: Check the first track's embedded art
             var supportedExtensions = new HashSet<string>(MeshWave.LibraryManager.LocalLibraryManager.SupportedExtensions, StringComparer.OrdinalIgnoreCase);
-            var firstTrack = Directory.EnumerateFiles(albumFolder, "*.*", SearchOption.TopDirectoryOnly)
+            var firstTrack = Directory.EnumerateFiles(albumFolder, "*.*", SearchOption.AllDirectories)
                 .FirstOrDefault(f => supportedExtensions.Contains(Path.GetExtension(f)));
 
             return firstTrack != null ? GetCoverArtPath(firstTrack) : string.Empty;
