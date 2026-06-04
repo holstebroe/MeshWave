@@ -112,8 +112,8 @@
                                     <TextBlock Text="{Binding Name}"/>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{Binding TrackCount, StringFormat={}{0} tracks}" FontSize="11" Foreground="{StaticResource TextSecondaryColor}" Margin="0,0,8,0"/>
-                                        <TextBlock Text="{Binding ReleaseBadge}" FontSize="11" Foreground="{StaticResource TextSecondaryColor}" Margin="0,0,8,0"/>
-                                        <TextBlock Text="{Binding Version, StringFormat=v{0}}" FontSize="11" Foreground="{StaticResource TextSecondaryColor}"/>
+                                        <TextBlock Text="{Binding ReleaseBadge}" FontSize="11" Foreground="{Binding ReleaseBadgeColor}" Margin="0,0,8,0"/>
+                                        <TextBlock Text="{Binding VersionLabel}" FontSize="11" Foreground="{StaticResource TextSecondaryColor}"/>
                                     </StackPanel>
                                 </StackPanel>
                             </StackPanel>
@@ -208,9 +208,15 @@
                                                 <TextBlock Text="{Binding Title}"
                                                            FontWeight="SemiBold" FontSize="13"
                                                            TextTrimming="CharacterEllipsis" MaxWidth="130"/>
-                                                <TextBlock Text="{Binding StatusBadge}"
-                                                           FontSize="11"
-                                                           Foreground="{StaticResource AccentColor}"/>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding StatusBadge}"
+                                                               FontSize="11"
+                                                               Foreground="{Binding ReleaseBadgeColor}"
+                                                               Margin="0,0,6,0"/>
+                                                    <TextBlock Text="{Binding VersionLabel}"
+                                                               FontSize="11"
+                                                               Foreground="{StaticResource TextSecondaryColor}"/>
+                                                </StackPanel>
                                             </StackPanel>
                                         </StackPanel>
                                     </DataTemplate>
@@ -234,16 +240,6 @@
                                                    FontSize="12"
                                                    Foreground="{StaticResource TextSecondaryColor}"
                                                    TextTrimming="CharacterEllipsis"
-                                                   VerticalAlignment="Center"/>
-                                    </DataTemplate>
-                                </GridViewColumn.CellTemplate>
-                            </GridViewColumn>
-                            <GridViewColumn Header="Version" Width="60">
-                                <GridViewColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding Version, StringFormat=v{0}}"
-                                                   FontSize="11"
-                                                   Foreground="{StaticResource TextSecondaryColor}"
                                                    VerticalAlignment="Center"/>
                                     </DataTemplate>
                                 </GridViewColumn.CellTemplate>

@@ -35,6 +35,7 @@ namespace MeshWave.Converters
                 bmp.BeginInit();
                 bmp.UriSource = new Uri(path, UriKind.Absolute);
                 bmp.CacheOption = BitmapCacheOption.OnLoad;
+                bmp.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
                 bmp.EndInit();
                 bmp.Freeze();
                 return bmp;
