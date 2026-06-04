@@ -298,6 +298,13 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// <summary>
     /// Requests content bytes from a currently known peer by content hash.
     /// </summary>
+    public async Task<bool> IsContentAvailableLocallyAsync(string contentHash)
+    {
+        if (string.IsNullOrWhiteSpace(contentHash)) return false;
+        var peers = await _catalogueService.GetPeersForContentAsync(contentHash);
+        return peers.Any(uid => string.Equals(uid, _identity?.UserId, StringComparison.OrdinalIgnoreCase));
+    }
+
     public async Task<(Stream? Stream, long ContentLength)> RequestContentStreamAsync(string peerUserId, string contentHash)
     {
         Logger.Debug("RequestContentStreamAsync: peer={0}, hash={1}", peerUserId, contentHash);
