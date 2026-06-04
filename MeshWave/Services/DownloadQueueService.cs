@@ -15,6 +15,7 @@ public class DownloadQueueItem : ViewModelBase
     private string _statusMessage = string.Empty;
 
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string? TrackId { get; set; }
     public string PeerUserId { get; set; } = string.Empty;
     public string ContentHash { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
@@ -84,7 +85,7 @@ public class DownloadQueueService
     public IReadOnlyObservableCollection Items => new ReadOnlyObservableCollectionWrapper(_items);
     public ObservableCollection<DownloadQueueItem> AllItems => _items;
 
-    public DownloadQueueItem Enqueue(string peerUserId, string contentHash, string title, string artist, string album, string targetType = "Track")
+    public DownloadQueueItem Enqueue(string peerUserId, string contentHash, string title, string artist, string album, string targetType = "Track", string? trackId = null)
     {
         // Avoid duplicates by contentHash
         var existing = _items.FirstOrDefault(i =>
@@ -100,7 +101,8 @@ public class DownloadQueueService
             Title = title,
             Artist = artist,
             Album = album,
-            TargetType = targetType
+            TargetType = targetType,
+            TrackId = trackId
         };
         _items.Add(item);
         return item;
