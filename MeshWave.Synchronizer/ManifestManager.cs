@@ -154,6 +154,10 @@ public class ManifestManager
                     entities.Remove((op.TargetId, op.TargetType));
                     break;
                 case ManifestOperationType.Comment:
+                case ManifestOperationType.CreateCompetition:
+                case ManifestOperationType.CompetitionSubmit:
+                case ManifestOperationType.CompetitionCastVote:
+                case ManifestOperationType.CompetitionRevealResults:
                     persistent.Add(op);
                     break;
                 case ManifestOperationType.CommentDelete:
@@ -320,6 +324,12 @@ public class ManifestManager
                 playCounts[key] = existing + 1;
             }
 
+            if (IsCompetitionOperation(op.OperationType))
+            {
+                if (!ValidateCompetitionOperation(op))
+                    continue;
+            }
+
             // We already verified all signatures in VerifyManifest call above,
             // but we can re-verify if we want to be paranoid or if VerifyManifest was skipped.
             // For performance, we trust the previous VerifyManifest(remote) call.
@@ -348,6 +358,24 @@ public class ManifestManager
             counts[key] = c + 1;
         }
         return counts;
+    }
+
+    private static bool IsCompetitionOperation(ManifestOperationType type)
+    {
+        return type is ManifestOperationType.CreateCompetition
+                    or ManifestOperationType.CompetitionSubmit
+                    or ManifestOperationType.CompetitionCastVote
+                    or ManifestOperationType.CompetitionRevealResults;
+    }
+
+    /// <summary>
+    /// Validates a competition-related operation.
+    /// Logic to be fully implemented in #76.
+    /// </summary>
+    private static bool ValidateCompetitionOperation(ManifestOperation op)
+    {
+        // TODO: Implement full validation (deadline checks, signature verification for reveal, etc.)
+        return true;
     }
 
     private static bool IsOperationWithinLimits(ManifestOperation op)
