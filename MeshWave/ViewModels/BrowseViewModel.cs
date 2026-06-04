@@ -17,19 +17,32 @@ public enum BrowseTab { Artists, Albums, Tracks, Playlists, Downloads }
 
 public class BrowseArtistItem : ViewModelBase
 {
+    private string _avatarIconPath = string.Empty;
+    private bool _isLocal;
+
     public string UserId { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
-    public string AvatarIconPath { get; set; } = string.Empty;
+    public string AvatarIconPath
+    {
+        get => _avatarIconPath;
+        set => SetProperty(ref _avatarIconPath, value);
+    }
     public string Bio { get; set; } = string.Empty;
     public int TrackCount { get; set; }
     public int AlbumCount { get; set; }
     public long TotalSize { get; set; }
     public string TotalSizeDisplay { get; set; } = string.Empty;
-    public bool IsLocal { get; set; }
+    public bool IsLocal
+    {
+        get => _isLocal;
+        set => SetProperty(ref _isLocal, value);
+    }
 }
 
 public class BrowseAlbumItem : ViewModelBase
 {
+    private bool _isLocal;
+
     public string AlbumId { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string ArtistUserId { get; set; } = string.Empty;
@@ -39,11 +52,17 @@ public class BrowseAlbumItem : ViewModelBase
     public string TotalSizeDisplay { get; set; } = string.Empty;
     public DateTime? ReleasedAt { get; set; }
     public string ReleasedAtDisplay => ReleasedAt.HasValue ? ReleasedAt.Value.ToLocalTime().ToString("MMM yyyy") : string.Empty;
-    public bool IsLocal { get; set; }
+    public bool IsLocal
+    {
+        get => _isLocal;
+        set => SetProperty(ref _isLocal, value);
+    }
 }
 
 public class BrowsePlaylistItem : ViewModelBase
 {
+    private bool _isLocal;
+
     public string PlaylistId { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
@@ -53,7 +72,11 @@ public class BrowsePlaylistItem : ViewModelBase
     public List<string> TrackIds { get; set; } = [];
     public DateTime? ReleasedAt { get; set; }
     public string ReleasedAtDisplay => ReleasedAt.HasValue ? ReleasedAt.Value.ToLocalTime().ToString("MMM d, yyyy") : string.Empty;
-    public bool IsLocal { get; set; }
+    public bool IsLocal
+    {
+        get => _isLocal;
+        set => SetProperty(ref _isLocal, value);
+    }
 }
 
 public class BrowseTrackItem : ViewModelBase
