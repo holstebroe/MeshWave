@@ -757,7 +757,7 @@ public class CommunityViewModel : ViewModelBase
                     ExecuteOnUi(() =>
                     {
                         item.State = DownloadState.Done;
-                        item.ProgressPercent = 100;
+                        item.PercentComplete = 100;
                         item.StatusMessage = fallbackPath;
                         SearchStatus = $"Downloaded \"{item.Title}\" to Library.";
                     });
@@ -767,7 +767,7 @@ public class CommunityViewModel : ViewModelBase
                     ExecuteOnUi(() =>
                     {
                         item.State = DownloadState.Done;
-                        item.ProgressPercent = 100;
+                        item.PercentComplete = 100;
                         item.StatusMessage = "Imported to Peer Music.";
                         SearchStatus = $"Downloaded \"{item.Title}\" to Library.";
                     });
