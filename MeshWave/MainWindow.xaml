@@ -95,13 +95,24 @@
                     <Border Background="{StaticResource SurfaceLightColor}" CornerRadius="8" Padding="12,10">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                <Ellipse Width="8" Height="8" Margin="0,0,6,0" VerticalAlignment="Center">
+                                <Ellipse Width="8" Height="8" Margin="0,0,6,0" VerticalAlignment="Center"
+                                         Fill="{Binding P2PStatusColor}">
                                     <Ellipse.Style>
                                         <Style TargetType="Ellipse">
-                                            <Setter Property="Fill" Value="#555555"/>
                                             <Style.Triggers>
-                                                <DataTrigger Binding="{Binding P2PIsConnected}" Value="True">
-                                                    <Setter Property="Fill" Value="#1DB954"/>
+                                                <DataTrigger Binding="{Binding P2PStatusText}" Value="Connecting…">
+                                                    <DataTrigger.EnterActions>
+                                                        <BeginStoryboard Name="PulseAnimation">
+                                                            <Storyboard>
+                                                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                 From="1.0" To="0.3" Duration="0:0:0.25"
+                                                                                 AutoReverse="True" RepeatBehavior="Forever"/>
+                                                            </Storyboard>
+                                                        </BeginStoryboard>
+                                                    </DataTrigger.EnterActions>
+                                                    <DataTrigger.ExitActions>
+                                                        <StopStoryboard BeginStoryboardName="PulseAnimation"/>
+                                                    </DataTrigger.ExitActions>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>

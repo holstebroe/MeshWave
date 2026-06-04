@@ -135,8 +135,24 @@ public class PeerRouter : IDisposable
 
             var routed = new RoutedPeer { Info = peer, LastSeen = DateTime.UtcNow, Source = PeerSource.Unknown };
             if (_table.TryAdd(peer.UserId, routed))
+            {
                 PeerAdded?.Invoke(this, peer);
+                _ = Task.Run(() => TryPexWithPeerAsync(peer, _cts?.Token ?? CancellationToken.None));
+            }
         }
+    }
+
+    private async Task TryPexWithPeerAsync(PeerInfo peer, CancellationToken ct)
+    {
+        try
+        {
+            var discovered = await _exchangeClient.FetchPeersAsync(peer.Address, peer.Port, cancellationToken: ct);
+            if (discovered != null)
+            {
+                LearnPeers(discovered);
+            }
+        }
+        catch { }
     }
 
     private void EvictStalestPeer()
@@ -163,18 +179,21 @@ public class PeerRouter : IDisposable
 
         try
         {
-            var peers = await _exchangeClient.FetchPeersAsync(host, port, ct);
-            LearnPeers(peers);
-
-            // The bootstrap node itself is a potential peer
-            var bootstrapPeer = new PeerInfo
+            var peers = await _exchangeClient.FetchPeersAsync(host, port, cancellationToken: ct);
+            if (peers != null)
             {
-                UserId = $"bootstrap:{host}:{port}",
-                DisplayName = $"Bootstrap ({host})",
-                Address = host,
-                Port = port
-            };
-            AddOrRefreshPeer(bootstrapPeer);
+                LearnPeers(peers);
+
+                // The bootstrap node itself is a potential peer
+                var bootstrapPeer = new PeerInfo
+                {
+                    UserId = $"bootstrap:{host}:{port}",
+                    DisplayName = $"Bootstrap ({host})",
+                    Address = host,
+                    Port = port
+                };
+                AddOrRefreshPeer(bootstrapPeer);
+            }
         }
         catch { /* node unreachable – skip silently */ }
     }
@@ -185,14 +204,14 @@ public class PeerRouter : IDisposable
         // Two independent counters track PEX and bootstrap intervals so
         // neither blocks the other.
         int cyclesSinceBootstrap = 0;
-        const int pexIntervalMinutes = 2;
-        const int bootstrapEveryNCycles = SecurityLimits.BootstrapRetryIntervalMinutes / pexIntervalMinutes;
+        const int pexIntervalSeconds = 30;
+        const int bootstrapEveryNCycles = (SecurityLimits.BootstrapRetryIntervalMinutes * 60) / pexIntervalSeconds;
 
         while (!ct.IsCancellationRequested)
         {
             try
             {
-                await Task.Delay(TimeSpan.FromMinutes(pexIntervalMinutes), ct);
+                await Task.Delay(TimeSpan.FromSeconds(pexIntervalSeconds), ct);
                 cyclesSinceBootstrap++;
 
                 // PEX: ask a sample of known peers for their peer lists
@@ -206,8 +225,11 @@ public class PeerRouter : IDisposable
                 {
                     try
                     {
-                        var discovered = await _exchangeClient.FetchPeersAsync(peer.Address, peer.Port, ct);
-                        LearnPeers(discovered);
+                        var discovered = await _exchangeClient.FetchPeersAsync(peer.Address, peer.Port, cancellationToken: ct);
+                        if (discovered != null)
+                        {
+                            LearnPeers(discovered);
+                        }
                     }
                     catch { }
                 }

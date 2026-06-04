@@ -898,6 +898,7 @@ public class CommunityViewModel : ViewModelBase
             var trackCount = manifest != null ? CountPublicTracks(manifest) : 0;
 
             // Count followers: scan all peer manifests + local manifest
+            if (_sync == null) continue;
             var allManifests = _sync.PeerManifests.Concat(
                 _sync.LocalManifest != null ? [_sync.LocalManifest] : []);
 
@@ -917,7 +918,7 @@ public class CommunityViewModel : ViewModelBase
             {
                 UserId = peer.UserId,
                 DisplayName = displayName,
-                AvatarIconPath = profileOp?.Metadata.GetValueOrDefault("iconPath") ?? string.Empty,
+                AvatarIconPath = _sync?.UserRepository?.GetUserIconPath(peer.UserId) ?? string.Empty,
                 TrackCount = trackCount,
                 FollowerCount = followerCount,
                 IsArtist = isArtist,

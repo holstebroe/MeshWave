@@ -335,6 +335,11 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             }
         }
 
+        if (!succeeded)
+        {
+            Logger.Warn("Content stream request failed for peer {0}: {1}", peerUserId, failureReason);
+        }
+
         report.Attempts.Add(new PeerConnectionAttemptResult(
             "content-stream-request",
             succeeded,
@@ -406,6 +411,11 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                 ? "TCP reachability confirmed on peer manifest port."
                 : "TCP probe timed out or was refused."));
 
+        if (directTcpReachable)
+        {
+            Logger.Info("Established direct TCP connection to {0}:{1}", peer.Address, peer.Port);
+        }
+
         var punched = await _natTraversal.TryPunchAsync(peer.Address, peer.Port);
         report.Attempts.Add(new PeerConnectionAttemptResult(
             "udp-hole-punch",
@@ -414,7 +424,12 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                 ? "UDP punch ACK received from peer."
                 : "No UDP punch ACK observed; continuing with direct TCP attempt."));
 
-        if (!punched)
+        if (punched)
+        {
+            Logger.Info("Established UDP hole-punched connection to {0}:{1}", peer.Address, peer.Port);
+        }
+
+        if (!punched && !directTcpReachable)
         {
             var rendezvous = await RequestBootstrapRendezvousAsync(peerUserId, report);
             report.Attempts.Add(new PeerConnectionAttemptResult(
@@ -434,6 +449,11 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                     synchronizedPunch
                         ? "UDP punch ACK received during coordinated rendezvous window."
                         : "No ACK during coordinated rendezvous window."));
+
+                if (synchronizedPunch)
+                {
+                    Logger.Info("Established synchronized UDP hole-punched connection to {0}:{1} via rendezvous", peer.Address, peer.Port);
+                }
             }
         }
 
@@ -474,6 +494,11 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                 (bytes, failureReason) = await _client.RequestContentAsync(peer.Address, peer.Port, contentHash);
                 succeeded = bytes != null && bytes.Length > 0;
             }
+        }
+
+        if (!succeeded)
+        {
+            Logger.Warn("Content request failed for peer {0}: {1}", peerUserId, failureReason);
         }
 
         report.Attempts.Add(new PeerConnectionAttemptResult(
@@ -677,13 +702,23 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
             try
             {
-                var peers = await _client.FetchPeersAsync(host, port);
-                _router.LearnPeers(peers);
-                refreshed = true;
-                report.Attempts.Add(new PeerConnectionAttemptResult(
-                    "bootstrap-refresh",
-                    true,
-                    $"Fetched {peers.Count} peers from bootstrap {host}:{port}."));
+                var peers = await _client.FetchPeersAsync(host, port, customLabel: "bootstrap");
+                if (peers != null)
+                {
+                    _router.LearnPeers(peers);
+                    refreshed = true;
+                    report.Attempts.Add(new PeerConnectionAttemptResult(
+                        "bootstrap-refresh",
+                        true,
+                        $"Fetched {peers.Count} peers from bootstrap {host}:{port}."));
+                }
+                else
+                {
+                    report.Attempts.Add(new PeerConnectionAttemptResult(
+                        "bootstrap-refresh",
+                        false,
+                        $"Failed to reach bootstrap {host}:{port}."));
+                }
             }
             catch (Exception ex)
             {
@@ -1222,9 +1257,51 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             if (profileOp != null)
             {
                 _userRepository?.UpdateProfile(remote.UserId, profileOp.Metadata);
+                var iconHash = profileOp.ContentHash;
+                if (!string.IsNullOrWhiteSpace(iconHash))
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            var bytes = await RequestContentAsync(remote.UserId, iconHash);
+                            if (bytes != null)
+                            {
+                                _userRepository?.SaveUserIcon(remote.UserId, bytes);
+                            }
+                        }
+                        catch { }
+                    });
+                }
             }
 
             _ = _catalogueService.IngestAsync(remote);
+
+            // Also trigger icon/content downloads for catalogue entries
+            foreach (var op in remote.Operations.Where(op => !string.IsNullOrWhiteSpace(op.ContentHash)))
+            {
+                if (op.OperationType == ManifestOperationType.Create || op.OperationType == ManifestOperationType.Update)
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            // For now, only small content like icons are fully downloaded here.
+                            // Larger media is streamed on-demand.
+                            // We can use a threshold or check TargetType if needed.
+                            if (op.TargetType == "User" || (op.Metadata.ContainsKey("isIcon") && op.Metadata["isIcon"] == "True"))
+                            {
+                                var bytes = await RequestContentAsync(remote.UserId, op.ContentHash!);
+                                if (bytes != null && _userRepository != null)
+                                {
+                                    _userRepository.SaveUserIcon(op.TargetId, bytes);
+                                }
+                            }
+                        }
+                        catch { }
+                    });
+                }
+            }
 
             ManifestMerged?.Invoke(this, new ManifestMergedEventArgs(remote.UserId, added));
         }

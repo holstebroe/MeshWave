@@ -143,6 +143,16 @@ public class ApplicationViewModel : ViewModelBase
         private set => SetProperty(ref _p2pStatusText, value);
     }
 
+    public string P2PStatusColor
+    {
+        get
+        {
+            if (!P2PIsConnected) return "#555555"; // Gray
+            if (_syncOrchestrator.MeshPeerCount == 0) return "#F1C40F"; // Yellow
+            return "#1DB954"; // Green
+        }
+    }
+
     public int P2PPeerCount
     {
         get => _p2pPeerCount;
@@ -410,13 +420,20 @@ public class ApplicationViewModel : ViewModelBase
 
     private void UpdateP2PStatusText()
     {
-        var peers = _syncOrchestrator.GetPeers().ToList();
-        var bootstrapPeers = peers.Count(static p => p.UserId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase));
-        var meshPeers = Math.Max(0, peers.Count - bootstrapPeers);
-
-        var mode = _p2pActAsListener ? "listener" : "outbound-only";
-        var bootstrapPart = bootstrapPeers > 0 ? $", {bootstrapPeers} bootstrap" : string.Empty;
-        P2PStatusText = $"Connected ({mode}) · {meshPeers} mesh peer{(meshPeers == 1 ? "" : "s")}{bootstrapPart}";
+        if (!P2PIsConnected)
+        {
+            P2PStatusText = "Disconnected";
+        }
+        else if (_syncOrchestrator.MeshPeerCount == 0)
+        {
+            P2PStatusText = "Connecting…";
+        }
+        else
+        {
+            var meshPeers = _syncOrchestrator.MeshPeerCount;
+            P2PStatusText = $"Connected · {meshPeers} mesh peer{(meshPeers == 1 ? "" : "s")}";
+        }
+        OnPropertyChanged(nameof(P2PStatusColor));
     }
 
     private byte[]? TryGetLocalContentByHash(string contentHash)
@@ -527,6 +544,9 @@ public class ApplicationViewModel : ViewModelBase
 
             foreach (var album in albums)
             {
+                if (_syncOrchestrator.LocalManifest?.Operations.Any(op => op.OperationType == ManifestOperationType.Create && op.TargetType == "Album" && string.Equals(op.TargetId, album.AlbumId, StringComparison.OrdinalIgnoreCase)) == true)
+                    continue;
+
                 var tracksInAlbum = tracks.Where(t => string.Equals(t.AlbumId, album.AlbumId, StringComparison.OrdinalIgnoreCase)).ToList();
                 var firstPath = tracksInAlbum.Select(t => t.FilePath).FirstOrDefault(p => !string.IsNullOrWhiteSpace(p));
                 if (string.IsNullOrWhiteSpace(firstPath))
@@ -540,16 +560,27 @@ public class ApplicationViewModel : ViewModelBase
                 if (!albumMeta.IsReleased)
                     continue;
 
+                var coverPath = manager.GetTrackCoverPath(firstPath);
+                string? coverHash = null;
+                if (!string.IsNullOrWhiteSpace(coverPath) && File.Exists(coverPath))
+                {
+                    coverHash = CryptoService.ComputeFileHash(coverPath);
+                }
+
                 var artistName = tracksInAlbum.FirstOrDefault()?.Description ?? string.Empty;
-                _syncOrchestrator.AnnounceAlbum(album.AlbumId, null, new Dictionary<string, string>
+                _syncOrchestrator.AnnounceAlbum(album.AlbumId, coverHash, new Dictionary<string, string>
                 {
                     ["name"] = SecurityLimits.Truncate(album.Title, SecurityLimits.MaxAlbumNameLength),
-                    ["artist"] = SecurityLimits.Truncate(artistName, SecurityLimits.MaxArtistNameLength)
+                    ["artist"] = SecurityLimits.Truncate(artistName, SecurityLimits.MaxArtistNameLength),
+                    ["isIcon"] = "True"
                 });
             }
 
             foreach (var track in tracks)
             {
+                if (_syncOrchestrator.LocalManifest?.Operations.Any(op => op.OperationType == ManifestOperationType.Create && op.TargetType == "Track" && string.Equals(op.TargetId, track.TrackId, StringComparison.OrdinalIgnoreCase)) == true)
+                    continue;
+
                 if (string.IsNullOrWhiteSpace(track.FilePath) || !File.Exists(track.FilePath))
                     continue;
 
