@@ -9,7 +9,9 @@ using MeshWave.Common.Core.Storage;
 using MeshWave.Services;
 using MeshWave.Synchronizer;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.IO;
+using System.Linq;
 using System.Windows.Input;
 
 namespace MeshWave.ViewModels;
@@ -39,6 +41,8 @@ public class ApplicationViewModel : ViewModelBase
     private string _p2pStatusText = "Disconnected";
     private int _p2pPeerCount;
     private bool _p2pActAsListener = true;
+    private int _activeDownloadCount;
+    private bool _hasActiveDownloads;
     private readonly Dictionary<string, int> _lastKnownReleaseSequenceByPeer = new(StringComparer.OrdinalIgnoreCase);
 
     public ApplicationViewModel()
@@ -116,7 +120,59 @@ public class ApplicationViewModel : ViewModelBase
             }
         };
 
+        DownloadQueueItems.CollectionChanged += (_, e) =>
+        {
+            if (e.Action == NotifyCollectionChangedAction.Reset)
+            {
+                // We don't have a list of old items, so we should ideally unhook from everything,
+                // but since we don't track all items we've ever hooked to, we just hook to the current ones.
+                // In practice, DownloadQueueItems is only cleared or items are removed individually.
+                UpdateDownloadStats();
+            }
+            else
+            {
+                if (e.NewItems != null)
+                {
+                    foreach (DownloadQueueItem item in e.NewItems)
+                        item.PropertyChanged += OnDownloadItemPropertyChanged;
+                }
+                if (e.OldItems != null)
+                {
+                    foreach (DownloadQueueItem item in e.OldItems)
+                        item.PropertyChanged -= OnDownloadItemPropertyChanged;
+                }
+                UpdateDownloadStats();
+            }
+        };
+
+        foreach (var item in DownloadQueueItems)
+            item.PropertyChanged += OnDownloadItemPropertyChanged;
+
+        UpdateDownloadStats();
+
         InitializeP2PAsync();
+    }
+
+    private void OnDownloadItemPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(DownloadQueueItem.State))
+        {
+            UpdateDownloadStats();
+        }
+    }
+
+    private void UpdateDownloadStats()
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher != null && !dispatcher.CheckAccess())
+        {
+            dispatcher.Invoke(UpdateDownloadStats);
+            return;
+        }
+
+        ActiveDownloadCount = DownloadQueueItems.Count(i => i.State == DownloadState.Downloading || i.State == DownloadState.Pending);
+        HasActiveDownloads = DownloadQueueItems.Any(i => i.State == DownloadState.Downloading || i.State == DownloadState.Pending || i.State == DownloadState.Failed);
+        OnPropertyChanged(nameof(ActiveDownloads));
     }
 
     public string ApplicationTitle
@@ -165,6 +221,20 @@ public class ApplicationViewModel : ViewModelBase
     public SyncOrchestrator SyncOrchestrator => _syncOrchestrator;
     public PlaybackViewModel Playback => _playbackViewModel;
     public System.Collections.ObjectModel.ObservableCollection<DownloadQueueItem> DownloadQueueItems => _downloadQueue.AllItems;
+
+    public int ActiveDownloadCount
+    {
+        get => _activeDownloadCount;
+        private set => SetProperty(ref _activeDownloadCount, value);
+    }
+
+    public bool HasActiveDownloads
+    {
+        get => _hasActiveDownloads;
+        private set => SetProperty(ref _hasActiveDownloads, value);
+    }
+
+    public IEnumerable<DownloadQueueItem> ActiveDownloads => DownloadQueueItems.Where(i => i.State == DownloadState.Downloading || i.State == DownloadState.Pending || i.State == DownloadState.Failed);
 
     public string BuildMeshDiagnosticsSummary()
     {

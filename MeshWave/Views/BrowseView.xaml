@@ -487,6 +487,22 @@
                                                 <Run Text=" — "/>
                                                 <Run Text="{Binding Album}"/>
                                             </TextBlock>
+                                            <ProgressBar Height="4" Margin="0,6,0,2"
+                                                         Value="{Binding PercentComplete}"
+                                                         Minimum="0" Maximum="100"
+                                                         Background="#1A1A1A" BorderThickness="0"
+                                                         Foreground="{StaticResource AccentColor}">
+                                                <ProgressBar.Style>
+                                                    <Style TargetType="ProgressBar">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding State}" Value="Downloading">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </ProgressBar.Style>
+                                            </ProgressBar>
                                             <TextBlock Text="{Binding StatusMessage}"
                                                        FontSize="11"
                                                        Foreground="{StaticResource TextSecondaryColor}"
