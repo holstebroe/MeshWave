@@ -17,7 +17,7 @@ namespace MeshWave.Synchronizer;
 public class PeerManifestStore
 {
     private readonly string _storeDirectory;
-    private readonly ConcurrentDictionary<string, Manifest> _manifests = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<(string UserId, ManifestStreamType StreamType), Manifest> _manifests = new();
 
     public PeerManifestStore(string? storeDirectory = null)
     {
@@ -45,17 +45,17 @@ public class PeerManifestStore
                 var json = File.ReadAllText(file);
                 var manifest = JsonSerializer.Deserialize<Manifest>(json);
                 if (manifest != null && !string.IsNullOrWhiteSpace(manifest.UserId))
-                    _manifests[manifest.UserId] = manifest;
+                    _manifests[(manifest.UserId, manifest.StreamType)] = manifest;
             }
             catch { /* skip corrupted files */ }
         }
     }
 
     /// <summary>
-    /// Returns the cached manifest for <paramref name="userId"/>, or null if not yet received.
+    /// Returns the cached manifest for <paramref name="userId"/> and <paramref name="streamType"/>, or null if not yet received.
     /// </summary>
-    public Manifest? Get(string userId)
-        => _manifests.TryGetValue(userId, out var m) ? m : null;
+    public Manifest? Get(string userId, ManifestStreamType streamType = ManifestStreamType.Content)
+        => _manifests.TryGetValue((userId, streamType), out var m) ? m : null;
 
     /// <summary>
     /// Returns all currently cached peer manifests.
@@ -64,15 +64,20 @@ public class PeerManifestStore
         => _manifests.Values.ToList();
 
     /// <summary>
-    /// Merges <paramref name="incoming"/> into the cached manifest for its owner.
-    /// Creates a new entry if this is the first manifest from that peer.
+    /// Merges <paramref name="incoming"/> into the cached manifest for its owner and stream type.
+    /// Creates a new entry if this is the first manifest from that peer for this stream.
     /// Persists to disk after merging.  Returns the number of new operations merged.
     /// </summary>
     public int MergeAndSave(Manifest incoming, string peerPublicKeyPem, ManifestManager manager)
     {
         if (string.IsNullOrWhiteSpace(incoming.UserId)) return 0;
 
-        var local = _manifests.GetOrAdd(incoming.UserId, _ => manager.CreateManifest(incoming.UserId));
+        var local = _manifests.GetOrAdd((incoming.UserId, incoming.StreamType), _ =>
+        {
+            var m = manager.CreateManifest(incoming.UserId);
+            m.StreamType = incoming.StreamType;
+            return m;
+        });
 
         int added;
         try
@@ -91,15 +96,18 @@ public class PeerManifestStore
     }
 
     /// <summary>
-    /// Removes the persisted manifest for a peer (e.g. when they are evicted from the routing table).
+    /// Removes the persisted manifests for a peer (e.g. when they are evicted from the routing table).
     /// </summary>
     public void Remove(string userId)
     {
-        _manifests.TryRemove(userId, out _);
-        var path = FilePath(userId);
-        if (File.Exists(path))
+        foreach (ManifestStreamType streamType in Enum.GetValues(typeof(ManifestStreamType)))
         {
-            try { File.Delete(path); } catch { }
+            _manifests.TryRemove((userId, streamType), out _);
+            var path = FilePath(userId, streamType);
+            if (File.Exists(path))
+            {
+                try { File.Delete(path); } catch { }
+            }
         }
     }
 
@@ -129,15 +137,16 @@ public class PeerManifestStore
         {
             Directory.CreateDirectory(_storeDirectory);
             var json = JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = false });
-            File.WriteAllText(FilePath(manifest.UserId), json);
+            File.WriteAllText(FilePath(manifest.UserId, manifest.StreamType), json);
         }
         catch { /* best-effort disk write */ }
     }
 
-    private string FilePath(string userId)
+    private string FilePath(string userId, ManifestStreamType streamType)
     {
         // Sanitise userId to a safe filename  (it is already a GUID-like string per P2PIdentityService)
         var safe = string.Concat(userId.Where(c => char.IsLetterOrDigit(c) || c == '-' || c == '_'));
-        return Path.Combine(_storeDirectory, $"{safe}.json");
+        var suffix = streamType.ToString().ToLowerInvariant();
+        return Path.Combine(_storeDirectory, $"{safe}.{suffix}.json");
     }
 }

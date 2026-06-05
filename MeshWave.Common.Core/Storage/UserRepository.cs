@@ -82,13 +82,33 @@ public class UserRepository
 
     public string? GetUserIconPath(string userId)
     {
-        var path = Path.Combine(_cacheDirectory, $"{userId}.png");
-        return File.Exists(path) ? path : null;
+        var pngPath = Path.Combine(_cacheDirectory, $"{userId}.png");
+        if (File.Exists(pngPath)) return pngPath;
+
+        var jpgPath = Path.Combine(_cacheDirectory, $"{userId}.jpg");
+        if (File.Exists(jpgPath)) return jpgPath;
+
+        return null;
     }
 
     public void SaveUserIcon(string userId, byte[] iconBytes)
     {
-        var path = Path.Combine(_cacheDirectory, $"{userId}.png");
+        if (iconBytes == null || iconBytes.Length < 4) return;
+
+        // Detect format: PNG = 89 50 4E 47, JPG = FF D8 FF
+        string ext = ".png";
+        if (iconBytes[0] == 0xFF && iconBytes[1] == 0xD8 && iconBytes[2] == 0xFF)
+        {
+            ext = ".jpg";
+        }
+
+        var path = Path.Combine(_cacheDirectory, userId + ext);
+
+        // Clean up other formats to prevent stale icons
+        var otherExt = ext == ".png" ? ".jpg" : ".png";
+        var otherPath = Path.Combine(_cacheDirectory, userId + otherExt);
+        try { if (File.Exists(otherPath)) File.Delete(otherPath); } catch { }
+
         File.WriteAllBytes(path, iconBytes);
     }
 

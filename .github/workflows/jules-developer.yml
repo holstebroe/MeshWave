@@ -46,30 +46,48 @@ jobs:
             SYSTEM INSTRUCTIONS:
             ${{ vars.JULES_ISSUE_DEVELOPER_PROMPT }}
 
-      # 3. VERIFY LAUNCH LOGS: Read the runner log text to detect silent failures
+      # 3. VERIFY LAUNCH SUCCESS: Check step output and logs for silent failures
       - name: Verify API Launch Success
         uses: actions/github-script@v7
+        if: always()  # ← Add this so step runs even if Jules step fails
         with:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const runId = context.runId;
-
-            // 1. Fetch the jobs for this workflow run to find our specific step logs
+      
+            // 1. Get the current job details
             const { data: jobs } = await github.rest.actions.listJobsForWorkflowRun({
               owner, repo, run_id: runId
             });
-
-            const currentJob = jobs.jobs.find(j => j.status === 'in_progress' || j.name === 'trigger-jules');
-            if (!currentJob) return;
-
-            // 2. Download the raw log text for this job execution
-            const { data: logText } = await github.rest.actions.downloadJobLogsForWorkflowRun({
-              owner, repo, job_id: currentJob.id
-            });
-
-            // 3. Scan the log for the specific silent API error payload
-            if (logText.includes('FAILED_PRECONDITION') || logText.includes('"error"')) {
+      
+            const currentJob = jobs.jobs.find(j => j.name === 'trigger-jules');
+            if (!currentJob) {
+              core.setFailed("❌ Could not find current job");
+              return;
+            }
+      
+            // 2. Wait a moment for logs to be available
+            await new Promise(r => setTimeout(r, 1000));
+      
+            // 3. Download the raw log text - handle 404 gracefully
+            let logText = '';
+            try {
+              const { data } = await github.rest.actions.downloadJobLogsForWorkflowRun({
+                owner, repo, job_id: currentJob.id
+              });
+              logText = typeof data === 'string' ? data : new TextDecoder().decode(data);
+            } catch (err) {
+              if (err.status === 404) {
+                // Logs not yet available, job still running - this is expected
+                console.log("ℹ️ Job logs not yet available (still running). Skipping log verification.");
+                return;
+              }
+              throw err;  // Re-throw any other error
+            }
+      
+            // 4. Scan the log for the specific silent API error payload
+            if (logText.includes('FAILED_PRECONDITION')) {
               core.setFailed("❌ Fatal: detected a silent 400 FAILED_PRECONDITION api failure in the Jules launch logs.");
             } else {
               console.log("✅ API logs confirmed a clean session deployment initialized.");

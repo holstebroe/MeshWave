@@ -9,7 +9,9 @@ using MeshWave.Common.Core.Storage;
 using MeshWave.Services;
 using MeshWave.Synchronizer;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.IO;
+using System.Linq;
 using System.Windows.Input;
 
 namespace MeshWave.ViewModels;
@@ -34,11 +36,12 @@ public class ApplicationViewModel : ViewModelBase
     private readonly MetadataLookupRepository _metadataLookup;
     private bool _resumeStateDirty;
 
-    private Manifest? _localManifest;
     private bool _p2pIsConnected;
     private string _p2pStatusText = "Disconnected";
     private int _p2pPeerCount;
     private bool _p2pActAsListener = true;
+    private int _activeDownloadCount;
+    private bool _hasActiveDownloads;
     private readonly Dictionary<string, int> _lastKnownReleaseSequenceByPeer = new(StringComparer.OrdinalIgnoreCase);
 
     public ApplicationViewModel()
@@ -116,7 +119,59 @@ public class ApplicationViewModel : ViewModelBase
             }
         };
 
+        DownloadQueueItems.CollectionChanged += (_, e) =>
+        {
+            if (e.Action == NotifyCollectionChangedAction.Reset)
+            {
+                // We don't have a list of old items, so we should ideally unhook from everything,
+                // but since we don't track all items we've ever hooked to, we just hook to the current ones.
+                // In practice, DownloadQueueItems is only cleared or items are removed individually.
+                UpdateDownloadStats();
+            }
+            else
+            {
+                if (e.NewItems != null)
+                {
+                    foreach (DownloadQueueItem item in e.NewItems)
+                        item.PropertyChanged += OnDownloadItemPropertyChanged;
+                }
+                if (e.OldItems != null)
+                {
+                    foreach (DownloadQueueItem item in e.OldItems)
+                        item.PropertyChanged -= OnDownloadItemPropertyChanged;
+                }
+                UpdateDownloadStats();
+            }
+        };
+
+        foreach (var item in DownloadQueueItems)
+            item.PropertyChanged += OnDownloadItemPropertyChanged;
+
+        UpdateDownloadStats();
+
         InitializeP2PAsync();
+    }
+
+    private void OnDownloadItemPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(DownloadQueueItem.State))
+        {
+            UpdateDownloadStats();
+        }
+    }
+
+    private void UpdateDownloadStats()
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher != null && !dispatcher.CheckAccess())
+        {
+            dispatcher.Invoke(UpdateDownloadStats);
+            return;
+        }
+
+        ActiveDownloadCount = DownloadQueueItems.Count(i => i.State == DownloadState.Downloading || i.State == DownloadState.Pending);
+        HasActiveDownloads = DownloadQueueItems.Any(i => i.State == DownloadState.Downloading || i.State == DownloadState.Pending || i.State == DownloadState.Failed);
+        OnPropertyChanged(nameof(ActiveDownloads));
     }
 
     public string ApplicationTitle
@@ -165,6 +220,20 @@ public class ApplicationViewModel : ViewModelBase
     public SyncOrchestrator SyncOrchestrator => _syncOrchestrator;
     public PlaybackViewModel Playback => _playbackViewModel;
     public System.Collections.ObjectModel.ObservableCollection<DownloadQueueItem> DownloadQueueItems => _downloadQueue.AllItems;
+
+    public int ActiveDownloadCount
+    {
+        get => _activeDownloadCount;
+        private set => SetProperty(ref _activeDownloadCount, value);
+    }
+
+    public bool HasActiveDownloads
+    {
+        get => _hasActiveDownloads;
+        private set => SetProperty(ref _hasActiveDownloads, value);
+    }
+
+    public IEnumerable<DownloadQueueItem> ActiveDownloads => DownloadQueueItems.Where(i => i.State == DownloadState.Downloading || i.State == DownloadState.Pending || i.State == DownloadState.Failed);
 
     public string BuildMeshDiagnosticsSummary()
     {
@@ -330,14 +399,20 @@ public class ApplicationViewModel : ViewModelBase
                 }
             }
 
-            _localManifest ??= _syncOrchestrator.LoadLocalManifest(identity.UserId)
-                               ?? _manifestManager.CreateManifest(identity.UserId);
+            var localManifests = new List<Manifest>();
+            foreach (ManifestStreamType streamType in Enum.GetValues(typeof(ManifestStreamType)))
+            {
+                var m = _syncOrchestrator.LoadLocalManifest(identity.UserId, streamType)
+                        ?? _manifestManager.CreateManifest(identity.UserId);
+                m.StreamType = streamType;
+                localManifests.Add(m);
+            }
 
             _userRepository.RegisterLocalUser(identity.UserId, profile.DisplayName, profile.AvatarIconPath);
 
             await _syncOrchestrator.StartAsync(
                 identity,
-                _localManifest,
+                localManifests,
                 bootstrapNodes,
                 actAsListener: _p2pActAsListener,
                 contentProvider: TryGetLocalContentByHash);
@@ -407,10 +482,11 @@ public class ApplicationViewModel : ViewModelBase
 
     private bool IsPeerFollowed(string peerUserId)
     {
-        if (_localManifest == null)
+        var manifest = _syncOrchestrator.GetLocalManifest(ManifestStreamType.Social);
+        if (manifest == null)
             return false;
 
-        var latestFollowState = _localManifest.Operations
+        var latestFollowState = manifest.Operations
             .Where(op => op.TargetType == "User" && string.Equals(op.TargetId, peerUserId, StringComparison.OrdinalIgnoreCase))
             .OrderBy(op => op.SequenceNumber)
             .LastOrDefault(op => op.OperationType == ManifestOperationType.Follow || op.OperationType == ManifestOperationType.Unfollow);
@@ -451,7 +527,8 @@ public class ApplicationViewModel : ViewModelBase
             var roots = new[]
             {
                 _settingsService.GetLocalMusicFolder(),
-                _settingsService.GetPeerMusicFolder()
+                _settingsService.GetPeerMusicFolder(),
+                Path.Combine(settings.BaseFolder, "UserCache", "Images")
             }
             .Where(static p => !string.IsNullOrWhiteSpace(p))
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -462,9 +539,14 @@ public class ApplicationViewModel : ViewModelBase
                 if (!Directory.Exists(root))
                     continue;
 
+                var isUserCache = root.Contains("UserCache");
+
                 foreach (var file in Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories))
                 {
-                    if (!supportedExtensions.Contains(Path.GetExtension(file)))
+                    if (!isUserCache && !supportedExtensions.Contains(Path.GetExtension(file)))
+                        continue;
+
+                    if (isUserCache && !string.Equals(Path.GetExtension(file), ".png", StringComparison.OrdinalIgnoreCase) && !string.Equals(Path.GetExtension(file), ".jpg", StringComparison.OrdinalIgnoreCase))
                         continue;
 
                     var hash = CryptoService.ComputeFileHash(file);
@@ -562,18 +644,28 @@ public class ApplicationViewModel : ViewModelBase
 
                 var coverPath = manager.GetTrackCoverPath(firstPath);
                 string? coverHash = null;
+                string? iconHash = null;
                 if (!string.IsNullOrWhiteSpace(coverPath) && File.Exists(coverPath))
                 {
                     coverHash = CryptoService.ComputeFileHash(coverPath);
+                    var iconBytes = metadataService.CreateIcon(coverPath);
+                    if (iconBytes != null)
+                    {
+                        iconHash = CryptoService.ComputeHash(iconBytes);
+                        _userRepository.SaveUserIcon(album.AlbumId, iconBytes);
+                    }
                 }
 
                 var artistName = tracksInAlbum.FirstOrDefault()?.Description ?? string.Empty;
-                _syncOrchestrator.AnnounceAlbum(album.AlbumId, coverHash, new Dictionary<string, string>
+                var metadata = new Dictionary<string, string>
                 {
                     ["name"] = SecurityLimits.Truncate(album.Title, SecurityLimits.MaxAlbumNameLength),
-                    ["artist"] = SecurityLimits.Truncate(artistName, SecurityLimits.MaxArtistNameLength),
-                    ["isIcon"] = "True"
-                });
+                    ["artist"] = SecurityLimits.Truncate(artistName, SecurityLimits.MaxArtistNameLength)
+                };
+                if (!string.IsNullOrWhiteSpace(iconHash))
+                    metadata["iconHash"] = iconHash;
+
+                _syncOrchestrator.AnnounceAlbum(album.AlbumId, coverHash, metadata);
             }
 
             foreach (var track in tracks)
@@ -588,13 +680,29 @@ public class ApplicationViewModel : ViewModelBase
                 if (!trackMeta.IsReleased)
                     continue;
 
+                var coverPath = manager.GetTrackCoverPath(track.FilePath);
+                string? iconHash = null;
+                if (!string.IsNullOrWhiteSpace(coverPath) && File.Exists(coverPath))
+                {
+                    var iconBytes = metadataService.CreateIcon(coverPath);
+                    if (iconBytes != null)
+                    {
+                        iconHash = CryptoService.ComputeHash(iconBytes);
+                        _userRepository.SaveUserIcon(track.TrackId, iconBytes);
+                    }
+                }
+
                 var albumTitle = albums.FirstOrDefault(a => string.Equals(a.AlbumId, track.AlbumId, StringComparison.OrdinalIgnoreCase))?.Title ?? string.Empty;
-                _syncOrchestrator.AnnounceTrack(track.TrackId, CryptoService.ComputeFileHash(track.FilePath), new Dictionary<string, string>
+                var metadata = new Dictionary<string, string>
                 {
                     ["title"] = SecurityLimits.Truncate(track.Title, SecurityLimits.MaxTrackTitleLength),
                     ["artist"] = SecurityLimits.Truncate(track.Description ?? string.Empty, SecurityLimits.MaxArtistNameLength),
                     ["album"] = SecurityLimits.Truncate(albumTitle, SecurityLimits.MaxAlbumNameLength)
-                });
+                };
+                if (!string.IsNullOrWhiteSpace(iconHash))
+                    metadata["iconHash"] = iconHash;
+
+                _syncOrchestrator.AnnounceTrack(track.TrackId, CryptoService.ComputeFileHash(track.FilePath), metadata);
             }
         }
         catch

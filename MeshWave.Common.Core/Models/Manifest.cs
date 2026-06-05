@@ -17,6 +17,46 @@ public class ManifestOperation
     public Dictionary<string, string> Metadata { get; set; } = [];
 }
 
+public enum ManifestStreamType
+{
+    Content,
+    Interaction,
+    Social
+}
+
+public static class ManifestStreamMapper
+{
+    public static ManifestStreamType GetStreamType(ManifestOperationType operationType)
+    {
+        return operationType switch
+        {
+            ManifestOperationType.Create or
+            ManifestOperationType.Update or
+            ManifestOperationType.Delete => ManifestStreamType.Content,
+
+            ManifestOperationType.Play or
+            ManifestOperationType.Like or
+            ManifestOperationType.Unlike or
+            ManifestOperationType.Comment or
+            ManifestOperationType.CommentDelete => ManifestStreamType.Interaction,
+
+            ManifestOperationType.Follow or
+            ManifestOperationType.Unfollow or
+            ManifestOperationType.Profile or
+            ManifestOperationType.FriendAdd or
+            ManifestOperationType.FriendRemove or
+            ManifestOperationType.GroupJoin or
+            ManifestOperationType.GroupLeave or
+            ManifestOperationType.CreateCompetition or
+            ManifestOperationType.CompetitionSubmit or
+            ManifestOperationType.CompetitionCastVote or
+            ManifestOperationType.CompetitionRevealResults => ManifestStreamType.Social,
+
+            _ => ManifestStreamType.Content
+        };
+    }
+}
+
 public enum ManifestOperationType
 {
     Create,
@@ -70,6 +110,9 @@ public class ManifestSnapshot
     /// <summary>RSA signature of the snapshot state, signed by the user's private key.</summary>
     public required string Signature { get; set; }
 
+    /// <summary>Canonical hash of the entire squashed library state (Set Verification).</summary>
+    public string? LibraryStateDigest { get; set; }
+
     // --- Squashed State ---
 
     /// <summary>Cumulative play counts: TrackId -> Total Plays.</summary>
@@ -111,6 +154,8 @@ public class SnapshotStateEntry
 public class Manifest
 {
     public required string UserId { get; set; }
+
+    public ManifestStreamType StreamType { get; set; } = ManifestStreamType.Content;
 
     /// <summary>
     /// Optional snapshot representing the state up to a certain sequence number.

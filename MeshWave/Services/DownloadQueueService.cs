@@ -11,10 +11,11 @@ public enum DownloadState { Pending, Downloading, Done, Failed }
 public class DownloadQueueItem : ViewModelBase
 {
     private DownloadState _state = DownloadState.Pending;
-    private int _progressPercent;
+    private int _percentComplete;
     private string _statusMessage = string.Empty;
 
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string? TrackId { get; set; }
     public string PeerUserId { get; set; } = string.Empty;
     public string ContentHash { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
@@ -37,10 +38,10 @@ public class DownloadQueueItem : ViewModelBase
         }
     }
 
-    public int ProgressPercent
+    public int PercentComplete
     {
-        get => _progressPercent;
-        set => SetProperty(ref _progressPercent, value);
+        get => _percentComplete;
+        set => SetProperty(ref _percentComplete, value);
     }
 
     public string StatusMessage
@@ -84,7 +85,7 @@ public class DownloadQueueService
     public IReadOnlyObservableCollection Items => new ReadOnlyObservableCollectionWrapper(_items);
     public ObservableCollection<DownloadQueueItem> AllItems => _items;
 
-    public DownloadQueueItem Enqueue(string peerUserId, string contentHash, string title, string artist, string album, string targetType = "Track")
+    public DownloadQueueItem Enqueue(string peerUserId, string contentHash, string title, string artist, string album, string targetType = "Track", string? trackId = null)
     {
         // Avoid duplicates by contentHash
         var existing = _items.FirstOrDefault(i =>
@@ -100,7 +101,8 @@ public class DownloadQueueService
             Title = title,
             Artist = artist,
             Album = album,
-            TargetType = targetType
+            TargetType = targetType,
+            TrackId = trackId
         };
         _items.Add(item);
         return item;

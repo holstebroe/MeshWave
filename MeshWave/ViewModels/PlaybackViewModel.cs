@@ -394,6 +394,30 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         }
     }
 
+    public void RefreshCurrentTrackMetadata()
+    {
+        if (string.IsNullOrWhiteSpace(_currentFilePath) || !File.Exists(_currentFilePath))
+            return;
+
+        var meta = _myMusicMetadataService.LoadForTrack(_currentFilePath);
+        CurrentTrackTitle = meta.Title;
+        CurrentArtist = meta.Artist;
+        TrackDescription = string.IsNullOrWhiteSpace(meta.Description) ? string.Empty : meta.Description;
+        CurrentTrackVersion = meta.Version <= 0 ? 1 : meta.Version;
+
+        var coverResolver = new LocalLibraryManager(Path.GetDirectoryName(_currentFilePath) ?? string.Empty);
+        CoverImagePath = coverResolver.GetTrackCoverPath(_currentFilePath);
+
+        // Also refresh the album track list if the current track is in it
+        if (SelectedAlbumTrack != null && string.Equals(SelectedAlbumTrack.FilePath, _currentFilePath, StringComparison.OrdinalIgnoreCase))
+        {
+            SelectedAlbumTrack.Title = meta.Title;
+            SelectedAlbumTrack.Artist = meta.Artist;
+            // Notify UI that SelectedAlbumTrack properties changed
+            OnPropertyChanged(nameof(SelectedAlbumTrack));
+        }
+    }
+
     public void LoadTrack(string trackTitle, string artist, TimeSpan duration, string? filePath = null, bool autoPlay = true, bool incrementPlayCount = true, long remoteContentLength = 0)
     {
         CurrentTrackTitle = trackTitle;
@@ -697,7 +721,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             return;
 
         var changed = false;
-        foreach (var manifest in _sync.PeerManifests)
+        foreach (var manifest in _sync.PeerManifests.Where(m => m.StreamType == ManifestStreamType.Interaction))
             changed |= ApplyPeerComments(manifest, trackHash);
 
         if (!changed)
@@ -766,8 +790,28 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
                     var existing = TimelineMarkers.FirstOrDefault(m => string.Equals(m.Id, commentOperationId, StringComparison.OrdinalIgnoreCase));
                     if (existing != null)
                     {
-                        TimelineMarkers.Remove(existing);
-                        changed = true;
+                        // Owner-based moderation:
+                        // Allow if deleter is the author OR if deleter is the track owner.
+                        var isAuthor = string.Equals(manifest.UserId, existing.UserId, StringComparison.OrdinalIgnoreCase);
+                        var isTrackOwner = false;
+
+                        if (!isAuthor && _sync?.CatalogueService != null)
+                        {
+                            // We can't await here, so we use a sync-over-async or a previously fetched state.
+                            // However, CatalogueService.GetEntryAsync is Task-based.
+                            // In this ViewModel, we can check if we already have the track owner.
+                            var trackEntry = _sync.CatalogueService.GetEntryAsync(CurrentTrackId).GetAwaiter().GetResult();
+                            if (trackEntry != null && string.Equals(manifest.UserId, trackEntry.OwnerUserId, StringComparison.OrdinalIgnoreCase))
+                            {
+                                isTrackOwner = true;
+                            }
+                        }
+
+                        if (isAuthor || isTrackOwner)
+                        {
+                            TimelineMarkers.Remove(existing);
+                            changed = true;
+                        }
                     }
                 }
             }
@@ -797,13 +841,13 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
 
     private void RefreshCurrentTrackLikeState()
     {
-        if (_sync?.LocalManifest == null || string.IsNullOrWhiteSpace(CurrentTrackId))
+        if (_sync?.GetLocalManifest(ManifestStreamType.Interaction) == null || string.IsNullOrWhiteSpace(CurrentTrackId))
         {
             IsCurrentTrackLikedByMe = false;
             return;
         }
 
-        var lastLikeState = _sync.LocalManifest.Operations
+        var lastLikeState = _sync.GetLocalManifest(ManifestStreamType.Interaction)!.Operations
             .Where(op => string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase)
                 && string.Equals(op.TargetId, CurrentTrackId, StringComparison.OrdinalIgnoreCase)
                 && (op.OperationType == ManifestOperationType.Like || op.OperationType == ManifestOperationType.Unlike))

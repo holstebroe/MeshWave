@@ -2,15 +2,19 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using Mono.Nat;
+using NLog;
 
 namespace MeshWave.Synchronizer;
 
 /// <summary>
 /// Lightweight UDP NAT traversal helper for peer-to-peer hole punching.
 /// Both peers periodically send punch probes so NAT mappings can open in both directions.
+/// Also handles automated UPnP/NAT-PMP port mapping via Mono.Nat.
 /// </summary>
 public sealed class NatTraversalService : IDisposable
 {
+    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private const string PunchPrefix = "meshwave:punch:";
     private const string AckPrefix = "meshwave:ack:";
 
@@ -20,7 +24,16 @@ public sealed class NatTraversalService : IDisposable
     private CancellationTokenSource? _cts;
     private Task? _receiveTask;
 
+    private INatDevice? _natDevice;
+    private Mapping? _tcpMapping;
+    private Mapping? _udpMapping;
+    private string? _externalIp;
+    private string _natStatus = "Not attempted";
+
     public bool IsRunning => _udp != null;
+    public string? ExternalIPAddress => _externalIp;
+    public string NatStatus => _natStatus;
+    public string? MappingProtocol => _natDevice?.NatProtocol.ToString();
 
     public async Task StartAsync(int localPort, CancellationToken cancellationToken = default)
     {
@@ -60,12 +73,123 @@ public sealed class NatTraversalService : IDisposable
             try { await _receiveTask; } catch { }
         }
 
+        await RemovePortMappingsAsync();
+
         _udp?.Dispose();
         _udp = null;
         _cts?.Dispose();
         _cts = null;
         _receiveTask = null;
         _pendingPunches.Clear();
+    }
+
+    public async Task SetupPortMappingAsync(int port, CancellationToken cancellationToken = default)
+    {
+        _natStatus = "Discovering NAT devices...";
+        Logger.Info("Starting NAT discovery for port {0} (TCP/UDP)", port);
+
+        var tcs = new TaskCompletionSource<INatDevice>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var registration = cancellationToken.Register(() => tcs.TrySetCanceled());
+
+        EventHandler<DeviceEventArgs> handler = (s, e) =>
+        {
+            tcs.TrySetResult(e.Device);
+        };
+
+        NatUtility.DeviceFound += handler;
+        try
+        {
+            NatUtility.StartDiscovery();
+
+            // Wait for a device to be found, or timeout
+            var discoveryTask = tcs.Task;
+            var timeoutTask = Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+
+            var completedTask = await Task.WhenAny(discoveryTask, timeoutTask);
+            if (completedTask == discoveryTask)
+            {
+                _natDevice = await discoveryTask;
+                _externalIp = (await _natDevice.GetExternalIPAsync()).ToString();
+
+                Logger.Info("Found NAT device: {0} ({1}). External IP: {2}",
+                    _natDevice.NatProtocol, _natDevice.DeviceEndpoint, _externalIp);
+
+                _tcpMapping = new Mapping(Protocol.Tcp, port, port, 0, "MeshWave P2P (TCP)");
+                _udpMapping = new Mapping(Protocol.Udp, port, port, 0, "MeshWave P2P (UDP)");
+
+                try
+                {
+                    await _natDevice.CreatePortMapAsync(_tcpMapping);
+                    Logger.Info("Successfully mapped TCP port {0} via {1}", port, _natDevice.NatProtocol);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn("Failed to map TCP port {0}: {1}", port, ex.Message);
+                }
+
+                try
+                {
+                    await _natDevice.CreatePortMapAsync(_udpMapping);
+                    Logger.Info("Successfully mapped UDP port {0} via {1}", port, _natDevice.NatProtocol);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn("Failed to map UDP port {0}: {1}", port, ex.Message);
+                }
+
+                _natStatus = $"Mapped via {_natDevice.NatProtocol}";
+            }
+            else
+            {
+                _natStatus = "No NAT device discovered (UPnP/NAT-PMP may be disabled)";
+                Logger.Info(_natStatus);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            _natStatus = "NAT discovery canceled";
+        }
+        catch (Exception ex)
+        {
+            _natStatus = $"NAT error: {ex.Message}";
+            Logger.Warn("NAT mapping error: {0}", ex.Message);
+        }
+        finally
+        {
+            NatUtility.StopDiscovery();
+            NatUtility.DeviceFound -= handler;
+        }
+    }
+
+    private async Task RemovePortMappingsAsync()
+    {
+        if (_natDevice == null) return;
+
+        try
+        {
+            if (_tcpMapping != null)
+            {
+                await _natDevice.DeletePortMapAsync(_tcpMapping);
+                Logger.Info("Removed TCP port mapping for {0}", _tcpMapping.PublicPort);
+            }
+            if (_udpMapping != null)
+            {
+                await _natDevice.DeletePortMapAsync(_udpMapping);
+                Logger.Info("Removed UDP port mapping for {0}", _udpMapping.PublicPort);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug("Error removing port mappings: {0}", ex.Message);
+        }
+        finally
+        {
+            _tcpMapping = null;
+            _udpMapping = null;
+            _natDevice = null;
+            _externalIp = null;
+            _natStatus = "Mappings removed";
+        }
     }
 
     /// <summary>

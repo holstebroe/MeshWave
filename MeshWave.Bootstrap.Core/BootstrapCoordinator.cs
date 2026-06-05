@@ -37,10 +37,10 @@ public sealed class BootstrapCoordinator : IDisposable
         _server.ManifestReceived += OnManifestReceived;
 
         await _server.StartAsync(
-            localManifestProvider: () => null,
+            localManifestProvider: (_) => null,
             peersProvider: GetLivePeers,
             rendezvousProvider: OnRendezvousRequested,
-            relayedManifestProvider: (userId) => _relayedManifests.GetValueOrDefault(userId),
+            relayedManifestProvider: (userId, streamType) => streamType == ManifestStreamType.Content ? _relayedManifests.GetValueOrDefault(userId) : null,
             cancellationToken: cancellationToken);
     }
 

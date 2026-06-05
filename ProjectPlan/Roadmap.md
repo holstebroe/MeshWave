@@ -23,6 +23,9 @@
 - Add empty-result UX and clear-search behavior
 
 ### [3) Library download lifecycle](https://github.com/holstebroe/MeshWave/milestone/3)
+- [ ] [Issue #119: [UI] Show pending downloads with progress in Library views](https://github.com/holstebroe/MeshWave/issues/119)
+- [ ] [Issue #120: [Logic] Implement 'Not Downloaded' state for tracks removed from local storage](https://github.com/holstebroe/MeshWave/issues/120)
+- [ ] [Issue #121: [UX] Standardize track state model and UI terminology](https://github.com/holstebroe/MeshWave/issues/121)
 - Show pending downloads in Library views with progress indicators
 - Remove-from-library keeps item visible in list as "Not Downloaded" state
 - Define final wording/state model for non-local items
@@ -33,6 +36,7 @@
 - [ ] [Issue #83: Network Health Indicator UI](https://github.com/holstebroe/MeshWave/issues/83)
 - [ ] [Issue #84: Automated UPnP/NAT-PMP Mapping](https://github.com/holstebroe/MeshWave/issues/84)
 - [ ] [Issue #85: Interactive NAT Troubleshooting Guide](https://github.com/holstebroe/MeshWave/issues/85)
+- [ ] [Issue #124: [Settings] Implement Export Diagnostic Logs utility for troubleshooting](https://github.com/holstebroe/MeshWave/issues/124)
 - Symmetric-NAT focused integration tests
 
 ## [In Progress: Milestone D remainder (Community Sync)](https://github.com/holstebroe/MeshWave/milestone/5)
@@ -85,6 +89,10 @@
 - Group profile page: editable title, description, cover image, tags
 
 ## Future Feature Ideas
+
+### [Track playback audio visualizer](https://github.com/holstebroe/MeshWave/milestone/17)
+- [ ] [Issue #122: [Core] Implement AudioAnalysisService for real-time PCM and FFT data streaming](https://github.com/holstebroe/MeshWave/issues/122)
+- [ ] [Issue #123: [UI] Create VisualizerWindow with OpenGL/Shader support](https://github.com/holstebroe/MeshWave/issues/123)
 
 ### Chat Channels in Groups
 - [ ] [Issue #79: Channel and PostMessage Models](https://github.com/holstebroe/MeshWave/issues/79)

@@ -19,5 +19,6 @@ public interface ISyncBrowseClient
     event EventHandler<ManifestMergedEventArgs>? ManifestMerged;
     Task<byte[]?> RequestContentAsync(string peerUserId, string contentHash);
     Task<(Stream? Stream, long ContentLength)> RequestContentStreamAsync(string peerUserId, string contentHash);
+    Task<bool> IsContentAvailableLocallyAsync(string contentHash);
     UserRepository? UserRepository { get; }
 }

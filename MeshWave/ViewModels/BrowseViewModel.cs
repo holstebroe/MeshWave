@@ -17,18 +17,39 @@ public enum BrowseTab { Artists, Albums, Tracks, Playlists, Downloads }
 
 public class BrowseArtistItem : ViewModelBase
 {
+    private string _avatarIconPath = string.Empty;
+    private string _iconPath = string.Empty;
+    private bool _isLocal;
+
     public string UserId { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
-    public string AvatarIconPath { get; set; } = string.Empty;
+    public string AvatarIconPath
+    {
+        get => _avatarIconPath;
+        set => SetProperty(ref _avatarIconPath, value);
+    }
+    public string IconPath
+    {
+        get => _iconPath;
+        set => SetProperty(ref _iconPath, value);
+    }
     public string Bio { get; set; } = string.Empty;
     public int TrackCount { get; set; }
     public int AlbumCount { get; set; }
     public long TotalSize { get; set; }
     public string TotalSizeDisplay { get; set; } = string.Empty;
+    public bool IsLocal
+    {
+        get => _isLocal;
+        set => SetProperty(ref _isLocal, value);
+    }
 }
 
 public class BrowseAlbumItem : ViewModelBase
 {
+    private string _iconPath = string.Empty;
+    private bool _isLocal;
+
     public string AlbumId { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string ArtistUserId { get; set; } = string.Empty;
@@ -38,10 +59,23 @@ public class BrowseAlbumItem : ViewModelBase
     public string TotalSizeDisplay { get; set; } = string.Empty;
     public DateTime? ReleasedAt { get; set; }
     public string ReleasedAtDisplay => ReleasedAt.HasValue ? ReleasedAt.Value.ToLocalTime().ToString("MMM yyyy") : string.Empty;
+    public string IconPath
+    {
+        get => _iconPath;
+        set => SetProperty(ref _iconPath, value);
+    }
+    public bool IsLocal
+    {
+        get => _isLocal;
+        set => SetProperty(ref _isLocal, value);
+    }
 }
 
 public class BrowsePlaylistItem : ViewModelBase
 {
+    private string _iconPath = string.Empty;
+    private bool _isLocal;
+
     public string PlaylistId { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
@@ -51,12 +85,25 @@ public class BrowsePlaylistItem : ViewModelBase
     public List<string> TrackIds { get; set; } = [];
     public DateTime? ReleasedAt { get; set; }
     public string ReleasedAtDisplay => ReleasedAt.HasValue ? ReleasedAt.Value.ToLocalTime().ToString("MMM d, yyyy") : string.Empty;
+    public string IconPath
+    {
+        get => _iconPath;
+        set => SetProperty(ref _iconPath, value);
+    }
+    public bool IsLocal
+    {
+        get => _isLocal;
+        set => SetProperty(ref _isLocal, value);
+    }
 }
 
 public class BrowseTrackItem : ViewModelBase
 {
     private bool _isQueued;
     private bool _isDownloaded;
+    private bool _isLocal;
+    private bool _needsUpdate;
+    private string _iconPath = string.Empty;
 
     public string TrackId { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
@@ -91,8 +138,42 @@ public class BrowseTrackItem : ViewModelBase
         }
     }
 
-    public string DownloadButtonLabel => IsQueued ? "⏳ Queued" : IsDownloaded ? "✅ Downloaded" : "⬇ Download";
-    public bool CanDownload => !IsQueued && !IsDownloaded;
+    public bool IsLocal
+    {
+        get => _isLocal;
+        set
+        {
+            SetProperty(ref _isLocal, value);
+            OnPropertyChanged(nameof(DownloadButtonLabel));
+            OnPropertyChanged(nameof(CanDownload));
+        }
+    }
+
+    public bool NeedsUpdate
+    {
+        get => _needsUpdate;
+        set
+        {
+            SetProperty(ref _needsUpdate, value);
+            OnPropertyChanged(nameof(DownloadButtonLabel));
+            OnPropertyChanged(nameof(CanDownload));
+        }
+    }
+
+    public string IconPath
+    {
+        get => _iconPath;
+        set => SetProperty(ref _iconPath, value);
+    }
+
+    public string DownloadButtonLabel =>
+        IsLocal ? "Local" :
+        IsQueued ? "⏳ Queued" :
+        NeedsUpdate ? "Update Available" :
+        IsDownloaded ? "✅ Downloaded" :
+        "⬇ Download";
+
+    public bool CanDownload => !IsLocal && !IsQueued && (!IsDownloaded || NeedsUpdate);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -108,6 +189,7 @@ public class BrowseViewModel : ViewModelBase
     private readonly ISyncBrowseClient? _sync;
     private readonly DownloadQueueService _downloadQueue;
     private readonly SettingsService _settingsService = new();
+    private readonly LibraryDownloadStateService _downloadState = new();
 
     private BrowseTab _activeTab = BrowseTab.Artists;
     private string _statusText = "Connect to the Mesh network to discover community music.";
@@ -354,6 +436,11 @@ public class BrowseViewModel : ViewModelBase
     // ─────────────────────────────────────────────────────────────────────
     private void Refresh()
     {
+        _ = RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
         if (_sync == null || !_sync.IsRunning)
         {
             Artists = [];
@@ -363,7 +450,7 @@ public class BrowseViewModel : ViewModelBase
             return;
         }
 
-        var manifests = _sync.PeerManifests.ToList();
+        var manifests = _sync.PeerManifests.Where(m => m.StreamType == ManifestStreamType.Content).ToList();
         if (_sync.LocalManifest != null)
             manifests.Add(_sync.LocalManifest);
 
@@ -379,7 +466,7 @@ public class BrowseViewModel : ViewModelBase
                 .FirstOrDefault();
 
             var displayName = profileOp?.Metadata.GetValueOrDefault("displayName")
-                ?? _sync.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, manifest.UserId, StringComparison.OrdinalIgnoreCase))?.DisplayName
+                ?? _sync?.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, manifest.UserId, StringComparison.OrdinalIgnoreCase))?.DisplayName
                 ?? manifest.UserId;
             var isArtist = bool.TryParse(profileOp?.Metadata.GetValueOrDefault("isArtist"), out var ia) && ia;
             var bio = profileOp?.Metadata.GetValueOrDefault("bio") ?? string.Empty;
@@ -407,11 +494,13 @@ public class BrowseViewModel : ViewModelBase
                 UserId = manifest.UserId,
                 DisplayName = displayName,
                 AvatarIconPath = _sync?.UserRepository?.GetUserIconPath(manifest.UserId) ?? string.Empty,
+                IconPath = _sync?.UserRepository?.GetUserIconPath(manifest.UserId) ?? string.Empty,
                 Bio = bio,
                 TrackCount = trackCount,
                 AlbumCount = albumCount,
                 TotalSize = artistTotalSize,
-                TotalSizeDisplay = FormatFileSize(artistTotalSize)
+                TotalSizeDisplay = FormatFileSize(artistTotalSize),
+                IsLocal = _sync?.LocalManifest != null && string.Equals(manifest.UserId, _sync.LocalManifest.UserId, StringComparison.OrdinalIgnoreCase)
             });
         }
         Artists = new ObservableCollection<BrowseArtistItem>(artists.OrderByDescending(a => a.TrackCount));
@@ -429,7 +518,7 @@ public class BrowseViewModel : ViewModelBase
                 .OrderByDescending(op => op.SequenceNumber)
                 .FirstOrDefault();
             var artistName = artistProfileOp?.Metadata.GetValueOrDefault("displayName")
-                ?? _sync.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, manifest.UserId, StringComparison.OrdinalIgnoreCase))?.DisplayName
+                ?? _sync?.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, manifest.UserId, StringComparison.OrdinalIgnoreCase))?.DisplayName
                 ?? manifest.UserId;
 
             var albumEntities = GetLatestEntities(manifest, "Album");
@@ -457,9 +546,11 @@ public class BrowseViewModel : ViewModelBase
                     Name = name,
                     ArtistUserId = manifest.UserId,
                     ArtistDisplayName = artistName,
+                    IconPath = _sync?.UserRepository?.GetUserIconPath(entity.TargetId) ?? string.Empty,
                     ReleasedAt = releasedAt,
                     TotalSize = albumTotalSize,
-                    TotalSizeDisplay = FormatFileSize(albumTotalSize)
+                    TotalSizeDisplay = FormatFileSize(albumTotalSize),
+                    IsLocal = _sync?.LocalManifest != null && string.Equals(manifest.UserId, _sync.LocalManifest.UserId, StringComparison.OrdinalIgnoreCase)
                 });
             }
         }
@@ -478,10 +569,11 @@ public class BrowseViewModel : ViewModelBase
                 .OrderByDescending(op => op.SequenceNumber)
                 .FirstOrDefault();
             var artistName = artistProfileOp?.Metadata.GetValueOrDefault("displayName")
-                ?? _sync.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, manifest.UserId, StringComparison.OrdinalIgnoreCase))?.DisplayName
+                ?? _sync?.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, manifest.UserId, StringComparison.OrdinalIgnoreCase))?.DisplayName
                 ?? manifest.UserId;
 
             var trackEntities = GetLatestEntities(manifest, "Track");
+            var downloadedEntries = _downloadState.GetDownloadedEntries();
 
             foreach (var entity in trackEntities)
             {
@@ -503,6 +595,25 @@ public class BrowseViewModel : ViewModelBase
                     : null;
                 var isQueued = queueItem != null && (queueItem.State == DownloadState.Pending || queueItem.State == DownloadState.Downloading);
                 var isDownloaded = queueItem?.State == DownloadState.Done;
+                if (!isDownloaded && !string.IsNullOrWhiteSpace(entity.ContentHash) && _sync != null)
+                    isDownloaded = await _sync.IsContentAvailableLocallyAsync(entity.ContentHash);
+
+                var isLocal = _sync?.LocalManifest != null && string.Equals(manifest.UserId, _sync.LocalManifest.UserId, StringComparison.OrdinalIgnoreCase);
+
+                var needsUpdate = false;
+                if (!isLocal && !string.IsNullOrWhiteSpace(entity.ContentHash))
+                {
+                    var downloaded = downloadedEntries.FirstOrDefault(e => string.Equals(e.TrackId, entity.TargetId, StringComparison.OrdinalIgnoreCase));
+                    if (downloaded != null)
+                    {
+                        if (!string.Equals(downloaded.ContentHash, entity.ContentHash, StringComparison.OrdinalIgnoreCase) ||
+                            entity.SequenceNumber > downloaded.SequenceNumber)
+                        {
+                            needsUpdate = true;
+                        }
+                    }
+                }
+
                 var fileSize = long.TryParse(entity.Metadata.GetValueOrDefault("fileSize"), out var fs) ? fs : 0;
 
                 tracks.Add(new BrowseTrackItem
@@ -516,8 +627,11 @@ public class BrowseViewModel : ViewModelBase
                     FileSize = fileSize,
                     FileSizeDisplay = FormatFileSize(fileSize),
                     ReleasedAt = releasedAt,
+                    IconPath = _sync?.UserRepository?.GetUserIconPath(entity.TargetId) ?? string.Empty,
                     IsQueued = isQueued,
-                    IsDownloaded = isDownloaded
+                    IsDownloaded = isDownloaded,
+                    IsLocal = isLocal,
+                    NeedsUpdate = needsUpdate
                 });
             }
         }
@@ -536,7 +650,7 @@ public class BrowseViewModel : ViewModelBase
                 .OrderByDescending(op => op.SequenceNumber)
                 .FirstOrDefault();
             var artistName = artistProfileOp?.Metadata.GetValueOrDefault("displayName")
-                ?? _sync.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, manifest.UserId, StringComparison.OrdinalIgnoreCase))?.DisplayName
+                ?? _sync?.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, manifest.UserId, StringComparison.OrdinalIgnoreCase))?.DisplayName
                 ?? manifest.UserId;
 
             var playlistEntities = GetLatestEntities(manifest, "Playlist");
@@ -572,7 +686,9 @@ public class BrowseViewModel : ViewModelBase
                     ArtistDisplayName = artistName,
                     TrackIds = trackIds,
                     TrackCount = trackIds.Count,
-                    ReleasedAt = releasedAt
+                    ReleasedAt = releasedAt,
+                    IconPath = _sync?.UserRepository?.GetUserIconPath(entity.TargetId) ?? string.Empty,
+                    IsLocal = _sync?.LocalManifest != null && string.Equals(manifest.UserId, _sync.LocalManifest.UserId, StringComparison.OrdinalIgnoreCase)
                 });
             }
         }
@@ -614,7 +730,8 @@ public class BrowseViewModel : ViewModelBase
             track.Title,
             track.ArtistDisplayName,
             track.Album,
-            "Track");
+            "Track",
+            track.TrackId);
 
         track.IsQueued = true;
 
@@ -628,6 +745,10 @@ public class BrowseViewModel : ViewModelBase
 
             try
             {
+                var manifests = _sync.PeerManifests.Where(m => m.StreamType == ManifestStreamType.Content).ToList();
+                if (_sync.LocalManifest != null)
+                    manifests.Add(_sync.LocalManifest);
+
                 var bytes = await _sync.RequestContentAsync(item.PeerUserId, item.ContentHash);
                 if (bytes == null || bytes.Length == 0)
                 {
@@ -659,11 +780,18 @@ public class BrowseViewModel : ViewModelBase
                 ExecuteOnUiOrCurrent(() =>
                 {
                     item.State = DownloadState.Done;
-                    item.ProgressPercent = 100;
+                    item.PercentComplete = 100;
                     item.StatusMessage = destPath;
                     track.IsQueued = false;
                     track.IsDownloaded = true;
+                    if (!string.IsNullOrWhiteSpace(track.TrackId) && !string.IsNullOrWhiteSpace(track.ContentHash))
+                    {
+                        var meshTrack = manifests.SelectMany(m => GetLatestEntities(m, "Track"))
+                            .FirstOrDefault(e => string.Equals(e.TargetId, track.TrackId, StringComparison.OrdinalIgnoreCase));
+                        _downloadState.MarkDownloaded(track.TrackId, track.ContentHash, meshTrack?.SequenceNumber ?? 0);
+                    }
                     StatusText = $"Downloaded \"{track.Title}\" to Library.";
+                    Refresh(); // Full refresh to re-evaluate states
                 });
             }
             catch (Exception ex)
