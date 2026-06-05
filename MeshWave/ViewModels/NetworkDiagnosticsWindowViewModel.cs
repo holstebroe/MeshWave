@@ -132,7 +132,12 @@ public sealed class NetworkDiagnosticsWindowViewModel : ViewModelBase
         var peerTracks = Peers.Where(p => !p.IsBootstrapPeer).Sum(p => p.PublishedTrackCount);
         var peerAlbums = Peers.Where(p => !p.IsBootstrapPeer).Sum(p => p.PublishedAlbumCount);
 
-        SummaryText = $"Routing table: {_sync.ConnectedPeerCount} total ({meshRoutingPeers} mesh + {bootstrapRoutingPeers} bootstrap){Environment.NewLine}"
+        var natInfo = !string.IsNullOrWhiteSpace(_sync.ExternalIPAddress)
+            ? $"NAT status: {_sync.NatStatus} (External IP: {_sync.ExternalIPAddress}, Protocol: {_sync.MappingProtocol}){Environment.NewLine}"
+            : $"NAT status: {_sync.NatStatus}{Environment.NewLine}";
+
+        SummaryText = natInfo
+                    + $"Routing table: {_sync.ConnectedPeerCount} total ({meshRoutingPeers} mesh + {bootstrapRoutingPeers} bootstrap){Environment.NewLine}"
                     + $"Diagnostics peers: {diagnosticsMeshPeers} mesh ({diagnosticsMeshOnline} online, {diagnosticsMeshWithManifest} with manifest, {diagnosticsMeshWithoutManifest} without manifest){Environment.NewLine}"
                     + $"Exchange counters: inbound pushes={_sync.InboundManifestPushCount}, outbound fetches={_sync.OutboundManifestFetchCount}{Environment.NewLine}"
                     + $"Local published: {localAlbums} albums, {localTracks} tracks ({localOps} manifest ops){Environment.NewLine}"
