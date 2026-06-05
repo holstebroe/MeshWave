@@ -18,6 +18,7 @@ public class CatalogueEntry
     public DateTime? ReleaseDate { get; set; }
     public string? Genre { get; set; }
     public long FileSize { get; set; }
+    public int Version { get; set; }
     public int SequenceNumber { get; set; }
     public DateTime Timestamp { get; set; }
 }

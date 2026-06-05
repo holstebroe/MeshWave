@@ -790,8 +790,28 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
                     var existing = TimelineMarkers.FirstOrDefault(m => string.Equals(m.Id, commentOperationId, StringComparison.OrdinalIgnoreCase));
                     if (existing != null)
                     {
-                        TimelineMarkers.Remove(existing);
-                        changed = true;
+                        // Owner-based moderation:
+                        // Allow if deleter is the author OR if deleter is the track owner.
+                        var isAuthor = string.Equals(manifest.UserId, existing.UserId, StringComparison.OrdinalIgnoreCase);
+                        var isTrackOwner = false;
+
+                        if (!isAuthor && _sync?.CatalogueService != null)
+                        {
+                            // We can't await here, so we use a sync-over-async or a previously fetched state.
+                            // However, CatalogueService.GetEntryAsync is Task-based.
+                            // In this ViewModel, we can check if we already have the track owner.
+                            var trackEntry = _sync.CatalogueService.GetEntryAsync(CurrentTrackId).GetAwaiter().GetResult();
+                            if (trackEntry != null && string.Equals(manifest.UserId, trackEntry.OwnerUserId, StringComparison.OrdinalIgnoreCase))
+                            {
+                                isTrackOwner = true;
+                            }
+                        }
+
+                        if (isAuthor || isTrackOwner)
+                        {
+                            TimelineMarkers.Remove(existing);
+                            changed = true;
+                        }
                     }
                 }
             }
