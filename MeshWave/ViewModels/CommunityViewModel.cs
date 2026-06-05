@@ -350,7 +350,7 @@ public class CommunityViewModel : ViewModelBase
         var followedIds = Following.Select(u => u.UserId).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (!followedIds.Contains(e.UserId))
         {
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            ExecuteOnUi(() =>
             {
                 RebuildFollowFriendLists();
                 RefreshDiscoverResults(SearchQuery);
@@ -361,7 +361,7 @@ public class CommunityViewModel : ViewModelBase
         var manifest = _sync.GetPeerManifest(e.UserId);
         if (manifest == null)
         {
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            ExecuteOnUi(() =>
             {
                 RebuildFollowFriendLists();
                 RefreshDiscoverResults(SearchQuery);
@@ -381,11 +381,11 @@ public class CommunityViewModel : ViewModelBase
             _lastFeedReleaseSequenceByPeer[e.UserId] = latestCreateSequence;
             if (ActiveTab != CommunityTab.Feed)
             {
-                System.Windows.Application.Current.Dispatcher.Invoke(() => NewReleaseCount++);
+                ExecuteOnUi(() => NewReleaseCount++);
             }
         }
 
-        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        ExecuteOnUi(() =>
         {
             RebuildFollowFriendLists();
             RefreshFeed();
@@ -816,10 +816,7 @@ public class CommunityViewModel : ViewModelBase
 
     private void OnPeerCountChanged(object? sender, EventArgs e)
     {
-        if (System.Windows.Application.Current?.Dispatcher == null)
-            return;
-
-        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        ExecuteOnUi(() =>
         {
             RefreshDiscoverResults(SearchQuery);
             UpdateOnlineStatus();

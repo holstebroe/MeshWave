@@ -27,7 +27,7 @@ public class MeshTestContext : IAsyncDisposable
         {
             if (_bootstrap == null)
             {
-                _bootstrapPort = 39877;
+                _bootstrapPort = TestPeerFactory.FindFreePort();
                 _bootstrap = new BootstrapCoordinator(_bootstrapPort);
                 await _bootstrap.StartAsync();
             }

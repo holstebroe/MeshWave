@@ -34,14 +34,4 @@ public static class ViewModelTestHelpers
         }
     }
 
-    public static async Task WaitForConditionAsync(Func<bool> condition, int timeoutMs = 5000)
-    {
-        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
-        while (DateTime.UtcNow < deadline)
-        {
-            if (condition()) return;
-            await Task.Delay(100);
-        }
-        throw new TimeoutException("Condition not met within timeout.");
-    }
 }

@@ -320,7 +320,7 @@ public class BrowseViewModel : ViewModelBase
         if (_sync != null)
         {
             _sync.ManifestMerged += (_, _) =>
-                System.Windows.Application.Current?.Dispatcher.Invoke(Refresh);
+                ExecuteOnUiOrCurrent(Refresh);
         }
 
         Refresh();

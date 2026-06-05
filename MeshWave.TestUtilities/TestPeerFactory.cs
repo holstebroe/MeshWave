@@ -94,7 +94,7 @@ public static class TestPeerFactory
         throw new DirectoryNotFoundException("TestData directory not found.");
     }
 
-    private static int FindFreePort()
+    public static int FindFreePort()
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
