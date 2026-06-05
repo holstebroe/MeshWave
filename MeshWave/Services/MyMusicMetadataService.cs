@@ -1,5 +1,7 @@
 using System.IO;
 using System.Text.Json;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using MeshWave.Models;
 
 namespace MeshWave.Services
@@ -290,6 +292,40 @@ namespace MeshWave.Services
             }
 
             return Path.Combine(albumFolder, ".cache", "album.mymusic.json");
+        }
+
+        public byte[]? CreateIcon(string imagePath)
+        {
+            if (string.IsNullOrWhiteSpace(imagePath) || !File.Exists(imagePath))
+            {
+                return null;
+            }
+
+            try
+            {
+                using var stream = new FileStream(imagePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+                var frame = decoder.Frames[0];
+
+                double targetSize = 128;
+                double scale = targetSize / Math.Max(frame.PixelWidth, frame.PixelHeight);
+
+                // If the image is already small, don't upscale it
+                if (scale > 1.0) scale = 1.0;
+
+                var transformed = new TransformedBitmap(frame, new ScaleTransform(scale, scale));
+
+                var encoder = new JpegBitmapEncoder { QualityLevel = 80 };
+                encoder.Frames.Add(BitmapFrame.Create(transformed));
+
+                using var outStream = new MemoryStream();
+                encoder.Save(outStream);
+                return outStream.ToArray();
+            }
+            catch
+            {
+                return null;
+            }
         }
     }
 }

@@ -1285,18 +1285,34 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             _ = _catalogueService.IngestAsync(remote);
 
             // Also trigger icon/content downloads for catalogue entries
-            foreach (var op in remote.Operations.Where(op => !string.IsNullOrWhiteSpace(op.ContentHash)))
+            foreach (var op in remote.Operations)
             {
                 if (op.OperationType == ManifestOperationType.Create || op.OperationType == ManifestOperationType.Update)
                 {
-                    _ = Task.Run(async () =>
+                    var iconHash = op.Metadata.GetValueOrDefault("iconHash");
+                    if (string.IsNullOrWhiteSpace(iconHash) && op.TargetType == "User")
+                        iconHash = op.ContentHash;
+
+                    if (!string.IsNullOrWhiteSpace(iconHash))
                     {
-                        try
+                        _ = Task.Run(async () =>
                         {
-                            // For now, only small content like icons are fully downloaded here.
-                            // Larger media is streamed on-demand.
-                            // We can use a threshold or check TargetType if needed.
-                            if (op.TargetType == "User" || (op.Metadata.ContainsKey("isIcon") && op.Metadata["isIcon"] == "True"))
+                            try
+                            {
+                                var bytes = await RequestContentAsync(remote.UserId, iconHash);
+                                if (bytes != null && _userRepository != null)
+                                {
+                                    _userRepository.SaveUserIcon(op.TargetId, bytes);
+                                }
+                            }
+                            catch { }
+                        });
+                    }
+                    else if (!string.IsNullOrWhiteSpace(op.ContentHash) && (op.Metadata.ContainsKey("isIcon") && op.Metadata["isIcon"] == "True"))
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            try
                             {
                                 var bytes = await RequestContentAsync(remote.UserId, op.ContentHash!);
                                 if (bytes != null && _userRepository != null)
@@ -1304,9 +1320,9 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                                     _userRepository.SaveUserIcon(op.TargetId, bytes);
                                 }
                             }
-                        }
-                        catch { }
-                    });
+                            catch { }
+                        });
+                    }
                 }
             }
 
