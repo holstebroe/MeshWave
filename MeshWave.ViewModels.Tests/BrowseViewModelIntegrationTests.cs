@@ -36,7 +36,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         await jane.WaitForConditionAsync(() => jane.Orchestrator.ConnectedPeerCount > 0);
 
         // Verify that john can see jane in the browse view (as an artist)
-        await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Artists, a => a.UserId == jane.UserId);
+        await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Artists, a => a.UserId == jane.UserId, timeoutMs: 30000);
 
         // Verify that john cannot see any released tracks from jane and vice versa
         Assert.DoesNotContain(jane.UserId, johnBrowseViewModel.Tracks.Select(t => t.ArtistUserId));
@@ -52,9 +52,9 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         await _context.ConnectAndSyncAllAsync();
 
         // Verify that john can see jane's track and vice versa
-        await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "jane-track-1");
-        await ViewModelTestHelpers.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == "john-track-1");
-        await ViewModelTestHelpers.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == "john-track-2");
+        await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "jane-track-1", timeoutMs: 30000);
+        await ViewModelTestHelpers.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == "john-track-1", timeoutMs: 30000);
+        await ViewModelTestHelpers.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == "john-track-2", timeoutMs: 30000);
 
         // Action: Jane releases 2 more tracks
         jane.AnnounceTrack("jane-track-2", "hash-jane-2", new Dictionary<string, string> { ["title"] = "Jane's Second" });
@@ -63,8 +63,8 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         await _context.ConnectAndSyncAllAsync();
 
         // Verify that john can see all of jane's released tracks
-        await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "jane-track-2");
-        await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "jane-track-3");
+        await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "jane-track-2", timeoutMs: 30000);
+        await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "jane-track-3", timeoutMs: 30000);
         Assert.Equal(3, johnBrowseViewModel.Tracks.Count(t => t.ArtistUserId == jane.UserId));
 
         // Action: John un-releases one of his tracks (deletes it from manifest)
@@ -97,7 +97,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
 
         await _context.ConnectAndSyncAllAsync();
 
-        await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "track-pop");
+        await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "track-pop", timeoutMs: 30000);
 
         johnBrowseViewModel.FilterText = "Rock";
         Assert.Contains(johnBrowseViewModel.Tracks, t => t.Title.Contains("Rock"));
@@ -111,23 +111,20 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task DownloadLifecycleIntegration()
     {
-        var john = await _context.CreatePeerAsync("John", testDataName: "John");
+        var trackId = "john-track-1";
+        var hash = "abc-123-hash";
+        byte[] content = [1, 2, 3, 4];
+
+        var john = await _context.CreatePeerAsync("John", testDataName: "John", contentProvider: h => h == hash ? content : null);
         var jane = await _context.CreatePeerAsync("Jane");
 
         var janeBrowseViewModel = new BrowseViewModel(jane.Orchestrator);
 
-        var trackId = "john-track-1";
-        var hash = "abc-123-hash";
         john.AnnounceTrack(trackId, hash, new Dictionary<string, string> { ["title"] = "Downloadable Track" });
-
-        // Setup john to provide content
-        byte[] content = [1, 2, 3, 4];
-        await john.DisposeAsync();
-        await john.StartAsync(contentProvider: h => h == hash ? content : null);
 
         await _context.ConnectAndSyncAllAsync();
 
-        await ViewModelTestHelpers.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == trackId);
+        await ViewModelTestHelpers.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == trackId, timeoutMs: 30000);
         var trackItem = janeBrowseViewModel.Tracks.First(t => t.TrackId == trackId);
 
         Assert.True(trackItem.CanDownload);

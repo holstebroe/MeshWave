@@ -353,6 +353,7 @@ public class CommunityViewModel : ViewModelBase
             ExecuteOnUi(() =>
             {
                 RebuildFollowFriendLists();
+                RefreshFeed();
                 RefreshDiscoverResults(SearchQuery);
             });
             return;

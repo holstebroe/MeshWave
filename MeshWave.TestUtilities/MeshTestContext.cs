@@ -13,7 +13,7 @@ public class MeshTestContext : IAsyncDisposable
     public int BootstrapPort => _bootstrapPort;
     public IReadOnlyList<TestPeer> Peers => _peers;
 
-    public async Task<TestPeer> CreatePeerAsync(string name, bool useBootstrap = true, string? testDataName = null)
+    public async Task<TestPeer> CreatePeerAsync(string name, bool useBootstrap = true, string? testDataName = null, Func<string, byte[]?>? contentProvider = null)
     {
         var peer = TestPeerFactory.CreatePeer(name);
         _peers.Add(peer);
@@ -35,7 +35,7 @@ public class MeshTestContext : IAsyncDisposable
             bootstrapNodes = [$"127.0.0.1:{_bootstrapPort}"];
         }
 
-        await peer.StartAsync(bootstrapNodes: bootstrapNodes);
+        await peer.StartAsync(bootstrapNodes: bootstrapNodes, contentProvider: contentProvider);
 
         // Ensure they have a profile broadcasted so their public key is in the social manifest
         peer.BroadcastProfile(name, isArtist: true);

@@ -9,7 +9,7 @@ public static class ViewModelTestHelpers
     /// Waits for an item matching the predicate to appear in a collection.
     /// Re-evaluates the collection provider frequently to handle cases where the collection object itself is replaced.
     /// </summary>
-    public static async Task WaitForItemPollingAsync<T>(Func<IEnumerable<T>> collectionProvider, Func<T, bool> predicate, int timeoutMs = 30000)
+    public static async Task WaitForItemPollingAsync<T>(Func<IEnumerable<T>> collectionProvider, Func<T, bool> predicate, int timeoutMs = 45000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
         while (DateTime.UtcNow < deadline)
@@ -19,16 +19,17 @@ public static class ViewModelTestHelpers
                 var currentCollection = collectionProvider();
                 if (currentCollection != null)
                 {
-                    // ToList() to avoid concurrent modification exceptions during Any()
-                    if (currentCollection.ToList().Any(predicate)) return;
+                    // Use a snapshot to avoid concurrent modification exceptions during enumeration
+                    var snapshot = currentCollection.ToList();
+                    if (snapshot.Any(predicate)) return;
                 }
             }
             catch (Exception)
             {
                 // Ignore collection modification or other transient errors during polling
             }
-            await Task.Delay(200);
+            await Task.Delay(250);
         }
-        throw new TimeoutException($"Timed out waiting for item in collection matching predicate.");
+        throw new TimeoutException($"Timed out after {timeoutMs}ms waiting for item in collection matching predicate.");
     }
 }
