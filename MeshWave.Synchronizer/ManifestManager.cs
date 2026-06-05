@@ -184,6 +184,8 @@ public class ManifestManager
             Signature = string.Empty
         };
 
+        snapshot.LibraryStateDigest = ComputeLibraryStateDigest(snapshot);
+
         var signable = BuildSnapshotSignablePayload(snapshot);
         snapshot.Signature = CryptoService.SignData(signable, privateKeyPem);
 
@@ -214,6 +216,36 @@ public class ManifestManager
         manifest.LastUpdated = DateTime.UtcNow;
     }
 
+    private static string ComputeLibraryStateDigest(ManifestSnapshot snapshot)
+    {
+        var sb = new StringBuilder();
+
+        // Followed, Liked, Friends, Groups
+        foreach (var id in snapshot.FollowedUserIds.OrderBy(s => s)) sb.Append("f:").Append(id).Append(';');
+        foreach (var id in snapshot.LikedTrackIds.OrderBy(s => s)) sb.Append("l:").Append(id).Append(';');
+        foreach (var id in snapshot.FriendUserIds.OrderBy(s => s)) sb.Append("fr:").Append(id).Append(';');
+        foreach (var id in snapshot.GroupIds.OrderBy(s => s)) sb.Append("g:").Append(id).Append(';');
+
+        // EntityStates
+        foreach (var ent in snapshot.EntityStates.OrderBy(e => e.TargetId).ThenBy(e => e.TargetType))
+        {
+            sb.Append("e:").Append(ent.TargetId).Append(':').Append(ent.TargetType).Append(':').Append(ent.ContentHash ?? string.Empty).Append('{');
+            foreach (var kv in ent.Metadata.OrderBy(k => k.Key))
+            {
+                sb.Append(kv.Key).Append('=').Append(kv.Value).Append(',');
+            }
+            sb.Append("};");
+        }
+
+        // PlayCounts
+        foreach (var kv in snapshot.PlayCounts.OrderBy(k => k.Key))
+        {
+            sb.Append("p:").Append(kv.Key).Append('=').Append(kv.Value).Append(';');
+        }
+
+        return CryptoService.ComputeHash(Encoding.UTF8.GetBytes(sb.ToString()));
+    }
+
     /// <summary>
     /// Verifies the integrity and authenticity of a manifest.
     /// Checks monotonic sequence numbers and each operation's RSA signature.
@@ -228,6 +260,14 @@ public class ManifestManager
             var snapshotSignable = BuildSnapshotSignablePayload(manifest.Snapshot);
             if (!CryptoService.VerifySignature(snapshotSignable, manifest.Snapshot.Signature, userPublicKey))
                 return false;
+
+            // Set Verification: Verify library state digest
+            if (!string.IsNullOrEmpty(manifest.Snapshot.LibraryStateDigest))
+            {
+                var computedDigest = ComputeLibraryStateDigest(manifest.Snapshot);
+                if (manifest.Snapshot.LibraryStateDigest != computedDigest)
+                    return false;
+            }
 
             // Verify persistent operations in the snapshot
             foreach (var op in manifest.Snapshot.PersistentOperations)
@@ -491,6 +531,10 @@ public class ManifestManager
             sb.Append(op.OperationId);
             sb.Append(',');
         }
+        sb.Append('|');
+
+        // LibraryStateDigest
+        sb.Append(snapshot.LibraryStateDigest ?? string.Empty);
 
         return sb.ToString();
     }

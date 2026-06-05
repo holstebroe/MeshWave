@@ -70,6 +70,9 @@ public class ManifestSnapshot
     /// <summary>RSA signature of the snapshot state, signed by the user's private key.</summary>
     public required string Signature { get; set; }
 
+    /// <summary>Canonical hash of the entire squashed library state (Set Verification).</summary>
+    public string? LibraryStateDigest { get; set; }
+
     // --- Squashed State ---
 
     /// <summary>Cumulative play counts: TrackId -> Total Plays.</summary>
