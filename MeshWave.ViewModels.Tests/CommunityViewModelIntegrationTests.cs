@@ -35,7 +35,7 @@ public class CommunityViewModelIntegrationTests : IAsyncLifetime
 
         // Alice finds Bob in Discover
         aliceCommunityVm.ActiveTab = CommunityTab.Discover;
-        await aliceCommunityVm.SearchResults.WaitForItemAsync(u => u.UserId == bob.UserId);
+        await ViewModelTestHelpers.WaitForItemPollingAsync(() => aliceCommunityVm.SearchResults, u => u.UserId == bob.UserId);
         var bobItem = aliceCommunityVm.SearchResults.First(u => u.UserId == bob.UserId);
 
         // Alice follows Bob
@@ -45,7 +45,7 @@ public class CommunityViewModelIntegrationTests : IAsyncLifetime
 
         // Alice sees Bob's track in her Feed
         aliceCommunityVm.ActiveTab = CommunityTab.Feed;
-        await aliceCommunityVm.ReleaseFeed.WaitForItemAsync(r => r.TargetId == "bob-track-1");
+        await ViewModelTestHelpers.WaitForItemPollingAsync(() => aliceCommunityVm.ReleaseFeed, r => r.TargetId == "bob-track-1");
     }
 
     [Fact]
@@ -64,7 +64,7 @@ public class CommunityViewModelIntegrationTests : IAsyncLifetime
         // Bob follows Alice and sees the track
         var aliceItem = new CommunityUserItem { UserId = alice.UserId, DisplayName = "Alice" };
         bobCommunityVm.FollowUserCommand.Execute(aliceItem);
-        await bobCommunityVm.ReleaseFeed.WaitForItemAsync(r => r.TargetId == "alice-track-1");
+        await ViewModelTestHelpers.WaitForItemPollingAsync(() => bobCommunityVm.ReleaseFeed, r => r.TargetId == "alice-track-1");
         var feedItem = bobCommunityVm.ReleaseFeed.First(r => r.TargetId == "alice-track-1");
 
         // Bob likes Alice's track
@@ -87,7 +87,7 @@ public class CommunityViewModelIntegrationTests : IAsyncLifetime
         var bobItem = new CommunityUserItem { UserId = bob.UserId, DisplayName = "Bob" };
         aliceCommunityVm.FollowUserCommand.Execute(bobItem);
 
-        await aliceCommunityVm.ReleaseFeed.WaitForItemAsync(r => r.TargetId == "alice-track-1");
+        await ViewModelTestHelpers.WaitForItemPollingAsync(() => aliceCommunityVm.ReleaseFeed, r => r.TargetId == "alice-track-1");
         var aliceHit = aliceCommunityVm.ReleaseFeed.First(r => r.TargetId == "alice-track-1");
 
         await alice.WaitForConditionAsync(() => aliceHit.LikeCount == 1);
@@ -108,7 +108,7 @@ public class CommunityViewModelIntegrationTests : IAsyncLifetime
         await _context.ConnectAndSyncAllAsync();
 
         // Alice should eventually discover Bob
-        await aliceCommunityVm.SearchResults.WaitForItemAsync(u => u.UserId == bob.UserId);
+        await ViewModelTestHelpers.WaitForItemPollingAsync(() => aliceCommunityVm.SearchResults, u => u.UserId == bob.UserId);
         Assert.Contains(aliceCommunityVm.SearchResults, u => u.UserId == bob.UserId);
     }
 }

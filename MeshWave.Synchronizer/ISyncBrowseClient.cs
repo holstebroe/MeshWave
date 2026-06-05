@@ -13,6 +13,7 @@ public interface ISyncBrowseClient
     bool IsRunning { get; }
     IReadOnlyCollection<Manifest> PeerManifests { get; }
     Manifest? LocalManifest { get; }
+    Manifest? GetLocalManifest(ManifestStreamType streamType);
     ICatalogueService CatalogueService { get; }
     PeerConnectionAttemptReport? LastConnectionAttemptReport { get; }
     IEnumerable<PeerInfo> GetPeers();
