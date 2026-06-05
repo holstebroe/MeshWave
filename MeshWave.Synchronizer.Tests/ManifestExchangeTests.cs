@@ -25,7 +25,7 @@ public class ManifestExchangeTests : IAsyncDisposable
         using var server = new ManifestExchangeServer(port);
         var manifest = _manager.CreateManifest("user-1");
 
-        await server.StartAsync(() => manifest);
+        await server.StartAsync((_) => manifest);
 
         try
         {
@@ -49,7 +49,7 @@ public class ManifestExchangeTests : IAsyncDisposable
         server.ManifestReceived += (_, e) => receivedManifest.TrySetResult(e.Manifest);
 
         var emptyManifest = _manager.CreateManifest("user-serving");
-        await server.StartAsync(() => emptyManifest);
+        await server.StartAsync((_) => emptyManifest);
 
         try
         {
@@ -75,7 +75,7 @@ public class ManifestExchangeTests : IAsyncDisposable
     {
         var port = FindFreePort();
         using var server = new ManifestExchangeServer(port);
-        await server.StartAsync(() => null);
+        await server.StartAsync((_) => null);
 
         try
         {
@@ -96,7 +96,7 @@ public class ManifestExchangeTests : IAsyncDisposable
         var port = FindFreePort();
         using var server = new ManifestExchangeServer(port);
         await server.StartAsync(
-            () => null,
+            (_) => null,
             peersProvider: null,
             rendezvousProvider: request => new RendezvousResponse
             {
@@ -146,7 +146,7 @@ public class ManifestExchangeTests : IAsyncDisposable
             });
         }
 
-        await server.StartAsync(() => manifest);
+        await server.StartAsync((_) => manifest);
 
         try
         {

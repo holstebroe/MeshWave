@@ -272,6 +272,9 @@ public class ManifestManager
         if (local.UserId != remote.UserId)
             throw new ArgumentException("Cannot merge manifests from different users.");
 
+        if (local.StreamType != remote.StreamType)
+            throw new ArgumentException($"Cannot merge manifests with different stream types ({local.StreamType} vs {remote.StreamType}).");
+
         if (remote.Operations.Count > SecurityLimits.MaxManifestOperations)
             throw new InvalidDataException($"Remote manifest exceeds operation limit ({remote.Operations.Count}).");
 

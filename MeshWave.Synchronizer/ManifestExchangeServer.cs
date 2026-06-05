@@ -22,11 +22,11 @@ public class ManifestExchangeServer : IDisposable
     private CancellationTokenSource? _cts;
     private Task? _serverTask;
 
-    private Func<Manifest?>? _localManifestProvider;
+    private Func<ManifestStreamType, Manifest?>? _localManifestProvider;
     private Func<IReadOnlyList<PeerInfo>>? _peersProvider;
     private Func<RendezvousRequest, RendezvousResponse?>? _rendezvousProvider;
     private Func<string, byte[]?>? _contentProvider;
-    private Func<string, Manifest?>? _relayedManifestProvider;
+    private Func<string, ManifestStreamType, Manifest?>? _relayedManifestProvider;
 
     public ManifestExchangeServer(int port = DefaultPort)
     {
@@ -38,15 +38,15 @@ public class ManifestExchangeServer : IDisposable
     /// <summary>
     /// Starts the TCP server.
     /// </summary>
-    /// <param name="localManifestProvider">Returns this peer's current manifest on demand.</param>
+    /// <param name="localManifestProvider">Returns this peer's current manifest on demand for a given stream.</param>
     /// <param name="peersProvider">Returns known peers for PEX responses. May be null to disable PEX serving.</param>
     /// <param name="rendezvousProvider">Optional bootstrap rendezvous provider for crossing-hands session issuance.</param>
     public async Task StartAsync(
-        Func<Manifest?> localManifestProvider,
+        Func<ManifestStreamType, Manifest?> localManifestProvider,
         Func<IReadOnlyList<PeerInfo>>? peersProvider = null,
         Func<RendezvousRequest, RendezvousResponse?>? rendezvousProvider = null,
         Func<string, byte[]?>? contentProvider = null,
-        Func<string, Manifest?>? relayedManifestProvider = null,
+        Func<string, ManifestStreamType, Manifest?>? relayedManifestProvider = null,
         CancellationToken cancellationToken = default)
     {
         _localManifestProvider = localManifestProvider;
@@ -121,8 +121,8 @@ public class ManifestExchangeServer : IDisposable
                     case ManifestRequestType.GetManifest:
                     {
                         var manifest = !string.IsNullOrWhiteSpace(request.TargetUserId)
-                            ? _relayedManifestProvider?.Invoke(request.TargetUserId)
-                            : _localManifestProvider?.Invoke();
+                            ? _relayedManifestProvider?.Invoke(request.TargetUserId, request.StreamType)
+                            : _localManifestProvider?.Invoke(request.StreamType);
 
                         if (manifest == null)
                         {
@@ -314,6 +314,7 @@ public enum ManifestRequestType
 public class ManifestRequest
 {
     public ManifestRequestType Type { get; set; }
+    public ManifestStreamType StreamType { get; set; } = ManifestStreamType.Content;
     public Manifest? Manifest { get; set; }
     public RendezvousRequest? Rendezvous { get; set; }
     public string? ContentHash { get; set; }

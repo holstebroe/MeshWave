@@ -425,7 +425,7 @@ public class BrowseViewModel : ViewModelBase
             return;
         }
 
-        var manifests = _sync.PeerManifests.ToList();
+        var manifests = _sync.PeerManifests.Where(m => m.StreamType == ManifestStreamType.Content).ToList();
         if (_sync.LocalManifest != null)
             manifests.Add(_sync.LocalManifest);
 
@@ -716,7 +716,7 @@ public class BrowseViewModel : ViewModelBase
 
             try
             {
-                var manifests = _sync.PeerManifests.ToList();
+                var manifests = _sync.PeerManifests.Where(m => m.StreamType == ManifestStreamType.Content).ToList();
                 if (_sync.LocalManifest != null)
                     manifests.Add(_sync.LocalManifest);
 
