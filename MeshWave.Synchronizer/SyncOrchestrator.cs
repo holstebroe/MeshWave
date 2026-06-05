@@ -79,6 +79,9 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     public int OutboundManifestFetchCount => _outboundManifestFetchCount;
     public int BootstrapPeerCount => _router.GetPeers().Count(p => p.UserId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase));
     public int MeshPeerCount => Math.Max(0, ConnectedPeerCount - BootstrapPeerCount);
+    public string NatStatus => _natTraversal.NatStatus;
+    public string? ExternalIPAddress => _natTraversal.ExternalIPAddress;
+    public string? MappingProtocol => _natTraversal.MappingProtocol;
 
     /// <summary>Returns the persisted manifest for a specific peer, or null if not yet received.</summary>
     public Manifest? GetPeerManifest(string userId) => _peerStore.Get(userId);
@@ -196,14 +199,15 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             _server ??= new ManifestExchangeServer(identity.ManifestPort);
             _server.ManifestReceived += OnManifestReceived;
 
+            await _natTraversal.StartAsync(identity.ManifestPort, _cts.Token);
+            await _natTraversal.SetupPortMappingAsync(identity.ManifestPort, _cts.Token);
+
             await _server.StartAsync(
                 () => _localManifest,
                 () => _router.GetPeersForExchange(),
                 rendezvousProvider: null,
                 contentProvider: _contentProvider,
                 cancellationToken: _cts.Token);
-
-            await _natTraversal.StartAsync(identity.ManifestPort, _cts.Token);
         }
 
         await _router.StartAsync(identity, _bootstrapNodes, _cts.Token);
@@ -1380,7 +1384,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         {
             UserId = _identity?.UserId ?? _localManifest?.UserId ?? string.Empty,
             DisplayName = SecurityLimits.Truncate(_identity?.DisplayName ?? _localManifest?.UserId ?? "peer", SecurityLimits.MaxDisplayNameLength),
-            Address = string.Empty,
+            Address = ExternalIPAddress ?? string.Empty,
             Port = _actAsListener ? (_identity?.ManifestPort ?? ManifestExchangeServer.DefaultPort) : 0,
             PublicKeyPem = _identity?.PublicKeyPem ?? string.Empty,
             LastSeen = DateTime.UtcNow
