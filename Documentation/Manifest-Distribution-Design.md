@@ -97,18 +97,18 @@ Assuming a peer follows 100 artists and interacts with 500 total peers. Daily up
 
 ## 5. Implementation Roadmap
 
-### Phase 1: Structural Split (Issue #127)
+### Phase 1: Structural Split (Issue #128)
 - Define `ManifestStreamType` enum.
-- Update `ManifestManager` to support multiple local files per user (`{UserId}.content.json`, `{UserId}.social.json`, etc.).
+- Update `ManifestManager` to support multiple local files per user (`{UserId}.content.json`, `{UserId}.interaction.json`, etc.).
 - Update `ManifestExchangeProtocol` to allow requesting specific streams.
 
-### Phase 2: Checkpointing and Consensus (Issue #128)
+### Phase 2: Checkpointing and Consensus (Issue #129)
 - Implement `InteractionCheckpoint` logic.
 - Add support for squashing Play counts and Likes into signed snapshots.
 - Implement playcount versioning (tracking plays per specific track content hash).
 - Implement percentage-played verification in the playback engine.
 
-### Phase 3: Content Authority and Moderation (Issue #129)
+### Phase 3: Content Authority and Moderation (Issue #130)
 - Implement owner-based comment moderation (removing comments from other peers on own content).
 - Add verification logic for track versioning and hash immutability.
 - Implement "Set Verification" — ensuring the current state of a user's library is authentic without requiring the full history of changes.
