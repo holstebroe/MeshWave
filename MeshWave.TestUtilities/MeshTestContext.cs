@@ -10,6 +10,7 @@ public class MeshTestContext : IAsyncDisposable
     private BootstrapCoordinator? _bootstrap;
     private int _bootstrapPort;
 
+    public int BootstrapPort => _bootstrapPort;
     public IReadOnlyList<TestPeer> Peers => _peers;
 
     public async Task<TestPeer> CreatePeerAsync(string name, bool useBootstrap = true, string? testDataName = null)

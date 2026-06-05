@@ -53,45 +53,35 @@ public class CommunityViewModelIntegrationTests : IAsyncLifetime
     {
         var alice = await _context.CreatePeerAsync("Alice");
         var bob = await _context.CreatePeerAsync("Bob");
+        var charlie = await _context.CreatePeerAsync("Charlie");
 
-        var aliceCommunityVm = new CommunityViewModel(alice.Orchestrator);
         var bobCommunityVm = new CommunityViewModel(bob.Orchestrator);
+        var charlieCommunityVm = new CommunityViewModel(charlie.Orchestrator);
 
         // Alice releases a track
         alice.AnnounceTrack("alice-track-1", "hash-alice-1", new Dictionary<string, string> { ["title"] = "Alice's Hit" });
         await _context.ConnectAndSyncAllAsync();
 
         // Bob follows Alice and sees the track
-        var aliceItem = new CommunityUserItem { UserId = alice.UserId, DisplayName = "Alice" };
-        bobCommunityVm.FollowUserCommand.Execute(aliceItem);
+        bobCommunityVm.FollowUserCommand.Execute(new CommunityUserItem { UserId = alice.UserId, DisplayName = "Alice" });
         await ViewModelTestHelpers.WaitForItemPollingAsync(() => bobCommunityVm.ReleaseFeed, r => r.TargetId == "alice-track-1");
-        var feedItem = bobCommunityVm.ReleaseFeed.First(r => r.TargetId == "alice-track-1");
+        var bobFeedItem = bobCommunityVm.ReleaseFeed.First(r => r.TargetId == "alice-track-1");
 
         // Bob likes Alice's track
-        bobCommunityVm.ToggleLikeCommand.Execute(feedItem);
-        Assert.True(feedItem.IsLikedByMe);
-        Assert.Equal(1, feedItem.LikeCount);
+        bobCommunityVm.ToggleLikeCommand.Execute(bobFeedItem);
+        Assert.True(bobFeedItem.IsLikedByMe);
+        Assert.Equal(1, bobFeedItem.LikeCount);
 
-        await bob.SyncAsync();
         await _context.ConnectAndSyncAllAsync();
 
-        // Alice follows Bob (so she can see his interactions in some view, though Feed is for followed users' CREATIONS)
-        // Wait, Likes are in Interaction stream. CommunityViewModel.RefreshFeed() only loads from followed users.
-        // Actually, RefreshFeed loads releases from followed users, and then it re-builds likes index from ALL peer manifests.
+        // Charlie follows Alice
+        charlieCommunityVm.FollowUserCommand.Execute(new CommunityUserItem { UserId = alice.UserId, DisplayName = "Alice" });
 
-        aliceCommunityVm.ActiveTab = CommunityTab.Following; // Just to trigger something
-        // Alice should see the like count on her own track if she follows someone who liked it?
-        // No, RebuildLikesIndex scans ALL peer manifests.
-
-        // Alice follows Bob to be sure she has his manifest
-        var bobItem = new CommunityUserItem { UserId = bob.UserId, DisplayName = "Bob" };
-        aliceCommunityVm.FollowUserCommand.Execute(bobItem);
-
-        await ViewModelTestHelpers.WaitForItemPollingAsync(() => aliceCommunityVm.ReleaseFeed, r => r.TargetId == "alice-track-1");
-        var aliceHit = aliceCommunityVm.ReleaseFeed.First(r => r.TargetId == "alice-track-1");
-
-        await alice.WaitForConditionAsync(() => aliceHit.LikeCount == 1);
-        Assert.Equal(1, aliceHit.LikeCount);
+        // Charlie should eventually see Alice's track with 1 like
+        await ViewModelTestHelpers.WaitForItemPollingAsync(
+            () => charlieCommunityVm.ReleaseFeed,
+            r => r.TargetId == "alice-track-1" && r.LikeCount == 1,
+            timeoutMs: 30000);
     }
 
     [Fact]

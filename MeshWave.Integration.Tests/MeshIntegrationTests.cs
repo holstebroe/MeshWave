@@ -145,8 +145,13 @@ public class MeshIntegrationTests : IAsyncLifetime
         var johnContentIndex = new Dictionary<string, byte[]>();
         johnContentIndex[hash] = File.ReadAllBytes(firstMp3);
 
+        // Restart john with content provider, keeping same identity and port
+        var identity = john.Identity;
+        var port = john.Port;
+        var bootstrapNodes = new[] { $"127.0.0.1:{_context.BootstrapPort}" };
+
         await john.DisposeAsync();
-        await john.StartAsync(bootstrapNodes: [$"127.0.0.1:39877"], contentProvider: h => johnContentIndex.GetValueOrDefault(h));
+        await john.StartAsync(bootstrapNodes: bootstrapNodes, contentProvider: h => johnContentIndex.GetValueOrDefault(h));
 
         await _context.ConnectAndSyncAllAsync();
 

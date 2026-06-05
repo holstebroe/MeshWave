@@ -36,7 +36,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         await jane.WaitForConditionAsync(() => jane.Orchestrator.ConnectedPeerCount > 0);
 
         // Verify that john can see jane in the browse view (as an artist)
-        await johnBrowseViewModel.Artists.WaitForItemAsync(a => a.UserId == jane.UserId);
+        await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Artists, a => a.UserId == jane.UserId);
 
         // Verify that john cannot see any released tracks from jane and vice versa
         Assert.DoesNotContain(jane.UserId, johnBrowseViewModel.Tracks.Select(t => t.ArtistUserId));
