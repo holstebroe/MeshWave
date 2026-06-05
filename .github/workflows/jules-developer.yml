@@ -64,32 +64,32 @@ jobs:
             SYSTEM INSTRUCTIONS:
             ${{ vars.JULES_ISSUE_DEVELOPER_PROMPT }}
 
-      # 3. VERIFY LAUNCH LOGS: Local bash log scan to circumvent Azure Blob race conditions & surface errors to summary page
+# 3. VERIFY LAUNCH LOGS: Strictly match the Google API JSON structure to avoid false positives inside prompt prose
       - name: Verify API Launch Success
         id: check_logs
         run: |
           echo "Fetching live run logs via GitHub CLI..."
           LOG_CONTENT=$(gh run view ${{ github.run_id }} --log 2>&1)
           
-          if echo "$LOG_CONTENT" | grep -q '"error"'; then
-            # Extract raw error message safely
-            RAW_ERROR=$(echo "$LOG_CONTENT" | grep -A 4 '"error"' | tr '\n' ' ' | sed 's/\"//g')
+          # Use grep with -z (zero-terminated lines) or an explicit multi-line check 
+          # to ensure '"error": {' is an actual JSON key returned by the googleapis server.
+          if echo "$LOG_CONTENT" | grep -U -q -E '"error":\s*\{'; then
             
-            # Determine high-level diagnosis strings
-            if echo "$LOG_CONTENT" | grep -q "FAILED_PRECONDITION"; then
+            # Determine high-level diagnosis strings securely based on actual server responses
+            if echo "$LOG_CONTENT" | grep -U -q -E 'FAILED_PRECONDITION'; then
               DIAGNOSIS="BURST CONCURRENCY COLLISION (FAILED_PRECONDITION) - Too many Jules agents launched simultaneously or AI Studio session limits hit."
-            elif echo "$LOG_CONTENT" | grep -q -E "403|PERMISSION_DENIED|API_KEY_INVALID"; then
+            elif echo "$LOG_CONTENT" | grep -U -q -E '403|PERMISSION_DENIED|API_KEY_INVALID'; then
               DIAGNOSIS="AUTHENTICATION FAILURE (403) - The JULES_API_KEY is invalid or expired."
-            elif echo "$LOG_CONTENT" | grep -q -E "429|QUOTA_EXCEEDED|RESOURCE_EXHAUSTED"; then
+            elif echo "$LOG_CONTENT" | grep -U -q -E '429|QUOTA_EXCEEDED|RESOURCE_EXHAUSTED'; then
               DIAGNOSIS="QUOTA EXHAUSTED (429) - Daily or per-minute token allocation limits reached."
             else
               DIAGNOSIS="GENERAL API VALIDATION ERROR - Malformed issue payload context or formatting error."
             fi
 
-            # 1. CREATE ANNOTATION: This injects a direct message on the summary page sidebar
+            # 1. CREATE ANNOTATION
             echo "::error title=Jules Launch Failure::$DIAGNOSIS"
 
-            # 2. CREATE JOB SUMMARY: This writes a bold Markdown alert box on the main page
+            # 2. CREATE JOB SUMMARY
             echo "### ❌ Jules Agent Initialization Failed" >> $GITHUB_STEP_SUMMARY
             echo "The automated coding agent failed to initialize a development session with Google's API." >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -97,7 +97,8 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "#### 📄 Technical Error Snippet:" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
-            echo "$LOG_CONTENT" | grep -A 5 '"error"' >> $GITHUB_STEP_SUMMARY
+            # Securely capture only the block surrounding the error text
+            echo "$LOG_CONTENT" | grep -A 6 '"error":' >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
             echo "The issue labels have been automatically rolled back to allow a clean retry on the next cycle." >> $GITHUB_STEP_SUMMARY
             
