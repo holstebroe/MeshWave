@@ -18,6 +18,7 @@
 	<ProjectReference Include="../MeshWave/MeshWave.csproj" />
 	<ProjectReference Include="../MeshWave.Synchronizer/MeshWave.Synchronizer.csproj" />
 	<ProjectReference Include="../MeshWave.Common.Core/MeshWave.Common.Core.csproj" />
+	<ProjectReference Include="..\MeshWave.TestUtilities\MeshWave.TestUtilities.csproj" />
   </ItemGroup>
 
 </Project>
