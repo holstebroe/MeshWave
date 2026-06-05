@@ -25,6 +25,7 @@ public class ManifestExchangeClient
     public async Task<Manifest?> FetchManifestAsync(
         string address,
         int port,
+        ManifestStreamType streamType = ManifestStreamType.Content,
         int startSequenceNumber = 0,
         int? endSequenceNumber = null,
         string? targetUserId = null,
@@ -37,11 +38,12 @@ public class ManifestExchangeClient
         Logger.Debug("Connecting to {0}:{1}...", address, port);
         await client.ConnectAsync(address, port, cts.Token);
 
-        Logger.Debug("Fetching manifest from {0}:{1} (start={2}, end={3})", address, port, startSequenceNumber, endSequenceNumber);
+        Logger.Debug("Fetching {0} manifest from {1}:{2} (start={3}, end={4})", streamType, address, port, startSequenceNumber, endSequenceNumber);
         var stream = client.GetStream();
         var request = new ManifestRequest
         {
             Type = ManifestRequestType.GetManifest,
+            StreamType = streamType,
             StartSequenceNumber = startSequenceNumber,
             EndSequenceNumber = endSequenceNumber,
             TargetUserId = targetUserId
@@ -88,6 +90,7 @@ public class ManifestExchangeClient
         var request = new ManifestRequest
         {
             Type = ManifestRequestType.RelayManifestPush,
+            StreamType = manifest.StreamType,
             Manifest = manifest,
             AnnouncingPeer = announcingPeer
         };
@@ -114,6 +117,7 @@ public class ManifestExchangeClient
         var request = new ManifestRequest
         {
             Type = ManifestRequestType.PushManifest,
+            StreamType = manifest.StreamType,
             Manifest = manifest,
             AnnouncingPeer = announcingPeer
         };

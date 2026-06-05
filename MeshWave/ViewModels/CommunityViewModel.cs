@@ -222,7 +222,7 @@ public class CommunityViewModel : ViewModelBase
 
         var releaseItems = new List<ReleaseFeedItem>();
 
-        foreach (var manifest in _sync.PeerManifests.Where(m => followedIds.Contains(m.UserId)))
+        foreach (var manifest in _sync.PeerManifests.Where(m => m.StreamType == ManifestStreamType.Content).Where(m => followedIds.Contains(m.UserId)))
         {
             var profile = Following.FirstOrDefault(u => string.Equals(u.UserId, manifest.UserId, StringComparison.OrdinalIgnoreCase));
             var createOps = manifest.Operations
@@ -508,7 +508,7 @@ public class CommunityViewModel : ViewModelBase
     /// </summary>
     private void RebuildFollowFriendLists()
     {
-        var local = _sync?.LocalManifest;
+        var local = _sync?.GetLocalManifest(ManifestStreamType.Social);
         if (local == null) return;
 
         // Compute the latest follow/unfollow state per user
@@ -593,7 +593,7 @@ public class CommunityViewModel : ViewModelBase
     {
         _trackLikes.Clear();
 
-        foreach (var manifest in _sync?.PeerManifests ?? [])
+        foreach (var manifest in _sync?.PeerManifests.Where(m => m.StreamType == ManifestStreamType.Interaction) ?? [])
         {
             var latestByTrack = manifest.Operations
                 .Where(op => op.OperationType == ManifestOperationType.Like || op.OperationType == ManifestOperationType.Unlike)
@@ -610,7 +610,7 @@ public class CommunityViewModel : ViewModelBase
 
     private bool IsLocallyLiked(string targetId)
     {
-        var local = _sync?.LocalManifest;
+        var local = _sync?.GetLocalManifest(ManifestStreamType.Interaction);
         if (local == null)
             return false;
 
@@ -858,7 +858,7 @@ public class CommunityViewModel : ViewModelBase
             .GroupBy(p => p.UserId, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(p => p.LastSeen).First(), StringComparer.OrdinalIgnoreCase);
 
-        var manifests = _sync.PeerManifests
+        var manifests = _sync.PeerManifests.Where(m => m.StreamType == ManifestStreamType.Content)
             .GroupBy(m => m.UserId, StringComparer.OrdinalIgnoreCase)
             .Select(g => g.First())
             .ToList();
@@ -899,7 +899,7 @@ public class CommunityViewModel : ViewModelBase
 
             // Count followers: scan all peer manifests + local manifest
             if (_sync == null) continue;
-            var allManifests = _sync.PeerManifests.Concat(
+            var allManifests = _sync.PeerManifests.Where(m => m.StreamType == ManifestStreamType.Content).Concat(
                 _sync.LocalManifest != null ? [_sync.LocalManifest] : []);
 
             var followerCount = allManifests.Count(pm =>

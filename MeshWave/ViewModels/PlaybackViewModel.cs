@@ -721,7 +721,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             return;
 
         var changed = false;
-        foreach (var manifest in _sync.PeerManifests)
+        foreach (var manifest in _sync.PeerManifests.Where(m => m.StreamType == ManifestStreamType.Interaction))
             changed |= ApplyPeerComments(manifest, trackHash);
 
         if (!changed)
@@ -841,13 +841,13 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
 
     private void RefreshCurrentTrackLikeState()
     {
-        if (_sync?.LocalManifest == null || string.IsNullOrWhiteSpace(CurrentTrackId))
+        if (_sync?.GetLocalManifest(ManifestStreamType.Interaction) == null || string.IsNullOrWhiteSpace(CurrentTrackId))
         {
             IsCurrentTrackLikedByMe = false;
             return;
         }
 
-        var lastLikeState = _sync.LocalManifest.Operations
+        var lastLikeState = _sync.GetLocalManifest(ManifestStreamType.Interaction)!.Operations
             .Where(op => string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase)
                 && string.Equals(op.TargetId, CurrentTrackId, StringComparison.OrdinalIgnoreCase)
                 && (op.OperationType == ManifestOperationType.Like || op.OperationType == ManifestOperationType.Unlike))

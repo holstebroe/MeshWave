@@ -36,7 +36,6 @@ public class ApplicationViewModel : ViewModelBase
     private readonly MetadataLookupRepository _metadataLookup;
     private bool _resumeStateDirty;
 
-    private Manifest? _localManifest;
     private bool _p2pIsConnected;
     private string _p2pStatusText = "Disconnected";
     private int _p2pPeerCount;
@@ -400,14 +399,20 @@ public class ApplicationViewModel : ViewModelBase
                 }
             }
 
-            _localManifest ??= _syncOrchestrator.LoadLocalManifest(identity.UserId)
-                               ?? _manifestManager.CreateManifest(identity.UserId);
+            var localManifests = new List<Manifest>();
+            foreach (ManifestStreamType streamType in Enum.GetValues(typeof(ManifestStreamType)))
+            {
+                var m = _syncOrchestrator.LoadLocalManifest(identity.UserId, streamType)
+                        ?? _manifestManager.CreateManifest(identity.UserId);
+                m.StreamType = streamType;
+                localManifests.Add(m);
+            }
 
             _userRepository.RegisterLocalUser(identity.UserId, profile.DisplayName, profile.AvatarIconPath);
 
             await _syncOrchestrator.StartAsync(
                 identity,
-                _localManifest,
+                localManifests,
                 bootstrapNodes,
                 actAsListener: _p2pActAsListener,
                 contentProvider: TryGetLocalContentByHash);
@@ -477,10 +482,11 @@ public class ApplicationViewModel : ViewModelBase
 
     private bool IsPeerFollowed(string peerUserId)
     {
-        if (_localManifest == null)
+        var manifest = _syncOrchestrator.GetLocalManifest(ManifestStreamType.Social);
+        if (manifest == null)
             return false;
 
-        var latestFollowState = _localManifest.Operations
+        var latestFollowState = manifest.Operations
             .Where(op => op.TargetType == "User" && string.Equals(op.TargetId, peerUserId, StringComparison.OrdinalIgnoreCase))
             .OrderBy(op => op.SequenceNumber)
             .LastOrDefault(op => op.OperationType == ManifestOperationType.Follow || op.OperationType == ManifestOperationType.Unfollow);

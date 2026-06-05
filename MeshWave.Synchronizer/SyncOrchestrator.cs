@@ -27,8 +27,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     private readonly ICatalogueService _catalogueService;
 
     private LocalPeerIdentity? _identity;
-    private Manifest? _localManifest;
-    private string? _localManifestPath;
+    private readonly Dictionary<ManifestStreamType, Manifest> _localManifests = [];
     private bool _actAsListener;
     private CancellationTokenSource? _cts;
     private IReadOnlyList<string> _bootstrapNodes = [];
@@ -57,8 +56,11 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// <summary>The local identity in use (set after StartAsync).</summary>
     public LocalPeerIdentity? Identity => _identity;
 
-    /// <summary>Current local manifest containing this node's signed operations.</summary>
-    public Manifest? LocalManifest => _localManifest;
+    /// <summary>Returns the primary content manifest for compatibility.</summary>
+    public Manifest? LocalManifest => GetLocalManifest(ManifestStreamType.Content);
+
+    /// <summary>Returns the current local manifest for the given stream type.</summary>
+    public Manifest? GetLocalManifest(ManifestStreamType streamType) => _localManifests.GetValueOrDefault(streamType);
 
     /// <summary>Read-only view of all peer manifests received and persisted so far.</summary>
     public IReadOnlyCollection<Manifest> PeerManifests => _peerStore.GetAll();
@@ -72,8 +74,8 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// <summary>The shared catalogue service for global metadata lookup.</summary>
     public ICatalogueService CatalogueService => _catalogueService;
 
-    public int LocalPublishedTrackCount => CountPublishedItems(_localManifest, "Track");
-    public int LocalPublishedAlbumCount => CountPublishedItems(_localManifest, "Album");
+    public int LocalPublishedTrackCount => CountPublishedItems(GetLocalManifest(ManifestStreamType.Content), "Track");
+    public int LocalPublishedAlbumCount => CountPublishedItems(GetLocalManifest(ManifestStreamType.Content), "Album");
 
     public int InboundManifestPushCount => _inboundManifestPushCount;
     public int OutboundManifestFetchCount => _outboundManifestFetchCount;
@@ -83,8 +85,8 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     public string? ExternalIPAddress => _natTraversal.ExternalIPAddress;
     public string? MappingProtocol => _natTraversal.MappingProtocol;
 
-    /// <summary>Returns the persisted manifest for a specific peer, or null if not yet received.</summary>
-    public Manifest? GetPeerManifest(string userId) => _peerStore.Get(userId);
+    /// <summary>Returns the persisted manifest for a specific peer and stream, or null if not yet received.</summary>
+    public Manifest? GetPeerManifest(string userId, ManifestStreamType streamType = ManifestStreamType.Content) => _peerStore.Get(userId, streamType);
 
     public IReadOnlyCollection<PeerDiagnosticsSnapshot> GetPeerDiagnosticsSnapshots()
     {
@@ -176,7 +178,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// </param>
     public async Task StartAsync(
         LocalPeerIdentity identity,
-        Manifest localManifest,
+        IEnumerable<Manifest> localManifests,
         IReadOnlyList<string>? bootstrapNodes = null,
         bool actAsListener = true,
         Func<string, byte[]?>? contentProvider = null,
@@ -184,8 +186,24 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     {
         Logger.Info("Starting SyncOrchestrator for user {0} (listener={1})", identity.UserId, actAsListener);
         _identity = identity;
-        _localManifest = localManifest;
-        _localManifestPath = BuildLocalManifestPath(identity.UserId);
+
+        _localManifests.Clear();
+        foreach (var m in localManifests)
+        {
+            _localManifests[m.StreamType] = m;
+        }
+
+        // Ensure all streams are present
+        foreach (ManifestStreamType streamType in Enum.GetValues(typeof(ManifestStreamType)))
+        {
+            if (!_localManifests.ContainsKey(streamType))
+            {
+                var m = LoadLocalManifest(identity.UserId, streamType) ?? _manifestManager.CreateManifest(identity.UserId);
+                m.StreamType = streamType;
+                _localManifests[streamType] = m;
+            }
+        }
+
         _actAsListener = actAsListener;
         _contentProvider = contentProvider;
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -203,18 +221,19 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             await _natTraversal.SetupPortMappingAsync(identity.ManifestPort, _cts.Token);
 
             await _server.StartAsync(
-                () => _localManifest,
+                (streamType) => _localManifests.GetValueOrDefault(streamType),
                 () => _router.GetPeersForExchange(),
                 rendezvousProvider: null,
                 contentProvider: _contentProvider,
+                relayedManifestProvider: (targetUserId, streamType) => null,
                 cancellationToken: _cts.Token);
         }
 
         await _router.StartAsync(identity, _bootstrapNodes, _cts.Token);
 
-        if (_localManifest != null)
+        foreach (var manifest in _localManifests.Values)
         {
-            await _catalogueService.IngestAsync(_localManifest);
+            await _catalogueService.IngestAsync(manifest);
         }
     }
 
@@ -250,26 +269,40 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     }
 
     /// <summary>
-    /// Saves the local manifest to disk so Follow/Friend/Profile operations persist across restarts.
+    /// Saves all local manifests to disk.
     /// </summary>
-    public void SaveLocalManifest()
+    public void SaveLocalManifests()
     {
-        if (_localManifest == null || _localManifestPath == null) return;
+        if (_identity == null) return;
+        foreach (var kvp in _localManifests)
+        {
+            SaveLocalManifest(kvp.Value);
+        }
+    }
+
+    private void SaveLocalManifest(Manifest manifest)
+    {
+        var path = BuildLocalManifestPath(manifest.UserId, manifest.StreamType);
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(_localManifestPath)!);
-            File.WriteAllText(_localManifestPath, JsonSerializer.Serialize(_localManifest));
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, JsonSerializer.Serialize(manifest));
         }
-        catch { /* best-effort */ }
+        catch { /* best-effort disk write */ }
     }
 
     /// <summary>
-    /// Loads a previously persisted local manifest for the given userId.
+    /// Compatibility method for saving local manifest.
+    /// </summary>
+    public void SaveLocalManifest() => SaveLocalManifests();
+
+    /// <summary>
+    /// Loads a previously persisted local manifest for the given userId and stream.
     /// Returns null if no persisted manifest exists.
     /// </summary>
-    public Manifest? LoadLocalManifest(string userId)
+    public Manifest? LoadLocalManifest(string userId, ManifestStreamType streamType)
     {
-        var path = BuildLocalManifestPath(userId);
+        var path = BuildLocalManifestPath(userId, streamType);
         if (!File.Exists(path)) return null;
         try
         {
@@ -279,13 +312,14 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         catch { return null; }
     }
 
-    private string BuildLocalManifestPath(string userId)
+    private string BuildLocalManifestPath(string userId, ManifestStreamType streamType)
     {
         var safeName = string.Concat(userId.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
+        var suffix = streamType.ToString().ToLowerInvariant();
         var baseFolder = _userRepository?.BaseDataFolder ?? MeshWaveEnvironment.GetAppDataRoot();
         var dir = Path.Combine(baseFolder, "LocalManifests");
         Directory.CreateDirectory(dir);
-        return Path.Combine(dir, $"{safeName}.json");
+        return Path.Combine(dir, $"{safeName}.{suffix}.json");
     }
 
     /// <summary>
@@ -539,22 +573,24 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         PeerCountChanged?.Invoke(this, EventArgs.Empty);
         _ = Task.Run(() => TryFetchAndMergeAsync(peer, _cts?.Token ?? CancellationToken.None));
 
-        if (_localManifest == null || peer.UserId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase))
+        if (peer.UserId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase))
             return;
 
         _ = Task.Run(async () =>
         {
-            try
+            foreach (var manifest in _localManifests.Values)
             {
-                await _client.PushManifestAsync(peer.Address, peer.Port, _localManifest, BuildAnnouncingPeerInfo());
-                RecordPeerMessage(peer.UserId, "PushManifest", success: true,
-                    $"Pushed local manifest ({_localManifest.Operations.Count} op) to {peer.Address}:{peer.Port}.");
-            }
-            catch (Exception ex)
-            {
-                RecordPeerMessage(peer.UserId, "PushManifest", success: false,
-                    $"Push failed to {peer.Address}:{peer.Port}: {ex.Message}");
-                // best-effort push; next periodic sync/merge will reconcile.
+                try
+                {
+                    await _client.PushManifestAsync(peer.Address, peer.Port, manifest, BuildAnnouncingPeerInfo(manifest.StreamType));
+                    RecordPeerMessage(peer.UserId, "PushManifest", success: true,
+                        $"Pushed local {manifest.StreamType} manifest ({manifest.Operations.Count} op) to {peer.Address}:{peer.Port}.");
+                }
+                catch (Exception ex)
+                {
+                    RecordPeerMessage(peer.UserId, "PushManifest", success: false,
+                        $"Push failed for {manifest.StreamType} to {peer.Address}:{peer.Port}: {ex.Message}");
+                }
             }
         });
     }
@@ -630,61 +666,64 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         if (string.IsNullOrWhiteSpace(peer.PublicKeyPem)) return;
         if (peer.UserId == _identity?.UserId) return;
 
-        try
+        foreach (ManifestStreamType streamType in Enum.GetValues(typeof(ManifestStreamType)))
         {
-            var existing = _peerStore.Get(peer.UserId);
-            var startSeq = (existing?.Snapshot?.LastSequenceNumber ?? -1) + 1 + (existing?.Operations.Count ?? 0);
-
-            Manifest? remoteManifest = null;
-            var fetchedFromPeer = false;
-
             try
             {
-                if (peer.Port > 0)
-                {
-                    remoteManifest = await _client.FetchManifestAsync(peer.Address, peer.Port, startSeq, null, targetUserId: null, cancellationToken: ct);
-                    fetchedFromPeer = remoteManifest != null;
-                }
-            }
-            catch { /* fallback to relay if peer is unreachable */ }
+                var existing = _peerStore.Get(peer.UserId, streamType);
+                var startSeq = (existing?.Snapshot?.LastSequenceNumber ?? -1) + 1 + (existing?.Operations.Count ?? 0);
 
-            if (remoteManifest == null && peer.Capabilities.Contains("relay"))
-            {
-                foreach (var bootstrap in _bootstrapNodes.Take(SecurityLimits.MaxBootstrapNodes))
+                Manifest? remoteManifest = null;
+                var fetchedFromPeer = false;
+
+                try
                 {
-                    if (TryParseEndpoint(bootstrap, out var host, out var port))
+                    if (peer.Port > 0)
                     {
-                        try
-                        {
-                            remoteManifest = await _client.FetchManifestAsync(host, port, startSeq, null, targetUserId: peer.UserId, cancellationToken: ct);
-                            if (remoteManifest != null)
-                            {
-                                RecordPeerMessage(peer.UserId, "FetchManifestRelay", success: true,
-                                    $"Fetched manifest from bootstrap relay {host}:{port}.");
-                                break;
-                            }
-                        }
-                        catch { }
+                        remoteManifest = await _client.FetchManifestAsync(peer.Address, peer.Port, streamType, startSeq, null, targetUserId: null, cancellationToken: ct);
+                        fetchedFromPeer = remoteManifest != null;
                     }
                 }
-            }
+                catch { /* fallback to relay if peer is unreachable */ }
 
-            if (remoteManifest == null)
+                if (remoteManifest == null && peer.Capabilities.Contains("relay"))
+                {
+                    foreach (var bootstrap in _bootstrapNodes.Take(SecurityLimits.MaxBootstrapNodes))
+                    {
+                        if (TryParseEndpoint(bootstrap, out var host, out var port))
+                        {
+                            try
+                            {
+                                remoteManifest = await _client.FetchManifestAsync(host, port, streamType, startSeq, null, targetUserId: peer.UserId, cancellationToken: ct);
+                                if (remoteManifest != null)
+                                {
+                                    RecordPeerMessage(peer.UserId, "FetchManifestRelay", success: true,
+                                        $"Fetched {streamType} manifest from bootstrap relay {host}:{port}.");
+                                    break;
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                }
+
+                if (remoteManifest == null)
+                {
+                    RecordPeerMessage(peer.UserId, "FetchManifest", success: false,
+                        $"Peer {peer.Address}:{peer.Port} returned no {streamType} manifest and relay fallback failed.");
+                    continue;
+                }
+
+                Interlocked.Increment(ref _outboundManifestFetchCount);
+                RecordPeerMessage(peer.UserId, "FetchManifest", success: true,
+                    $"Fetched {streamType} manifest with {remoteManifest.Operations.Count} operation(s) (delta sync from seq {startSeq}). FromPeer={fetchedFromPeer}");
+                TryMerge(remoteManifest, peer.PublicKeyPem);
+            }
+            catch (Exception ex)
             {
                 RecordPeerMessage(peer.UserId, "FetchManifest", success: false,
-                    $"Peer {peer.Address}:{peer.Port} returned no manifest and relay fallback failed.");
-                return;
+                    $"Fetch failed for {streamType}: {ex.Message}");
             }
-
-            Interlocked.Increment(ref _outboundManifestFetchCount);
-            RecordPeerMessage(peer.UserId, "FetchManifest", success: true,
-                $"Fetched manifest with {remoteManifest.Operations.Count} operation(s) (delta sync from seq {startSeq}). FromPeer={fetchedFromPeer}");
-            TryMerge(remoteManifest, peer.PublicKeyPem);
-        }
-        catch (Exception ex)
-        {
-            RecordPeerMessage(peer.UserId, "FetchManifest", success: false,
-                $"Fetch failed: {ex.Message}");
         }
     }
 
@@ -945,13 +984,14 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// <returns><c>true</c> if a new Play operation was appended; <c>false</c> if rate-capped or not ready.</returns>
     public bool RecordPlay(string trackId, string title, string artist)
     {
-        if (_localManifest == null || _identity == null) return false;
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Play));
+        if (manifest == null || _identity == null) return false;
         if (string.IsNullOrWhiteSpace(trackId)) return false;
         if (!_playedThisSession.Add(trackId)) return false;   // already counted this session
 
         Logger.Info("Recording play for track '{0}' (ID: {1})", title, trackId);
         _manifestManager.AppendSignedOperation(
-            _localManifest,
+            manifest,
             ManifestOperationType.Play,
             SecurityLimits.Truncate(trackId, SecurityLimits.MaxTargetIdLength),
             "Track",
@@ -973,7 +1013,8 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// </summary>
     public void AnnounceTrack(string trackId, string contentHash, Dictionary<string, string>? metadata = null)
     {
-        if (_localManifest == null || _identity == null) return;
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Create));
+        if (manifest == null || _identity == null) return;
         var meta = metadata != null ? new Dictionary<string, string>(metadata) : [];
         meta.TryAdd("releasedAt", DateTime.UtcNow.ToString("O"));
 
@@ -981,14 +1022,14 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         Logger.Info("Announcing track release: '{0}' (ID: {1}, Hash: {2})", title, trackId, contentHash);
 
         _manifestManager.AppendSignedOperation(
-            _localManifest,
+            manifest,
             ManifestOperationType.Create,
             trackId,
             "Track",
             contentHash,
             meta,
             _identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest();
+        PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 
     /// <summary>
@@ -997,7 +1038,8 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// </summary>
     public void AnnounceAlbum(string albumId, string? contentHash, Dictionary<string, string>? metadata = null)
     {
-        if (_localManifest == null || _identity == null) return;
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Create));
+        if (manifest == null || _identity == null) return;
         var meta = metadata != null ? new Dictionary<string, string>(metadata) : [];
         meta.TryAdd("releasedAt", DateTime.UtcNow.ToString("O"));
 
@@ -1005,14 +1047,14 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         Logger.Info("Announcing album release: '{0}' (ID: {1})", name, albumId);
 
         _manifestManager.AppendSignedOperation(
-            _localManifest,
+            manifest,
             ManifestOperationType.Create,
             albumId,
             "Album",
             contentHash,
             meta,
             _identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest();
+        PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 
     /// <summary>
@@ -1021,19 +1063,20 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// </summary>
     public void RecordFollow(string targetUserId)
     {
-        if (_localManifest == null || _identity == null) return;
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Follow));
+        if (manifest == null || _identity == null) return;
         if (string.IsNullOrWhiteSpace(targetUserId)) return;
 
         Logger.Info("Recording follow for user {0}", targetUserId);
         _manifestManager.AppendSignedOperation(
-            _localManifest,
+            manifest,
             ManifestOperationType.Follow,
             SecurityLimits.Truncate(targetUserId, SecurityLimits.MaxTargetIdLength),
             "User",
             contentHash: null,
             metadata: null,
             _identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest();
+        PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 
     /// <summary>
@@ -1041,19 +1084,20 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// </summary>
     public void RecordFriendAdd(string targetUserId)
     {
-        if (_localManifest == null || _identity == null) return;
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.FriendAdd));
+        if (manifest == null || _identity == null) return;
         if (string.IsNullOrWhiteSpace(targetUserId)) return;
 
         Logger.Info("Recording friend add for user {0}", targetUserId);
         _manifestManager.AppendSignedOperation(
-            _localManifest,
+            manifest,
             ManifestOperationType.FriendAdd,
             SecurityLimits.Truncate(targetUserId, SecurityLimits.MaxTargetIdLength),
             "User",
             contentHash: null,
             metadata: null,
             _identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest();
+        PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 
     /// <summary>
@@ -1061,19 +1105,20 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// </summary>
     public void RecordFriendRemove(string targetUserId)
     {
-        if (_localManifest == null || _identity == null) return;
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.FriendRemove));
+        if (manifest == null || _identity == null) return;
         if (string.IsNullOrWhiteSpace(targetUserId)) return;
 
         Logger.Info("Recording friend remove for user {0}", targetUserId);
         _manifestManager.AppendSignedOperation(
-            _localManifest,
+            manifest,
             ManifestOperationType.FriendRemove,
             SecurityLimits.Truncate(targetUserId, SecurityLimits.MaxTargetIdLength),
             "User",
             contentHash: null,
             metadata: null,
             _identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest();
+        PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 
     /// <summary>
@@ -1081,18 +1126,20 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// </summary>
     public void RecordGroupJoin(string groupId)
     {
-        if (_localManifest == null || _identity == null) return;
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.GroupJoin));
+        if (manifest == null || _identity == null) return;
         if (string.IsNullOrWhiteSpace(groupId)) return;
 
         Logger.Info("Recording group join for group {0}", groupId);
         _manifestManager.AppendSignedOperation(
-            _localManifest,
+            manifest,
             ManifestOperationType.GroupJoin,
             SecurityLimits.Truncate(groupId, SecurityLimits.MaxTargetIdLength),
             "Group",
             contentHash: null,
             metadata: null,
             _identity.PrivateKeyPem);
+        PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 
     /// <summary>
@@ -1100,18 +1147,20 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// </summary>
     public void RecordGroupLeave(string groupId)
     {
-        if (_localManifest == null || _identity == null) return;
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.GroupLeave));
+        if (manifest == null || _identity == null) return;
         if (string.IsNullOrWhiteSpace(groupId)) return;
 
         Logger.Info("Recording group leave for group {0}", groupId);
         _manifestManager.AppendSignedOperation(
-            _localManifest,
+            manifest,
             ManifestOperationType.GroupLeave,
             SecurityLimits.Truncate(groupId, SecurityLimits.MaxTargetIdLength),
             "Group",
             contentHash: null,
             metadata: null,
             _identity.PrivateKeyPem);
+        PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 
     /// <summary>
@@ -1119,19 +1168,20 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// </summary>
     public void RecordUnfollow(string targetUserId)
     {
-        if (_localManifest == null || _identity == null) return;
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Unfollow));
+        if (manifest == null || _identity == null) return;
         if (string.IsNullOrWhiteSpace(targetUserId)) return;
 
         Logger.Info("Recording unfollow for user {0}", targetUserId);
         _manifestManager.AppendSignedOperation(
-            _localManifest,
+            manifest,
             ManifestOperationType.Unfollow,
             SecurityLimits.Truncate(targetUserId, SecurityLimits.MaxTargetIdLength),
             "User",
             contentHash: null,
             metadata: null,
             _identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest();
+        PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 
     /// <summary>
@@ -1139,7 +1189,8 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// </summary>
     public string? RecordComment(string trackId, string commentText, string? replyToId = null, Dictionary<string, string>? metadata = null)
     {
-        if (_localManifest == null || _identity == null) return null;
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Comment));
+        if (manifest == null || _identity == null) return null;
         if (string.IsNullOrWhiteSpace(trackId) || string.IsNullOrWhiteSpace(commentText)) return null;
 
         Logger.Info("Recording comment for track {0}: '{1}'", trackId, SecurityLimits.Truncate(commentText, 32));
@@ -1149,7 +1200,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             meta["replyToId"] = SecurityLimits.Truncate(replyToId, SecurityLimits.MaxOperationIdLength);
 
         var op = _manifestManager.AppendSignedOperation(
-            _localManifest,
+            manifest,
             ManifestOperationType.Comment,
             SecurityLimits.Truncate(trackId, SecurityLimits.MaxTargetIdLength),
             "Track",
@@ -1157,6 +1208,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             metadata: meta,
             _identity.PrivateKeyPem);
 
+        PersistAndFanoutLocalManifest(manifest.StreamType);
         return op.OperationId;
     }
 
@@ -1165,12 +1217,13 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// </summary>
     public void RecordCommentDelete(string trackId, string commentOperationId)
     {
-        if (_localManifest == null || _identity == null) return;
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.CommentDelete));
+        if (manifest == null || _identity == null) return;
         if (string.IsNullOrWhiteSpace(trackId) || string.IsNullOrWhiteSpace(commentOperationId)) return;
 
         Logger.Info("Recording comment deletion for track {0}, op {1}", trackId, commentOperationId);
         _manifestManager.AppendSignedOperation(
-            _localManifest,
+            manifest,
             ManifestOperationType.CommentDelete,
             SecurityLimits.Truncate(trackId, SecurityLimits.MaxTargetIdLength),
             "Track",
@@ -1180,6 +1233,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                 ["commentOperationId"] = SecurityLimits.Truncate(commentOperationId, SecurityLimits.MaxOperationIdLength)
             },
             _identity.PrivateKeyPem);
+        PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 
     /// <summary>
@@ -1187,18 +1241,20 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// </summary>
     public void RecordLike(string trackId)
     {
-        if (_localManifest == null || _identity == null) return;
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Like));
+        if (manifest == null || _identity == null) return;
         if (string.IsNullOrWhiteSpace(trackId)) return;
 
         Logger.Info("Recording like for track {0}", trackId);
         _manifestManager.AppendSignedOperation(
-            _localManifest,
+            manifest,
             ManifestOperationType.Like,
             SecurityLimits.Truncate(trackId, SecurityLimits.MaxTargetIdLength),
             "Track",
             contentHash: null,
             metadata: null,
             _identity.PrivateKeyPem);
+        PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 
     /// <summary>
@@ -1206,18 +1262,20 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// </summary>
     public void RecordUnlike(string trackId)
     {
-        if (_localManifest == null || _identity == null) return;
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Unlike));
+        if (manifest == null || _identity == null) return;
         if (string.IsNullOrWhiteSpace(trackId)) return;
 
         Logger.Info("Recording unlike for track {0}", trackId);
         _manifestManager.AppendSignedOperation(
-            _localManifest,
+            manifest,
             ManifestOperationType.Unlike,
             SecurityLimits.Truncate(trackId, SecurityLimits.MaxTargetIdLength),
             "Track",
             contentHash: null,
             metadata: null,
             _identity.PrivateKeyPem);
+        PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 
     /// <summary>
@@ -1226,7 +1284,8 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// </summary>
     public void BroadcastProfile(string displayName, bool isArtist, string bio, string? website, string? bannerImageHash)
     {
-        if (_localManifest == null || _identity == null) return;
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Profile));
+        if (manifest == null || _identity == null) return;
 
         Logger.Info("Broadcasting updated profile for {0} (isArtist: {1})", displayName, isArtist);
         var meta = new Dictionary<string, string>
@@ -1241,14 +1300,14 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             meta["bannerImageHash"] = bannerImageHash;
 
         _manifestManager.AppendSignedOperation(
-            _localManifest,
+            manifest,
             ManifestOperationType.Profile,
             _identity.UserId,
             "User",
             contentHash: bannerImageHash,
             meta,
             _identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest();
+        PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 
     private void TryMerge(Manifest remote, string publicKeyPem)
@@ -1338,15 +1397,15 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         }
     }
 
-    private void PersistAndFanoutLocalManifest()
+    private void PersistAndFanoutLocalManifest(ManifestStreamType streamType)
     {
-        SaveLocalManifest();
+        var manifest = GetLocalManifest(streamType);
+        if (manifest == null) return;
 
-        if (_localManifest == null)
-            return;
+        SaveLocalManifest(manifest);
 
-        Logger.Info("Local manifest updated (ops: {0}). Initiating fan-out to peers.", _localManifest.Operations.Count);
-        _ = _catalogueService.IngestAsync(_localManifest);
+        Logger.Info("Local {0} manifest updated (ops: {1}). Initiating fan-out to peers.", streamType, manifest.Operations.Count);
+        _ = _catalogueService.IngestAsync(manifest);
 
         _ = Task.Run(async () =>
         {
@@ -1355,16 +1414,16 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             {
                 try
                 {
-                    Logger.Debug("Pushing local manifest to peer {0} ({1}:{2})", peer.UserId, peer.Address, peer.Port);
-                    await _client.PushManifestAsync(peer.Address, peer.Port, _localManifest, BuildAnnouncingPeerInfo());
+                    Logger.Debug("Pushing local {0} manifest to peer {1} ({2}:{3})", streamType, peer.UserId, peer.Address, peer.Port);
+                    await _client.PushManifestAsync(peer.Address, peer.Port, manifest, BuildAnnouncingPeerInfo(streamType));
                     RecordPeerMessage(peer.UserId, "PushManifest", success: true,
-                        $"Pushed local manifest ({_localManifest.Operations.Count} op) to {peer.Address}:{peer.Port}.");
+                        $"Pushed local {streamType} manifest ({manifest.Operations.Count} op) to {peer.Address}:{peer.Port}.");
                 }
                 catch (Exception ex)
                 {
-                    Logger.Warn("Failed to push manifest to {0}: {1}", peer.UserId, ex.Message);
+                    Logger.Warn("Failed to push {0} manifest to {1}: {2}", streamType, peer.UserId, ex.Message);
                     RecordPeerMessage(peer.UserId, "PushManifest", success: false,
-                        $"Push failed to {peer.Address}:{peer.Port}: {ex.Message}");
+                        $"Push failed for {streamType} to {peer.Address}:{peer.Port}: {ex.Message}");
                     // best-effort push; periodic sync/merge will reconcile later
                 }
             }
@@ -1377,16 +1436,16 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                     {
                         try
                         {
-                            Logger.Debug("Relaying local manifest via bootstrap {0}:{1}", host, port);
-                            await _client.RelayManifestPushAsync(host, port, _localManifest, BuildAnnouncingPeerInfo());
+                            Logger.Debug("Relaying local {0} manifest via bootstrap {1}:{2}", streamType, host, port);
+                            await _client.RelayManifestPushAsync(host, port, manifest, BuildAnnouncingPeerInfo(streamType));
                             RecordPeerMessage($"bootstrap:{host}:{port}", "RelayManifestPush", success: true,
-                                $"Pushed local manifest to bootstrap for relaying.");
+                                $"Pushed local {streamType} manifest to bootstrap for relaying.");
                         }
                         catch (Exception ex)
                         {
-                            Logger.Warn("Failed to relay manifest via bootstrap {0}:{1}: {2}", host, port, ex.Message);
+                            Logger.Warn("Failed to relay {0} manifest via bootstrap {1}:{2}: {3}", streamType, host, port, ex.Message);
                             RecordPeerMessage($"bootstrap:{host}:{port}", "RelayManifestPush", success: false,
-                                $"Relay push failed: {ex.Message}");
+                                $"Relay push failed for {streamType}: {ex.Message}");
                         }
                     }
                 }
@@ -1394,12 +1453,13 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         });
     }
 
-    private PeerInfo BuildAnnouncingPeerInfo()
+    private PeerInfo BuildAnnouncingPeerInfo(ManifestStreamType streamType)
     {
+        var manifest = GetLocalManifest(streamType);
         return new PeerInfo
         {
-            UserId = _identity?.UserId ?? _localManifest?.UserId ?? string.Empty,
-            DisplayName = SecurityLimits.Truncate(_identity?.DisplayName ?? _localManifest?.UserId ?? "peer", SecurityLimits.MaxDisplayNameLength),
+            UserId = _identity?.UserId ?? manifest?.UserId ?? string.Empty,
+            DisplayName = SecurityLimits.Truncate(_identity?.DisplayName ?? manifest?.UserId ?? "peer", SecurityLimits.MaxDisplayNameLength),
             Address = ExternalIPAddress ?? string.Empty,
             Port = _actAsListener ? (_identity?.ManifestPort ?? ManifestExchangeServer.DefaultPort) : 0,
             PublicKeyPem = _identity?.PublicKeyPem ?? string.Empty,

@@ -113,8 +113,8 @@ public class MeshIntegrationTests : IAsyncLifetime
         var (peerA, identityA, manifestA, portA) = CreatePeer("Alice");
         var (peerB, identityB, manifestB, portB) = CreatePeer("Bob");
 
-        await peerA.StartAsync(identityA, manifestA);
-        await peerB.StartAsync(identityB, manifestB,
+        await peerA.StartAsync(identityA, [manifestA]);
+        await peerB.StartAsync(identityB, [manifestB],
             bootstrapNodes: [$"127.0.0.1:{portA}"]);
 
         // Allow bootstrap contact and manifest fetch.
@@ -155,7 +155,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         {
             // No external bootstrap is running: start an in-process bootstrap for this test.
             bootstrapServer = new ManifestExchangeServer(bootstrapPort);
-            await bootstrapServer.StartAsync(() => null, () => []);
+            await bootstrapServer.StartAsync((_) => null, () => []);
         }
 
         try
@@ -163,7 +163,7 @@ public class MeshIntegrationTests : IAsyncLifetime
             var (peer, identity, manifest, _) = CreatePeer("Client");
             identity.ManifestPort = FindFreePort(); // explicitly non-bootstrap port
 
-            await peer.StartAsync(identity, manifest, bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
+            await peer.StartAsync(identity, [manifest], bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
 
             Assert.True(peer.IsRunning, "Client should start even when bootstrap uses 39877.");
             Assert.NotEqual(bootstrapPort, identity.ManifestPort);
@@ -187,7 +187,7 @@ public class MeshIntegrationTests : IAsyncLifetime
     {
         var (peerA, identityA, manifestA, portA) = CreatePeer("Alice");
 
-        await peerA.StartAsync(identityA, manifestA);
+        await peerA.StartAsync(identityA, [manifestA]);
 
         // Act: A announces a track.
         peerA.AnnounceTrack("track-001", "abc123hash", new Dictionary<string, string>
@@ -197,7 +197,8 @@ public class MeshIntegrationTests : IAsyncLifetime
         });
 
         // Assert: the operation is in A's manifest and has a valid signature.
-        var manifest = manifestA;
+        var manifest = peerA.GetLocalManifest(ManifestStreamType.Content);
+        Assert.NotNull(manifest);
         Assert.NotEmpty(manifest.Operations);
         Assert.Contains(manifest.Operations, op =>
             op.OperationType == ManifestOperationType.Create &&
@@ -215,13 +216,14 @@ public class MeshIntegrationTests : IAsyncLifetime
     {
         var (peerA, identityA, manifestA, portA) = CreatePeer("Alice");
 
-        await peerA.StartAsync(identityA, manifestA);
+        await peerA.StartAsync(identityA, [manifestA]);
 
         // Alice broadcasts her artist profile.
         peerA.BroadcastProfile("Alice Artist", isArtist: true, "My bio", "https://alice.example", null!);
 
         // Assert: profile operation is in her manifest.
-        var manifest = manifestA;
+        var manifest = peerA.GetLocalManifest(ManifestStreamType.Social);
+        Assert.NotNull(manifest);
         Assert.NotEmpty(manifest.Operations);
 
         var profileOp = manifest.Operations.FirstOrDefault(op => op.OperationType == ManifestOperationType.Profile);
@@ -239,7 +241,7 @@ public class MeshIntegrationTests : IAsyncLifetime
     {
         var (peerB, identityB, manifestB, portB) = CreatePeer("Bob");
 
-        await peerB.StartAsync(identityB, manifestB);
+        await peerB.StartAsync(identityB, [manifestB]);
 
         var targetUserId = "user-123";
 
@@ -248,8 +250,10 @@ public class MeshIntegrationTests : IAsyncLifetime
         peerB.RecordUnfollow(targetUserId);
 
         // Assert: both operations are in Bob's manifest.
-        Assert.Contains(manifestB.Operations, op => op.OperationType == ManifestOperationType.Follow);
-        Assert.Contains(manifestB.Operations, op => op.OperationType == ManifestOperationType.Unfollow);
+        var manifest = peerB.GetLocalManifest(ManifestStreamType.Social);
+        Assert.NotNull(manifest);
+        Assert.Contains(manifest.Operations, op => op.OperationType == ManifestOperationType.Follow);
+        Assert.Contains(manifest.Operations, op => op.OperationType == ManifestOperationType.Unfollow);
     }
 
     // ---------------------------------------------------------------------------
@@ -265,8 +269,8 @@ public class MeshIntegrationTests : IAsyncLifetime
         var mergeEvents = new List<ManifestMergedEventArgs>();
         peerB.ManifestMerged += (_, args) => mergeEvents.Add(args);
 
-        await peerA.StartAsync(identityA, manifestA);
-        await peerB.StartAsync(identityB, manifestB, bootstrapNodes: [$"127.0.0.1:{portA}"]);
+        await peerA.StartAsync(identityA, [manifestA]);
+        await peerB.StartAsync(identityB, [manifestB], bootstrapNodes: [$"127.0.0.1:{portA}"]);
 
         // Record an event to ensure the merge event fires.
         peerA.AnnounceTrack("test-track", "hashvalue");
@@ -306,16 +310,18 @@ public class MeshIntegrationTests : IAsyncLifetime
         identityA.ManifestPort = FindFreePort();
         identityB.ManifestPort = FindFreePort();
 
-        await peerA.StartAsync(identityA, manifestA, bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
-        await peerB.StartAsync(identityB, manifestB, bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
+        await peerA.StartAsync(identityA, [manifestA], bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
+        await peerB.StartAsync(identityB, [manifestB], bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
 
         // Push any signed op to force bootstrap registration via PushManifest callback.
         peerA.RecordFollow("bootstrap-probe-user");
         peerB.RecordFollow("bootstrap-probe-user");
 
         var pushClient = new ManifestExchangeClient(timeoutMs: LocalTestTimeoutMs);
-        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, manifestA);
-        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, manifestB);
+        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, peerA.GetLocalManifest(ManifestStreamType.Social)!);
+        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, peerA.GetLocalManifest(ManifestStreamType.Content)!);
+        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, peerB.GetLocalManifest(ManifestStreamType.Social)!);
+        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, peerB.GetLocalManifest(ManifestStreamType.Content)!);
 
         await WaitUntilAsync(() => bootstrap.RegisteredPeerCount >= 2, timeoutMs: LocalTestTimeoutMs);
 
@@ -347,15 +353,17 @@ public class MeshIntegrationTests : IAsyncLifetime
         identityA.ManifestPort = FindFreePort();
         identityB.ManifestPort = FindFreePort();
 
-        await peerA.StartAsync(identityA, manifestA, bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
-        await peerB.StartAsync(identityB, manifestB, bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
+        await peerA.StartAsync(identityA, [manifestA], bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
+        await peerB.StartAsync(identityB, [manifestB], bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
 
         peerA.RecordFollow("diagnostic-probe");
         peerB.RecordFollow("diagnostic-probe");
 
         var pushClient = new ManifestExchangeClient(timeoutMs: LocalTestTimeoutMs);
-        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, manifestA);
-        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, manifestB);
+        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, peerA.GetLocalManifest(ManifestStreamType.Social)!);
+        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, peerA.GetLocalManifest(ManifestStreamType.Content)!);
+        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, peerB.GetLocalManifest(ManifestStreamType.Social)!);
+        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, peerB.GetLocalManifest(ManifestStreamType.Content)!);
 
         // Ensure peerA learns about peerB to execute the full attempt pipeline.
         await peerA.SyncAllPeersAsync();
@@ -429,15 +437,17 @@ public class MeshIntegrationTests : IAsyncLifetime
         identityA.ManifestPort = FindFreePort();
         identityB.ManifestPort = FindFreePort();
 
-        await peerA.StartAsync(identityA, manifestA, bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
-        await peerB.StartAsync(identityB, manifestB, bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
+        await peerA.StartAsync(identityA, [manifestA], bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
+        await peerB.StartAsync(identityB, [manifestB], bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
 
         peerA.RecordFollow("rendezvous-probe");
         peerB.RecordFollow("rendezvous-probe");
 
         var pushClient = new ManifestExchangeClient(timeoutMs: LocalTestTimeoutMs);
-        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, manifestA);
-        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, manifestB);
+        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, peerA.GetLocalManifest(ManifestStreamType.Social)!);
+        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, peerA.GetLocalManifest(ManifestStreamType.Content)!);
+        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, peerB.GetLocalManifest(ManifestStreamType.Social)!);
+        await pushClient.PushManifestAsync("127.0.0.1", bootstrapPort, peerB.GetLocalManifest(ManifestStreamType.Content)!);
 
         await peerA.SyncAllPeersAsync();
 
@@ -458,7 +468,7 @@ public class MeshIntegrationTests : IAsyncLifetime
     {
         var (peerA, identityA, manifestA, portA) = CreatePeer("Alice");
 
-        await peerA.StartAsync(identityA, manifestA);
+        await peerA.StartAsync(identityA, [manifestA]);
 
         // Create a manifest with a valid signed operation.
         var mgr = new ManifestManager();
@@ -544,8 +554,8 @@ public class MeshIntegrationTests : IAsyncLifetime
         var (john, johnId, johnManifest, johnPort) = CreatePeer("John");
         var (jane, janeId, janeManifest, janePort) = CreatePeer("Jane");
 
-        await john.StartAsync(johnId, johnManifest);
-        await jane.StartAsync(janeId, janeManifest, bootstrapNodes: [$"127.0.0.1:{johnPort}"]);
+        await john.StartAsync(johnId, [johnManifest]);
+        await jane.StartAsync(janeId, [janeManifest], bootstrapNodes: [$"127.0.0.1:{johnPort}"]);
 
         // Both announce themselves as artists.
         john.BroadcastProfile("John Artist", isArtist: true, "Beats and synths", "", null!);
@@ -560,13 +570,13 @@ public class MeshIntegrationTests : IAsyncLifetime
         await Task.Delay(200);
 
         // Verify John has his own profile recorded.
-        var johnProfileOp = johnManifest.Operations.FirstOrDefault(o => o.OperationType == ManifestOperationType.Profile);
+        var johnProfileOp = john.GetLocalManifest(ManifestStreamType.Social)!.Operations.FirstOrDefault(o => o.OperationType == ManifestOperationType.Profile);
         Assert.NotNull(johnProfileOp);
         Assert.Equal("John Artist", johnProfileOp!.Metadata["displayName"]);
         Assert.Equal("True", johnProfileOp.Metadata["isArtist"]);
 
         // Verify Jane has her own profile recorded.
-        var janeProfileOp = janeManifest.Operations.FirstOrDefault(o => o.OperationType == ManifestOperationType.Profile);
+        var janeProfileOp = jane.GetLocalManifest(ManifestStreamType.Social)!.Operations.FirstOrDefault(o => o.OperationType == ManifestOperationType.Profile);
         Assert.NotNull(janeProfileOp);
         Assert.Equal("Jane Artist", janeProfileOp!.Metadata["displayName"]);
         Assert.Equal("True", janeProfileOp.Metadata["isArtist"]);
@@ -578,8 +588,8 @@ public class MeshIntegrationTests : IAsyncLifetime
         var (john, johnId, johnManifest, johnPort) = CreatePeer("John");
         var (jane, janeId, janeManifest, janePort) = CreatePeer("Jane");
 
-        await john.StartAsync(johnId, johnManifest);
-        await jane.StartAsync(janeId, janeManifest, bootstrapNodes: [$"127.0.0.1:{johnPort}"]);
+        await john.StartAsync(johnId, [johnManifest]);
+        await jane.StartAsync(janeId, [janeManifest], bootstrapNodes: [$"127.0.0.1:{johnPort}"]);
 
         john.BroadcastProfile("John Artist", isArtist: true, "", null, null);
         jane.BroadcastProfile("Jane Artist", isArtist: true, "", null, null);
@@ -611,8 +621,10 @@ public class MeshIntegrationTests : IAsyncLifetime
 
         // Deterministic cross-push to avoid timing flakiness in local test environments.
         var directPush = new ManifestExchangeClient(timeoutMs: LocalTestTimeoutMs);
-        await directPush.PushManifestAsync("127.0.0.1", janePort, johnManifest);
-        await directPush.PushManifestAsync("127.0.0.1", johnPort, janeManifest);
+        await directPush.PushManifestAsync("127.0.0.1", janePort, john.GetLocalManifest(ManifestStreamType.Social)!);
+        await directPush.PushManifestAsync("127.0.0.1", janePort, john.GetLocalManifest(ManifestStreamType.Content)!);
+        await directPush.PushManifestAsync("127.0.0.1", johnPort, jane.GetLocalManifest(ManifestStreamType.Social)!);
+        await directPush.PushManifestAsync("127.0.0.1", johnPort, jane.GetLocalManifest(ManifestStreamType.Content)!);
 
         await WaitUntilAsync(() =>
             john.GetPeerManifest(janeId.UserId) != null && jane.GetPeerManifest(johnId.UserId) != null,
@@ -654,8 +666,8 @@ public class MeshIntegrationTests : IAsyncLifetime
         var (john, johnId, johnManifest, johnPort) = CreatePeer("John");
         var (jane, janeId, janeManifest, janePort) = CreatePeer("Jane");
 
-        await john.StartAsync(johnId, johnManifest, contentProvider: johnContentProvider);
-        await jane.StartAsync(janeId, janeManifest, bootstrapNodes: [$"127.0.0.1:{johnPort}"]);
+        await john.StartAsync(johnId, [johnManifest], contentProvider: johnContentProvider);
+        await jane.StartAsync(janeId, [janeManifest], bootstrapNodes: [$"127.0.0.1:{johnPort}"]);
 
         // John announces the DeskPlastic album and its tracks.
         john.AnnounceAlbum("album-deskplastic", null, new Dictionary<string, string>
@@ -705,8 +717,8 @@ public class MeshIntegrationTests : IAsyncLifetime
         var (john, johnId, johnManifest, johnPort) = CreatePeer("John");
         var (jane, janeId, janeManifest, janePort) = CreatePeer("Jane");
 
-        await john.StartAsync(johnId, johnManifest, bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
-        await jane.StartAsync(janeId, janeManifest, bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
+        await john.StartAsync(johnId, [johnManifest], bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
+        await jane.StartAsync(janeId, [janeManifest], bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"]);
 
         john.BroadcastProfile("John Artist", isArtist: true, "", null, null);
         john.AnnounceAlbum("album-fanout", null, new Dictionary<string, string>
@@ -723,7 +735,8 @@ public class MeshIntegrationTests : IAsyncLifetime
 
         // Register both peers with bootstrap using explicit metadata so discovery includes reachable endpoint + public key.
         var push = new ManifestExchangeClient(timeoutMs: LocalTestTimeoutMs);
-        await push.PushManifestAsync("127.0.0.1", bootstrapPort, johnManifest, new PeerInfo
+        john.GetLocalManifest(ManifestStreamType.Social)!.StreamType = ManifestStreamType.Social; // ensure consistency
+        await push.PushManifestAsync("127.0.0.1", bootstrapPort, john.GetLocalManifest(ManifestStreamType.Social)!, new PeerInfo
         {
             UserId = johnId.UserId,
             DisplayName = johnId.DisplayName,
@@ -732,7 +745,7 @@ public class MeshIntegrationTests : IAsyncLifetime
             PublicKeyPem = johnId.PublicKeyPem,
             LastSeen = DateTime.UtcNow
         });
-        await push.PushManifestAsync("127.0.0.1", bootstrapPort, janeManifest, new PeerInfo
+        await push.PushManifestAsync("127.0.0.1", bootstrapPort, jane.GetLocalManifest(ManifestStreamType.Social)!, new PeerInfo
         {
             UserId = janeId.UserId,
             DisplayName = janeId.DisplayName,
@@ -778,11 +791,11 @@ public class MeshIntegrationTests : IAsyncLifetime
         // Bob is a regular peer
         var (bob, bobId, bobManifest, _) = CreatePeer("Bob");
 
-        await alice.StartAsync(aliceId, aliceManifest,
+        await alice.StartAsync(aliceId, [aliceManifest],
             bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"],
             actAsListener: false);
 
-        await bob.StartAsync(bobId, bobManifest,
+        await bob.StartAsync(bobId, [bobManifest],
             bootstrapNodes: [$"127.0.0.1:{bootstrapPort}"],
             actAsListener: true);
 
