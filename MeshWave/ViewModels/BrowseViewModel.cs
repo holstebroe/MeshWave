@@ -18,6 +18,7 @@ public enum BrowseTab { Artists, Albums, Tracks, Playlists, Downloads }
 public class BrowseArtistItem : ViewModelBase
 {
     private string _avatarIconPath = string.Empty;
+    private string _iconPath = string.Empty;
     private bool _isLocal;
 
     public string UserId { get; set; } = string.Empty;
@@ -26,6 +27,11 @@ public class BrowseArtistItem : ViewModelBase
     {
         get => _avatarIconPath;
         set => SetProperty(ref _avatarIconPath, value);
+    }
+    public string IconPath
+    {
+        get => _iconPath;
+        set => SetProperty(ref _iconPath, value);
     }
     public string Bio { get; set; } = string.Empty;
     public int TrackCount { get; set; }
@@ -41,6 +47,7 @@ public class BrowseArtistItem : ViewModelBase
 
 public class BrowseAlbumItem : ViewModelBase
 {
+    private string _iconPath = string.Empty;
     private bool _isLocal;
 
     public string AlbumId { get; set; } = string.Empty;
@@ -52,6 +59,11 @@ public class BrowseAlbumItem : ViewModelBase
     public string TotalSizeDisplay { get; set; } = string.Empty;
     public DateTime? ReleasedAt { get; set; }
     public string ReleasedAtDisplay => ReleasedAt.HasValue ? ReleasedAt.Value.ToLocalTime().ToString("MMM yyyy") : string.Empty;
+    public string IconPath
+    {
+        get => _iconPath;
+        set => SetProperty(ref _iconPath, value);
+    }
     public bool IsLocal
     {
         get => _isLocal;
@@ -61,6 +73,7 @@ public class BrowseAlbumItem : ViewModelBase
 
 public class BrowsePlaylistItem : ViewModelBase
 {
+    private string _iconPath = string.Empty;
     private bool _isLocal;
 
     public string PlaylistId { get; set; } = string.Empty;
@@ -72,6 +85,11 @@ public class BrowsePlaylistItem : ViewModelBase
     public List<string> TrackIds { get; set; } = [];
     public DateTime? ReleasedAt { get; set; }
     public string ReleasedAtDisplay => ReleasedAt.HasValue ? ReleasedAt.Value.ToLocalTime().ToString("MMM d, yyyy") : string.Empty;
+    public string IconPath
+    {
+        get => _iconPath;
+        set => SetProperty(ref _iconPath, value);
+    }
     public bool IsLocal
     {
         get => _isLocal;
@@ -85,6 +103,7 @@ public class BrowseTrackItem : ViewModelBase
     private bool _isDownloaded;
     private bool _isLocal;
     private bool _needsUpdate;
+    private string _iconPath = string.Empty;
 
     public string TrackId { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
@@ -139,6 +158,12 @@ public class BrowseTrackItem : ViewModelBase
             OnPropertyChanged(nameof(DownloadButtonLabel));
             OnPropertyChanged(nameof(CanDownload));
         }
+    }
+
+    public string IconPath
+    {
+        get => _iconPath;
+        set => SetProperty(ref _iconPath, value);
     }
 
     public string DownloadButtonLabel =>
@@ -469,6 +494,7 @@ public class BrowseViewModel : ViewModelBase
                 UserId = manifest.UserId,
                 DisplayName = displayName,
                 AvatarIconPath = _sync?.UserRepository?.GetUserIconPath(manifest.UserId) ?? string.Empty,
+                IconPath = _sync?.UserRepository?.GetUserIconPath(manifest.UserId) ?? string.Empty,
                 Bio = bio,
                 TrackCount = trackCount,
                 AlbumCount = albumCount,
@@ -520,6 +546,7 @@ public class BrowseViewModel : ViewModelBase
                     Name = name,
                     ArtistUserId = manifest.UserId,
                     ArtistDisplayName = artistName,
+                    IconPath = _sync?.UserRepository?.GetUserIconPath(entity.TargetId) ?? string.Empty,
                     ReleasedAt = releasedAt,
                     TotalSize = albumTotalSize,
                     TotalSizeDisplay = FormatFileSize(albumTotalSize),
@@ -600,6 +627,7 @@ public class BrowseViewModel : ViewModelBase
                     FileSize = fileSize,
                     FileSizeDisplay = FormatFileSize(fileSize),
                     ReleasedAt = releasedAt,
+                    IconPath = _sync?.UserRepository?.GetUserIconPath(entity.TargetId) ?? string.Empty,
                     IsQueued = isQueued,
                     IsDownloaded = isDownloaded,
                     IsLocal = isLocal,
@@ -659,6 +687,7 @@ public class BrowseViewModel : ViewModelBase
                     TrackIds = trackIds,
                     TrackCount = trackIds.Count,
                     ReleasedAt = releasedAt,
+                    IconPath = _sync?.UserRepository?.GetUserIconPath(entity.TargetId) ?? string.Empty,
                     IsLocal = _sync?.LocalManifest != null && string.Equals(manifest.UserId, _sync.LocalManifest.UserId, StringComparison.OrdinalIgnoreCase)
                 });
             }

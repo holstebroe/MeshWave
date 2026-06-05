@@ -521,7 +521,8 @@ public class ApplicationViewModel : ViewModelBase
             var roots = new[]
             {
                 _settingsService.GetLocalMusicFolder(),
-                _settingsService.GetPeerMusicFolder()
+                _settingsService.GetPeerMusicFolder(),
+                Path.Combine(settings.BaseFolder, "UserCache", "Images")
             }
             .Where(static p => !string.IsNullOrWhiteSpace(p))
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -532,9 +533,14 @@ public class ApplicationViewModel : ViewModelBase
                 if (!Directory.Exists(root))
                     continue;
 
+                var isUserCache = root.Contains("UserCache");
+
                 foreach (var file in Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories))
                 {
-                    if (!supportedExtensions.Contains(Path.GetExtension(file)))
+                    if (!isUserCache && !supportedExtensions.Contains(Path.GetExtension(file)))
+                        continue;
+
+                    if (isUserCache && !string.Equals(Path.GetExtension(file), ".png", StringComparison.OrdinalIgnoreCase) && !string.Equals(Path.GetExtension(file), ".jpg", StringComparison.OrdinalIgnoreCase))
                         continue;
 
                     var hash = CryptoService.ComputeFileHash(file);
@@ -632,18 +638,28 @@ public class ApplicationViewModel : ViewModelBase
 
                 var coverPath = manager.GetTrackCoverPath(firstPath);
                 string? coverHash = null;
+                string? iconHash = null;
                 if (!string.IsNullOrWhiteSpace(coverPath) && File.Exists(coverPath))
                 {
                     coverHash = CryptoService.ComputeFileHash(coverPath);
+                    var iconBytes = metadataService.CreateIcon(coverPath);
+                    if (iconBytes != null)
+                    {
+                        iconHash = CryptoService.ComputeHash(iconBytes);
+                        _userRepository.SaveUserIcon(album.AlbumId, iconBytes);
+                    }
                 }
 
                 var artistName = tracksInAlbum.FirstOrDefault()?.Description ?? string.Empty;
-                _syncOrchestrator.AnnounceAlbum(album.AlbumId, coverHash, new Dictionary<string, string>
+                var metadata = new Dictionary<string, string>
                 {
                     ["name"] = SecurityLimits.Truncate(album.Title, SecurityLimits.MaxAlbumNameLength),
-                    ["artist"] = SecurityLimits.Truncate(artistName, SecurityLimits.MaxArtistNameLength),
-                    ["isIcon"] = "True"
-                });
+                    ["artist"] = SecurityLimits.Truncate(artistName, SecurityLimits.MaxArtistNameLength)
+                };
+                if (!string.IsNullOrWhiteSpace(iconHash))
+                    metadata["iconHash"] = iconHash;
+
+                _syncOrchestrator.AnnounceAlbum(album.AlbumId, coverHash, metadata);
             }
 
             foreach (var track in tracks)
@@ -658,13 +674,29 @@ public class ApplicationViewModel : ViewModelBase
                 if (!trackMeta.IsReleased)
                     continue;
 
+                var coverPath = manager.GetTrackCoverPath(track.FilePath);
+                string? iconHash = null;
+                if (!string.IsNullOrWhiteSpace(coverPath) && File.Exists(coverPath))
+                {
+                    var iconBytes = metadataService.CreateIcon(coverPath);
+                    if (iconBytes != null)
+                    {
+                        iconHash = CryptoService.ComputeHash(iconBytes);
+                        _userRepository.SaveUserIcon(track.TrackId, iconBytes);
+                    }
+                }
+
                 var albumTitle = albums.FirstOrDefault(a => string.Equals(a.AlbumId, track.AlbumId, StringComparison.OrdinalIgnoreCase))?.Title ?? string.Empty;
-                _syncOrchestrator.AnnounceTrack(track.TrackId, CryptoService.ComputeFileHash(track.FilePath), new Dictionary<string, string>
+                var metadata = new Dictionary<string, string>
                 {
                     ["title"] = SecurityLimits.Truncate(track.Title, SecurityLimits.MaxTrackTitleLength),
                     ["artist"] = SecurityLimits.Truncate(track.Description ?? string.Empty, SecurityLimits.MaxArtistNameLength),
                     ["album"] = SecurityLimits.Truncate(albumTitle, SecurityLimits.MaxAlbumNameLength)
-                });
+                };
+                if (!string.IsNullOrWhiteSpace(iconHash))
+                    metadata["iconHash"] = iconHash;
+
+                _syncOrchestrator.AnnounceTrack(track.TrackId, CryptoService.ComputeFileHash(track.FilePath), metadata);
             }
         }
         catch
