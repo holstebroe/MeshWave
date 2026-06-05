@@ -15,126 +15,67 @@ jobs:
       issues: write
       contents: write       
       pull-requests: write  
+      actions: read         # Crucial: Allows this job to read its own execution logs
     steps:
-      # 1. Add the in-progress badge and clear out previous failure flags
+      # 1. Add the in-progress badge
       - name: Lock Issue to In-Progress
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['jules-in-progress']
+            });
+            
+      # 2. Run Jules (which might fail silently with a green checkmark)
+      - name: Run Jules Implementer
+        id: jules_step
+        uses: google-labs-code/jules-invoke@v1.0.0
+        with:
+          jules_api_key: ${{ secrets.JULES_API_KEY }}
+          starting_branch: master
+          prompt: |
+            ISSUE_TITLE: ${{ github.event.issue.title }}
+            ISSUE_NUMBER: ${{ github.event.issue.number }}
+            ISSUE_BODY: |
+              ${{ github.event.issue.body }}
+            
+            --------------------------------------------------
+            SYSTEM INSTRUCTIONS:
+            ${{ vars.JULES_ISSUE_DEVELOPER_PROMPT }}
+
+      # 3. VERIFY LAUNCH LOGS: Read the runner log text to detect silent failures
+      - name: Verify API Launch Success
         uses: actions/github-script@v7
         with:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            const issue_number = context.issue.number;
+            const runId = context.runId;
 
-            const { data: issue } = await github.rest.issues.get({ owner, repo, issue_number });
-            const currentLabels = issue.labels.map(l => l.name);
-
-            await github.rest.issues.addLabels({
-              owner, repo, issue_number,
-              labels: ['jules-in-progress']
+            // 1. Fetch the jobs for this workflow run to find our specific step logs
+            const { data: jobs } = await github.rest.actions.listJobsForWorkflowRun({
+              owner, repo, run_id: runId
             });
 
-            if (currentLabels.includes('jules-implementation-failed')) {
-              await github.rest.issues.removeLabel({ owner, repo, issue_number, name: 'jules-implementation-failed' });
+            const currentJob = jobs.jobs.find(j => j.status === 'in_progress' || j.name === 'trigger-jules');
+            if (!currentJob) return;
+
+            // 2. Download the raw log text for this job execution
+            const { data: logText } = await github.rest.actions.downloadJobLogsForWorkflowRun({
+              owner, repo, job_id: currentJob.id
+            });
+
+            // 3. Scan the log for the specific silent API error payload
+            if (logText.includes('FAILED_PRECONDITION')) {
+              core.setFailed("❌ Fatal: detected a silent 400 FAILED_PRECONDITION api failure in the Jules launch logs.");
+            } else {
+              console.log("✅ API logs confirmed a clean session deployment initialized.");
             }
 
-      # 2. Check out the codebase context explicitly (needed for generating git logs/diffs)
-      - name: Checkout Codebase Context
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 20
-
-      # 3. Native Execution & Local Verification Step
-      - name: Run Jules Implementer
-        id: jules_step
-        run: |
-          echo "Assembling prompt and system context strings..."
-          
-          # Reconstruct prompt structure matching Jules requirements
-          echo "${{ github.event.issue.title }}" > user_prompt.txt
-          echo "${{ github.event.issue.body }}" >> user_prompt.txt
-          echo -e '\n\nContent of the latest commit (in the format of `git show`):' >> user_prompt.txt
-          git show --stat >> user_prompt.txt || true
-          echo -e '\n\nLog of the last 20 commits (in the format of `git log --stat`):' >> user_prompt.txt
-          git log -n 20 --stat >> user_prompt.txt || true
-
-          # Read system instructions from repository variables safely
-          SYSTEM_INSTRUCTIONS=$(cat << 'EOF'
-          ${{ vars.JULES_ISSUE_DEVELOPER_PROMPT }}
-          EOF
-          )
-          echo -e "\n\n--------------------------------------------------\nSYSTEM INSTRUCTIONS:\n$SYSTEM_INSTRUCTIONS" >> user_prompt.txt
-
-          echo "Building JSON payload structure..."
-          jq -n \
-            --arg jules_prompt "$(cat user_prompt.txt)" \
-            --arg starting_branch "master" \
-            --arg repo_full_name "${{ github.repository }}" \
-            '{
-              prompt: $jules_prompt,
-              sourceContext: {
-                source: ("sources/github/" + $repo_full_name),
-                githubRepoContext: {
-                  startingBranch: $starting_branch
-                }
-              },
-              automationMode: "AUTO_CREATE_PR"
-            }' > jules_payload.json
-
-          echo "Invoking Jules Remote AI Agent..."
-          # Send request and append HTTP status code locally to the response variable
-          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
-            -X POST \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${{ secrets.JULES_API_KEY }}" \
-            -d @jules_payload.json \
-            'https://jules.googleapis.com/v1alpha/sessions')
-
-          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d':' -f2)
-          BODY=$(echo "$RESPONSE" | sed '/HTTP_STATUS:/d')
-          
-          echo "$BODY" > response.json
-
-          # Verify if the API request failed
-          if [ "$HTTP_STATUS" -ne 200 ] || jq -e '.error' response.json >/dev/null 2>&1; then
-            echo "=============================================================================="
-            echo "❌ CRITICAL: Jules API session initialization failed."
-            echo "=============================================================================="
-            
-            ERROR_STATUS=$(jq -r '.error.status // "UNKNOWN_STATUS"' response.json)
-            ERROR_MSG=$(jq -r '.error.message // "No descriptive text returned."' response.json)
-            
-            if [ "$ERROR_STATUS" = "FAILED_PRECONDITION" ]; then
-              DIAGNOSIS="BURST CONCURRENCY COLLISION (FAILED_PRECONDITION) - Too many Jules agents launched simultaneously or AI Studio session limits hit."
-            elif [ "$HTTP_STATUS" = "403" ] || [ "$ERROR_STATUS" = "PERMISSION_DENIED" ]; then
-              DIAGNOSIS="AUTHENTICATION FAILURE (403) - The JULES_API_KEY is invalid, restricted, or expired."
-            elif [ "$HTTP_STATUS" = "429" ] || [ "$ERROR_STATUS" = "RESOURCE_EXHAUSTED" ]; then
-              DIAGNOSIS="QUOTA EXHAUSTED (429) - Daily or per-minute token allocation limits reached."
-            else
-              DIAGNOSIS="GENERAL API VALIDATION ERROR ($HTTP_STATUS) - $ERROR_MSG"
-            fi
-
-            # 1. Raise Workflow Error Annotation
-            echo "::error title=Jules Launch Failure::$DIAGNOSIS"
-
-            # 2. Generate Rich Summary Dashboard UI Card
-            echo "### ❌ Jules Agent Initialization Failed" >> $GITHUB_STEP_SUMMARY
-            echo "The automated coding agent failed to initialize a development session with Google's API." >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "> **Diagnosis:** $DIAGNOSIS" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "#### 📄 Technical Error Snippet:" >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
-            cat response.json >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-            echo "The issue labels have been automatically rolled back to allow a clean retry on the next cycle." >> $GITHUB_STEP_SUMMARY
-            
-            exit 1
-          else
-            echo "✅ Clean session deployment initialized successfully."
-            echo "Session ID: $(jq -r '.id // .name' response.json)"
-          fi
-
-      # 4. SELF-HEALING RECOVERY: Triggers instantly if step 3 runs into an error status
+      # 4. SELF-HEALING RECOVERY: This will now catch the forced failure from Step 3!
       - name: Revert Labels on Failure
         if: failure()
         uses: actions/github-script@v7
@@ -153,10 +94,4 @@ jobs:
             if (currentLabels.includes('jules-task')) {
               await github.rest.issues.removeLabel({ owner, repo, issue_number, name: 'jules-task' });
             }
-            if (!currentLabels.includes('jules-implementation-failed')) {
-              await github.rest.issues.addLabels({ 
-                owner, repo, issue_number, 
-                labels: ['jules-implementation-failed'] 
-              });
-            }
-            console.log(`Successfully reset Issue #${issue_number} labels following a verified launch failure.`);
+            console.log(`Successfully reset Issue #${issue_number} labels following a log-verified launch failure.`);
