@@ -8,6 +8,8 @@
 - [x] [Define shared catalogue schema for Artist/Album/Track/Playlist metadata and peer availability](https://github.com/holstebroe/MeshWave/issues/14)
 - [x] [Implement catalogue sync/index pipeline (ingest, dedupe, staleness rules)](https://github.com/holstebroe/MeshWave/issues/15)
 - [x] [Build Browse UI for artists/albums/tracks/playlists with download actions](https://github.com/holstebroe/MeshWave/issues/13)
+- [ ] [Issue #113: Display album and track icon thumbnails when browsing](https://github.com/holstebroe/MeshWave/issues/113) [DISPATCHED]
+- [ ] [Issue #113: Display album and track icon thumbnails when browsing](https://github.com/holstebroe/MeshWave/issues/113) [DISPATCHED]
 - [ ] [Implement play-while-downloading flow (buffered start)](https://github.com/holstebroe/MeshWave/issues/16) [IN PROGRESS]
 - [ ] [Add global pending downloads queue UI with per-item progress/state](https://github.com/holstebroe/MeshWave/issues/12) [DISPATCHED]
 
@@ -50,7 +52,7 @@
 - [x] P2P foundation: PeerDiscovery, ManifestExchangeServer/Client, SyncOrchestrator
 - [x] [Implement delta manifest synchronization (request operations by `SequenceNumber` range)](https://github.com/holstebroe/MeshWave/issues/30)
 - [x] [Implement manifest compaction/snapshotting (signed state checkpoints to squash old operations, especially operations where the exact history is unimportant. Play count, etc.)](https://github.com/holstebroe/MeshWave/issues/31)
-- [ ] [Migrate manifest wire format to a compact binary format (e.g., Protobuf or MessagePack)](https://github.com/holstebroe/MeshWave/issues/32)
+- [ ] [Migrate manifest wire format to a compact binary format (e.g., Protobuf or MessagePack)](https://github.com/holstebroe/MeshWave/issues/32) [DISPATCHED]
 - [x] Manifest signing + verification using RSA
 - [x] SecurityLimits -- central constants enforced at TCP layer and manifest merge
 - [x] P2PIdentityService -- persistent RSA keypair, UserId derived from public key fingerprint
@@ -73,8 +75,8 @@
 - [x] Bootstrap rendezvous phase 2: coordinated simultaneous outbound probe window (TCP SYN + UDP punch hints)
 - [ ] [Relay fallback (opt-in): bootstrap-assisted relay only when direct methods fail](https://github.com/holstebroe/MeshWave/issues/33)
 - [ ] [NAT: Outbound-only manifest push via bootstrap](https://github.com/holstebroe/MeshWave/issues/58)
-- [ ] [Issue #83: [UI] Network Health Indicator and Connectivity Status Bar](https://github.com/holstebroe/MeshWave/issues/83)
-- [ ] [Issue #84: [Net] Automated UPnP/NAT-PMP Port Mapping Support](https://github.com/holstebroe/MeshWave/issues/84)
+- [ ] [Issue #83: [UI] Network Health Indicator and Connectivity Status Bar](https://github.com/holstebroe/MeshWave/issues/83) [DISPATCHED] [DISPATCHED] [DISPATCHED]
+- [ ] [Issue #84: [Net] Automated UPnP/NAT-PMP Port Mapping Support](https://github.com/holstebroe/MeshWave/issues/84) [DISPATCHED]
 - [ ] [Issue #85: [UI] Interactive NAT Troubleshooting and Configuration Guide](https://github.com/holstebroe/MeshWave/issues/85)
 - [x] ARM Linux bootstrap publish script baseline (`scripts/publish-bootstrap-arm.ps1`)
 - [x] Connection diagnostics panel: show per-attempt outcomes, local/remote endpoints, and recommended NAT forwarding rules
@@ -99,6 +101,8 @@
 - [x] Follow notifications -- badge on Community nav item when followed artist has new Create ops since last sync
 - [x] Persist follow list as signed Follow manifest ops (social graph)
 - [x] User profile sync op -- broadcast IsArtist, Bio, BannerImageHash, Website as signed Profile manifest op
+- [ ] [Comments, likes, plays and metadata changes should be pushed immediately to library owners and consumers](https://github.com/holstebroe/MeshWave/issues/115) [DISPATCHED]
+- [ ] [Comments, likes, plays and metadata changes should be pushed immediately to library owners and consumers](https://github.com/holstebroe/MeshWave/issues/115) [DISPATCHED]
 
 ## Milestone G: Community Groups and Distributed Chat
 
@@ -233,3 +237,9 @@ Example groups: Roland Synth Junkies, Berlin Techno Producers, Ambient Drone Col
 ## Metadata Editing
 - [ ] [Issue #70: Album metadata editor basic design](https://github.com/holstebroe/MeshWave/issues/70)
 - [ ] [Issue #86: [UI] Track metadata editor refinement](https://github.com/holstebroe/MeshWave/issues/86)
+
+## High Priority Social Propagation
+- [ ] [Comments, likes, plays and metadata changes should be pushed immediately to library owners and consumers](https://github.com/holstebroe/MeshWave/issues/115) [DISPATCHED]
+
+## Shared Catalogue UX
+- [ ] [Issue #113: Display album and track icon thumbnails when browsing](https://github.com/holstebroe/MeshWave/issues/113) [DISPATCHED]

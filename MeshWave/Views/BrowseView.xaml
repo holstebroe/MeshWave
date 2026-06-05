@@ -188,11 +188,11 @@
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <Border Grid.Column="0" Width="36" Height="36"
-                                            CornerRadius="18" ClipToBounds="True"
+                                    <Border Grid.Column="0" Width="44" Height="44"
+                                            CornerRadius="22" ClipToBounds="True"
                                             Background="{StaticResource SurfaceLightColor}"
                                             VerticalAlignment="Center">
-                                        <Image Source="{Binding AvatarIconPath, Converter={StaticResource UserIconConverter}}"
+                                        <Image Source="{Binding IconPath, Converter={StaticResource UserIconConverter}}"
                                                Stretch="UniformToFill"/>
                                     </Border>
                                     <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center">
@@ -285,11 +285,19 @@
                                     CornerRadius="8" Padding="16,12" Margin="0,0,0,8">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <Border Grid.Column="0" Width="44" Height="44"
+                                            CornerRadius="4" ClipToBounds="True"
+                                            Background="{StaticResource SurfaceLightColor}"
+                                            VerticalAlignment="Center" Margin="0,0,16,0">
+                                        <Image Source="{Binding IconPath, Converter={StaticResource UserIconConverter}}"
+                                               Stretch="UniformToFill"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="{Binding Name}"
                                                        FontWeight="SemiBold" FontSize="15"
@@ -315,7 +323,7 @@
                                             <Run Text="{Binding TotalSizeDisplay}"/>
                                         </TextBlock>
                                     </StackPanel>
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                                         <TextBlock Text="{Binding ReleasedAtDisplay, Mode=OneWay}"
                                                    FontSize="12"
                                                    Foreground="{StaticResource TextSecondaryColor}"
@@ -360,10 +368,18 @@
                                     CornerRadius="8" Padding="16,12" Margin="0,0,0,8">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <Border Grid.Column="0" Width="44" Height="44"
+                                            CornerRadius="4" ClipToBounds="True"
+                                            Background="{StaticResource SurfaceLightColor}"
+                                            VerticalAlignment="Center" Margin="0,0,16,0">
+                                        <Image Source="{Binding IconPath, Converter={StaticResource UserIconConverter}}"
+                                               Stretch="UniformToFill"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="{Binding Name}"
                                                        FontWeight="SemiBold" FontSize="15"
@@ -395,7 +411,7 @@
                                             <Run Text=" tracks"/>
                                         </TextBlock>
                                     </StackPanel>
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                                         <TextBlock Text="{Binding ReleasedAtDisplay}"
                                                    FontSize="12"
                                                    Foreground="{StaticResource TextSecondaryColor}"
@@ -440,12 +456,20 @@
                                     CornerRadius="6" Padding="14,10" Margin="0,0,0,6">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="80"/>
                                         <ColumnDefinition Width="110"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <Border Grid.Column="0" Width="44" Height="44"
+                                            CornerRadius="4" ClipToBounds="True"
+                                            Background="{StaticResource SurfaceLightColor}"
+                                            VerticalAlignment="Center" Margin="0,0,16,0">
+                                        <Image Source="{Binding IconPath, Converter={StaticResource UserIconConverter}}"
+                                               Stretch="UniformToFill"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Title}"
                                                    FontWeight="SemiBold" FontSize="14"
                                                    Foreground="{StaticResource TextPrimaryColor}"
@@ -457,17 +481,17 @@
                                             <Run Text="{Binding Album}"/>
                                         </TextBlock>
                                     </StackPanel>
-                                    <TextBlock Grid.Column="1"
+                                    <TextBlock Grid.Column="2"
                                                Text="{Binding FileSizeDisplay}"
                                                FontSize="12"
                                                Foreground="{StaticResource TextSecondaryColor}"
                                                VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="2"
+                                    <TextBlock Grid.Column="3"
                                                Text="{Binding ReleasedAtDisplay}"
                                                FontSize="12"
                                                Foreground="{StaticResource TextSecondaryColor}"
                                                VerticalAlignment="Center"/>
-                                    <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
                                         <Button Content="▶ Play"
                                                 Command="{Binding DataContext.PlayRemoteTrackCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                 CommandParameter="{Binding}"

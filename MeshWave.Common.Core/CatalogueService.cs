@@ -101,7 +101,27 @@ public class CatalogueService : ICatalogueService
 
         lock (_lock)
         {
-            // Staleness Rule: Only apply if incoming SequenceNumber is greater than existing for this TargetId
+            _entries.TryGetValue(targetId, out var existingEntry);
+
+            // 1. Authority Rule: Only the original owner can update or delete an entry
+            if (existingEntry != null && !string.Equals(existingEntry.OwnerUserId, userId, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            // 2. Versioning and Hash Immutability (for Tracks)
+            if (targetType == "Track")
+            {
+                var incomingVersion = int.TryParse(metadata.GetValueOrDefault("version") ?? metadata.GetValueOrDefault("trackVersion"), out var v) ? v : 1;
+                if (existingEntry != null)
+                {
+                    if (incomingVersion < existingEntry.Version)
+                        return; // Reject older versions
+
+                    if (incomingVersion == existingEntry.Version && !string.Equals(existingEntry.ContentHash, contentHash, StringComparison.OrdinalIgnoreCase))
+                        return; // Hash immutability: same version must have same hash
+                }
+            }
+
+            // 3. Staleness Rule: Only apply if incoming SequenceNumber is greater than existing for this TargetId
             if (_lastSequenceNumbers.TryGetValue(targetId, out var existingSeq) && sequenceNumber <= existingSeq)
                 return;
 
@@ -126,6 +146,7 @@ public class CatalogueService : ICatalogueService
                     ReleaseDate = ParseDate(metadata.GetValueOrDefault("releasedAt") ?? metadata.GetValueOrDefault("releaseDate")),
                     Genre = metadata.GetValueOrDefault("genre"),
                     FileSize = long.TryParse(metadata.GetValueOrDefault("fileSize"), out var fs) ? fs : 0,
+                    Version = int.TryParse(metadata.GetValueOrDefault("version") ?? metadata.GetValueOrDefault("trackVersion"), out var v) ? v : 1,
                     SequenceNumber = sequenceNumber,
                     Timestamp = timestamp
                 };

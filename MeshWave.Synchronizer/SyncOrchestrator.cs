@@ -81,6 +81,9 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     public int OutboundManifestFetchCount => _outboundManifestFetchCount;
     public int BootstrapPeerCount => _router.GetPeers().Count(p => p.UserId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase));
     public int MeshPeerCount => Math.Max(0, ConnectedPeerCount - BootstrapPeerCount);
+    public string NatStatus => _natTraversal.NatStatus;
+    public string? ExternalIPAddress => _natTraversal.ExternalIPAddress;
+    public string? MappingProtocol => _natTraversal.MappingProtocol;
 
     /// <summary>Returns the persisted manifest for a specific peer and stream, or null if not yet received.</summary>
     public Manifest? GetPeerManifest(string userId, ManifestStreamType streamType = ManifestStreamType.Content) => _peerStore.Get(userId, streamType);
@@ -214,6 +217,9 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             _server ??= new ManifestExchangeServer(identity.ManifestPort);
             _server.ManifestReceived += OnManifestReceived;
 
+            await _natTraversal.StartAsync(identity.ManifestPort, _cts.Token);
+            await _natTraversal.SetupPortMappingAsync(identity.ManifestPort, _cts.Token);
+
             await _server.StartAsync(
                 (streamType) => _localManifests.GetValueOrDefault(streamType),
                 () => _router.GetPeersForExchange(),
@@ -221,8 +227,6 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                 contentProvider: _contentProvider,
                 relayedManifestProvider: (targetUserId, streamType) => null,
                 cancellationToken: _cts.Token);
-
-            await _natTraversal.StartAsync(identity.ManifestPort, _cts.Token);
         }
 
         await _router.StartAsync(identity, _bootstrapNodes, _cts.Token);
@@ -1344,18 +1348,34 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             _ = _catalogueService.IngestAsync(remote);
 
             // Also trigger icon/content downloads for catalogue entries
-            foreach (var op in remote.Operations.Where(op => !string.IsNullOrWhiteSpace(op.ContentHash)))
+            foreach (var op in remote.Operations)
             {
                 if (op.OperationType == ManifestOperationType.Create || op.OperationType == ManifestOperationType.Update)
                 {
-                    _ = Task.Run(async () =>
+                    var iconHash = op.Metadata.GetValueOrDefault("iconHash");
+                    if (string.IsNullOrWhiteSpace(iconHash) && op.TargetType == "User")
+                        iconHash = op.ContentHash;
+
+                    if (!string.IsNullOrWhiteSpace(iconHash))
                     {
-                        try
+                        _ = Task.Run(async () =>
                         {
-                            // For now, only small content like icons are fully downloaded here.
-                            // Larger media is streamed on-demand.
-                            // We can use a threshold or check TargetType if needed.
-                            if (op.TargetType == "User" || (op.Metadata.ContainsKey("isIcon") && op.Metadata["isIcon"] == "True"))
+                            try
+                            {
+                                var bytes = await RequestContentAsync(remote.UserId, iconHash);
+                                if (bytes != null && _userRepository != null)
+                                {
+                                    _userRepository.SaveUserIcon(op.TargetId, bytes);
+                                }
+                            }
+                            catch { }
+                        });
+                    }
+                    else if (!string.IsNullOrWhiteSpace(op.ContentHash) && (op.Metadata.ContainsKey("isIcon") && op.Metadata["isIcon"] == "True"))
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            try
                             {
                                 var bytes = await RequestContentAsync(remote.UserId, op.ContentHash!);
                                 if (bytes != null && _userRepository != null)
@@ -1363,9 +1383,9 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                                     _userRepository.SaveUserIcon(op.TargetId, bytes);
                                 }
                             }
-                        }
-                        catch { }
-                    });
+                            catch { }
+                        });
+                    }
                 }
             }
 
@@ -1440,7 +1460,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         {
             UserId = _identity?.UserId ?? manifest?.UserId ?? string.Empty,
             DisplayName = SecurityLimits.Truncate(_identity?.DisplayName ?? manifest?.UserId ?? "peer", SecurityLimits.MaxDisplayNameLength),
-            Address = string.Empty,
+            Address = ExternalIPAddress ?? string.Empty,
             Port = _actAsListener ? (_identity?.ManifestPort ?? ManifestExchangeServer.DefaultPort) : 0,
             PublicKeyPem = _identity?.PublicKeyPem ?? string.Empty,
             LastSeen = DateTime.UtcNow

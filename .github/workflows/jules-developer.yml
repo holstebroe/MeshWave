@@ -17,35 +17,17 @@ jobs:
       pull-requests: write  
       actions: read         # Crucial: Allows this job to read its own execution logs
     steps:
-      # 1. Add the in-progress badge and clear out previous failure flags
+      # 1. Add the in-progress badge
       - name: Lock Issue to In-Progress
         uses: actions/github-script@v7
         with:
           script: |
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const issue_number = context.issue.number;
-
-            // Fetch the issue data first to safely check existing labels
-            const { data: issue } = await github.rest.issues.get({ owner, repo, issue_number });
-            const currentLabels = issue.labels.map(l => l.name);
-
             await github.rest.issues.addLabels({
-              owner,
-              repo,
-              issue_number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
               labels: ['jules-in-progress']
             });
-
-            // Clean up old failure tags cleanly if they exist
-            if (currentLabels.includes('jules-implementation-failed')) {
-              await github.rest.issues.removeLabel({
-                owner,
-                repo,
-                issue_number,
-                name: 'jules-implementation-failed'
-              });
-            }
             
       # 2. Run Jules (which might fail silently with a green checkmark)
       - name: Run Jules Implementer
@@ -64,50 +46,34 @@ jobs:
             SYSTEM INSTRUCTIONS:
             ${{ vars.JULES_ISSUE_DEVELOPER_PROMPT }}
 
-# 3. VERIFY LAUNCH LOGS: Strictly match the Google API JSON structure to avoid false positives inside prompt prose
+      # 3. VERIFY LAUNCH LOGS: Read the runner log text to detect silent failures
       - name: Verify API Launch Success
-        id: check_logs
-        run: |
-          echo "Fetching live run logs via GitHub CLI..."
-          LOG_CONTENT=$(gh run view ${{ github.run_id }} --log 2>&1)
-          
-          # Use grep with -z (zero-terminated lines) or an explicit multi-line check 
-          # to ensure '"error": {' is an actual JSON key returned by the googleapis server.
-          if echo "$LOG_CONTENT" | grep -U -q -E '"error":\s*\{'; then
-            
-            # Determine high-level diagnosis strings securely based on actual server responses
-            if echo "$LOG_CONTENT" | grep -U -q -E 'FAILED_PRECONDITION'; then
-              DIAGNOSIS="BURST CONCURRENCY COLLISION (FAILED_PRECONDITION) - Too many Jules agents launched simultaneously or AI Studio session limits hit."
-            elif echo "$LOG_CONTENT" | grep -U -q -E '403|PERMISSION_DENIED|API_KEY_INVALID'; then
-              DIAGNOSIS="AUTHENTICATION FAILURE (403) - The JULES_API_KEY is invalid or expired."
-            elif echo "$LOG_CONTENT" | grep -U -q -E '429|QUOTA_EXCEEDED|RESOURCE_EXHAUSTED'; then
-              DIAGNOSIS="QUOTA EXHAUSTED (429) - Daily or per-minute token allocation limits reached."
-            else
-              DIAGNOSIS="GENERAL API VALIDATION ERROR - Malformed issue payload context or formatting error."
-            fi
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const runId = context.runId;
 
-            # 1. CREATE ANNOTATION
-            echo "::error title=Jules Launch Failure::$DIAGNOSIS"
+            // 1. Fetch the jobs for this workflow run to find our specific step logs
+            const { data: jobs } = await github.rest.actions.listJobsForWorkflowRun({
+              owner, repo, run_id: runId
+            });
 
-            # 2. CREATE JOB SUMMARY
-            echo "### ❌ Jules Agent Initialization Failed" >> $GITHUB_STEP_SUMMARY
-            echo "The automated coding agent failed to initialize a development session with Google's API." >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "> **Diagnosis:** $DIAGNOSIS" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "#### 📄 Technical Error Snippet:" >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
-            # Securely capture only the block surrounding the error text
-            echo "$LOG_CONTENT" | grep -A 6 '"error":' >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-            echo "The issue labels have been automatically rolled back to allow a clean retry on the next cycle." >> $GITHUB_STEP_SUMMARY
-            
-            exit 1
-          else
-            echo "✅ API logs confirmed a clean session deployment initialized successfully."
-          fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            const currentJob = jobs.jobs.find(j => j.status === 'in_progress' || j.name === 'trigger-jules');
+            if (!currentJob) return;
+
+            // 2. Download the raw log text for this job execution
+            const { data: logText } = await github.rest.actions.downloadJobLogsForWorkflowRun({
+              owner, repo, job_id: currentJob.id
+            });
+
+            // 3. Scan the log for the specific silent API error payload
+            if (logText.includes('FAILED_PRECONDITION')) {
+              core.setFailed("❌ Fatal: detected a silent 400 FAILED_PRECONDITION api failure in the Jules launch logs.");
+            } else {
+              console.log("✅ API logs confirmed a clean session deployment initialized.");
+            }
 
       # 4. SELF-HEALING RECOVERY: This will now catch the forced failure from Step 3!
       - name: Revert Labels on Failure
@@ -127,14 +93,5 @@ jobs:
             }
             if (currentLabels.includes('jules-task')) {
               await github.rest.issues.removeLabel({ owner, repo, issue_number, name: 'jules-task' });
-            }
-            
-            if (!currentLabels.includes('jules-implementation-failed')) {
-              await github.rest.issues.addLabels({ 
-                owner, 
-                repo, 
-                issue_number, 
-                labels: ['jules-implementation-failed'] 
-              });
             }
             console.log(`Successfully reset Issue #${issue_number} labels following a log-verified launch failure.`);
