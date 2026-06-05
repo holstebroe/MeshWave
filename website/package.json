@@ -1,0 +1,19 @@
+{
+  "name": "meshwave",
+  "version": "1.0.0",
+  "description": "MeshWave documentation server.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "meshwave",
+    "documentation"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.2.1",
+    "marked": "^18.0.5"
+  }
+}

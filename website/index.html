@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MeshWave | Decentralized Content Synchronization</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .gradient-bg { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-md py-3 px-6 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <a href="index.html" class="flex items-center space-x-2 cursor-pointer">
+                <img src="../Assets/MeshWaveIcon128.png" alt="MeshWave Logo" class="h-10 w-auto">
+                <span class="text-2xl font-bold tracking-tight text-gray-900">MeshWave</span>
+            </a>
+            <div class="flex space-x-8 font-medium items-center">
+                <a href="#features" class="hover:text-blue-600 transition cursor-pointer">Features</a>
+                <a href="#technology" class="hover:text-blue-600 transition cursor-pointer">Technology</a>
+                <a href="documentation.html" class="hover:text-blue-600 transition cursor-pointer">Documentation</a>
+                <button id="getStartedBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition cursor-pointer shadow-md">Get Started</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="gradient-bg text-white py-24 px-6">
+        <div class="max-w-5xl mx-auto text-center">
+            <h1 class="text-5xl md:text-7xl font-extrabold mb-6">Seamless Sync. <br>Decentralized Power.</h1>
+            <p class="text-xl md:text-2xl mb-10 opacity-90 max-w-3xl mx-auto">MeshWave provides a robust P2P mesh network for seamless content synchronization and decentralized data management.</p>
+            <div class="flex flex-col sm:flex-row justify-center gap-4">
+                <a href="#features" class="bg-white text-blue-600 px-8 py-4 rounded-full font-bold text-lg hover:bg-gray-100 transition shadow-lg">Explore Features</a>
+                <a href="#" class="border-2 border-white px-8 py-4 rounded-full font-bold text-lg hover:bg-white hover:text-blue-600 transition">View Documentation</a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Features Section -->
+    <section id="features" class="py-20 px-6 bg-white">
+        <div class="max-w-7xl mx-auto text-center mb-16">
+            <h2 class="text-4xl font-bold mb-4">Core Capabilities</h2>
+            <p class="text-gray-600 max-w-2xl mx-auto">Everything you need to build a resilient, distributed content ecosystem.</p>
+        </div>
+        <div class="max-w-7xl mx-auto grid md:grid-cols-3 gap-8">
+            <div class="p-8 border rounded-2xl hover:shadow-lg transition bg-gray-50">
+                <div class="bg-blue-100 w-14 h-14 flex items-center justify-center rounded-lg mb-6">
+                    <i class="fas fa-network-wired text-blue-600 text-2xl"></i>
+                </div>
+                <h3 class="text-xl font-bold mb-4">P2P Mesh Network</h3>
+                <p class="text-gray-600">Robust peer discovery and routing that ensures your data stays reachable across the mesh.</p>
+            </div>
+            <div class="p-8 border rounded-2xl hover:shadow-lg transition bg-gray-50">
+                <div class="bg-blue-100 w-14 h-14 flex items-center justify-center rounded-lg mb-6">
+                    <i class="fas fa-sync text-blue-600 text-2xl"></i>
+                </div>
+                <h3 class="text-xl font-bold mb-4">Smart Sync</h3>
+                <p class="text-gray-600">Intelligent synchronization algorithms that handle conflicts and ensure consistency across all nodes.</p>
+            </div>
+            <div class="p-8 border rounded-2xl hover:shadow-lg transition bg-gray-50">
+                <div class="bg-blue-100 w-14 h-14 flex items-center justify-center rounded-lg mb-6">
+                    <i class="fas fa-shield-alt text-blue-600 text-2xl"></i>
+                </div>
+                <h3 class="text-xl font-bold mb-4">Secure Exchange</h3>
+                <p class="text-gray-600">End-to-end encrypted communication and signed manifest verification for secure data exchange.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Technology Section -->
+    <section id="technology" class="py-20 px-6 bg-gray-900 text-white">
+        <div class="max-w-7xl mx-auto">
+            <h2 class="text-4xl font-bold mb-12 text-center">The Technology Stack</h2>
+            <div class="grid md:grid-cols-2 gap-16 items-center">
+                <div>
+                    <h3 class="text-2xl font-semibold mb-4 text-blue-400">Robust Infrastructure</h3>
+                    <p class="text-gray-400 mb-6">Built with .NET, MeshWave utilizes advanced networking protocols to establish stable peer connections even in complex network environments.</p>
+                    <ul class="space-y-3">
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> NAT Traversal Support</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> Peer Discovery & Routing</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-500 mr-2"></i> Manifest Management</li>
+                    </ul>
+                </div>
+                <div class="bg-gray-800 p-8 rounded-xl border border-gray-700">
+                    <pre class="text-sm text-blue-300"><code>// Example: Peer Discovery
+var peer = await _peerDiscovery.FindPeersAsync(query);
+var status = await _syncOrchestrator.StartSync(peer);
+
+if (status.IsSuccess) {
+    Console.WriteLine("Sync Complete");
+}</code></pre>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-12 px-6 bg-white border-t">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center">
+            <div class="mb-4 md:mb-0">
+                <span class="text-xl font-bold">MeshWave</span> &copy; 2026. All rights reserved.
+            </div>
+            <div class="flex space-x-6 text-gray-500">
+                <a href="#" class="hover:text-blue-600"><i class="fab fa-github"></i></a>
+                <a href="#" class="hover:text-blue-600"><i class="fab fa-twitter"></i></a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Smooth scrolling for internal anchors
+        document.querySelectorAll('a[href^="#"], button[id*="getStartedBtn"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                const targetId = this.getAttribute('href').substring(1);
+                if (targetId === '#') return; // Prevent scrolling on empty anchors
+
+                // Handle internal anchor links
+                if (this.tagName === 'A' && this.getAttribute('href').startsWith('#')) {
+                    e.preventDefault();
+                    document.querySelector(this.getAttribute('href')).scrollIntoView({
+                        behavior: 'smooth'
+                    });
+                } 
+                // Handle the Get Started button click to scroll to download page or section
+                else if (this.id === 'getStartedBtn') {
+                    e.preventDefault();
+                    window.location.href = 'download.html'; // Direct to download page for primary CTA
+                }
+            });
+        });
+
+        // Add event listener for the Get Started button on index.html
+        document.getElementById('getStartedBtn')?.addEventListener('click', function() {
+            console.log("Get Started clicked: Navigating to download.html");
+            window.location.href = 'download.html';
+        });
+
+    </script>
+</body>
+</html>
+</html>
