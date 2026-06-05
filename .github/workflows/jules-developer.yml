@@ -46,34 +46,47 @@ jobs:
             SYSTEM INSTRUCTIONS:
             ${{ vars.JULES_ISSUE_DEVELOPER_PROMPT }}
 
-      # 3. VERIFY LAUNCH LOGS: Read the runner log text to detect silent failures
+# 3. VERIFY LAUNCH LOGS: Local bash log scan to circumvent Azure Blob race conditions & extract error root causes
       - name: Verify API Launch Success
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const runId = context.runId;
-
-            // 1. Fetch the jobs for this workflow run to find our specific step logs
-            const { data: jobs } = await github.rest.actions.listJobsForWorkflowRun({
-              owner, repo, run_id: runId
-            });
-
-            const currentJob = jobs.jobs.find(j => j.status === 'in_progress' || j.name === 'trigger-jules');
-            if (!currentJob) return;
-
-            // 2. Download the raw log text for this job execution
-            const { data: logText } = await github.rest.actions.downloadJobLogsForWorkflowRun({
-              owner, repo, job_id: currentJob.id
-            });
-
-            // 3. Scan the log for the specific silent API error payload
-            if (logText.includes('FAILED_PRECONDITION') || logText.includes('"error"')) {
-              core.setFailed("❌ Fatal: detected a silent 400 FAILED_PRECONDITION api failure in the Jules launch logs.");
-            } else {
-              console.log("✅ API logs confirmed a clean session deployment initialized.");
-            }
+        id: check_logs
+        run: |
+          echo "Fetching live run logs via GitHub CLI..."
+          # Grab the streaming console buffer for the current workflow run
+          LOG_CONTENT=$(gh run view ${{ github.run_id }} --log 2>&1)
+          
+          # Check if the API returned an error payload
+          if echo "$LOG_CONTENT" | grep -q '"error"'; then
+            echo "=============================================================================="
+            echo "❌ CRITICAL: Jules API failed to initialize properly."
+            echo "=============================================================================="
+            
+            # Extract and print the specific message from the log to make debugging easy
+            echo "Detailed Error Payload from API:"
+            echo "$LOG_CONTENT" | grep -A 4 '"error"' || true
+            echo "------------------------------------------------------------------------------"
+            
+            # Provide intelligent context based on the error text discovered
+            if echo "$LOG_CONTENT" | grep -q "FAILED_PRECONDITION"; then
+              echo "💡 DIAGNOSIS: FAILED_PRECONDITION"
+              echo "This usually indicates a high-concurrency burst collision (too many Jules agents launching at the exact same second) or your Google AI Studio project hitting its concurrent session limit."
+            elif echo "$LOG_CONTENT" | grep -q -E "403|PERMISSION_DENIED|API_KEY_INVALID"; then
+              echo "💡 DIAGNOSIS: AUTHENTICATION FAILURE"
+              echo "The JULES_API_KEY used by this runner appears to be invalid, restricted, or expired."
+            elif echo "$LOG_CONTENT" | grep -q -E "429|QUOTA_EXCEEDED|RESOURCE_EXHAUSTED"; then
+              echo "💡 DIAGNOSIS: QUOTA EXHAUSTED"
+              echo "You have consumed your available token or request allocation for the day/minute tier."
+            else
+              echo "💡 DIAGNOSIS: General API request validation failure. Check issue payload formatting."
+            fi
+            echo "=============================================================================="
+            
+            # Force a clean, descriptive runner crash so the self-healing step triggers
+            exit 1
+          else
+            echo "✅ API logs confirmed a clean session deployment initialized successfully."
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # 4. SELF-HEALING RECOVERY: This will now catch the forced failure from Step 3!
       - name: Revert Labels on Failure
