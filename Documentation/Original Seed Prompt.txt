@@ -1,0 +1,58 @@
+I want to build a new app called MeshWave.
+
+The app is a distributed music sharing app for community musicians
+(typically hobby musicians), who wants to share their work (music tracks) with peers. Much like SoundCloud, but server-less, i.e. entirely community driven.
+
+The app will be developed in Visual Studio 2026 in C#14 / .NET 10.
+
+I imagine a server-less design and multiple frontend platforms.
+For now we will just begin with a Windows WPF frontend.
+
+The application should be parted in:
+Frontends (we will start with WPF)
+Library manager
+Synchronizer
+
+The frontend is where the music library can be browsed and
+music files can be played. 
+Frontend is also where the application is configured.
+The frontend is also where the user can interact with the music
+produced by other users by leaving comments or praises.
+
+The library manager organizes the locally stored library of
+the users own music and the synchronized community music.
+
+The synchronizer is performing the exchange of music files and comment files
+in a distributed mesh system (peer to peer).
+Music files and comments are synchronized in a blockchain manner, 
+such that only the owner (artist) of folders/files can choose to add, update or delete files in the network.
+Any user can add or edit own comments to other users music, but only the owner can delete comments.
+
+Adding comments can be linked to either an album or single track.
+A comment to a track can either be linked to the whole track or a specific
+time in the track (e.g. the user can leave a "cool bridge" comment for minute mark 1:50.
+
+Exchange of files should be peer to peer and not through a server, i.e.
+with whatever network trick it takes to download directly.
+
+Music files are orginized in albums and tracks. Orphan tracks (singles) without an album are also allowed.
+
+The synchronizer also exchanges the common catalogue of all music in the
+community.
+
+Users can be organized in zero to many community groups.
+
+The user may choose to download all music from a community group, single user, single album or single track.
+
+The frontend should have a setup page where the local folder for
+synchronized are stored.
+The user also selects a user name in the setup page (but is internally 
+identified by a unique id, such that the name can be changed).
+A folder for the user's own music will automatically be created with a special name under the main storage folder.
+This is where the user will place his own album and tracks.
+
+A user (artist), album, track can all have basic descriptions, including a cover image at all level. 
+The frontend will have a page where the user can organize his own tracks and
+albums, including these descriptions.
+
+When a user plays a track, the UI will show a visualization of the track wave and a playback cursor. The comments will be under that playback visualization.
