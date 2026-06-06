@@ -2,6 +2,8 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const marked = require('marked');
+const rateLimit = require('express-rate-limit');
+const escapeHtml = require('escape-html');
 
 const app = express();
 const PORT = 8000;
@@ -9,12 +11,19 @@ const PORT = 8000;
 // Serve static files from the website directory
 app.use(express.static(path.join(__dirname)));
 
+// Rate limiting to prevent DoS via file system access
+const docLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per windowMs
+    message: 'Too many requests from this IP, please try again after 15 minutes'
+});
+
 /**
  * Documentation route handler
  * Handles requests for the landing page (/documentation), query-based access (/documentation?source=Architecture), 
  * and direct markdown file access (/Documentation/P2P-Handshake.md).
  */
-app.get('/documentation', (req, res) => {
+app.get('/documentation', docLimiter, (req, res) => {
     let source = null;
     let isPathAccess = false;
 
@@ -37,12 +46,20 @@ app.get('/documentation', (req, res) => {
         );
     }
 
+    // Validate source to prevent path injection and XSS
+    // Only allow alphanumeric, hyphen, underscore, and forward slash
+    if (!/^[a-zA-Z0-9\-_/]+$/.test(source)) {
+        return res.status(400).send('Invalid source parameter');
+    }
+
     // Determine the markdown file path based on the source name
-    const mdFilePath = path.join(
-        __dirname, '..',
-        'Documentation',
-        `${source}.md`
-    );
+    const documentationDir = path.resolve(__dirname, '..', 'Documentation');
+    const mdFilePath = path.join(documentationDir, `${source}.md`);
+
+    // Verify the resolved path is still within the documentation directory
+    if (!mdFilePath.startsWith(documentationDir)) {
+        return res.status(403).send('Access denied');
+    }
 
     // Check file exists
     if (!fs.existsSync(mdFilePath)) {
@@ -56,7 +73,7 @@ app.get('/documentation', (req, res) => {
 </head>
 <body class="bg-gray-50 text-gray-900 p-10">
     <h1 class="text-3xl font-bold mb-4">404 Not Found</h1>
-    <p>Markdown source "${source}" was not found.</p>
+    <p>Markdown source "${escapeHtml(source)}" was not found.</p>
 </body>
 </html>
         `);
@@ -88,9 +105,9 @@ app.get('/documentation', (req, res) => {
         // Determine title based on access method for better SEO/UX
         let pageTitle;
         if (isPathAccess) {
-             pageTitle = `${source} | MeshWave Documentation`;
+             pageTitle = `${escapeHtml(source)} | MeshWave Documentation`;
         } else {
-            pageTitle = `${source} | MeshWave Documentation`;
+            pageTitle = `${escapeHtml(source)} | MeshWave Documentation`;
         }
 
 
@@ -164,7 +181,7 @@ app.get('/documentation', (req, res) => {
     <header class="gradient-bg text-white py-24 px-6">
         <div class="max-w-5xl mx-auto text-center">
             <h1 class="text-5xl md:text-7xl font-extrabold mb-6">
-                ${source}
+                ${escapeHtml(source)}
             </h1>
 
             <p class="text-xl md:text-2xl opacity-90">

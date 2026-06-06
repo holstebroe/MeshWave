@@ -3,6 +3,10 @@ name: One-Time Milestone & Issue Migration
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+  issues: write
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 

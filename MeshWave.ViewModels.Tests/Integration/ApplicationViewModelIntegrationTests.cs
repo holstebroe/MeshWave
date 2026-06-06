@@ -11,13 +11,13 @@ public class ApplicationViewModelIntegrationTests : IAsyncLifetime
 {
     private MeshTestContext _context = null!;
 
-    public Task InitializeAsync()
+    public ValueTask InitializeAsync()
     {
         _context = new MeshTestContext();
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await _context.DisposeAsync();
     }
