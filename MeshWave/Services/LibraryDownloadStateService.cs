@@ -6,11 +6,17 @@ namespace MeshWave.Services;
 
 public sealed class LibraryDownloadStateService
 {
-    private static readonly object Sync = new();
+    private readonly object Sync = new();
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
-    private static List<RemovedLibraryTrackEntry>? _removedCache;
-    private static List<DownloadedTrackEntry>? _downloadedCache;
+    private List<RemovedLibraryTrackEntry>? _removedCache;
+    private List<DownloadedTrackEntry>? _downloadedCache;
+    private readonly string _appDataRoot;
+
+    public LibraryDownloadStateService(string? appDataRoot = null)
+    {
+        _appDataRoot = appDataRoot ?? MeshWaveEnvironment.GetAppDataRoot();
+    }
 
     public IReadOnlyList<RemovedLibraryTrackEntry> GetRemovedEntries()
     {
@@ -52,9 +58,9 @@ public sealed class LibraryDownloadStateService
         }
     }
 
-    private static string GetPath() => MeshWaveEnvironment.CombineInAppData("removed-library-tracks.json");
+    private string GetPath() => Path.Combine(_appDataRoot, "removed-library-tracks.json");
 
-    private static List<RemovedLibraryTrackEntry> LoadInternal()
+    private List<RemovedLibraryTrackEntry> LoadInternal()
     {
         if (_removedCache != null) return [.. _removedCache];
 
@@ -74,7 +80,7 @@ public sealed class LibraryDownloadStateService
         }
     }
 
-    private static void SaveInternal(List<RemovedLibraryTrackEntry> entries)
+    private void SaveInternal(List<RemovedLibraryTrackEntry> entries)
     {
         var path = GetPath();
         var dir = Path.GetDirectoryName(path);
@@ -113,9 +119,9 @@ public sealed class LibraryDownloadStateService
         }
     }
 
-    private static string GetDownloadedPath() => MeshWaveEnvironment.CombineInAppData("downloaded-tracks.json");
+    private string GetDownloadedPath() => Path.Combine(_appDataRoot, "downloaded-tracks.json");
 
-    private static List<DownloadedTrackEntry> LoadDownloadedInternal()
+    private List<DownloadedTrackEntry> LoadDownloadedInternal()
     {
         if (_downloadedCache != null) return [.. _downloadedCache];
 
@@ -135,7 +141,7 @@ public sealed class LibraryDownloadStateService
         }
     }
 
-    private static void SaveDownloadedInternal(List<DownloadedTrackEntry> entries)
+    private void SaveDownloadedInternal(List<DownloadedTrackEntry> entries)
     {
         var path = GetDownloadedPath();
         var dir = Path.GetDirectoryName(path);

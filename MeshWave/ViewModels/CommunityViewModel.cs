@@ -17,7 +17,7 @@ namespace MeshWave.ViewModels;
 public class CommunityViewModel : ViewModelBase
 {
     private readonly SyncOrchestrator? _sync;
-    private readonly SettingsService _settingsService = new();
+    private readonly SettingsService _settingsService;
 
     private string _searchQuery = string.Empty;
     private string _searchStatus = string.Empty;
@@ -36,10 +36,14 @@ public class CommunityViewModel : ViewModelBase
     private readonly Action<string>? _onBrowseArtist;
     private readonly System.Collections.ObjectModel.ObservableCollection<DownloadQueueItem>? _downloadQueue;
 
-    public CommunityViewModel(SyncOrchestrator? sync = null, Action<string>? onBrowseArtist = null)
+    public CommunityViewModel(
+        SyncOrchestrator? sync = null,
+        Action<string>? onBrowseArtist = null,
+        SettingsService? settingsService = null)
     {
         _sync = sync;
         _onBrowseArtist = onBrowseArtist;
+        _settingsService = settingsService ?? new SettingsService();
         _downloadQueue = (System.Windows.Application.Current?.MainWindow?.DataContext as ApplicationViewModel)?.DownloadQueueItems;
 
         SearchCommand = new RelayCommand(_ => Search(), _ => !IsSearching && !string.IsNullOrWhiteSpace(SearchQuery));

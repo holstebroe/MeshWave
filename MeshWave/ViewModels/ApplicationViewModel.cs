@@ -26,8 +26,8 @@ public class ApplicationViewModel : ViewModelBase
     private ViewModelBase _currentViewModel;
     private readonly PlaybackViewModel _playbackViewModel;
 
-    private readonly SettingsService _settingsService = new();
-    private readonly UserProfileService _profileService = new();
+    private readonly SettingsService _settingsService;
+    private readonly UserProfileService _profileService;
     private readonly P2PIdentityService _identityService = new();
     private readonly ManifestManager _manifestManager = new();
     private readonly SyncOrchestrator _syncOrchestrator;
@@ -44,15 +44,21 @@ public class ApplicationViewModel : ViewModelBase
     private bool _hasActiveDownloads;
     private readonly Dictionary<string, int> _lastKnownReleaseSequenceByPeer = new(StringComparer.OrdinalIgnoreCase);
 
-    public ApplicationViewModel()
+    public ApplicationViewModel(
+        SettingsService? settingsService = null,
+        UserProfileService? profileService = null,
+        Func<IAudioPlaybackService>? audioServiceFactory = null)
     {
+        _settingsService = settingsService ?? new SettingsService();
+        _profileService = profileService ?? new UserProfileService();
+
         var settings = _settingsService.LoadSettings();
         _userRepository = new UserRepository(settings.BaseFolder);
         _metadataLookup = new MetadataLookupRepository(_settingsService.GetLocalMusicFolder());
         var catalogueService = new CatalogueService();
         _syncOrchestrator = new SyncOrchestrator(userRepository: _userRepository, catalogueService: catalogueService);
 
-        _playbackViewModel = new PlaybackViewModel(_syncOrchestrator, _userRepository, _metadataLookup);
+        _playbackViewModel = new PlaybackViewModel(_syncOrchestrator, _userRepository, _metadataLookup, audioServiceFactory);
         _currentViewModel = new HomeViewModel();
 
         // Apply persisted waveform style immediately
@@ -285,7 +291,8 @@ public class ApplicationViewModel : ViewModelBase
                 _playbackViewModel.Stop();
                 _playbackViewModel.LoadTrack(title, artist, duration, filePath, remoteContentLength: length);
                 CurrentViewModel = _playbackViewModel;
-            });
+            },
+            settingsService: _settingsService);
         if (!string.IsNullOrWhiteSpace(artistUserId))
             vm.NavigateToArtist(artistUserId);
         CurrentViewModel = vm;
@@ -301,7 +308,7 @@ public class ApplicationViewModel : ViewModelBase
 
     public void NavigateToCommunity()
     {
-        var vm = new CommunityViewModel(_syncOrchestrator, NavigateToBrowse);
+        var vm = new CommunityViewModel(_syncOrchestrator, NavigateToBrowse, settingsService: _settingsService);
         vm.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(CommunityViewModel.HasNewReleases))

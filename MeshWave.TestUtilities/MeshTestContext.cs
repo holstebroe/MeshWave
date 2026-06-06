@@ -4,6 +4,10 @@ using MeshWave.Synchronizer;
 
 namespace MeshWave.TestUtilities;
 
+/// <summary>
+/// Main test harness for MeshWave P2P integration testing.
+/// Manages isolated peer environments and an optional bootstrap node.
+/// </summary>
 public class MeshTestContext : IAsyncDisposable
 {
     private readonly List<TestPeer> _peers = [];

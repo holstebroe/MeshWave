@@ -22,4 +22,5 @@ public interface ISyncBrowseClient
     Task<(Stream? Stream, long ContentLength)> RequestContentStreamAsync(string peerUserId, string contentHash);
     Task<bool> IsContentAvailableLocallyAsync(string contentHash);
     UserRepository? UserRepository { get; }
+    Task SyncAllPeersAsync(CancellationToken cancellationToken = default);
 }

@@ -2,9 +2,10 @@ using MeshWave.Common.Core.Models;
 using MeshWave.Synchronizer;
 using MeshWave.TestUtilities;
 using MeshWave.ViewModels;
+using Moq;
 using Xunit;
 
-namespace MeshWave.ViewModels.Tests;
+namespace MeshWave.ViewModels.Tests.Integration;
 
 public class ApplicationViewModelIntegrationTests : IAsyncLifetime
 {
@@ -24,31 +25,43 @@ public class ApplicationViewModelIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task P2PConnectionLifecycleScenario()
     {
-        // This is a bit tricky because ApplicationViewModel.ConnectP2PAsync is private and called in constructor/InitializeP2PAsync
-        // which uses real SettingsService and UserProfileService.
-        // We might need to mock those or just test the parts we can.
+        // For ApplicationViewModel to work in tests, we need to mock its dependencies
+        // to avoid loading real user settings and playing real audio.
+        var tempAppData = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        var mockSettings = new Mock<Services.SettingsService>(tempAppData);
+        mockSettings.Setup(s => s.LoadSettings()).Returns(new Models.AppSettings
+        {
+            BaseFolder = Path.Combine(tempAppData, "Music"),
+            P2P = new Models.P2PSettings { Enabled = false }
+        });
 
-        // Given the constraints, it's better to test ApplicationViewModel with a started SyncOrchestrator if possible,
-        // but ApplicationViewModel creates its own SyncOrchestrator.
+        var mockAudio = new Mock<Services.IAudioPlaybackService>();
 
-        // Let's see if we can use the existing ApplicationViewModel and just verify it reacts to Orchestrator events.
-        var appVm = new ApplicationViewModel();
+        var appVm = new ApplicationViewModel(
+            settingsService: mockSettings.Object,
+            audioServiceFactory: () => mockAudio.Object);
         var orchestrator = appVm.SyncOrchestrator;
 
         Assert.False(appVm.P2PIsConnected);
-
-        // We can't easily call ConnectP2PAsync without it trying to load real settings.
-        // But we can manually start the orchestrator it owns if we want to simulate it being connected.
-        // However, ApplicationViewModel might not be designed for that.
-
-        // Alternatively, we can test that it correctly exposes Orchestrator properties.
         Assert.Equal(orchestrator.ConnectedPeerCount, appVm.P2PPeerCount);
     }
 
     [Fact]
     public async Task NavigationScenario()
     {
-        var appVm = new ApplicationViewModel();
+        var tempAppData = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        var mockSettings = new Mock<Services.SettingsService>(tempAppData);
+        mockSettings.Setup(s => s.LoadSettings()).Returns(new Models.AppSettings
+        {
+            BaseFolder = Path.Combine(tempAppData, "Music"),
+            P2P = new Models.P2PSettings { Enabled = false }
+        });
+
+        var mockAudio = new Mock<Services.IAudioPlaybackService>();
+
+        var appVm = new ApplicationViewModel(
+            settingsService: mockSettings.Object,
+            audioServiceFactory: () => mockAudio.Object);
 
         appVm.NavigateToHome();
         Assert.IsType<HomeViewModel>(appVm.CurrentViewModel);

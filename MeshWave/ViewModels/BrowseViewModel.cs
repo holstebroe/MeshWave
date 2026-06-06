@@ -188,8 +188,8 @@ public class BrowseViewModel : ViewModelBase
 {
     private readonly ISyncBrowseClient? _sync;
     private readonly DownloadQueueService _downloadQueue;
-    private readonly SettingsService _settingsService = new();
-    private readonly LibraryDownloadStateService _downloadState = new();
+    private readonly SettingsService _settingsService;
+    private readonly LibraryDownloadStateService _downloadState;
 
     private BrowseTab _activeTab = BrowseTab.Artists;
     private string _statusText = "Connect to the Mesh network to discover community music.";
@@ -201,10 +201,17 @@ public class BrowseViewModel : ViewModelBase
     private ObservableCollection<BrowseTrackItem> _tracks = [];
     private ObservableCollection<BrowsePlaylistItem> _playlists = [];
 
-    public BrowseViewModel(ISyncBrowseClient? sync = null, DownloadQueueService? downloadQueue = null, Action<string, string, TimeSpan, string, long>? onPlayRemote = null)
+    public BrowseViewModel(
+        ISyncBrowseClient? sync = null,
+        DownloadQueueService? downloadQueue = null,
+        Action<string, string, TimeSpan, string, long>? onPlayRemote = null,
+        SettingsService? settingsService = null,
+        LibraryDownloadStateService? downloadState = null)
     {
         _sync = sync;
         _downloadQueue = downloadQueue ?? new DownloadQueueService();
+        _settingsService = settingsService ?? new SettingsService();
+        _downloadState = downloadState ?? new LibraryDownloadStateService();
 
         SetTabCommand = new RelayCommand<string>(tab =>
         {

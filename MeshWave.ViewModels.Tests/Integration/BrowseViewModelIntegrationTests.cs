@@ -4,7 +4,7 @@ using MeshWave.TestUtilities;
 using MeshWave.ViewModels;
 using Xunit;
 
-namespace MeshWave.ViewModels.Tests;
+namespace MeshWave.ViewModels.Tests.Integration;
 
 public class BrowseViewModelIntegrationTests : IAsyncLifetime
 {
@@ -28,12 +28,16 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         var john = await _context.CreatePeerAsync("John");
         var jane = await _context.CreatePeerAsync("Jane");
 
-        var johnBrowseViewModel = new BrowseViewModel(john.Orchestrator);
-        var janeBrowseViewModel = new BrowseViewModel(jane.Orchestrator);
+        var johnBrowseViewModel = new BrowseViewModel(john.Orchestrator, settingsService: new Services.SettingsService(john.AppDataRoot));
+        var janeBrowseViewModel = new BrowseViewModel(jane.Orchestrator, settingsService: new Services.SettingsService(jane.AppDataRoot));
 
         // Verify that john and jane are connected
         await john.WaitForConditionAsync(() => john.Orchestrator.ConnectedPeerCount > 0);
         await jane.WaitForConditionAsync(() => jane.Orchestrator.ConnectedPeerCount > 0);
+
+        // Force a sync to ensure profiles are exchanged immediately
+        await john.Orchestrator.SyncAllPeersAsync();
+        await jane.Orchestrator.SyncAllPeersAsync();
 
         // Verify that john can see jane in the browse view (as an artist)
         await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Artists, a => a.UserId == jane.UserId, timeoutMs: 30000);
@@ -50,6 +54,10 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         jane.AnnounceTrack("jane-track-1", "hash-jane-1", new Dictionary<string, string> { ["title"] = "Jane's First" });
 
         await _context.ConnectAndSyncAllAsync();
+
+        // Extra sync to be absolutely sure after actions
+        await john.SyncAsync();
+        await jane.SyncAsync();
 
         // Verify that john can see jane's track and vice versa
         await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "jane-track-1", timeoutMs: 30000);
@@ -90,7 +98,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         var john = await _context.CreatePeerAsync("John");
         var jane = await _context.CreatePeerAsync("Jane");
 
-        var johnBrowseViewModel = new BrowseViewModel(john.Orchestrator);
+        var johnBrowseViewModel = new BrowseViewModel(john.Orchestrator, settingsService: new Services.SettingsService(john.AppDataRoot));
 
         john.AnnounceTrack("track-rock", "hash-rock", new Dictionary<string, string> { ["title"] = "Rock Song", ["album"] = "Rock Album" });
         jane.AnnounceTrack("track-pop", "hash-pop", new Dictionary<string, string> { ["title"] = "Pop Song", ["album"] = "Pop Album" });
@@ -118,7 +126,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         var john = await _context.CreatePeerAsync("John", testDataName: "John", contentProvider: h => h == hash ? content : null);
         var jane = await _context.CreatePeerAsync("Jane");
 
-        var janeBrowseViewModel = new BrowseViewModel(jane.Orchestrator);
+        var janeBrowseViewModel = new BrowseViewModel(jane.Orchestrator, settingsService: new Services.SettingsService(jane.AppDataRoot));
 
         john.AnnounceTrack(trackId, hash, new Dictionary<string, string> { ["title"] = "Downloadable Track" });
 

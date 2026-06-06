@@ -12,6 +12,7 @@ public class TestPeer : IAsyncDisposable
 {
     public string Name { get; }
     public string BaseDir { get; }
+    public string AppDataRoot { get; }
     public SyncOrchestrator Orchestrator { get; }
     public LocalPeerIdentity Identity { get; }
     public int Port { get; }
@@ -22,6 +23,7 @@ public class TestPeer : IAsyncDisposable
     {
         Name = name;
         BaseDir = baseDir;
+        AppDataRoot = baseDir; // Use same directory for AppData in tests
         Port = port;
         Orchestrator = orchestrator;
         Identity = identity;

@@ -17,7 +17,13 @@ namespace MeshWave.Services
             Environment.GetFolderPath(Environment.SpecialFolder.MyMusic),
             "MeshWave");
 
-        private static AppSettings? _currentSettings;
+        private AppSettings? _currentSettings;
+        private readonly string _appDataRoot;
+
+        public SettingsService(string? appDataRoot = null)
+        {
+            _appDataRoot = appDataRoot ?? MeshWaveEnvironment.GetAppDataRoot();
+        }
 
         public AppSettings LoadSettings()
         {
@@ -65,7 +71,7 @@ namespace MeshWave.Services
         {
             try
             {
-                var appDataFolder = MeshWaveEnvironment.GetAppDataRoot();
+                var appDataFolder = _appDataRoot;
                 var settingsFilePath = GetSettingsFilePath();
 
                 if (!Directory.Exists(appDataFolder))
@@ -141,7 +147,7 @@ namespace MeshWave.Services
             };
         }
 
-        private static string GetSettingsFilePath() => MeshWaveEnvironment.CombineInAppData("settings.json");
+        private string GetSettingsFilePath() => Path.Combine(_appDataRoot, "settings.json");
 
         private static void ApplyLaunchOverrides(AppSettings settings)
         {
