@@ -1,7 +1,6 @@
 using MeshWave.Common.Core.Models;
 using MeshWave.Synchronizer;
 using MeshWave.TestUtilities;
-using MeshWave.ViewModels;
 using System.Diagnostics;
 using Xunit;
 
@@ -23,7 +22,6 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    [Trait(TestTraits.Category, TestTraits.Stress)]
     public async Task BrowsingReleasesTracksWithUpdates()
     {
         var john = await _context.CreatePeerAsync("John");
@@ -36,19 +34,46 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         await john.WaitForConditionAsync(() => john.Orchestrator.ConnectedPeerCount > 0);
         await jane.WaitForConditionAsync(() => jane.Orchestrator.ConnectedPeerCount > 0);
 
-        // Force a sync to ensure profiles are exchanged immediately
-        await john.Orchestrator.SyncAllPeersAsync(TestContext.Current.CancellationToken);
-        await jane.Orchestrator.SyncAllPeersAsync(TestContext.Current.CancellationToken);
+        // Use the built-in ConnectAndSyncAll which properly propagates manifests
+        await _context.ConnectAndSyncAllAsync();
 
-        // Verify that john can see jane in the browse view (as an artist)
+        // Trigger refresh of browse viewmodels to load the manifests that were just synced
+        // (FilterText change causes Refresh to be called)
+        johnBrowseViewModel.FilterText = " ";
+        johnBrowseViewModel.FilterText = string.Empty;
+        janeBrowseViewModel.FilterText = " ";
+        janeBrowseViewModel.FilterText = string.Empty;
+
+        // Give the ViewModels a moment to process the refresh
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+
+        // Now verify that John can see Jane in browse view
+        // Are we sure that Jane is actually reporting herself as artist?
         try
         {
             await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Artists, a => a.UserId == jane.UserId, timeoutMs: 5000);
         }
         catch (Exception ex)
         {
+            // Log detailed info about what manifests John has
+            var johnManifests = john.Orchestrator.PeerManifests.ToList();
+            var johnLocalManifest = john.Orchestrator.GetLocalManifest(ManifestStreamType.Social);
+            var janeManifestContent = johnManifests.FirstOrDefault(m => m.StreamType == ManifestStreamType.Content && m.UserId == jane.UserId);
+            var janeManifestSocial = johnManifests.FirstOrDefault(m => m.StreamType == ManifestStreamType.Social && m.UserId == jane.UserId);
+
+            var manifesDebugInfo = $"\nJohn's Local Social Manifest: {(johnLocalManifest != null ? "YES" : "NO")}\n" +
+                $"John's Peer Manifests: {johnManifests.Count}\n" +
+                $"  Social: {johnManifests.Count(m => m.StreamType == ManifestStreamType.Social)}\n" +
+                $"  Content: {johnManifests.Count(m => m.StreamType == ManifestStreamType.Content)}\n" +
+                $"  Artists in BrowseViewModel: {johnBrowseViewModel.Artists.Count}\n" +
+                $"Jane's Social Manifest Details:\n" +
+                $"  Found: {(janeManifestSocial != null ? "YES" : "NO")}\n" +
+                $"  Operations Count: {(janeManifestSocial?.Operations.Count ?? 0)}\n" +
+                $"  All Operations: {(janeManifestSocial != null ? string.Join(",", janeManifestSocial.Operations.Select(o => $"{o.OperationType}({o.SequenceNumber})")) : "NONE")}\n" +
+                $"  Snapshot: {(janeManifestSocial?.Snapshot != null ? $"LastSeqNum={janeManifestSocial.Snapshot.LastSequenceNumber}" : "NONE")}\n";
+
             OutputPeerLogs(john, jane);
-            throw new Exception($"{ex.Message}\n\n=== JOHN'S LOGS ===\n{john.GetLogsAsString()}\n\n=== JANE'S LOGS ===\n{jane.GetLogsAsString()}", ex);
+            throw new Exception($"{ex.Message}{manifesDebugInfo}\n\n=== JOHN'S LOGS ===\n{john.GetLogsAsString()}\n\n=== JANE'S LOGS ===\n{jane.GetLogsAsString()}", ex);
         }
 
         // Verify that john cannot see any released tracks from jane and vice versa
