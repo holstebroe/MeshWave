@@ -2,6 +2,7 @@ using MeshWave.Common.Core.Models;
 using MeshWave.Synchronizer;
 using MeshWave.TestUtilities;
 using MeshWave.ViewModels;
+using System.Diagnostics;
 using Xunit;
 
 namespace MeshWave.ViewModels.Tests.Integration;
@@ -40,7 +41,15 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         await jane.Orchestrator.SyncAllPeersAsync(TestContext.Current.CancellationToken);
 
         // Verify that john can see jane in the browse view (as an artist)
-        await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Artists, a => a.UserId == jane.UserId, timeoutMs: 5000);
+        try
+        {
+            await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Artists, a => a.UserId == jane.UserId, timeoutMs: 5000);
+        }
+        catch (Exception ex)
+        {
+            OutputPeerLogs(john, jane);
+            throw new Exception($"{ex.Message}\n\n=== JOHN'S LOGS ===\n{john.GetLogsAsString()}\n\n=== JANE'S LOGS ===\n{jane.GetLogsAsString()}", ex);
+        }
 
         // Verify that john cannot see any released tracks from jane and vice versa
         Assert.DoesNotContain(jane.UserId, johnBrowseViewModel.Tracks.Select(t => t.ArtistUserId));
@@ -60,9 +69,35 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         await jane.SyncAsync();
 
         // Verify that john can see jane's track and vice versa
-        await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "jane-track-1", timeoutMs: 30000);
-        await ViewModelTestHelpers.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == "john-track-1", timeoutMs: 30000);
-        await ViewModelTestHelpers.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == "john-track-2", timeoutMs: 30000);
+        try
+        {
+            await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "jane-track-1", timeoutMs: 30000);
+        }
+        catch (Exception ex)
+        {
+            OutputPeerLogs(john, jane);
+            throw new Exception($"{ex.Message}\n\n=== JOHN'S LOGS ===\n{john.GetLogsAsString()}\n\n=== JANE'S LOGS ===\n{jane.GetLogsAsString()}", ex);
+        }
+
+        try
+        {
+            await ViewModelTestHelpers.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == "john-track-1", timeoutMs: 30000);
+        }
+        catch (Exception ex)
+        {
+            OutputPeerLogs(john, jane);
+            throw new Exception($"{ex.Message}\n\n=== JOHN'S LOGS ===\n{john.GetLogsAsString()}\n\n=== JANE'S LOGS ===\n{jane.GetLogsAsString()}", ex);
+        }
+
+        try
+        {
+            await ViewModelTestHelpers.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == "john-track-2", timeoutMs: 30000);
+        }
+        catch (Exception ex)
+        {
+            OutputPeerLogs(john, jane);
+            throw new Exception($"{ex.Message}\n\n=== JOHN'S LOGS ===\n{john.GetLogsAsString()}\n\n=== JANE'S LOGS ===\n{jane.GetLogsAsString()}", ex);
+        }
 
         // Action: Jane releases 2 more tracks
         jane.AnnounceTrack("jane-track-2", "hash-jane-2", new Dictionary<string, string> { ["title"] = "Jane's Second" });
@@ -148,5 +183,19 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         Assert.False(trackItem.IsQueued);
         Assert.True(trackItem.IsDownloaded);
         Assert.False(trackItem.CanDownload);
+    }
+
+    private void OutputPeerLogs(TestPeer john, TestPeer jane)
+    {
+        Debug.WriteLine("=== JOHN'S LOGS ===");
+        Debug.WriteLine(john.GetLogsAsString());
+        Debug.WriteLine("\n=== JANE'S LOGS ===");
+        Debug.WriteLine(jane.GetLogsAsString());
+
+        // Also output to console for visibility in test output
+        Console.WriteLine("=== JOHN'S LOGS ===");
+        Console.WriteLine(john.GetLogsAsString());
+        Console.WriteLine("\n=== JANE'S LOGS ===");
+        Console.WriteLine(jane.GetLogsAsString());
     }
 }

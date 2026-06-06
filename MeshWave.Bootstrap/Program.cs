@@ -1,5 +1,6 @@
 using MeshWave.Bootstrap.Core;
 using MeshWave.Synchronizer;
+using NLog;
 
 namespace MeshWave.Bootstrap;
 
@@ -42,7 +43,8 @@ internal class Program
             cts.Cancel();
         };
 
-        _coordinator = new BootstrapCoordinator(port);
+        var logger = LogManager.GetCurrentClassLogger();
+        _coordinator = new BootstrapCoordinator(port, logger);
         _coordinator.PeerRegistered += (_, e) =>
             Console.WriteLine($"[peer+] {DateTime.UtcNow:HH:mm:ss} user={e.Peer.UserId} addr={e.Peer.Address}:{e.Peer.Port} reason={e.Reason}");
         _coordinator.PeerRefreshed += (_, e) =>

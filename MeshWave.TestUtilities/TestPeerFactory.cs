@@ -5,6 +5,8 @@ using MeshWave.Common.Core.Models;
 using MeshWave.Common.Core.Storage;
 using MeshWave.Synchronizer;
 using NLog;
+using NLog.Config;
+using NLog.Targets;
 
 namespace MeshWave.TestUtilities;
 
@@ -18,9 +20,30 @@ public static class TestPeerFactory
 
         // Get peer specific logger to diagnose network traffic per-peer.
         var logger = LogManager.GetLogger(name);
-        // TODO: Configure the peer specific logger with a MemoryTarget and a ConsoleTarget and a layout prefixed with the peer name.
 
-            var discovery = new NullPeerDiscovery(); // Typically want to avoid UDP broadcast in tests
+        // Configure the peer specific logger with a MemoryTarget and a ConsoleTarget with layout prefixed with the peer name.
+        var memoryTarget = new MemoryTarget($"memory_{name}")
+        {
+            Layout = "[${longdate}][${level:uppercase=true}][${logger}] ${message} ${exception:format=tostring}"
+        };
+
+        var consoleTarget = new ConsoleTarget($"console_{name}")
+        {
+            Layout = $"[{name}] [" + "${longdate}][${level:uppercase=true}][${logger}] ${message} ${exception:format=tostring}"
+        };
+
+        var config = LogManager.Configuration ?? new LoggingConfiguration();
+        if (config.FindTargetByName(memoryTarget.Name) == null)
+            config.AddTarget(memoryTarget);
+        if (config.FindTargetByName(consoleTarget.Name) == null)
+            config.AddTarget(consoleTarget);
+
+        var rule = new LoggingRule(name, LogLevel.Trace, memoryTarget);
+        rule.Targets.Add(consoleTarget);
+        config.LoggingRules.Add(rule);
+        LogManager.Configuration = config;
+
+        var discovery = new NullPeerDiscovery(); // Typically want to avoid UDP broadcast in tests
         var peerRouter = new PeerRouter(lanDiscovery: discovery, logger:logger);
         var server = new ManifestExchangeServer(port, logger: logger);
         var client = new ManifestExchangeClient(timeoutMs: 2000, logger: logger);
@@ -42,7 +65,7 @@ public static class TestPeerFactory
             ManifestPort = port
         };
 
-        return new TestPeer(name, tempDir, port, orchestrator, identity);
+        return new TestPeer(name, tempDir, port, orchestrator, identity, memoryTarget, logger);
     }
 
     public static void InitializeWithTestData(TestPeer peer, string sourceUserTestDataName)

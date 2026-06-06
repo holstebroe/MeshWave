@@ -1,15 +1,14 @@
-using System.Net;
-using System.Net.Sockets;
-using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
-using MeshWave.Common.Core.Storage;
 using MeshWave.Synchronizer;
-using MeshWave.Bootstrap.Core;
+using NLog;
+using NLog.Targets;
 
 namespace MeshWave.TestUtilities;
 
 public class TestPeer : IAsyncDisposable
 {
+    private readonly MemoryTarget _memoryTarget;
+
     public string Name { get; }
     public string BaseFolder { get; }
     public string AppDataRoot { get; }
@@ -18,8 +17,9 @@ public class TestPeer : IAsyncDisposable
     public int Port { get; }
 
     public string UserId => Identity.UserId;
+    public Logger Logger { get; }
 
-    public TestPeer(string name, string baseFolder, int port, SyncOrchestrator orchestrator, LocalPeerIdentity identity)
+    public TestPeer(string name, string baseFolder, int port, SyncOrchestrator orchestrator, LocalPeerIdentity identity, MemoryTarget memoryTarget, Logger logger)
     {
         Name = name;
         BaseFolder = baseFolder;
@@ -28,6 +28,8 @@ public class TestPeer : IAsyncDisposable
         Port = port;
         Orchestrator = orchestrator;
         Identity = identity;
+        Logger = logger;
+        _memoryTarget = memoryTarget;
     }
 
     public async Task StartAsync(IEnumerable<Manifest>? initialManifests = null, IReadOnlyList<string>? bootstrapNodes = null, bool actAsListener = true, Func<string, byte[]?>? contentProvider = null)
@@ -69,4 +71,8 @@ public class TestPeer : IAsyncDisposable
         => Orchestrator.BroadcastProfile(displayName, isArtist, bio, website, iconHash);
 
     public async Task SyncAsync() => await Orchestrator.SyncAllPeersAsync();
+
+    public IReadOnlyList<string> GetLogs() => _memoryTarget.Logs.AsReadOnly();
+
+    public string GetLogsAsString() => string.Join(Environment.NewLine, _memoryTarget.Logs);
 }

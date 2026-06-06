@@ -33,7 +33,7 @@ public class MeshTestContext : IAsyncDisposable
             if (_bootstrap == null)
             {
                 _bootstrapPort = TestPeerFactory.FindFreePort();
-                _bootstrap = new BootstrapCoordinator(_bootstrapPort);
+                _bootstrap = new BootstrapCoordinator(_bootstrapPort, peer.Logger);
                 await _bootstrap.StartAsync();
             }
             bootstrapNodes = [$"127.0.0.1:{_bootstrapPort}"];
