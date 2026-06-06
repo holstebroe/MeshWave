@@ -13,7 +13,7 @@ public class MeshTestContext : IAsyncDisposable
 
     public IReadOnlyList<TestPeer> Peers => _peers;
 
-    public async Task<TestPeer> CreatePeerAsync(string name, bool useBootstrap = true, string? testDataName = null)
+    public async Task<TestPeer> CreatePeerAsync(string name, bool useBootstrap = true, string? testDataName = null, Func<string, byte[]?>? contentProvider = null)
     {
         var peer = TestPeerFactory.CreatePeer(name);
         _peers.Add(peer);

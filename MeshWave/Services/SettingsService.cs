@@ -19,7 +19,7 @@ namespace MeshWave.Services
 
         private static AppSettings? _currentSettings;
 
-        public AppSettings LoadSettings()
+        public virtual AppSettings LoadSettings()
         {
             if (_currentSettings != null)
                 return _currentSettings;
@@ -61,7 +61,7 @@ namespace MeshWave.Services
             return _currentSettings;
         }
 
-        public void SaveSettings(AppSettings settings)
+        public virtual void SaveSettings(AppSettings settings)
         {
             try
             {
