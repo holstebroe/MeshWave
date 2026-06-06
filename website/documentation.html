@@ -141,7 +141,11 @@
                     })
                     .catch(error => {
                         console.error("Could not load or render markdown:", error);
-                        contentContainer.innerHTML = `<div class="p-6 bg-red-100 border border-red-400 text-red-700 rounded">Error loading documentation: ${error.message}. Please ensure the source file exists at ${filePath} and is a valid markdown file.</div>`;
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = "p-6 bg-red-100 border border-red-400 text-red-700 rounded";
+                        errorDiv.textContent = `Error loading documentation: ${error.message}. Please ensure the source file exists at ${filePath} and is a valid markdown file.`;
+                        contentContainer.innerHTML = '';
+                        contentContainer.appendChild(errorDiv);
                     });
             } else if (contentContainer) {
                 // If no source parameter, display a default message or keep existing content structure visible. 
