@@ -13,14 +13,20 @@ namespace MeshWave.Integration.Tests;
 public class MeshIntegrationTests : IAsyncLifetime
 {
     private MeshTestContext _context = default!;
+    private readonly ITestOutputHelper _output;
 
-    public Task InitializeAsync()
+    public MeshIntegrationTests(ITestOutputHelper output)
     {
-        _context = new MeshTestContext();
-        return Task.CompletedTask;
+        _output = output;
     }
 
-    public async Task DisposeAsync()
+    public ValueTask InitializeAsync()
+    {
+        _context = new MeshTestContext();
+        return default;
+    }
+
+    public async ValueTask DisposeAsync()
     {
         await _context.DisposeAsync();
     }
@@ -28,10 +34,17 @@ public class MeshIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task Bootstrap_LateJoiner_CanDiscoverExistingPeer()
     {
+        _output.WriteLine("Starting Bootstrap_LateJoiner_CanDiscoverExistingPeer");
         var peerA = await _context.CreatePeerAsync("Alice");
-        var peerB = await _context.CreatePeerAsync("Bob");
+        _output.WriteLine($"Peer A (Alice) created: {peerA.UserId} on port {peerA.Port}");
 
+        var peerB = await _context.CreatePeerAsync("Bob");
+        _output.WriteLine($"Peer B (Bob) created: {peerB.UserId} on port {peerB.Port}");
+
+        _output.WriteLine("Waiting for Peer B to discover Peer A...");
         await peerB.WaitForConditionAsync(() => peerB.Orchestrator.ConnectedPeerCount > 0);
+        _output.WriteLine($"Peer B connected peer count: {peerB.Orchestrator.ConnectedPeerCount}");
+
         Assert.True(peerB.Orchestrator.ConnectedPeerCount >= 0);
     }
 
@@ -111,16 +124,26 @@ public class MeshIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task RequestContentAsync_RecordsAttempts_AndProducesNatGuidance_WhenTransferFails()
     {
+        _output.WriteLine("Starting RequestContentAsync_RecordsAttempts_AndProducesNatGuidance_WhenTransferFails");
         var alice = await _context.CreatePeerAsync("Alice");
         var bob = await _context.CreatePeerAsync("Bob");
 
+        _output.WriteLine("Syncing peers...");
         await _context.ConnectAndSyncAllAsync();
 
+        _output.WriteLine("Requesting missing content from Bob...");
         var content = await alice.Orchestrator.RequestContentAsync(bob.UserId, "missing-content-hash");
         Assert.Null(content);
 
         var report = alice.Orchestrator.LastConnectionAttemptReport;
         Assert.NotNull(report);
+
+        _output.WriteLine($"Connection report for {report!.PeerUserId}:");
+        foreach (var attempt in report.Attempts)
+        {
+            _output.WriteLine($"  - Attempt: {attempt.Method}, Success: {attempt.Success}, Details: {attempt.Details}");
+        }
+
         Assert.Equal(bob.UserId, report!.PeerUserId);
         Assert.Contains(report.Attempts, a => a.Method == "direct-tcp-probe");
         Assert.Contains(report.Attempts, a => a.Method == "nat-guidance");
