@@ -64,6 +64,9 @@ public static class TestPeerFactory
         }
     }
 
+    private static readonly HashSet<int> _usedPorts = new();
+    private static readonly object _portLock = new();
+
     private static string FindTestDataPath()
     {
         var dir = AppContext.BaseDirectory;
@@ -94,13 +97,28 @@ public static class TestPeerFactory
         throw new DirectoryNotFoundException("TestData directory not found.");
     }
 
-    private static int FindFreePort()
+    public static int FindFreePort()
     {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
+        lock (_portLock)
+        {
+            int port;
+            int retry = 0;
+            while (true)
+            {
+                var listener = new TcpListener(IPAddress.Loopback, 0);
+                listener.Start();
+                port = ((IPEndPoint)listener.LocalEndpoint).Port;
+                listener.Stop();
+
+                if (!_usedPorts.Contains(port))
+                {
+                    _usedPorts.Add(port);
+                    return port;
+                }
+
+                if (++retry > 100) throw new Exception("Could not find a free port after 100 retries.");
+            }
+        }
     }
 }
 

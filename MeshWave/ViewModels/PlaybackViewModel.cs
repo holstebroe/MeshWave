@@ -30,10 +30,11 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     private double _volume = 1.0;
     private ObservableCollection<string> _comments = [];
     private ObservableCollection<TimelineCommentMarker> _timelineMarkers = [];
-    private AudioPlaybackService? _audioService;
+    private IAudioPlaybackService? _audioService;
+    private Func<IAudioPlaybackService>? _audioServiceFactory;
     private string? _currentFilePath;
     private bool _isUpdatingPosition = false;
-    private readonly UserProfileService _profileService = new();
+    private readonly UserProfileService _profileService;
     private readonly MyMusicMetadataService _myMusicMetadataService = new();
     private string _coverImagePath = string.Empty;
     private float[] _waveformSamples = [];
@@ -52,11 +53,18 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     private readonly Dictionary<string, HashSet<string>> _importedCommentOperationIdsByPeer = new(StringComparer.OrdinalIgnoreCase);
     private bool _isCurrentTrackLikedByMe;
 
-    public PlaybackViewModel(SyncOrchestrator? sync = null, UserRepository? userRepository = null, MetadataLookupRepository? metadataLookup = null)
+    public PlaybackViewModel(
+        SyncOrchestrator? sync = null,
+        UserRepository? userRepository = null,
+        MetadataLookupRepository? metadataLookup = null,
+        Func<IAudioPlaybackService>? audioServiceFactory = null,
+        UserProfileService? profileService = null)
     {
         _sync = sync;
         _userRepository = userRepository;
         _metadataLookup = metadataLookup;
+        _audioServiceFactory = audioServiceFactory;
+        _profileService = profileService ?? new UserProfileService();
 
         PlayCommand = new RelayCommand(_ => Play());
         PauseCommand = new RelayCommand(_ => Pause());
@@ -448,7 +456,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             SyncCommentsFromPeerManifests();
 
             _audioService?.Dispose();
-            var audioService = new AudioPlaybackService();
+            var audioService = _audioServiceFactory?.Invoke() ?? new AudioPlaybackService();
             _audioService = audioService;
             audioService.PositionChanged += (s, pos) =>
             {

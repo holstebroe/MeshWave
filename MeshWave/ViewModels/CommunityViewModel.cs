@@ -17,7 +17,7 @@ namespace MeshWave.ViewModels;
 public class CommunityViewModel : ViewModelBase
 {
     private readonly SyncOrchestrator? _sync;
-    private readonly SettingsService _settingsService = new();
+    private readonly SettingsService _settingsService;
 
     private string _searchQuery = string.Empty;
     private string _searchStatus = string.Empty;
@@ -36,10 +36,14 @@ public class CommunityViewModel : ViewModelBase
     private readonly Action<string>? _onBrowseArtist;
     private readonly System.Collections.ObjectModel.ObservableCollection<DownloadQueueItem>? _downloadQueue;
 
-    public CommunityViewModel(SyncOrchestrator? sync = null, Action<string>? onBrowseArtist = null)
+    public CommunityViewModel(
+        SyncOrchestrator? sync = null,
+        Action<string>? onBrowseArtist = null,
+        SettingsService? settingsService = null)
     {
         _sync = sync;
         _onBrowseArtist = onBrowseArtist;
+        _settingsService = settingsService ?? new SettingsService();
         _downloadQueue = (System.Windows.Application.Current?.MainWindow?.DataContext as ApplicationViewModel)?.DownloadQueueItems;
 
         SearchCommand = new RelayCommand(_ => Search(), _ => !IsSearching && !string.IsNullOrWhiteSpace(SearchQuery));
@@ -350,9 +354,10 @@ public class CommunityViewModel : ViewModelBase
         var followedIds = Following.Select(u => u.UserId).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (!followedIds.Contains(e.UserId))
         {
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            ExecuteOnUi(() =>
             {
                 RebuildFollowFriendLists();
+                RefreshFeed();
                 RefreshDiscoverResults(SearchQuery);
             });
             return;
@@ -361,7 +366,7 @@ public class CommunityViewModel : ViewModelBase
         var manifest = _sync.GetPeerManifest(e.UserId);
         if (manifest == null)
         {
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            ExecuteOnUi(() =>
             {
                 RebuildFollowFriendLists();
                 RefreshDiscoverResults(SearchQuery);
@@ -381,11 +386,11 @@ public class CommunityViewModel : ViewModelBase
             _lastFeedReleaseSequenceByPeer[e.UserId] = latestCreateSequence;
             if (ActiveTab != CommunityTab.Feed)
             {
-                System.Windows.Application.Current.Dispatcher.Invoke(() => NewReleaseCount++);
+                ExecuteOnUi(() => NewReleaseCount++);
             }
         }
 
-        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        ExecuteOnUi(() =>
         {
             RebuildFollowFriendLists();
             RefreshFeed();
@@ -816,10 +821,7 @@ public class CommunityViewModel : ViewModelBase
 
     private void OnPeerCountChanged(object? sender, EventArgs e)
     {
-        if (System.Windows.Application.Current?.Dispatcher == null)
-            return;
-
-        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        ExecuteOnUi(() =>
         {
             RefreshDiscoverResults(SearchQuery);
             UpdateOnlineStatus();
