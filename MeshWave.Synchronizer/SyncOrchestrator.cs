@@ -1,3 +1,4 @@
+using MeshWave.Common.Core.P2P;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -286,7 +287,10 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, JsonSerializer.Serialize(manifest));
+            lock (manifest)
+            {
+                File.WriteAllText(path, JsonSerializer.Serialize(manifest));
+            }
         }
         catch { /* best-effort disk write */ }
     }
@@ -578,18 +582,35 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
         _ = Task.Run(async () =>
         {
-            foreach (var manifest in _localManifests.Values)
+            foreach (var streamType in Enum.GetValues<ManifestStreamType>())
             {
+                var manifest = GetLocalManifest(streamType);
+                if (manifest == null) continue;
+
+                Manifest manifestToPush;
+                lock (manifest)
+                {
+                    manifestToPush = new Manifest
+                    {
+                        UserId = manifest.UserId,
+                        StreamType = manifest.StreamType,
+                        Snapshot = manifest.Snapshot,
+                        Operations = manifest.Operations.ToList(),
+                        Version = manifest.Version,
+                        LastUpdated = manifest.LastUpdated
+                    };
+                }
+
                 try
                 {
-                    await _client.PushManifestAsync(peer.Address, peer.Port, manifest, BuildAnnouncingPeerInfo(manifest.StreamType));
+                    await _client.PushManifestAsync(peer.Address, peer.Port, manifestToPush, BuildAnnouncingPeerInfo(manifestToPush.StreamType));
                     RecordPeerMessage(peer.UserId, "PushManifest", success: true,
-                        $"Pushed local {manifest.StreamType} manifest ({manifest.Operations.Count} op) to {peer.Address}:{peer.Port}.");
+                        $"Pushed local {manifestToPush.StreamType} manifest ({manifestToPush.Operations.Count} op) to {peer.Address}:{peer.Port}.");
                 }
                 catch (Exception ex)
                 {
                     RecordPeerMessage(peer.UserId, "PushManifest", success: false,
-                        $"Push failed for {manifest.StreamType} to {peer.Address}:{peer.Port}: {ex.Message}");
+                        $"Push failed for {manifestToPush.StreamType} to {peer.Address}:{peer.Port}: {ex.Message}");
                 }
             }
         });
@@ -680,7 +701,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                 {
                     if (peer.Port > 0)
                     {
-                        remoteManifest = await _client.FetchManifestAsync(peer.Address, peer.Port, streamType, startSeq, null, targetUserId: null, cancellationToken: ct);
+                        remoteManifest = await _client.FetchManifestAsync(peer.Address, peer.Port, _peerStore, peer.UserId, streamType, ct);
                         fetchedFromPeer = remoteManifest != null;
                     }
                 }
@@ -694,7 +715,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                         {
                             try
                             {
-                                remoteManifest = await _client.FetchManifestAsync(host, port, streamType, startSeq, null, targetUserId: peer.UserId, cancellationToken: ct);
+                                remoteManifest = await _client.FetchManifestAsync(host, port, _peerStore, peer.UserId, streamType, ct);
                                 if (remoteManifest != null)
                                 {
                                     RecordPeerMessage(peer.UserId, "FetchManifestRelay", success: true,
@@ -1314,7 +1335,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     {
         if (remote.UserId == _identity?.UserId) return;
 
-        Logger.Debug("Attempting merge of manifest from peer {0} ({1} ops)", remote.UserId, remote.Operations.Count);
+        Logger.Debug("Attempting merge of manifest from peer {0} ({1} ops, stream={2})", remote.UserId, remote.Operations.Count, remote.StreamType);
         var added = _peerStore.MergeAndSave(remote, publicKeyPem, _manifestManager);
         if (added > 0)
         {
@@ -1326,6 +1347,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
             if (profileOp != null)
             {
+                Logger.Debug("Updating profile for {0} from merged manifest", remote.UserId);
                 _userRepository?.UpdateProfile(remote.UserId, profileOp.Metadata);
                 var iconHash = profileOp.ContentHash;
                 if (!string.IsNullOrWhiteSpace(iconHash))
@@ -1402,10 +1424,32 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         var manifest = GetLocalManifest(streamType);
         if (manifest == null) return;
 
-        SaveLocalManifest(manifest);
+        Manifest manifestToShare;
+        lock (manifest)
+        {
+            if (manifest.Operations.Count >= 500 && _identity != null)
+            {
+                Logger.Info("Compacting local {0} manifest ({1} operations)", streamType, manifest.Operations.Count);
+                _manifestManager.Compact(manifest, _identity.PrivateKeyPem, threshold: 500, keepRecent: 100);
+            }
 
-        Logger.Info("Local {0} manifest updated (ops: {1}). Initiating fan-out to peers.", streamType, manifest.Operations.Count);
-        _ = _catalogueService.IngestAsync(manifest);
+            SaveLocalManifest(manifest);
+
+            Logger.Info("Local {0} manifest updated (ops: {1}). Initiating fan-out to peers.", streamType, manifest.Operations.Count);
+
+            // Clone for sharing to avoid race conditions with further modifications/compactions
+            manifestToShare = new Manifest
+            {
+                UserId = manifest.UserId,
+                StreamType = manifest.StreamType,
+                Snapshot = manifest.Snapshot,
+                Operations = manifest.Operations.ToList(),
+                Version = manifest.Version,
+                LastUpdated = manifest.LastUpdated
+            };
+        }
+
+        _ = _catalogueService.IngestAsync(manifestToShare);
 
         _ = Task.Run(async () =>
         {
@@ -1415,9 +1459,9 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                 try
                 {
                     Logger.Debug("Pushing local {0} manifest to peer {1} ({2}:{3})", streamType, peer.UserId, peer.Address, peer.Port);
-                    await _client.PushManifestAsync(peer.Address, peer.Port, manifest, BuildAnnouncingPeerInfo(streamType));
+                    await _client.PushManifestAsync(peer.Address, peer.Port, manifestToShare, BuildAnnouncingPeerInfo(streamType));
                     RecordPeerMessage(peer.UserId, "PushManifest", success: true,
-                        $"Pushed local {streamType} manifest ({manifest.Operations.Count} op) to {peer.Address}:{peer.Port}.");
+                        $"Pushed local {streamType} manifest ({manifestToShare.Operations.Count} op) to {peer.Address}:{peer.Port}.");
                 }
                 catch (Exception ex)
                 {
@@ -1437,7 +1481,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                         try
                         {
                             Logger.Debug("Relaying local {0} manifest via bootstrap {1}:{2}", streamType, host, port);
-                            await _client.RelayManifestPushAsync(host, port, manifest, BuildAnnouncingPeerInfo(streamType));
+                            await _client.RelayManifestPushAsync(host, port, manifestToShare, BuildAnnouncingPeerInfo(streamType));
                             RecordPeerMessage($"bootstrap:{host}:{port}", "RelayManifestPush", success: true,
                                 $"Pushed local {streamType} manifest to bootstrap for relaying.");
                         }

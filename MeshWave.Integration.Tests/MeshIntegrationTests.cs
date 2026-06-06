@@ -244,6 +244,43 @@ public class MeshIntegrationTests : IAsyncLifetime
         }, timeoutMs: 15000);
     }
 
+    [Fact]
+    [Trait(TestTraits.Category, TestTraits.Stress)]
+    public async Task StressSync1000OperationsTest()
+    {
+        _output.WriteLine("Starting StressSync1000OperationsTest");
+        var alice = await _context.CreatePeerAsync("Alice");
+        var bob = await _context.CreatePeerAsync("Bob");
+
+        alice.AnnounceTrack("main-track", "alice-hash-1");
+        await _context.ConnectAndSyncAllAsync();
+
+        _output.WriteLine("Alice is generating 1000 comments...");
+        for (int i = 0; i < 1000; i++)
+        {
+            alice.Orchestrator.RecordComment("main-track", $"Comment {i}");
+        }
+
+        _output.WriteLine("Alice is performing final sync/push...");
+        await alice.SyncAsync();
+        await bob.SyncAsync();
+
+        _output.WriteLine("Waiting for Bob to receive all 1000 comments via delta-sync and Protobuf...");
+        await bob.WaitForConditionAsync(() => {
+            var manifest = bob.GetPeerManifest(alice.UserId, ManifestStreamType.Interaction);
+            var totalOps = (manifest?.Operations.Count ?? 0) + (manifest?.Snapshot?.PersistentOperations.Count ?? 0);
+            _output.WriteLine($"Current total ops for Alice in Bob's store: {totalOps}");
+            return totalOps == 1000;
+        }, timeoutMs: 60000);
+
+        _output.WriteLine("Success: Bob received 1000 operations.");
+
+        var manifestBobHas = bob.GetPeerManifest(alice.UserId, ManifestStreamType.Interaction);
+        Assert.NotNull(manifestBobHas);
+        var finalCount = manifestBobHas.Operations.Count + (manifestBobHas.Snapshot?.PersistentOperations.Count ?? 0);
+        Assert.Equal(1000, finalCount);
+    }
+
     private static int CountPublicTracks(Manifest? manifest)
     {
         if (manifest == null) return 0;

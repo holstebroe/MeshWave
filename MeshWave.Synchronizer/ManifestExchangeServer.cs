@@ -1,9 +1,11 @@
+using MeshWave.Common.Core.P2P;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using NLog;
 using MeshWave.Common.Core.Models;
+using MeshWave.Common.Core.Serialization;
 
 namespace MeshWave.Synchronizer;
 
@@ -106,25 +108,37 @@ public class ManifestExchangeServer : IDisposable
             try
             {
                 var stream = client.GetStream();
-                var requestJson = await ReadMessageAsync(stream, ct);
-                var request = JsonSerializer.Deserialize<ManifestRequest>(requestJson);
+                var (bytes, isJson) = await ReadMessageAsync(stream, ct);
+
+                ManifestRequest? request;
+                if (isJson)
+                {
+                    var json = Encoding.UTF8.GetString(bytes);
+                    request = System.Text.Json.JsonSerializer.Deserialize<ManifestRequest>(json);
+                }
+                else
+                {
+                    request = ManifestSerializer.DeserializeRequest(bytes);
+                }
+
                 if (request == null)
                 {
                     Logger.Warn("Received empty or invalid request from {0}", remoteEndpoint);
                     return;
                 }
 
-                Logger.Debug("Received {0} request from {1}", request.Type, remoteEndpoint);
+                Logger.Debug("Received {0} request from {1} (format={2})", request.Type, remoteEndpoint, isJson ? "JSON" : "Protobuf");
 
                 switch (request.Type)
                 {
                     case ManifestRequestType.GetManifest:
                     {
-                        var manifest = !string.IsNullOrWhiteSpace(request.TargetUserId)
+                        var originalManifest = !string.IsNullOrWhiteSpace(request.TargetUserId)
                             ? _relayedManifestProvider?.Invoke(request.TargetUserId, request.StreamType)
                             : _localManifestProvider?.Invoke(request.StreamType);
 
-                        if (manifest == null)
+                        Manifest? responseManifest = null;
+                        if (originalManifest == null)
                         {
                             Logger.Warn("Could not provide manifest for {0} (TargetUserId: {1})",
                                 remoteEndpoint, request.TargetUserId ?? "local");
@@ -132,28 +146,35 @@ public class ManifestExchangeServer : IDisposable
                         else
                         {
                             Logger.Info("Serving manifest for {0} to {1} (delta={2}, ops={3})",
-                                manifest.UserId, remoteEndpoint, request.StartSequenceNumber > 0, manifest.Operations.Count);
-                        }
+                                originalManifest.UserId, remoteEndpoint, request.StartSequenceNumber > 0, originalManifest.Operations.Count);
 
-                        if (manifest != null && (request.StartSequenceNumber > 0 || request.EndSequenceNumber != null))
-                        {
-                            var filteredOps = manifest.Operations
-                                .Where(op => op.SequenceNumber >= request.StartSequenceNumber &&
-                                            (request.EndSequenceNumber == null || op.SequenceNumber <= request.EndSequenceNumber))
-                                .ToList();
-
-                            manifest = new Manifest
+                            lock (originalManifest)
                             {
-                                UserId = manifest.UserId,
-                                Version = manifest.Version,
-                                LastUpdated = manifest.LastUpdated,
-                                Snapshot = manifest.Snapshot,
-                                Operations = filteredOps
-                            };
+                                var snapshot = originalManifest.Snapshot;
+                                if (request.StartSequenceNumber > (snapshot?.LastSequenceNumber ?? -1))
+                                {
+                                    snapshot = null;
+                                }
+
+                                var filteredOps = originalManifest.Operations
+                                    .Where(op => op.SequenceNumber >= request.StartSequenceNumber &&
+                                                (request.EndSequenceNumber == null || op.SequenceNumber <= request.EndSequenceNumber))
+                                    .ToList();
+
+                                responseManifest = new Manifest
+                                {
+                                    UserId = originalManifest.UserId,
+                                    StreamType = originalManifest.StreamType,
+                                    Version = originalManifest.Version,
+                                    LastUpdated = originalManifest.LastUpdated,
+                                    Snapshot = snapshot,
+                                    Operations = filteredOps
+                                };
+                            }
                         }
 
-                        var response = new ManifestResponse { Manifest = manifest };
-                        await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
+                        var response = new ManifestResponse { Manifest = responseManifest };
+                        await WriteMessageAsync(stream, response, ct);
                         break;
                     }
                     case ManifestRequestType.PushManifest when request.Manifest != null:
@@ -171,7 +192,7 @@ public class ManifestExchangeServer : IDisposable
                             Logger.Warn("Rejected push from {0}: too many operations ({1})", remoteEndpoint, opCount);
                         }
                         var ack = new ManifestResponse { Acknowledged = true };
-                        await WriteMessageAsync(stream, JsonSerializer.Serialize(ack), ct);
+                        await WriteMessageAsync(stream, ack, ct);
                         break;
                     }
                     case ManifestRequestType.RelayManifestPush when request.Manifest != null:
@@ -189,7 +210,7 @@ public class ManifestExchangeServer : IDisposable
                             Logger.Warn("Rejected relayed push from {0}: too many operations ({1})", remoteEndpoint, opCount);
                         }
                         var ack = new ManifestResponse { Acknowledged = true };
-                        await WriteMessageAsync(stream, JsonSerializer.Serialize(ack), ct);
+                        await WriteMessageAsync(stream, ack, ct);
                         break;
                     }
                     case ManifestRequestType.GetPeers:
@@ -199,7 +220,7 @@ public class ManifestExchangeServer : IDisposable
                             .ToList() ?? [];
                         Logger.Info("Serving {0} peers to {1} (PEX)", peers.Count, remoteEndpoint);
                         var response = new ManifestResponse { Peers = peers };
-                        await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
+                        await WriteMessageAsync(stream, response, ct);
                         break;
                     }
                     case ManifestRequestType.RequestRendezvous when request.Rendezvous != null:
@@ -214,23 +235,23 @@ public class ManifestExchangeServer : IDisposable
                         Logger.Info("Rendezvous request from {0} (Target: {1}) -> Success: {2}",
                             remoteEndpoint, request.Rendezvous.TargetUserId, rendezvous.Success);
                         var response = new ManifestResponse { Rendezvous = rendezvous, Acknowledged = rendezvous.Success };
-                        await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
+                        await WriteMessageAsync(stream, response, ct);
                         break;
                     }
                     case ManifestRequestType.RequestContent when !string.IsNullOrWhiteSpace(request.ContentHash):
                     {
-                        var bytes = _contentProvider?.Invoke(request.ContentHash);
+                        var contentBytes = _contentProvider?.Invoke(request.ContentHash);
                         Logger.Info("Content request from {0} for hash {1}. Found: {2}",
-                            remoteEndpoint, request.ContentHash, bytes != null);
+                            remoteEndpoint, request.ContentHash, contentBytes != null);
                         var response = new ManifestResponse
                         {
-                            Acknowledged = bytes != null && bytes.Length > 0,
-                            ContentLength = bytes?.Length ?? 0
+                            Acknowledged = contentBytes != null && contentBytes.Length > 0,
+                            ContentLength = contentBytes?.Length ?? 0
                         };
-                        await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
-                        if (bytes != null && bytes.Length > 0)
+                        await WriteMessageAsync(stream, response, ct);
+                        if (contentBytes != null && contentBytes.Length > 0)
                         {
-                            await stream.WriteAsync(bytes, ct);
+                            await stream.WriteAsync(contentBytes, ct);
                             await stream.FlushAsync(ct);
                         }
                         break;
@@ -238,7 +259,7 @@ public class ManifestExchangeServer : IDisposable
                     default:
                     {
                         var response = new ManifestResponse { Acknowledged = false };
-                        await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
+                        await WriteMessageAsync(stream, response, ct);
                         break;
                     }
                 }
@@ -262,27 +283,54 @@ public class ManifestExchangeServer : IDisposable
         }
     }
 
-    internal static async Task WriteMessageAsync(Stream stream, string json, CancellationToken ct)
+    internal static Task WriteMessageAsync(Stream stream, ManifestRequest request, CancellationToken ct)
     {
-        var body = Encoding.UTF8.GetBytes(json);
+        var body = ManifestSerializer.SerializeRequest(request);
+        return WriteBytesAsync(stream, body, ct);
+    }
+
+    internal static Task WriteMessageAsync(Stream stream, ManifestResponse response, CancellationToken ct)
+    {
+        var body = ManifestSerializer.SerializeResponse(response);
+        return WriteBytesAsync(stream, body, ct);
+    }
+
+    private static async Task WriteBytesAsync(Stream stream, byte[] body, CancellationToken ct)
+    {
         var lengthBytes = BitConverter.GetBytes(body.Length);
         await stream.WriteAsync(lengthBytes, ct);
         await stream.WriteAsync(body, ct);
         await stream.FlushAsync(ct);
     }
 
-    internal static async Task<string> ReadMessageAsync(Stream stream, CancellationToken ct)
+    internal static async Task<(byte[] Bytes, bool IsJson)> ReadMessageAsync(Stream stream, CancellationToken ct)
     {
         var lengthBytes = new byte[4];
-        await stream.ReadExactlyAsync(lengthBytes, ct);
-        var length = BitConverter.ToInt32(lengthBytes);
+        var totalRead = 0;
+        while (totalRead < 4)
+        {
+            var read = await stream.ReadAsync(lengthBytes.AsMemory(totalRead, 4 - totalRead), ct);
+            if (read == 0) throw new EndOfStreamException("End of stream reached while reading length.");
+            totalRead += read;
+        }
+        var length = BitConverter.ToInt32(lengthBytes, 0);
 
-        if (length <= 0 || length > SecurityLimits.MaxMessageBytes)
+        if (length < 0 || length > SecurityLimits.MaxMessageBytes)
             throw new InvalidDataException($"Rejected message: length {length} exceeds limit.");
 
+        if (length == 0) return ([], false);
+
         var body = new byte[length];
-        await stream.ReadExactlyAsync(body, ct);
-        return Encoding.UTF8.GetString(body);
+        totalRead = 0;
+        while (totalRead < length)
+        {
+            var read = await stream.ReadAsync(body.AsMemory(totalRead, length - totalRead), ct);
+            if (read == 0) throw new EndOfStreamException("End of stream reached while reading body.");
+            totalRead += read;
+        }
+
+        bool isJson = body.Length > 0 && body[0] == (byte)'{';
+        return (body, isJson);
     }
 
     public void Dispose()
@@ -299,55 +347,4 @@ public class ManifestReceivedEventArgs(Manifest manifest, string peerAddress, Pe
     public string PeerAddress { get; } = peerAddress;
     public PeerInfo? AnnouncingPeer { get; } = announcingPeer;
     public bool IsRelay { get; } = isRelay;
-}
-
-public enum ManifestRequestType
-{
-    GetManifest,
-    PushManifest,
-    GetPeers,
-    RequestRendezvous,
-    RequestContent,
-    RelayManifestPush
-}
-
-public class ManifestRequest
-{
-    public ManifestRequestType Type { get; set; }
-    public ManifestStreamType StreamType { get; set; } = ManifestStreamType.Content;
-    public Manifest? Manifest { get; set; }
-    public RendezvousRequest? Rendezvous { get; set; }
-    public string? ContentHash { get; set; }
-    public PeerInfo? AnnouncingPeer { get; set; }
-    public int StartSequenceNumber { get; set; }
-    public int? EndSequenceNumber { get; set; }
-    public string? TargetUserId { get; set; }
-}
-
-public class ManifestResponse
-{
-    public Manifest? Manifest { get; set; }
-    public bool Acknowledged { get; set; }
-    public List<PeerInfo> Peers { get; set; } = [];
-    public RendezvousResponse? Rendezvous { get; set; }
-    public byte[]? ContentBytes { get; set; }
-    public long ContentLength { get; set; }
-}
-
-public class RendezvousRequest
-{
-    public string InitiatorUserId { get; set; } = string.Empty;
-    public string TargetUserId { get; set; } = string.Empty;
-    public int InitiatorPort { get; set; }
-    public int RequestedProbeWindowMs { get; set; } = 4_000;
-}
-
-public class RendezvousResponse
-{
-    public bool Success { get; set; }
-    public string SessionId { get; set; } = string.Empty;
-    public DateTime ExpiresAtUtc { get; set; }
-    public DateTime ProbeStartUtc { get; set; }
-    public int ProbeWindowMs { get; set; } = 4_000;
-    public string Message { get; set; } = string.Empty;
 }

@@ -1,0 +1,131 @@
+syntax = "proto3";
+
+option csharp_namespace = "MeshWave.Common.Core.Serialization.Protobuf";
+
+import "google/protobuf/timestamp.proto";
+
+enum ProtoManifestStreamType {
+    CONTENT = 0;
+    INTERACTION = 1;
+    SOCIAL = 2;
+}
+
+enum ProtoManifestOperationType {
+    CREATE = 0;
+    UPDATE = 1;
+    DELETE = 2;
+    PLAY = 3;
+    FOLLOW = 4;
+    UNFOLLOW = 5;
+    PROFILE = 6;
+    COMMENT = 7;
+    COMMENT_DELETE = 8;
+    FRIEND_ADD = 9;
+    FRIEND_REMOVE = 10;
+    GROUP_JOIN = 11;
+    GROUP_LEAVE = 12;
+    LIKE = 13;
+    UNLIKE = 14;
+    CREATE_COMPETITION = 15;
+    COMPETITION_SUBMIT = 16;
+    COMPETITION_CAST_VOTE = 17;
+    COMPETITION_REVEAL_RESULTS = 18;
+}
+
+message ProtoManifestOperation {
+    string operation_id = 1;
+    ProtoManifestOperationType operation_type = 2;
+    string target_id = 3;
+    string target_type = 4;
+    optional string content_hash = 5;
+    int32 sequence_number = 6;
+    string signature = 7;
+    google.protobuf.Timestamp timestamp = 8;
+    map<string, string> metadata = 9;
+}
+
+message ProtoSnapshotStateEntry {
+    string target_id = 1;
+    string target_type = 2;
+    optional string content_hash = 3;
+    map<string, string> metadata = 4;
+}
+
+message ProtoManifestSnapshot {
+    int32 last_sequence_number = 1;
+    google.protobuf.Timestamp timestamp = 2;
+    string signature = 3;
+    optional string library_state_digest = 4;
+    map<string, int32> play_counts = 5;
+    repeated string followed_user_ids = 6;
+    repeated string liked_track_ids = 7;
+    repeated string friend_user_ids = 8;
+    repeated string group_ids = 9;
+    repeated ProtoSnapshotStateEntry entity_states = 10;
+    repeated ProtoManifestOperation persistent_operations = 11;
+}
+
+message ProtoManifest {
+    string user_id = 1;
+    ProtoManifestStreamType stream_type = 2;
+    optional ProtoManifestSnapshot snapshot = 3;
+    repeated ProtoManifestOperation operations = 4;
+    int32 version = 5;
+    google.protobuf.Timestamp last_updated = 6;
+}
+
+message ProtoPeerInfo {
+    string user_id = 1;
+    string display_name = 2;
+    string address = 3;
+    int32 port = 4;
+    string public_key_pem = 5;
+    google.protobuf.Timestamp last_seen = 6;
+    repeated string capabilities = 7;
+}
+
+enum ProtoManifestRequestType {
+    GET_MANIFEST = 0;
+    PUSH_MANIFEST = 1;
+    GET_PEERS = 2;
+    REQUEST_RENDEZVOUS = 3;
+    REQUEST_CONTENT = 4;
+    RELAY_MANIFEST_PUSH = 5;
+}
+
+message ProtoRendezvousRequest {
+    string initiator_user_id = 1;
+    string target_user_id = 2;
+    int32 initiator_port = 3;
+    int32 requested_probe_window_ms = 4;
+}
+
+message ProtoManifestRequest {
+    ProtoManifestRequestType type = 1;
+    ProtoManifestStreamType stream_type = 2;
+    optional ProtoManifest manifest = 3;
+    optional ProtoRendezvousRequest rendezvous = 4;
+    optional string content_hash = 5;
+    optional ProtoPeerInfo announcing_peer = 6;
+    int32 start_sequence_number = 7;
+    optional int32 end_sequence_number = 8;
+    optional string target_user_id = 9;
+}
+
+message ProtoRendezvousResponse {
+    bool success = 1;
+    string session_id = 2;
+    google.protobuf.Timestamp expires_at_utc = 3;
+    google.protobuf.Timestamp probe_start_utc = 4;
+    int32 probe_window_ms = 5;
+    string message = 6;
+}
+
+message ProtoManifestResponse {
+    optional ProtoManifest manifest = 1;
+    bool acknowledged = 2;
+    repeated ProtoPeerInfo peers = 3;
+    optional ProtoRendezvousResponse rendezvous = 4;
+    optional bytes content_bytes = 5;
+    int64 content_length = 6;
+}
