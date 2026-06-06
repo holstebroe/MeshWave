@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net.Sockets;
+using NLog;
 
 namespace MeshWave.Synchronizer;
 
@@ -24,10 +25,10 @@ public class PeerRouter : IDisposable
     private Task? _bootstrapTask;
     private Task? _maintenanceTask;
 
-    public PeerRouter(PeerDiscovery? lanDiscovery = null, ManifestExchangeClient? exchangeClient = null)
+    public PeerRouter(PeerDiscovery? lanDiscovery = null, ManifestExchangeClient? exchangeClient = null, Logger? logger = null)
     {
         _lanDiscovery = lanDiscovery ?? new PeerDiscovery();
-        _exchangeClient = exchangeClient ?? new ManifestExchangeClient(timeoutMs: SecurityLimits.ConnectTimeoutMs);
+        _exchangeClient = exchangeClient ?? new ManifestExchangeClient(timeoutMs: SecurityLimits.ConnectTimeoutMs, logger:logger);
     }
 
     public event EventHandler<PeerInfo>? PeerAdded;

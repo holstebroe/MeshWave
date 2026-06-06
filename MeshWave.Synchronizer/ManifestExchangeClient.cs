@@ -10,12 +10,13 @@ namespace MeshWave.Synchronizer;
 /// </summary>
 public class ManifestExchangeClient
 {
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private readonly Logger _logger;
     private readonly int _timeoutMs;
 
-    public ManifestExchangeClient(int timeoutMs = 10_000)
+    public ManifestExchangeClient(int timeoutMs = 10_000, Logger? logger = null)
     {
         _timeoutMs = timeoutMs;
+        _logger = logger ?? LogManager.GetCurrentClassLogger();
     }
 
     /// <summary>
@@ -35,10 +36,10 @@ public class ManifestExchangeClient
         cts.CancelAfter(_timeoutMs);
 
         using var client = new TcpClient();
-        Logger.Debug("Connecting to {0}:{1}...", address, port);
+        _logger.Debug("Connecting to {0}:{1}...", address, port);
         await client.ConnectAsync(address, port, cts.Token);
 
-        Logger.Debug("Fetching {0} manifest from {1}:{2} (start={3}, end={4})", streamType, address, port, startSequenceNumber, endSequenceNumber);
+        _logger.Debug("Fetching {0} manifest from {1}:{2} (start={3}, end={4})", streamType, address, port, startSequenceNumber, endSequenceNumber);
         var stream = client.GetStream();
         var request = new ManifestRequest
         {
@@ -52,7 +53,7 @@ public class ManifestExchangeClient
 
         var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
         var response = JsonSerializer.Deserialize<ManifestResponse>(responseJson);
-        Logger.Debug("FetchManifest from {0}:{1} outcome: {2} ops", address, port, response?.Manifest?.Operations.Count ?? 0);
+        _logger.Debug("FetchManifest from {0}:{1} outcome: {2} ops", address, port, response?.Manifest?.Operations.Count ?? 0);
         return response?.Manifest;
     }
 
@@ -81,10 +82,10 @@ public class ManifestExchangeClient
         cts.CancelAfter(_timeoutMs);
 
         using var client = new TcpClient();
-        Logger.Debug("Connecting to {0}:{1}...", address, port);
+        _logger.Debug("Connecting to {0}:{1}...", address, port);
         await client.ConnectAsync(address, port, cts.Token);
 
-        Logger.Debug("Relaying manifest push for {0} to {1}:{2} via bootstrap", manifest.UserId, address, port);
+        _logger.Debug("Relaying manifest push for {0} to {1}:{2} via bootstrap", manifest.UserId, address, port);
         var stream = client.GetStream();
 
         var request = new ManifestRequest
@@ -98,7 +99,7 @@ public class ManifestExchangeClient
 
         var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
         var response = JsonSerializer.Deserialize<ManifestResponse>(responseJson);
-        Logger.Debug("RelayManifestPush to {0}:{1} outcome: {2}", address, port, response?.Acknowledged == true);
+        _logger.Debug("RelayManifestPush to {0}:{1} outcome: {2}", address, port, response?.Acknowledged == true);
         return response?.Acknowledged == true;
     }
 
@@ -108,10 +109,10 @@ public class ManifestExchangeClient
         cts.CancelAfter(_timeoutMs);
 
         using var client = new TcpClient();
-        Logger.Debug("Connecting to {0}:{1}...", address, port);
+        _logger.Debug("Connecting to {0}:{1}...", address, port);
         await client.ConnectAsync(address, port, cts.Token);
 
-        Logger.Debug("Pushing manifest for {0} to {1}:{2}", manifest.UserId, address, port);
+        _logger.Debug("Pushing manifest for {0} to {1}:{2}", manifest.UserId, address, port);
         var stream = client.GetStream();
 
         var request = new ManifestRequest
@@ -125,7 +126,7 @@ public class ManifestExchangeClient
 
         var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
         var response = JsonSerializer.Deserialize<ManifestResponse>(responseJson);
-        Logger.Debug("PushManifest to {0}:{1} outcome: {2}", address, port, response?.Acknowledged == true);
+        _logger.Debug("PushManifest to {0}:{1} outcome: {2}", address, port, response?.Acknowledged == true);
         return response?.Acknowledged == true;
     }
 
@@ -143,10 +144,10 @@ public class ManifestExchangeClient
         try
         {
             using var client = new TcpClient();
-            Logger.Debug("Connecting to {0} {1}:{2}...", label, address, port);
+            _logger.Debug("Connecting to {0} {1}:{2}...", label, address, port);
             await client.ConnectAsync(address, port, cts.Token);
 
-            Logger.Debug("Fetching {0} from {1}:{2} (PEX)", label, address, port);
+            _logger.Debug("Fetching {0} from {1}:{2} (PEX)", label, address, port);
             var stream = client.GetStream();
             var request = new ManifestRequest { Type = ManifestRequestType.GetPeers };
             await ManifestExchangeServer.WriteMessageAsync(stream, JsonSerializer.Serialize(request), cts.Token);
@@ -156,17 +157,17 @@ public class ManifestExchangeClient
             var peers = response?.Peers
                 .Take(SecurityLimits.MaxPeersPerExchange)
                 .ToList() ?? [];
-            Logger.Debug("Fetched {0} peers from {1}:{2}", peers.Count, address, port);
+            _logger.Debug("Fetched {0} peers from {1}:{2}", peers.Count, address, port);
             return peers;
         }
         catch (OperationCanceledException)
         {
-            Logger.Warn("Failed to fetch {0} from {1}:{2}: The operation timed out after {3}ms.", label, address, port, _timeoutMs);
+            _logger.Warn("Failed to fetch {0} from {1}:{2}: The operation timed out after {3}ms.", label, address, port, _timeoutMs);
             return null;
         }
         catch (Exception ex)
         {
-            Logger.Warn("Failed to fetch {0} from {1}:{2}: {3}", label, address, port, ex.Message);
+            _logger.Warn("Failed to fetch {0} from {1}:{2}: {3}", label, address, port, ex.Message);
             return null;
         }
     }
@@ -184,10 +185,10 @@ public class ManifestExchangeClient
         try
         {
             using var client = new TcpClient();
-            Logger.Debug("Connecting to {0}:{1}...", address, port);
+            _logger.Debug("Connecting to {0}:{1}...", address, port);
             await client.ConnectAsync(address, port, cts.Token);
 
-            Logger.Debug("Requesting content {0} from {1}:{2}", contentHash, address, port);
+            _logger.Debug("Requesting content {0} from {1}:{2}", contentHash, address, port);
             var stream = client.GetStream();
             var request = new ManifestRequest { Type = ManifestRequestType.RequestContent, ContentHash = contentHash };
             await ManifestExchangeServer.WriteMessageAsync(stream, JsonSerializer.Serialize(request), cts.Token);
@@ -233,10 +234,10 @@ public class ManifestExchangeClient
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(_timeoutMs);
 
-            Logger.Debug("Connecting to {0}:{1}...", address, port);
+            _logger.Debug("Connecting to {0}:{1}...", address, port);
             await client.ConnectAsync(address, port, cts.Token);
 
-            Logger.Info("Requesting content stream for hash {0} from {1}:{2}", contentHash, address, port);
+            _logger.Info("Requesting content stream for hash {0} from {1}:{2}", contentHash, address, port);
             var stream = client.GetStream();
 
             var request = new ManifestRequest { Type = ManifestRequestType.RequestContent, ContentHash = contentHash };
@@ -309,17 +310,17 @@ public class ManifestExchangeClient
         cts.CancelAfter(_timeoutMs);
 
         using var client = new TcpClient();
-        Logger.Debug("Connecting to {0}:{1}...", address, port);
+        _logger.Debug("Connecting to {0}:{1}...", address, port);
         await client.ConnectAsync(address, port, cts.Token);
 
-        Logger.Debug("Requesting rendezvous from {0}:{1} for target {2}", address, port, rendezvous.TargetUserId);
+        _logger.Debug("Requesting rendezvous from {0}:{1} for target {2}", address, port, rendezvous.TargetUserId);
         var stream = client.GetStream();
         var request = new ManifestRequest { Type = ManifestRequestType.RequestRendezvous, Rendezvous = rendezvous };
         await ManifestExchangeServer.WriteMessageAsync(stream, JsonSerializer.Serialize(request), cts.Token);
 
         var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
         var response = JsonSerializer.Deserialize<ManifestResponse>(responseJson);
-        Logger.Debug("Rendezvous response from {0}:{1} outcome: {2}", address, port, response?.Rendezvous?.Success == true);
+        _logger.Debug("Rendezvous response from {0}:{1} outcome: {2}", address, port, response?.Rendezvous?.Success == true);
         return response?.Rendezvous;
     }
 }

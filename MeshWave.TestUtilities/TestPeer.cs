@@ -11,7 +11,7 @@ namespace MeshWave.TestUtilities;
 public class TestPeer : IAsyncDisposable
 {
     public string Name { get; }
-    public string BaseDir { get; }
+    public string BaseFolder { get; }
     public string AppDataRoot { get; }
     public SyncOrchestrator Orchestrator { get; }
     public LocalPeerIdentity Identity { get; }
@@ -19,11 +19,12 @@ public class TestPeer : IAsyncDisposable
 
     public string UserId => Identity.UserId;
 
-    public TestPeer(string name, string baseDir, int port, SyncOrchestrator orchestrator, LocalPeerIdentity identity)
+    public TestPeer(string name, string baseFolder, int port, SyncOrchestrator orchestrator, LocalPeerIdentity identity)
     {
         Name = name;
-        BaseDir = baseDir;
-        AppDataRoot = baseDir; // Use same directory for AppData in tests
+        BaseFolder = baseFolder;
+        AppDataRoot = Path.Combine(baseFolder, "AppData");
+        Directory.CreateDirectory(AppDataRoot);
         Port = port;
         Orchestrator = orchestrator;
         Identity = identity;
@@ -51,6 +52,11 @@ public class TestPeer : IAsyncDisposable
     {
         await Orchestrator.StopAsync();
         Orchestrator.Dispose();
+
+        if (BaseFolder.StartsWith(Path.GetTempPath()))
+        {
+            Directory.Delete(BaseFolder, true);
+        }
     }
 
     public Manifest? GetLocalManifest(ManifestStreamType streamType) => Orchestrator.GetLocalManifest(streamType);

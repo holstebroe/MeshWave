@@ -4,6 +4,7 @@ using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
 using MeshWave.Common.Core.Storage;
 using MeshWave.Synchronizer;
+using NLog;
 
 namespace MeshWave.TestUtilities;
 
@@ -15,15 +16,19 @@ public static class TestPeerFactory
         var tempDir = Path.Combine(Path.GetTempPath(), $"mw_test_{name}_{Guid.NewGuid():N}");
         Directory.CreateDirectory(tempDir);
 
-        var discovery = new NullPeerDiscovery(); // Typically want to avoid UDP broadcast in tests
-        var peerRouter = new PeerRouter(lanDiscovery: discovery);
-        var server = new ManifestExchangeServer(port);
-        var client = new ManifestExchangeClient(timeoutMs: 2000);
+        // Get peer specific logger to diagnose network traffic per-peer.
+        var logger = LogManager.GetLogger(name);
+        // TODO: Configure the peer specific logger with a MemoryTarget and a ConsoleTarget and a layout prefixed with the peer name.
+
+            var discovery = new NullPeerDiscovery(); // Typically want to avoid UDP broadcast in tests
+        var peerRouter = new PeerRouter(lanDiscovery: discovery, logger:logger);
+        var server = new ManifestExchangeServer(port, logger: logger);
+        var client = new ManifestExchangeClient(timeoutMs: 2000, logger: logger);
         var mgr = new ManifestManager();
         var userRepo = new UserRepository(tempDir);
         var store = PeerManifestStore.CreateAtBase(tempDir);
 
-        var orchestrator = new SyncOrchestrator(peerRouter, server, client, mgr, store, userRepository: userRepo);
+        var orchestrator = new SyncOrchestrator(peerRouter, server, client, mgr, store, userRepository: userRepo, logger: logger);
 
         var (privKey, pubKey) = CryptoService.GenerateKeyPair();
         var userId = CryptoService.DeriveUserIdFromPublicKey(pubKey);
@@ -49,7 +54,7 @@ public static class TestPeerFactory
 
         // For simplicity, we just copy everything to the peer's base directory as if it was their music folder
         // In a real scenario, we might want to be more specific about where it goes.
-        CopyDirectory(sourceDir, peer.BaseDir);
+        CopyDirectory(sourceDir, peer.BaseFolder);
     }
 
     private static void CopyDirectory(string sourceDir, string destinationDir)

@@ -1,9 +1,11 @@
+using MeshWave.Common.Core.Models;
+using Mono.Nat.Logging;
+using NLog;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
-using NLog;
-using MeshWave.Common.Core.Models;
+using Logger = NLog.Logger;
 
 namespace MeshWave.Synchronizer;
 
@@ -14,7 +16,7 @@ namespace MeshWave.Synchronizer;
 /// </summary>
 public class ManifestExchangeServer : IDisposable
 {
-    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private readonly Logger _logger;
     public const int DefaultPort = 39877;
 
     private readonly int _port;
@@ -28,9 +30,10 @@ public class ManifestExchangeServer : IDisposable
     private Func<string, byte[]?>? _contentProvider;
     private Func<string, ManifestStreamType, Manifest?>? _relayedManifestProvider;
 
-    public ManifestExchangeServer(int port = DefaultPort)
+    public ManifestExchangeServer(int port = DefaultPort, Logger? logger = null)
     {
         _port = port;
+        _logger = logger ?? LogManager.GetCurrentClassLogger();
     }
 
     public event EventHandler<ManifestReceivedEventArgs>? ManifestReceived;
@@ -96,7 +99,7 @@ public class ManifestExchangeServer : IDisposable
     private async Task HandleClientAsync(TcpClient client, CancellationToken ct)
     {
         var remoteEndpoint = client.Client.RemoteEndPoint?.ToString() ?? "unknown";
-        Logger.Debug("Accepted connection from {0}", remoteEndpoint);
+        _logger.Debug("Accepted connection from {0}", remoteEndpoint);
 
         using (client)
         {
@@ -110,11 +113,11 @@ public class ManifestExchangeServer : IDisposable
                 var request = JsonSerializer.Deserialize<ManifestRequest>(requestJson);
                 if (request == null)
                 {
-                    Logger.Warn("Received empty or invalid request from {0}", remoteEndpoint);
+                    _logger.Warn("Received empty or invalid request from {0}", remoteEndpoint);
                     return;
                 }
 
-                Logger.Debug("Received {0} request from {1}", request.Type, remoteEndpoint);
+                _logger.Debug("Received {0} request from {1}", request.Type, remoteEndpoint);
 
                 switch (request.Type)
                 {
@@ -126,12 +129,12 @@ public class ManifestExchangeServer : IDisposable
 
                         if (manifest == null)
                         {
-                            Logger.Warn("Could not provide manifest for {0} (TargetUserId: {1})",
+                            _logger.Warn("Could not provide manifest for {0} (TargetUserId: {1})",
                                 remoteEndpoint, request.TargetUserId ?? "local");
                         }
                         else
                         {
-                            Logger.Info("Serving manifest for {0} to {1} (delta={2}, ops={3})",
+                            _logger.Info("Serving manifest for {0} to {1} (delta={2}, ops={3})",
                                 manifest.UserId, remoteEndpoint, request.StartSequenceNumber > 0, manifest.Operations.Count);
                         }
 
@@ -162,13 +165,13 @@ public class ManifestExchangeServer : IDisposable
                         if (opCount <= SecurityLimits.MaxManifestOperations)
                         {
                             var peerEndpoint = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString() ?? "unknown";
-                            Logger.Info("Received manifest push from {0} (User: {1}, Ops: {2})",
+                            _logger.Info("Received manifest push from {0} (User: {1}, Ops: {2})",
                                 remoteEndpoint, request.Manifest.UserId, opCount);
                             ManifestReceived?.Invoke(this, new ManifestReceivedEventArgs(request.Manifest, peerEndpoint, request.AnnouncingPeer, isRelay: false));
                         }
                         else
                         {
-                            Logger.Warn("Rejected push from {0}: too many operations ({1})", remoteEndpoint, opCount);
+                            _logger.Warn("Rejected push from {0}: too many operations ({1})", remoteEndpoint, opCount);
                         }
                         var ack = new ManifestResponse { Acknowledged = true };
                         await WriteMessageAsync(stream, JsonSerializer.Serialize(ack), ct);
@@ -180,13 +183,13 @@ public class ManifestExchangeServer : IDisposable
                         if (opCount <= SecurityLimits.MaxManifestOperations)
                         {
                             var peerEndpoint = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString() ?? "unknown";
-                            Logger.Info("Received relayed manifest push from {0} (User: {1}, Ops: {2})",
+                            _logger.Info("Received relayed manifest push from {0} (User: {1}, Ops: {2})",
                                 remoteEndpoint, request.Manifest.UserId, opCount);
                             ManifestReceived?.Invoke(this, new ManifestReceivedEventArgs(request.Manifest, peerEndpoint, request.AnnouncingPeer, isRelay: true));
                         }
                         else
                         {
-                            Logger.Warn("Rejected relayed push from {0}: too many operations ({1})", remoteEndpoint, opCount);
+                            _logger.Warn("Rejected relayed push from {0}: too many operations ({1})", remoteEndpoint, opCount);
                         }
                         var ack = new ManifestResponse { Acknowledged = true };
                         await WriteMessageAsync(stream, JsonSerializer.Serialize(ack), ct);
@@ -197,7 +200,7 @@ public class ManifestExchangeServer : IDisposable
                         var peers = _peersProvider?.Invoke()
                             .Take(SecurityLimits.MaxPeersPerExchange)
                             .ToList() ?? [];
-                        Logger.Info("Serving {0} peers to {1} (PEX)", peers.Count, remoteEndpoint);
+                        _logger.Info("Serving {0} peers to {1} (PEX)", peers.Count, remoteEndpoint);
                         var response = new ManifestResponse { Peers = peers };
                         await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
                         break;
@@ -211,7 +214,7 @@ public class ManifestExchangeServer : IDisposable
                                 Message = "Rendezvous is not enabled on this node."
                             };
 
-                        Logger.Info("Rendezvous request from {0} (Target: {1}) -> Success: {2}",
+                        _logger.Info("Rendezvous request from {0} (Target: {1}) -> Success: {2}",
                             remoteEndpoint, request.Rendezvous.TargetUserId, rendezvous.Success);
                         var response = new ManifestResponse { Rendezvous = rendezvous, Acknowledged = rendezvous.Success };
                         await WriteMessageAsync(stream, JsonSerializer.Serialize(response), ct);
@@ -220,7 +223,7 @@ public class ManifestExchangeServer : IDisposable
                     case ManifestRequestType.RequestContent when !string.IsNullOrWhiteSpace(request.ContentHash):
                     {
                         var bytes = _contentProvider?.Invoke(request.ContentHash);
-                        Logger.Info("Content request from {0} for hash {1}. Found: {2}",
+                        _logger.Info("Content request from {0} for hash {1}. Found: {2}",
                             remoteEndpoint, request.ContentHash, bytes != null);
                         var response = new ManifestResponse
                         {
@@ -245,19 +248,19 @@ public class ManifestExchangeServer : IDisposable
             }
             catch (EndOfStreamException)
             {
-                Logger.Debug("Client {0} disconnected before sending a complete message (expected for TCP probes).", remoteEndpoint);
+                _logger.Debug("Client {0} disconnected before sending a complete message (expected for TCP probes).", remoteEndpoint);
             }
             catch (IOException ex)
             {
-                Logger.Debug("IO error with client {0}: {1}", remoteEndpoint, ex.Message);
+                _logger.Debug("IO error with client {0}: {1}", remoteEndpoint, ex.Message);
             }
             catch (OperationCanceledException)
             {
-                Logger.Debug("Connection with {0} was canceled.", remoteEndpoint);
+                _logger.Debug("Connection with {0} was canceled.", remoteEndpoint);
             }
             catch (Exception ex)
             {
-                Logger.Warn(ex, "Error handling client {0}", remoteEndpoint);
+                _logger.Warn(ex, "Error handling client {0}", remoteEndpoint);
             }
         }
     }

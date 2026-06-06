@@ -8,10 +8,8 @@ using MeshWave.Common.Core.Models;
 using MeshWave.Common.Core.Storage;
 using MeshWave.Services;
 using MeshWave.Synchronizer;
-using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.IO;
-using System.Linq;
 using System.Windows.Input;
 
 namespace MeshWave.ViewModels;
@@ -40,16 +38,14 @@ public class ApplicationViewModel : ViewModelBase
     private string _p2pStatusText = "Disconnected";
     private int _p2pPeerCount;
     private bool _p2pActAsListener = true;
-    private int _activeDownloadCount;
-    private bool _hasActiveDownloads;
     private readonly Dictionary<string, int> _lastKnownReleaseSequenceByPeer = new(StringComparer.OrdinalIgnoreCase);
 
     public ApplicationViewModel(
-        SettingsService? settingsService = null,
+        SettingsService settingsService,
         UserProfileService? profileService = null,
         Func<IAudioPlaybackService>? audioServiceFactory = null)
     {
-        _settingsService = settingsService ?? new SettingsService();
+        _settingsService = settingsService;
         _profileService = profileService ?? new UserProfileService();
 
         var settings = _settingsService.LoadSettings();
@@ -229,14 +225,14 @@ public class ApplicationViewModel : ViewModelBase
 
     public int ActiveDownloadCount
     {
-        get => _activeDownloadCount;
-        private set => SetProperty(ref _activeDownloadCount, value);
+        get;
+        private set => SetProperty(ref field, value);
     }
 
     public bool HasActiveDownloads
     {
-        get => _hasActiveDownloads;
-        private set => SetProperty(ref _hasActiveDownloads, value);
+        get;
+        private set => SetProperty(ref field, value);
     }
 
     public IEnumerable<DownloadQueueItem> ActiveDownloads => DownloadQueueItems.Where(i => i.State == DownloadState.Downloading || i.State == DownloadState.Pending || i.State == DownloadState.Failed);

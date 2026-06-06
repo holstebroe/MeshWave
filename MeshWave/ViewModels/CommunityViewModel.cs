@@ -5,7 +5,6 @@ using MeshWave.Services;
 using MeshWave.Synchronizer;
 using System.Collections.ObjectModel;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Windows.Input;
 
@@ -19,40 +18,29 @@ public class CommunityViewModel : ViewModelBase
     private readonly SyncOrchestrator? _sync;
     private readonly SettingsService _settingsService;
 
-    private string _searchQuery = string.Empty;
-    private string _searchStatus = string.Empty;
-    private bool _isSearching;
-    private CommunityTab _activeTab = CommunityTab.Feed;
-    private ObservableCollection<CommunityUserItem> _searchResults = [];
-    private ObservableCollection<CommunityGroupItem> _groupResults = [];
-    private ObservableCollection<CommunityUserItem> _friends = [];
-    private ObservableCollection<CommunityUserItem> _following = [];
-    private ObservableCollection<CommunityGroupItem> _myGroups = [];
-    private ObservableCollection<ReleaseFeedItem> _releaseFeed = [];
     private int _newReleaseCount;
     private readonly Dictionary<string, int> _lastFeedReleaseSequenceByPeer = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, int> _trackLikes = new(StringComparer.OrdinalIgnoreCase);
-    private string _discoverHintText = "Search for users by name or peer id.";
     private readonly Action<string>? _onBrowseArtist;
-    private readonly System.Collections.ObjectModel.ObservableCollection<DownloadQueueItem>? _downloadQueue;
+    private readonly ObservableCollection<DownloadQueueItem>? _downloadQueue;
 
     public CommunityViewModel(
-        SyncOrchestrator? sync = null,
+        SyncOrchestrator sync,
         Action<string>? onBrowseArtist = null,
         SettingsService? settingsService = null)
     {
         _sync = sync;
         _onBrowseArtist = onBrowseArtist;
         _settingsService = settingsService ?? new SettingsService();
-        _downloadQueue = (System.Windows.Application.Current?.MainWindow?.DataContext as ApplicationViewModel)?.DownloadQueueItems;
+        _downloadQueue = (Application.Current?.MainWindow?.DataContext as ApplicationViewModel)?.DownloadQueueItems;
 
         SearchCommand = new RelayCommand(_ => Search(), _ => !IsSearching && !string.IsNullOrWhiteSpace(SearchQuery));
-        FollowUserCommand = new RelayCommand<CommunityUserItem>(FollowUser, u => u != null && !u.IsFollowing);
-        UnfollowUserCommand = new RelayCommand<CommunityUserItem>(UnfollowUser, u => u != null && u.IsFollowing);
-        AddFriendCommand = new RelayCommand<CommunityUserItem>(AddFriend, u => u != null && !u.IsFriend);
-        RemoveFriendCommand = new RelayCommand<CommunityUserItem>(RemoveFriend, u => u != null && u.IsFriend);
-        JoinGroupCommand = new RelayCommand<CommunityGroupItem>(JoinGroup, g => g != null && !g.IsMember);
-        LeaveGroupCommand = new RelayCommand<CommunityGroupItem>(LeaveGroup, g => g != null && g.IsMember);
+        FollowUserCommand = new RelayCommand<CommunityUserItem>(FollowUser, u => u is { IsFollowing: false });
+        UnfollowUserCommand = new RelayCommand<CommunityUserItem>(UnfollowUser, u => u is { IsFollowing: true });
+        AddFriendCommand = new RelayCommand<CommunityUserItem>(AddFriend, u => u is { IsFriend: false });
+        RemoveFriendCommand = new RelayCommand<CommunityUserItem>(RemoveFriend, u => u is { IsFriend: true });
+        JoinGroupCommand = new RelayCommand<CommunityGroupItem>(JoinGroup, g => g is { IsMember: false });
+        LeaveGroupCommand = new RelayCommand<CommunityGroupItem>(LeaveGroup, g => g is { IsMember: true });
         SetTabCommand = new RelayCommand<string>(tab =>
         {
             ActiveTab = Enum.Parse<CommunityTab>(tab ?? "Feed");
@@ -113,26 +101,26 @@ public class CommunityViewModel : ViewModelBase
 
     public string SearchQuery
     {
-        get => _searchQuery;
+        get;
         set
         {
-            SetProperty(ref _searchQuery, value);
+            SetProperty(ref field, value);
             OnPropertyChanged(nameof(CanSearch));
         }
-    }
+    } = string.Empty;
 
     public string SearchStatus
     {
-        get => _searchStatus;
-        private set => SetProperty(ref _searchStatus, value);
-    }
+        get;
+        private set => SetProperty(ref field, value);
+    } = string.Empty;
 
     public bool IsSearching
     {
-        get => _isSearching;
+        get;
         private set
         {
-            SetProperty(ref _isSearching, value);
+            SetProperty(ref field, value);
             OnPropertyChanged(nameof(CanSearch));
         }
     }
@@ -141,17 +129,17 @@ public class CommunityViewModel : ViewModelBase
 
     public CommunityTab ActiveTab
     {
-        get => _activeTab;
+        get;
         set
         {
-            SetProperty(ref _activeTab, value);
+            SetProperty(ref field, value);
             OnPropertyChanged(nameof(IsTabFeed));
             OnPropertyChanged(nameof(IsTabDiscover));
             OnPropertyChanged(nameof(IsTabFriends));
             OnPropertyChanged(nameof(IsTabFollowing));
             OnPropertyChanged(nameof(IsTabGroups));
         }
-    }
+    } = CommunityTab.Feed;
 
     public bool IsTabFeed     => ActiveTab == CommunityTab.Feed;
     public bool IsTabDiscover  => ActiveTab == CommunityTab.Discover;
@@ -161,45 +149,45 @@ public class CommunityViewModel : ViewModelBase
 
     public string DiscoverHintText
     {
-        get => _discoverHintText;
-        private set => SetProperty(ref _discoverHintText, value);
-    }
+        get;
+        private set => SetProperty(ref field, value);
+    } = "Search for users by name or peer id.";
 
     public ObservableCollection<CommunityUserItem> SearchResults
     {
-        get => _searchResults;
-        private set => SetProperty(ref _searchResults, value);
-    }
+        get;
+        private set => SetProperty(ref field, value);
+    } = [];
 
     public ObservableCollection<CommunityGroupItem> GroupResults
     {
-        get => _groupResults;
-        private set => SetProperty(ref _groupResults, value);
-    }
+        get;
+        private set => SetProperty(ref field, value);
+    } = [];
 
     public ObservableCollection<CommunityUserItem> Friends
     {
-        get => _friends;
-        private set => SetProperty(ref _friends, value);
-    }
+        get;
+        private set => SetProperty(ref field, value);
+    } = [];
 
     public ObservableCollection<CommunityUserItem> Following
     {
-        get => _following;
-        private set => SetProperty(ref _following, value);
-    }
+        get;
+        private set => SetProperty(ref field, value);
+    } = [];
 
     public ObservableCollection<CommunityGroupItem> MyGroups
     {
-        get => _myGroups;
-        private set => SetProperty(ref _myGroups, value);
-    }
+        get;
+        private set => SetProperty(ref field, value);
+    } = [];
 
     public ObservableCollection<ReleaseFeedItem> ReleaseFeed
     {
-        get => _releaseFeed;
-        private set => SetProperty(ref _releaseFeed, value);
-    }
+        get;
+        private set => SetProperty(ref field, value);
+    } = [];
 
     // ──────────────────────────────────────────────────────────────────────
     // Release feed

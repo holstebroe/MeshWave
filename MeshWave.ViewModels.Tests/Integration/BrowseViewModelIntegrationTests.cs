@@ -36,11 +36,11 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         await jane.WaitForConditionAsync(() => jane.Orchestrator.ConnectedPeerCount > 0);
 
         // Force a sync to ensure profiles are exchanged immediately
-        await john.Orchestrator.SyncAllPeersAsync();
-        await jane.Orchestrator.SyncAllPeersAsync();
+        await john.Orchestrator.SyncAllPeersAsync(TestContext.Current.CancellationToken);
+        await jane.Orchestrator.SyncAllPeersAsync(TestContext.Current.CancellationToken);
 
         // Verify that john can see jane in the browse view (as an artist)
-        await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Artists, a => a.UserId == jane.UserId, timeoutMs: 30000);
+        await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Artists, a => a.UserId == jane.UserId, timeoutMs: 5000);
 
         // Verify that john cannot see any released tracks from jane and vice versa
         Assert.DoesNotContain(jane.UserId, johnBrowseViewModel.Tracks.Select(t => t.ArtistUserId));

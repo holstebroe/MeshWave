@@ -2,7 +2,6 @@ using System.IO;
 using MeshWave.Common.Core;
 using MeshWave.Models;
 using NLog;
-using NLog.Config;
 using NLog.Targets;
 
 namespace MeshWave.Services

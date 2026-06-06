@@ -155,7 +155,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         var john = await _context.CreatePeerAsync("John", testDataName: "John");
         var jane = await _context.CreatePeerAsync("Jane", testDataName: "Jane");
 
-        var deskPlasticDir = Path.Combine(john.BaseDir, "DeskPlastic");
+        var deskPlasticDir = Path.Combine(john.BaseFolder, "DeskPlastic");
         var mp3Files = Directory.GetFiles(deskPlasticDir, "*.mp3");
         Assert.NotEmpty(mp3Files);
 

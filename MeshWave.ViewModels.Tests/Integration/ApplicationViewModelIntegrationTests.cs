@@ -1,7 +1,6 @@
-using MeshWave.Common.Core.Models;
-using MeshWave.Synchronizer;
+using MeshWave.Models;
+using MeshWave.Services;
 using MeshWave.TestUtilities;
-using MeshWave.ViewModels;
 using Moq;
 using Xunit;
 
@@ -11,10 +10,9 @@ public class ApplicationViewModelIntegrationTests : IAsyncLifetime
 {
     private MeshTestContext _context = null!;
 
-    public ValueTask InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
-        _context = new MeshTestContext();
-        return ValueTask.CompletedTask;
+        _context = await MeshTestStandardScenarios.CreateSingleUserScenario();
     }
 
     public async ValueTask DisposeAsync()
@@ -23,22 +21,20 @@ public class ApplicationViewModelIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task P2PConnectionLifecycleScenario()
+    public void P2PConnectionLifecycleScenario()
     {
         // For ApplicationViewModel to work in tests, we need to mock its dependencies
         // to avoid loading real user settings and playing real audio.
-        var tempAppData = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-        var mockSettings = new Mock<Services.SettingsService>(tempAppData);
-        mockSettings.Setup(s => s.LoadSettings()).Returns(new Models.AppSettings
-        {
-            BaseFolder = Path.Combine(tempAppData, "Music"),
-            P2P = new Models.P2PSettings { Enabled = false }
-        });
+        var peer = _context.Peers.Single();
+        var settingsService = new SettingsService(peer.AppDataRoot);
+        var appSettings = settingsService.LoadSettings();
+        appSettings.BaseFolder = peer.BaseFolder;
+        appSettings.P2P = new P2PSettings { Enabled = false };
 
-        var mockAudio = new Mock<Services.IAudioPlaybackService>();
+        var mockAudio = new Mock<IAudioPlaybackService>();
 
         var appVm = new ApplicationViewModel(
-            settingsService: mockSettings.Object,
+            settingsService,
             audioServiceFactory: () => mockAudio.Object);
         var orchestrator = appVm.SyncOrchestrator;
 
@@ -47,20 +43,18 @@ public class ApplicationViewModelIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task NavigationScenario()
+    public void NavigationScenario()
     {
-        var tempAppData = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-        var mockSettings = new Mock<Services.SettingsService>(tempAppData);
-        mockSettings.Setup(s => s.LoadSettings()).Returns(new Models.AppSettings
-        {
-            BaseFolder = Path.Combine(tempAppData, "Music"),
-            P2P = new Models.P2PSettings { Enabled = false }
-        });
+        var peer = _context.Peers.Single();
+        var settingsService = new SettingsService(peer.AppDataRoot);
+        var appSettings = settingsService.LoadSettings();
+        appSettings.BaseFolder = peer.BaseFolder;
+        appSettings.P2P = new P2PSettings { Enabled = false };
 
-        var mockAudio = new Mock<Services.IAudioPlaybackService>();
+        var mockAudio = new Mock<IAudioPlaybackService>();
 
         var appVm = new ApplicationViewModel(
-            settingsService: mockSettings.Object,
+            settingsService,
             audioServiceFactory: () => mockAudio.Object);
 
         appVm.NavigateToHome();
