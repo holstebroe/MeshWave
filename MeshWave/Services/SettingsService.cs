@@ -25,7 +25,7 @@ namespace MeshWave.Services
             _appDataRoot = appDataRoot ?? MeshWaveEnvironment.GetAppDataRoot();
         }
 
-        public AppSettings LoadSettings()
+        public virtual AppSettings LoadSettings()
         {
             if (_currentSettings != null)
                 return _currentSettings;
@@ -67,7 +67,7 @@ namespace MeshWave.Services
             return _currentSettings;
         }
 
-        public void SaveSettings(AppSettings settings)
+        public virtual void SaveSettings(AppSettings settings)
         {
             try
             {
@@ -95,19 +95,19 @@ namespace MeshWave.Services
             }
         }
 
-        public string GetLocalMusicFolder()
+        public virtual string GetLocalMusicFolder()
         {
             var settings = LoadSettings();
             return Path.Combine(settings.BaseFolder, "Local Music");
         }
 
-        public string GetPeerMusicFolder()
+        public virtual string GetPeerMusicFolder()
         {
             var settings = LoadSettings();
             return Path.Combine(settings.BaseFolder, "Peer Music");
         }
 
-        public void EnsureFoldersExist()
+        public virtual void EnsureFoldersExist()
         {
             var settings = LoadSettings();
 

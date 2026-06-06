@@ -102,13 +102,8 @@ app.get('/documentation', docLimiter, (req, res) => {
 
         const htmlContent = marked.parse(data);
 
-        // Determine title based on access method for better SEO/UX
-        let pageTitle;
-        if (isPathAccess) {
-             pageTitle = `${escapeHtml(source)} | MeshWave Documentation`;
-        } else {
-            pageTitle = `${escapeHtml(source)} | MeshWave Documentation`;
-        }
+        // Determine title based on source for better SEO/UX
+        const pageTitle = `${escapeHtml(source)} | MeshWave Documentation`;
 
 
         const finalHtml = `
