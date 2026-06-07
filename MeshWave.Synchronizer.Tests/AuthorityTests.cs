@@ -23,6 +23,7 @@ public class AuthorityTests
         await service.IngestAsync(CreateManifestWithOp(user1, trackId, "Track", ManifestOperationType.Create, "hash1", meta1, 0));
 
         var entry = await service.GetEntryAsync(trackId);
+        Assert.NotNull(entry);
         Assert.Equal("Title 1", entry.Title);
         Assert.Equal(user1, entry.OwnerUserId);
 
@@ -31,6 +32,9 @@ public class AuthorityTests
         await service.IngestAsync(CreateManifestWithOp(user2, trackId, "Track", ManifestOperationType.Update, "hash2", meta2, 0));
 
         entry = await service.GetEntryAsync(trackId);
+        Assert.NotNull(entry);
+        Assert.NotNull(entry);
+        Assert.NotNull(entry);
         Assert.Equal("Title 1", entry.Title); // Still Title 1
         Assert.Equal(user1, entry.OwnerUserId);
     }
@@ -51,6 +55,7 @@ public class AuthorityTests
         await service.IngestAsync(CreateManifestWithOp(user1, trackId, "Track", ManifestOperationType.Update, "hash2", meta2, 1));
 
         var entry = await service.GetEntryAsync(trackId);
+        Assert.NotNull(entry);
         Assert.Equal(2, entry.Version);
         Assert.Equal("V2", entry.Title);
 
@@ -59,6 +64,7 @@ public class AuthorityTests
         await service.IngestAsync(CreateManifestWithOp(user1, trackId, "Track", ManifestOperationType.Update, "hash3", meta3, 2));
 
         entry = await service.GetEntryAsync(trackId);
+        Assert.NotNull(entry);
         Assert.Equal(2, entry.Version);
     }
 
@@ -78,6 +84,7 @@ public class AuthorityTests
         await service.IngestAsync(CreateManifestWithOp(user1, trackId, "Track", ManifestOperationType.Update, "hash2", meta2, 1));
 
         var entry = await service.GetEntryAsync(trackId);
+        Assert.NotNull(entry);
         Assert.Equal("hash1", entry.ContentHash);
     }
 
