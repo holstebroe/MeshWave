@@ -53,6 +53,7 @@
 - [x] [Implement delta manifest synchronization (request operations by `SequenceNumber` range)](https://github.com/holstebroe/MeshWave/issues/30)
 - [x] [Implement manifest compaction/snapshotting (signed state checkpoints to squash old operations, especially operations where the exact history is unimportant. Play count, etc.)](https://github.com/holstebroe/MeshWave/issues/31)
 - [ ] [Migrate manifest wire format to a compact binary format (e.g., Protobuf or MessagePack)](https://github.com/holstebroe/MeshWave/issues/32) [DISPATCHED]
+- [ ] [Issue #114: Appending manifests quickly grows too big to send over the network](https://github.com/holstebroe/MeshWave/issues/114) [DISPATCHED]
 - [x] Manifest signing + verification using RSA
 - [x] SecurityLimits -- central constants enforced at TCP layer and manifest merge
 - [x] P2PIdentityService -- persistent RSA keypair, UserId derived from public key fingerprint
@@ -80,6 +81,7 @@
 - [ ] [Issue #85: [UI] Interactive NAT Troubleshooting and Configuration Guide](https://github.com/holstebroe/MeshWave/issues/85)
 - [x] ARM Linux bootstrap publish script baseline (`scripts/publish-bootstrap-arm.ps1`)
 - [x] Connection diagnostics panel: show per-attempt outcomes, local/remote endpoints, and recommended NAT forwarding rules
+- [ ] [Issue #124: [Settings] Implement Export Diagnostic Logs utility for troubleshooting](https://github.com/holstebroe/MeshWave/issues/124) [DISPATCHED]
 - [x] Diagnostics consistency pass: distinguish routing peers vs mesh/bootstrap peers, show manifest availability,
       keep peer endpoint visibility, and make summary text copyable
 
@@ -101,7 +103,6 @@
 - [x] Follow notifications -- badge on Community nav item when followed artist has new Create ops since last sync
 - [x] Persist follow list as signed Follow manifest ops (social graph)
 - [x] User profile sync op -- broadcast IsArtist, Bio, BannerImageHash, Website as signed Profile manifest op
-- [ ] [Comments, likes, plays and metadata changes should be pushed immediately to library owners and consumers](https://github.com/holstebroe/MeshWave/issues/115) [DISPATCHED]
 - [ ] [Comments, likes, plays and metadata changes should be pushed immediately to library owners and consumers](https://github.com/holstebroe/MeshWave/issues/115) [DISPATCHED]
 
 ## Milestone G: Community Groups and Distributed Chat

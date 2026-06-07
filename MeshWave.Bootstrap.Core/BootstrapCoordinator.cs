@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using MeshWave.Common.Core.Models;
 using MeshWave.Synchronizer;
+using NLog;
 
 namespace MeshWave.Bootstrap.Core;
 
@@ -11,6 +12,7 @@ namespace MeshWave.Bootstrap.Core;
 /// </summary>
 public sealed class BootstrapCoordinator : IDisposable
 {
+    private readonly Logger _logger;
     private readonly ConcurrentDictionary<string, BootstrapPeerEntry> _peers = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, BootstrapRendezvousSession> _rendezvousSessions = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, Manifest> _relayedManifests = new(StringComparer.OrdinalIgnoreCase);
@@ -23,10 +25,11 @@ public sealed class BootstrapCoordinator : IDisposable
     public event EventHandler<BootstrapPeerEventArgs>? PeerRefreshed;
     public event EventHandler<BootstrapPeerEventArgs>? PeerDisconnected;
 
-    public BootstrapCoordinator(int port)
+    public BootstrapCoordinator(int port, Logger logger)
     {
+        _logger = logger;
         Port = port;
-        _server = new ManifestExchangeServer(port);
+        _server = new ManifestExchangeServer(port, logger: logger);
     }
 
     public int Port { get; }
@@ -81,7 +84,7 @@ public sealed class BootstrapCoordinator : IDisposable
 
     public async Task SeedFromNodesAsync(IEnumerable<string> seeds, CancellationToken ct = default)
     {
-        var client = new ManifestExchangeClient(timeoutMs: 5_000);
+        var client = new ManifestExchangeClient(timeoutMs: 5_000, logger: _logger);
         foreach (var seed in seeds.Take(SecurityLimits.MaxBootstrapNodes))
         {
             try

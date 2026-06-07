@@ -101,7 +101,7 @@
             </StackPanel>
 
             <!-- Progress row -->
-            <Grid>
+            <Grid Margin="0,5,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
@@ -111,12 +111,46 @@
                            Text="{Binding CurrentPosition, StringFormat=mm\\:ss}"
                            FontSize="11" Foreground="{StaticResource TextSecondaryColor}"
                            VerticalAlignment="Center" Margin="0,0,10,0"/>
-                <Slider Grid.Column="1"
-                        Minimum="0"
-                        Maximum="{Binding Duration, Converter={StaticResource TimeSpanToSecondsConverter}}"
-                        Value="{Binding CurrentPosition, Mode=TwoWay, Converter={StaticResource TimeSpanToSecondsConverter}}"
-                        IsMoveToPointEnabled="True"
-                        VerticalAlignment="Center"/>
+
+                <Grid x:Name="WaveformContainer" Grid.Column="1" VerticalAlignment="Center" Height="28" SizeChanged="WaveformContainer_SizeChanged">
+                    <Path x:Name="WaveformPathDim" Opacity="0.3" Stroke="{x:Null}" StrokeThickness="0" IsHitTestVisible="False"/>
+                    <Canvas x:Name="PlayedWaveformCanvas" HorizontalAlignment="Left" ClipToBounds="True" Width="0" IsHitTestVisible="False">
+                        <Path x:Name="WaveformPathBright" Opacity="1.0" Stroke="{x:Null}" StrokeThickness="0" IsHitTestVisible="False"/>
+                    </Canvas>
+
+                    <Slider Minimum="0"
+                            Maximum="{Binding Duration, Converter={StaticResource TimeSpanToSecondsConverter}}"
+                            Value="{Binding CurrentPosition, Mode=TwoWay, Converter={StaticResource TimeSpanToSecondsConverter}}"
+                            IsMoveToPointEnabled="True"
+                            VerticalAlignment="Center"
+                            Background="Transparent"
+                            BorderThickness="0">
+                        <Slider.Template>
+                            <ControlTemplate TargetType="Slider">
+                                <Grid>
+                                    <Track x:Name="PART_Track">
+                                        <Track.DecreaseRepeatButton>
+                                            <RepeatButton Command="Slider.DecreaseLarge" IsTabStop="False" Opacity="0"/>
+                                        </Track.DecreaseRepeatButton>
+                                        <Track.Thumb>
+                                            <Thumb>
+                                                <Thumb.Template>
+                                                    <ControlTemplate TargetType="Thumb">
+                                                        <Ellipse Width="13" Height="13" Fill="White" VerticalAlignment="Center" Cursor="Hand"/>
+                                                    </ControlTemplate>
+                                                </Thumb.Template>
+                                            </Thumb>
+                                        </Track.Thumb>
+                                        <Track.IncreaseRepeatButton>
+                                            <RepeatButton Command="Slider.IncreaseLarge" IsTabStop="False" Opacity="0"/>
+                                        </Track.IncreaseRepeatButton>
+                                    </Track>
+                                </Grid>
+                            </ControlTemplate>
+                        </Slider.Template>
+                    </Slider>
+                </Grid>
+
                 <TextBlock Grid.Column="2"
                            Text="{Binding Duration, StringFormat=mm\\:ss}"
                            FontSize="11" Foreground="{StaticResource TextSecondaryColor}"

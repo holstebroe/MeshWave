@@ -14,6 +14,7 @@ public interface ISyncBrowseClient
     bool IsRunning { get; }
     IReadOnlyCollection<Manifest> PeerManifests { get; }
     Manifest? LocalManifest { get; }
+    Manifest? GetLocalManifest(ManifestStreamType streamType);
     ICatalogueService CatalogueService { get; }
     PeerConnectionAttemptReport? LastConnectionAttemptReport { get; }
     IEnumerable<PeerInfo> GetPeers();
@@ -22,4 +23,5 @@ public interface ISyncBrowseClient
     Task<(Stream? Stream, long ContentLength)> RequestContentStreamAsync(string peerUserId, string contentHash);
     Task<bool> IsContentAvailableLocallyAsync(string contentHash);
     UserRepository? UserRepository { get; }
+    Task SyncAllPeersAsync(CancellationToken cancellationToken = default);
 }

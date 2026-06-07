@@ -155,7 +155,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         var john = await _context.CreatePeerAsync("John", testDataName: "John");
         var jane = await _context.CreatePeerAsync("Jane", testDataName: "Jane");
 
-        var deskPlasticDir = Path.Combine(john.BaseDir, "DeskPlastic");
+        var deskPlasticDir = Path.Combine(john.BaseFolder, "DeskPlastic");
         var mp3Files = Directory.GetFiles(deskPlasticDir, "*.mp3");
         Assert.NotEmpty(mp3Files);
 
@@ -168,8 +168,13 @@ public class MeshIntegrationTests : IAsyncLifetime
         var johnContentIndex = new Dictionary<string, byte[]>();
         johnContentIndex[hash] = File.ReadAllBytes(firstMp3);
 
+        // Restart john with content provider, keeping same identity and port
+        var identity = john.Identity;
+        var port = john.Port;
+        var bootstrapNodes = new[] { $"127.0.0.1:{_context.BootstrapPort}" };
+
         await john.DisposeAsync();
-        await john.StartAsync(bootstrapNodes: [$"127.0.0.1:39877"], contentProvider: h => johnContentIndex.GetValueOrDefault(h));
+        await john.StartAsync(bootstrapNodes: bootstrapNodes, contentProvider: h => johnContentIndex.GetValueOrDefault(h));
 
         await _context.ConnectAndSyncAllAsync();
 

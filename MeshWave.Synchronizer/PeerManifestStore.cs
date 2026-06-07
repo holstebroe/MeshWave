@@ -17,18 +17,19 @@ namespace MeshWave.Synchronizer;
 /// </summary>
 public class PeerManifestStore
 {
+    private const string PeerManifestsFolderName = "PeerManifests";
     private readonly string _storeDirectory;
     private readonly ConcurrentDictionary<(string UserId, ManifestStreamType StreamType), Manifest> _manifests = new();
 
     public PeerManifestStore(string? storeDirectory = null)
     {
-        _storeDirectory = storeDirectory ?? Path.Combine(MeshWaveEnvironment.GetAppDataRoot(), "PeerManifests");
+        _storeDirectory = storeDirectory ?? Path.Combine(MeshWaveEnvironment.GetAppDataRoot(), PeerManifestsFolderName);
         Directory.CreateDirectory(_storeDirectory);
     }
 
     public static PeerManifestStore CreateAtBase(string baseFolder)
     {
-        return new PeerManifestStore(Path.Combine(baseFolder, "PeerManifests"));
+        return new PeerManifestStore(Path.Combine(baseFolder, PeerManifestsFolderName));
     }
 
     /// <summary>
@@ -56,7 +57,7 @@ public class PeerManifestStore
     /// Returns the cached manifest for <paramref name="userId"/> and <paramref name="streamType"/>, or null if not yet received.
     /// </summary>
     public Manifest? Get(string userId, ManifestStreamType streamType = ManifestStreamType.Content)
-        => _manifests.TryGetValue((userId, streamType), out var m) ? m : null;
+        => _manifests.GetValueOrDefault((userId, streamType));
 
     /// <summary>
     /// Returns all currently cached peer manifests.
@@ -107,7 +108,11 @@ public class PeerManifestStore
             var path = FilePath(userId, streamType);
             if (File.Exists(path))
             {
-                try { File.Delete(path); } catch { }
+                try { File.Delete(path); }
+                catch
+                {
+                    // ignored
+                }
             }
         }
     }
@@ -124,7 +129,11 @@ public class PeerManifestStore
 
         foreach (var file in Directory.EnumerateFiles(_storeDirectory, "*.json", SearchOption.TopDirectoryOnly))
         {
-            try { File.Delete(file); } catch { }
+            try { File.Delete(file); }
+            catch
+            {
+                // ignored
+            }
         }
     }
 

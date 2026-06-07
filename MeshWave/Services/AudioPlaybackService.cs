@@ -10,7 +10,7 @@ namespace MeshWave.Services
     /// <summary>
     /// Audio playback service using NAudio.
     /// </summary>
-    public class AudioPlaybackService : IDisposable
+    public class AudioPlaybackService : IAudioPlaybackService
     {
         private IWavePlayer? _waveOut;
         private WaveStream? _audioFile;

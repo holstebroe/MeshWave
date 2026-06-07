@@ -1,5 +1,6 @@
 ﻿using System.Windows;
 using System.Windows.Input;
+using MeshWave.Services;
 
 namespace MeshWave
 {
@@ -11,7 +12,8 @@ namespace MeshWave
         public MainWindow()
         {
             InitializeComponent();
-            DataContext = new ViewModels.ApplicationViewModel();
+            var settingsService = new SettingsService();
+            DataContext = new ViewModels.ApplicationViewModel(settingsService: settingsService);
         }
 
         private ViewModels.ApplicationViewModel ViewModel => (ViewModels.ApplicationViewModel)DataContext;

@@ -11,6 +11,13 @@ namespace MeshWave.Services
 {
     public class UserProfileService
     {
+        private readonly string _appDataRoot;
+
+        public UserProfileService(string? appDataRoot = null)
+        {
+            _appDataRoot = appDataRoot ?? MeshWaveEnvironment.GetAppDataRoot();
+        }
+
         public UserProfile LoadProfile()
         {
             var profileFilePath = GetProfileFilePath();
@@ -45,7 +52,7 @@ namespace MeshWave.Services
 
         public void SaveProfile(UserProfile profile)
         {
-            var appDataFolder = MeshWaveEnvironment.GetAppDataRoot();
+            var appDataFolder = _appDataRoot;
             var profileFilePath = GetProfileFilePath();
 
             if (!Directory.Exists(appDataFolder))
@@ -81,7 +88,7 @@ namespace MeshWave.Services
 
         private string GenerateRoundedIcon(string sourceImagePath)
         {
-            var appDataFolder = MeshWaveEnvironment.GetAppDataRoot();
+            var appDataFolder = _appDataRoot;
             // Use a unique filename to avoid locking issues (WPF might still hold the old file).
             var timestamp = DateTime.Now.Ticks;
             var iconPath = Path.Combine(appDataFolder, $"user_icon_{timestamp}.png");
@@ -133,7 +140,7 @@ namespace MeshWave.Services
             return iconPath;
         }
 
-        private static string GetProfileFilePath() => MeshWaveEnvironment.CombineInAppData("profile.json");
+        private string GetProfileFilePath() => Path.Combine(_appDataRoot, "profile.json");
 
         private static void ApplyLaunchOverrides(UserProfile profile)
         {

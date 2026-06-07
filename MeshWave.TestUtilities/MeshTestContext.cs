@@ -6,12 +6,17 @@ using MeshWave.Synchronizer;
 
 namespace MeshWave.TestUtilities;
 
+/// <summary>
+/// Main test harness for MeshWave P2P integration testing.
+/// Manages isolated peer environments and an optional bootstrap node.
+/// </summary>
 public class MeshTestContext : IAsyncDisposable
 {
     private readonly List<TestPeer> _peers = [];
     private BootstrapCoordinator? _bootstrap;
     private int _bootstrapPort;
 
+    public int BootstrapPort => _bootstrapPort;
     public IReadOnlyList<TestPeer> Peers => _peers;
 
     public async Task<TestPeer> CreatePeerAsync(string name, bool useBootstrap = true, string? testDataName = null, Func<string, byte[]?>? contentProvider = null)
@@ -29,14 +34,14 @@ public class MeshTestContext : IAsyncDisposable
         {
             if (_bootstrap == null)
             {
-                _bootstrapPort = 39877;
-                _bootstrap = new BootstrapCoordinator(_bootstrapPort);
+                _bootstrapPort = TestPeerFactory.FindFreePort();
+                _bootstrap = new BootstrapCoordinator(_bootstrapPort, peer.Logger);
                 await _bootstrap.StartAsync();
             }
             bootstrapNodes = [$"127.0.0.1:{_bootstrapPort}"];
         }
 
-        await peer.StartAsync(bootstrapNodes: bootstrapNodes);
+        await peer.StartAsync(bootstrapNodes: bootstrapNodes, contentProvider: contentProvider);
 
         // Ensure they have a profile broadcasted so their public key is in the social manifest
         peer.BroadcastProfile(name, isArtist: true);
@@ -108,7 +113,7 @@ public class MeshTestContext : IAsyncDisposable
         foreach (var peer in _peers)
         {
             await peer.DisposeAsync();
-            try { Directory.Delete(peer.BaseDir, true); } catch { }
+            try { Directory.Delete(peer.BaseFolder, true); } catch { }
         }
 
         if (_bootstrap != null)
