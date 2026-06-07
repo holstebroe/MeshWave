@@ -388,28 +388,6 @@
         </Setter>
     </Style>
 
-    <!-- ===== Dark GridViewColumnHeader style ===== -->
-    <Style TargetType="GridViewColumnHeader">
-        <Setter Property="Background" Value="#FF0A0A0A"/>
-        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryColor}"/>
-        <Setter Property="FontSize" Value="11"/>
-        <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="Padding" Value="10,6"/>
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="GridViewColumnHeader">
-                    <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
-                        <TextBlock Text="{TemplateBinding Content}"
-                                   Foreground="{TemplateBinding Foreground}"
-                                   FontSize="{TemplateBinding FontSize}"
-                                   FontWeight="{TemplateBinding FontWeight}"
-                                   VerticalAlignment="Center"/>
-                    </Border>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
 
     <!-- ===== Spotify-style Slider: thin track, accent fill, thumb always on top ===== -->
     <Style TargetType="Slider">
