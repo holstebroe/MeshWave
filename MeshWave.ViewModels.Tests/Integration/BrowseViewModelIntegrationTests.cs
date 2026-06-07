@@ -38,6 +38,13 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         john.BroadcastProfile("John", true);
         jane.BroadcastProfile("Jane", true);
 
+        // Save local manifests immediately so they are available for sync
+        john.Orchestrator.SaveLocalManifests();
+        jane.Orchestrator.SaveLocalManifests();
+
+        // Wait for CatalogueService ingestion of local changes before connecting peers
+        await Task.Delay(1000, TestContext.Current.CancellationToken);
+
         // Use the built-in ConnectAndSyncAll which properly propagates manifests
         await _context.ConnectAndSyncAllAsync();
 
