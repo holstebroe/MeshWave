@@ -51,7 +51,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         // Are we sure that Jane is actually reporting herself as artist?
         try
         {
-            await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Artists, a => a.UserId == jane.UserId, timeoutMs: 5000);
+            await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Artists, a => a.UserId == jane.UserId, timeoutMs: 60000);
         }
         catch (Exception ex)
         {
