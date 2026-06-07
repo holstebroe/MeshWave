@@ -1,3 +1,4 @@
+using MeshWave.Common.Core.P2P;
 using MeshWave.Common.Core.Models;
 using MeshWave.Synchronizer;
 using Xunit;
@@ -25,11 +26,11 @@ public class ManifestExchangeTests : IAsyncDisposable
         using var server = new ManifestExchangeServer(port);
         var manifest = _manager.CreateManifest("user-1");
 
-        await server.StartAsync((_) => manifest);
+        await server.StartAsync((_) => manifest, cancellationToken: TestContext.Current.CancellationToken);
 
         try
         {
-            var fetched = await _client.FetchManifestAsync("127.0.0.1", port);
+            var fetched = await _client.FetchManifestAsync("127.0.0.1", port, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.NotNull(fetched);
             Assert.Equal("user-1", fetched.UserId);
@@ -49,17 +50,17 @@ public class ManifestExchangeTests : IAsyncDisposable
         server.ManifestReceived += (_, e) => receivedManifest.TrySetResult(e.Manifest);
 
         var emptyManifest = _manager.CreateManifest("user-serving");
-        await server.StartAsync((_) => emptyManifest);
+        await server.StartAsync((_) => emptyManifest, cancellationToken: TestContext.Current.CancellationToken);
 
         try
         {
             var toSend = _manager.CreateManifest("user-sender");
             var client = new ManifestExchangeClient(timeoutMs: 10000);
-            var ack = await client.PushManifestAsync("127.0.0.1", port, toSend);
+            var ack = await client.PushManifestAsync("127.0.0.1", port, toSend, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.True(ack);
 
-            var completed = await Task.WhenAny(receivedManifest.Task, Task.Delay(10000));
+            var completed = await Task.WhenAny(receivedManifest.Task, Task.Delay(10000, TestContext.Current.CancellationToken));
             Assert.True(receivedManifest.Task.IsCompleted);
             var result = await receivedManifest.Task;
             Assert.Equal("user-sender", result.UserId);
@@ -75,12 +76,12 @@ public class ManifestExchangeTests : IAsyncDisposable
     {
         var port = FindFreePort();
         using var server = new ManifestExchangeServer(port);
-        await server.StartAsync((_) => null);
+        await server.StartAsync((_) => null, cancellationToken: TestContext.Current.CancellationToken);
 
         try
         {
             var client = new ManifestExchangeClient(timeoutMs: 10000);
-            var fetched = await client.FetchManifestAsync("127.0.0.1", port);
+            var fetched = await client.FetchManifestAsync("127.0.0.1", port, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Null(fetched);
         }
@@ -104,7 +105,8 @@ public class ManifestExchangeTests : IAsyncDisposable
                 SessionId = $"rv-{request.InitiatorUserId}-{request.TargetUserId}",
                 ExpiresAtUtc = DateTime.UtcNow.AddSeconds(30),
                 Message = "ok"
-            });
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         try
         {
@@ -114,7 +116,7 @@ public class ManifestExchangeTests : IAsyncDisposable
                 InitiatorUserId = "initiator-1",
                 TargetUserId = "target-1",
                 InitiatorPort = 40001
-            });
+            }, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.NotNull(response);
             Assert.True(response!.Success);
@@ -146,14 +148,14 @@ public class ManifestExchangeTests : IAsyncDisposable
             });
         }
 
-        await server.StartAsync((_) => manifest);
+        await server.StartAsync((_) => manifest, cancellationToken: TestContext.Current.CancellationToken);
 
         try
         {
             var client = new ManifestExchangeClient(timeoutMs: 10000);
 
             // Request middle range (2, 3)
-            var fetched = await client.FetchManifestAsync("127.0.0.1", port, startSequenceNumber: 2, endSequenceNumber: 3);
+            var fetched = await client.FetchManifestAsync("127.0.0.1", port, startSequenceNumber: 2, endSequenceNumber: 3, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.NotNull(fetched);
             Assert.Equal(2, fetched.Operations.Count);
@@ -161,7 +163,7 @@ public class ManifestExchangeTests : IAsyncDisposable
             Assert.Equal(3, fetched.Operations[1].SequenceNumber);
 
             // Request from 4 onwards
-            var fetched2 = await client.FetchManifestAsync("127.0.0.1", port, startSequenceNumber: 4);
+            var fetched2 = await client.FetchManifestAsync("127.0.0.1", port, startSequenceNumber: 4, cancellationToken: TestContext.Current.CancellationToken);
             Assert.NotNull(fetched2);
             Assert.Single(fetched2.Operations);
             Assert.Equal(4, fetched2.Operations[0].SequenceNumber);

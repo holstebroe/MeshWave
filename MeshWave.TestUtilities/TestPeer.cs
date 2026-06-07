@@ -1,3 +1,4 @@
+using MeshWave.Common.Core.P2P;
 using MeshWave.Common.Core.Models;
 using MeshWave.Synchronizer;
 using NLog;
@@ -57,15 +58,7 @@ public class TestPeer : IAsyncDisposable
 
         if (BaseFolder.StartsWith(Path.GetTempPath()))
         {
-            try
-            {
-                if (Directory.Exists(BaseFolder))
-                {
-                    Directory.Delete(BaseFolder, true);
-                }
-            }
-            catch (DirectoryNotFoundException) { }
-            catch (Exception ex) { Console.WriteLine($"Cleanup warning: {ex.Message}"); }
+            if (Directory.Exists(BaseFolder)) { Directory.Delete(BaseFolder, true); }
         }
     }
 

@@ -1,3 +1,4 @@
+using MeshWave.Common.Core.P2P;
 namespace MeshWave.Synchronizer;
 
 /// <summary>
@@ -8,8 +9,8 @@ public static class SecurityLimits
 {
     // --- Network message limits ---
 
-    /// <summary>Maximum raw TCP message body size in bytes (512 KB).</summary>
-    public const int MaxMessageBytes = 512 * 1024;
+    /// <summary>Maximum raw TCP message body size in bytes (Protobuf optimized to 512 KB).</summary>
+    public const int MaxMessageBytes = 2 * 1024 * 1024;
 
     /// <summary>Maximum number of operations allowed in a manifest received from a peer.</summary>
     public const int MaxManifestOperations = 10_000;

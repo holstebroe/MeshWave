@@ -1,3 +1,5 @@
+using Xunit;
+using MeshWave.Common.Core.P2P;
 using MeshWave.Bootstrap.Core;
 using MeshWave.Common.Core.Models;
 using MeshWave.Synchronizer;
@@ -69,7 +71,7 @@ public class MeshTestContext : IAsyncDisposable
                 }
             }
             if (allConnected) break;
-            await Task.Delay(500);
+            await Task.Delay(500, TestContext.Current.CancellationToken);
             foreach (var peer in _peers) await peer.SyncAsync();
         }
 
@@ -103,7 +105,7 @@ public class MeshTestContext : IAsyncDisposable
         }
 
         // Give it a moment to process the pushes
-        await Task.Delay(1000);
+        await Task.Delay(1000, TestContext.Current.CancellationToken);
     }
 
     public async ValueTask DisposeAsync()
