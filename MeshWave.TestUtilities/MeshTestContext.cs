@@ -113,7 +113,11 @@ public class MeshTestContext : IAsyncDisposable
         foreach (var peer in _peers)
         {
             await peer.DisposeAsync();
-            try { Directory.Delete(peer.BaseFolder, true); } catch { }
+            try {
+                if (Directory.Exists(peer.BaseFolder)) {
+                    Directory.Delete(peer.BaseFolder, true);
+                }
+            } catch { }
         }
 
         if (_bootstrap != null)

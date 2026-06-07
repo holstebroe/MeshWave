@@ -217,6 +217,29 @@
         </Setter>
     </Style>
 
+    <!-- ===== Modern GridViewColumnHeader ===== -->
+    <Style TargetType="GridViewColumnHeader">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryColor}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Padding" Value="10,8"/>
+        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="GridViewColumnHeader">
+                    <Border Background="{TemplateBinding Background}"
+                            Padding="{TemplateBinding Padding}"
+                            BorderThickness="0,0,0,1"
+                            BorderBrush="#FF252525">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- ===== Spotify-style ListView (track list) ===== -->
     <Style TargetType="ListView">
         <Setter Property="Background" Value="Transparent"/>
@@ -233,33 +256,62 @@
                     <Setter Property="Template">
                         <Setter.Value>
                             <ControlTemplate TargetType="ListViewItem">
-                                <Border Background="{TemplateBinding Background}"
-                                        CornerRadius="4"
-                                        Padding="{TemplateBinding Padding}">
-                                    <Grid>
-                                        <GridViewRowPresenter x:Name="GridViewRowPresenter"
+                                <Grid Margin="0,2">
+                                    <!-- Glow and Active Background -->
+                                    <Border x:Name="ActiveBackground"
+                                            CornerRadius="6"
+                                            Opacity="0">
+                                        <Border.Background>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                <GradientStop Color="#4051BCA7" Offset="0"/>
+                                                <GradientStop Color="#0051BCA7" Offset="1"/>
+                                            </LinearGradientBrush>
+                                        </Border.Background>
+                                    </Border>
+
+                                    <Border x:Name="ActiveBorder"
+                                            BorderBrush="#8051BCA7"
+                                            BorderThickness="1"
+                                            CornerRadius="6"
+                                            Opacity="0">
+                                        <Border.Effect>
+                                            <DropShadowEffect Color="#51BCA7" BlurRadius="10" ShadowDepth="0" Opacity="0.8"/>
+                                        </Border.Effect>
+                                    </Border>
+
+                                    <!-- Hover Background -->
+                                    <Border x:Name="HoverBackground" Background="{DynamicResource SurfaceLightColor}" Opacity="0" CornerRadius="6"/>
+
+                                    <Border Padding="{TemplateBinding Padding}" CornerRadius="6">
+                                        <Grid>
+                                            <GridViewRowPresenter x:Name="GridViewRowPresenter"
+                                                                  Content="{TemplateBinding Content}"
+                                                                  Columns="{TemplateBinding GridView.ColumnCollection}"/>
+                                            <ContentPresenter x:Name="ContentPresenter"
+                                                              Visibility="Collapsed"
                                                               Content="{TemplateBinding Content}"
-                                                              Columns="{TemplateBinding GridView.ColumnCollection}"/>
-                                        <ContentPresenter x:Name="ContentPresenter"
-                                                          Visibility="Collapsed"
-                                                          Content="{TemplateBinding Content}"
-                                                          ContentTemplate="{TemplateBinding ContentTemplate}"
-                                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                                                          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
-                                    </Grid>
-                                </Border>
+                                                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
+                                        </Grid>
+                                    </Border>
+                                </Grid>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="GridView.ColumnCollection" Value="{x:Null}">
                                         <Setter TargetName="GridViewRowPresenter" Property="Visibility" Value="Collapsed"/>
                                         <Setter TargetName="ContentPresenter" Property="Visibility" Value="Visible"/>
                                     </Trigger>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter Property="Background" Value="{DynamicResource SurfaceLightColor}"/>
+                                        <Setter TargetName="HoverBackground" Property="Opacity" Value="1"/>
                                     </Trigger>
                                     <Trigger Property="IsSelected" Value="True">
-                                        <Setter Property="Background" Value="{DynamicResource SurfaceLightColor}"/>
-                                        <Setter Property="Foreground" Value="{DynamicResource AccentColor}"/>
+                                        <Setter TargetName="HoverBackground" Property="Opacity" Value="1"/>
                                     </Trigger>
+                                    <!-- The magic binding for IsNowPlaying -->
+                                    <DataTrigger Binding="{Binding IsNowPlaying}" Value="True">
+                                        <Setter TargetName="ActiveBackground" Property="Opacity" Value="1"/>
+                                        <Setter TargetName="ActiveBorder" Property="Opacity" Value="1"/>
+                                    </DataTrigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
                         </Setter.Value>
@@ -335,28 +387,6 @@
         </Setter>
     </Style>
 
-    <!-- ===== Dark GridViewColumnHeader style ===== -->
-    <Style TargetType="GridViewColumnHeader">
-        <Setter Property="Background" Value="#FF0A0A0A"/>
-        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryColor}"/>
-        <Setter Property="FontSize" Value="11"/>
-        <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="Padding" Value="10,6"/>
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="GridViewColumnHeader">
-                    <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
-                        <TextBlock Text="{TemplateBinding Content}"
-                                   Foreground="{TemplateBinding Foreground}"
-                                   FontSize="{TemplateBinding FontSize}"
-                                   FontWeight="{TemplateBinding FontWeight}"
-                                   VerticalAlignment="Center"/>
-                    </Border>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
 
     <!-- ===== Spotify-style Slider: thin track, accent fill, thumb always on top ===== -->
     <Style TargetType="Slider">
