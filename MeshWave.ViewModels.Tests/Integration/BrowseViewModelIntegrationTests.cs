@@ -34,8 +34,14 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         await john.WaitForConditionAsync(() => john.Orchestrator.ConnectedPeerCount > 0);
         await jane.WaitForConditionAsync(() => jane.Orchestrator.ConnectedPeerCount > 0);
 
+        // Make sure peers broadcast their artist profile
+        john.BroadcastProfile("John", true);
+        jane.BroadcastProfile("Jane", true);
+
         // Use the built-in ConnectAndSyncAll which properly propagates manifests
         await _context.ConnectAndSyncAllAsync();
+
+
 
         // Trigger refresh of browse viewmodels to load the manifests that were just synced
         // (FilterText change causes Refresh to be called)
@@ -45,7 +51,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         janeBrowseViewModel.FilterText = string.Empty;
 
         // Give the ViewModels a moment to process the refresh
-        await Task.Delay(100, TestContext.Current.CancellationToken);
+        await Task.Delay(1000, TestContext.Current.CancellationToken);
 
         // Now verify that John can see Jane in browse view
         // Are we sure that Jane is actually reporting herself as artist?
