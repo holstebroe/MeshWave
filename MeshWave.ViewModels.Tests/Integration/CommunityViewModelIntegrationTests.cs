@@ -2,6 +2,8 @@ using MeshWave.Common.Core.Models;
 using MeshWave.Synchronizer;
 using MeshWave.TestUtilities;
 using MeshWave.ViewModels;
+using MeshWave.Wpf.Services;
+using MeshWave.Wpf.ViewModels;
 using Xunit;
 
 namespace MeshWave.ViewModels.Tests.Integration;
@@ -27,7 +29,7 @@ public class CommunityViewModelIntegrationTests : IAsyncLifetime
         var alice = await _context.CreatePeerAsync("Alice");
         var bob = await _context.CreatePeerAsync("Bob");
 
-        var aliceCommunityVm = new CommunityViewModel(alice.Orchestrator, settingsService: new Services.SettingsService(alice.AppDataRoot));
+        var aliceCommunityVm = new CommunityViewModel(alice.Orchestrator, settingsService: new SettingsService(alice.AppDataRoot));
 
         // Bob releases a track
         bob.AnnounceTrack("bob-track-1", "hash-bob-1", new Dictionary<string, string> { ["title"] = "Bob's Hit" });
@@ -55,8 +57,8 @@ public class CommunityViewModelIntegrationTests : IAsyncLifetime
         var bob = await _context.CreatePeerAsync("Bob");
         var charlie = await _context.CreatePeerAsync("Charlie");
 
-        var bobCommunityVm = new CommunityViewModel(bob.Orchestrator, settingsService: new Services.SettingsService(bob.AppDataRoot));
-        var charlieCommunityVm = new CommunityViewModel(charlie.Orchestrator, settingsService: new Services.SettingsService(charlie.AppDataRoot));
+        var bobCommunityVm = new CommunityViewModel(bob.Orchestrator, settingsService: new SettingsService(bob.AppDataRoot));
+        var charlieCommunityVm = new CommunityViewModel(charlie.Orchestrator, settingsService: new SettingsService(charlie.AppDataRoot));
 
         // Alice releases a track
         alice.AnnounceTrack("alice-track-1", "hash-alice-1", new Dictionary<string, string> { ["title"] = "Alice's Hit" });
@@ -88,7 +90,7 @@ public class CommunityViewModelIntegrationTests : IAsyncLifetime
     public async Task DiscoveryIntegrationScenario()
     {
         var alice = await _context.CreatePeerAsync("Alice");
-        var aliceCommunityVm = new CommunityViewModel(alice.Orchestrator, settingsService: new Services.SettingsService(alice.AppDataRoot));
+        var aliceCommunityVm = new CommunityViewModel(alice.Orchestrator, settingsService: new SettingsService(alice.AppDataRoot));
 
         aliceCommunityVm.ActiveTab = CommunityTab.Discover;
         Assert.Empty(aliceCommunityVm.SearchResults);

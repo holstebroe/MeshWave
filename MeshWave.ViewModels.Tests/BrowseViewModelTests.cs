@@ -1,8 +1,9 @@
 using MeshWave.Common.Core.P2P;
 using MeshWave.Common.Core.Models;
-using MeshWave.Services;
 using MeshWave.Synchronizer;
 using MeshWave.ViewModels;
+using MeshWave.Wpf.Services;
+using MeshWave.Wpf.ViewModels;
 using Moq;
 using Xunit;
 

@@ -1,0 +1,710 @@
+<UserControl x:Class="MeshWave.Wpf.Views.BrowseView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:converters="clr-namespace:MeshWave.Wpf.Converters"
+             mc:Ignorable="d"
+             Background="{StaticResource BackgroundColor}">
+    <UserControl.Resources>
+        <converters:PathToBitmapConverter x:Key="PathToBitmap"/>
+        <converters:UserIconConverter x:Key="UserIconConverter"/>
+    </UserControl.Resources>
+    <Grid Margin="30">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header row with optional artist breadcrumb -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,4">
+            <TextBlock Text="Browse Community Music"
+                       FontSize="28" FontWeight="Bold"
+                       Foreground="{StaticResource TextPrimaryColor}"
+                       VerticalAlignment="Center"/>
+            <!-- Artist detail breadcrumb -->
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                <StackPanel.Style>
+                    <Style TargetType="StackPanel">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsShowingArtistDetail}" Value="True">
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </StackPanel.Style>
+                <TextBlock Text="›" FontSize="22" Foreground="{StaticResource TextSecondaryColor}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBlock Text="{Binding ActiveArtistName}"
+                           FontSize="22" FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryColor}" VerticalAlignment="Center"/>
+                <Button Content="← All Artists"
+                        Command="{Binding BackToAllArtistsCommand}"
+                        Margin="16,0,0,0" Padding="8,4" VerticalAlignment="Center">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                            <Setter Property="Margin" Value="16,0,0,0"/>
+                        </Style>
+                    </Button.Style>
+                </Button>
+            </StackPanel>
+        </StackPanel>
+
+        <!-- Status text -->
+        <TextBlock Grid.Row="1" Text="{Binding StatusText}"
+                   FontSize="13"
+                   Foreground="{StaticResource TextSecondaryColor}"
+                   Margin="0,0,0,12"/>
+
+        <!-- Filter box -->
+        <Border Grid.Row="2" Background="{StaticResource SurfaceColor}"
+                CornerRadius="6" Padding="10,6" Margin="0,0,0,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="🔍" FontSize="14"
+                           Foreground="{StaticResource TextSecondaryColor}"
+                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBox Grid.Column="1"
+                         Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                         Background="Transparent" BorderThickness="0"
+                         Foreground="{StaticResource TextPrimaryColor}"
+                         CaretBrush="{StaticResource TextPrimaryColor}"
+                         FontSize="14" VerticalAlignment="Center">
+                    <TextBox.Style>
+                        <Style TargetType="TextBox">
+                            <Style.Resources>
+                                <Style TargetType="Border"><Setter Property="CornerRadius" Value="4"/></Style>
+                            </Style.Resources>
+                        </Style>
+                    </TextBox.Style>
+                </TextBox>
+            </Grid>
+        </Border>
+
+        <!-- Sub-tabs -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,12">
+            <Button Content="Artists" Command="{Binding SetTabCommand}" CommandParameter="Artists" Padding="14,7" Margin="0,0,6,0">
+                <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                        <Setter Property="Margin" Value="0,0,6,0"/>
+                        <Setter Property="Opacity" Value="0.5"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsTabArtists}" Value="True">
+                                <Setter Property="Opacity" Value="1"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+            <Button Content="Albums" Command="{Binding SetTabCommand}" CommandParameter="Albums" Padding="14,7" Margin="0,0,6,0">
+                <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                        <Setter Property="Margin" Value="0,0,6,0"/>
+                        <Setter Property="Opacity" Value="0.5"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsTabAlbums}" Value="True">
+                                <Setter Property="Opacity" Value="1"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+            <Button Content="Tracks" Command="{Binding SetTabCommand}" CommandParameter="Tracks" Padding="14,7" Margin="0,0,6,0">
+                <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                        <Setter Property="Margin" Value="0,0,6,0"/>
+                        <Setter Property="Opacity" Value="0.5"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsTabTracks}" Value="True">
+                                <Setter Property="Opacity" Value="1"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+            <Button Content="Playlists" Command="{Binding SetTabCommand}" CommandParameter="Playlists" Padding="14,7" Margin="0,0,6,0">
+                <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                        <Setter Property="Margin" Value="0,0,6,0"/>
+                        <Setter Property="Opacity" Value="0.5"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsTabPlaylists}" Value="True">
+                                <Setter Property="Opacity" Value="1"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+            <Button Content="Downloads" Command="{Binding SetTabCommand}" CommandParameter="Downloads" Padding="14,7">
+                <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                        <Setter Property="Margin" Value="0,0,0,0"/>
+                        <Setter Property="Opacity" Value="0.5"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsTabDownloads}" Value="True">
+                                <Setter Property="Opacity" Value="1"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+        </StackPanel>
+
+        <!-- Content area -->
+        <ScrollViewer Grid.Row="4" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+
+                <!-- ── Artists tab ─────────────────────────────────────── -->
+                <ItemsControl ItemsSource="{Binding Artists}">
+                    <ItemsControl.Style>
+                        <Style TargetType="ItemsControl">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsTabArtists}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ItemsControl.Style>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{StaticResource SurfaceColor}"
+                                    CornerRadius="8" Padding="16,12" Margin="0,0,0,8"
+                                    Cursor="Hand">
+                                <Border.InputBindings>
+                                    <MouseBinding MouseAction="LeftDoubleClick"
+                                                  Command="{Binding DataContext.ViewArtistCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                  CommandParameter="{Binding}"/>
+                                </Border.InputBindings>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="44"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Width="44" Height="44"
+                                            CornerRadius="22" ClipToBounds="True"
+                                            Background="{StaticResource SurfaceLightColor}"
+                                            VerticalAlignment="Center">
+                                        <Image Source="{Binding IconPath, Converter={StaticResource UserIconConverter}}"
+                                               Stretch="UniformToFill"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding DisplayName}"
+                                                       FontWeight="SemiBold" FontSize="15"
+                                                       Foreground="{StaticResource TextPrimaryColor}"/>
+                                            <Border Background="{StaticResource AccentColor}" CornerRadius="4" Padding="6,1" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsLocal}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <TextBlock Text="Local" FontSize="10" FontWeight="Bold" Foreground="White"/>
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding Bio}"
+                                                   FontSize="12" FontStyle="Italic"
+                                                   Foreground="{StaticResource TextSecondaryColor}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   MaxWidth="360" Margin="0,2,0,0"/>
+                                        <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                            <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryColor}">
+                                                <Run Text="{Binding TrackCount}"/>
+                                                <Run Text=" tracks"/>
+                                            </TextBlock>
+                                            <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryColor}" Margin="8,0,0,0">
+                                                <Run Text="{Binding AlbumCount}"/>
+                                                <Run Text=" albums"/>
+                                            </TextBlock>
+                                            <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryColor}" Margin="8,0,0,0">
+                                                <Run Text=" · "/>
+                                                <Run Text="{Binding TotalSizeDisplay}"/>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Button Content="⬇ Download All"
+                                                Command="{Binding DataContext.DownloadArtistCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                Padding="10,5" Margin="0,0,8,0">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                                    <Setter Property="Margin" Value="0,0,8,0"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsLocal}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                        <Button Content="View Tracks →"
+                                                Command="{Binding DataContext.ViewArtistCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                Padding="10,5">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                                    <Setter Property="Margin" Value="0"/>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- ── Albums tab ──────────────────────────────────────── -->
+                <ItemsControl ItemsSource="{Binding Albums}">
+                    <ItemsControl.Style>
+                        <Style TargetType="ItemsControl">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsTabAlbums}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ItemsControl.Style>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{StaticResource SurfaceColor}"
+                                    CornerRadius="8" Padding="16,12" Margin="0,0,0,8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Width="44" Height="44"
+                                            CornerRadius="4" ClipToBounds="True"
+                                            Background="{StaticResource SurfaceLightColor}"
+                                            VerticalAlignment="Center" Margin="0,0,16,0">
+                                        <Image Source="{Binding IconPath, Converter={StaticResource UserIconConverter}}"
+                                               Stretch="UniformToFill"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Name}"
+                                                       FontWeight="SemiBold" FontSize="15"
+                                                       Foreground="{StaticResource TextPrimaryColor}"/>
+                                            <Border Background="{StaticResource AccentColor}" CornerRadius="4" Padding="6,1" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsLocal}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <TextBlock Text="Local" FontSize="10" FontWeight="Bold" Foreground="White"/>
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryColor}" Margin="0,2,0,0">
+                                            <Run Text="by"/>
+                                            <Run Text="{Binding ArtistDisplayName, Mode=OneWay}" FontWeight="SemiBold"/>
+                                            <Run Text=" · "/>
+                                            <Run Text="{Binding TotalSizeDisplay}"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding ReleasedAtDisplay, Mode=OneWay}"
+                                                   FontSize="12"
+                                                   Foreground="{StaticResource TextSecondaryColor}"
+                                                   VerticalAlignment="Center" Margin="16,0,16,0"/>
+                                        <Button Content="⬇ Download All"
+                                                Command="{Binding DataContext.DownloadAlbumCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                Padding="10,5" VerticalAlignment="Center">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                                    <Setter Property="Margin" Value="0"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsLocal}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- ── Playlists tab ───────────────────────────────────── -->
+                <ItemsControl ItemsSource="{Binding Playlists}">
+                    <ItemsControl.Style>
+                        <Style TargetType="ItemsControl">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsTabPlaylists}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ItemsControl.Style>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{StaticResource SurfaceColor}"
+                                    CornerRadius="8" Padding="16,12" Margin="0,0,0,8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Width="44" Height="44"
+                                            CornerRadius="4" ClipToBounds="True"
+                                            Background="{StaticResource SurfaceLightColor}"
+                                            VerticalAlignment="Center" Margin="0,0,16,0">
+                                        <Image Source="{Binding IconPath, Converter={StaticResource UserIconConverter}}"
+                                               Stretch="UniformToFill"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Name}"
+                                                       FontWeight="SemiBold" FontSize="15"
+                                                       Foreground="{StaticResource TextPrimaryColor}"/>
+                                            <Border Background="{StaticResource AccentColor}" CornerRadius="4" Padding="6,1" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsLocal}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <TextBlock Text="Local" FontSize="10" FontWeight="Bold" Foreground="White"/>
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding Description}"
+                                                   FontSize="12" FontStyle="Italic"
+                                                   Foreground="{StaticResource TextSecondaryColor}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   MaxWidth="400" Margin="0,2,0,0"/>
+                                        <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryColor}" Margin="0,3,0,0">
+                                            <Run Text="by"/>
+                                            <Run Text="{Binding ArtistDisplayName}" FontWeight="SemiBold"/>
+                                            <Run Text=" · "/>
+                                            <Run Text="{Binding TrackCount}"/>
+                                            <Run Text=" tracks"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding ReleasedAtDisplay}"
+                                                   FontSize="12"
+                                                   Foreground="{StaticResource TextSecondaryColor}"
+                                                   VerticalAlignment="Center" Margin="16,0,16,0"/>
+                                        <Button Content="⬇ Download All"
+                                                Command="{Binding DataContext.DownloadPlaylistCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                Padding="10,5" VerticalAlignment="Center">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                                    <Setter Property="Margin" Value="0"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsLocal}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- ── Tracks tab ──────────────────────────────────────── -->
+                <ItemsControl ItemsSource="{Binding Tracks}">
+                    <ItemsControl.Style>
+                        <Style TargetType="ItemsControl">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsTabTracks}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ItemsControl.Style>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{StaticResource SurfaceColor}"
+                                    CornerRadius="6" Padding="14,10" Margin="0,0,0,6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="80"/>
+                                        <ColumnDefinition Width="110"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Width="44" Height="44"
+                                            CornerRadius="4" ClipToBounds="True"
+                                            Background="{StaticResource SurfaceLightColor}"
+                                            VerticalAlignment="Center" Margin="0,0,16,0">
+                                        <Image Source="{Binding IconPath, Converter={StaticResource UserIconConverter}}"
+                                               Stretch="UniformToFill"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Title}"
+                                                   FontWeight="SemiBold" FontSize="14"
+                                                   Foreground="{StaticResource TextPrimaryColor}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryColor}" Margin="0,2,0,0"
+                                                   TextTrimming="CharacterEllipsis">
+                                            <Run Text="{Binding ArtistDisplayName}"/>
+                                            <Run Text=" — "/>
+                                            <Run Text="{Binding Album}"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2"
+                                               Text="{Binding FileSizeDisplay}"
+                                               FontSize="12"
+                                               Foreground="{StaticResource TextSecondaryColor}"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="3"
+                                               Text="{Binding ReleasedAtDisplay}"
+                                               FontSize="12"
+                                               Foreground="{StaticResource TextSecondaryColor}"
+                                               VerticalAlignment="Center"/>
+                                    <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Button Content="▶ Play"
+                                                Command="{Binding DataContext.PlayRemoteTrackCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                Padding="10,4" Margin="0,0,8,0">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                                    <Setter Property="Margin" Value="0,0,8,0"/>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                        <Button Content="{Binding DownloadButtonLabel}"
+                                                Command="{Binding DataContext.DownloadTrackCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                IsEnabled="{Binding CanDownload}"
+                                                Width="120"
+                                                Padding="10,4">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                                    <Setter Property="Margin" Value="0"/>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- ── Downloads tab ───────────────────────────────────── -->
+                <StackPanel>
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsTabDownloads}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                        <TextBlock Text="Download Queue"
+                                   FontSize="16" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryColor}"
+                                   VerticalAlignment="Center"/>
+                        <Button Content="Clear Completed"
+                                Command="{Binding ClearCompletedCommand}"
+                                Margin="16,0,0,0" Padding="8,4">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                    <Setter Property="Margin" Value="16,0,0,0"/>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </StackPanel>
+
+                    <ItemsControl ItemsSource="{Binding DownloadQueue}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{StaticResource SurfaceColor}"
+                                        CornerRadius="6" Padding="14,10" Margin="0,0,0,6">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="90"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Title}"
+                                                       FontWeight="SemiBold" FontSize="14"
+                                                       Foreground="{StaticResource TextPrimaryColor}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryColor}" Margin="0,2,0,0"
+                                                       TextTrimming="CharacterEllipsis">
+                                                <Run Text="{Binding Artist}"/>
+                                                <Run Text=" — "/>
+                                                <Run Text="{Binding Album}"/>
+                                            </TextBlock>
+                                            <ProgressBar Height="4" Margin="0,6,0,2"
+                                                         Value="{Binding PercentComplete}"
+                                                         Minimum="0" Maximum="100"
+                                                         Background="#1A1A1A" BorderThickness="0"
+                                                         Foreground="{StaticResource AccentColor}">
+                                                <ProgressBar.Style>
+                                                    <Style TargetType="ProgressBar">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding State}" Value="Downloading">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </ProgressBar.Style>
+                                            </ProgressBar>
+                                            <TextBlock Text="{Binding StatusMessage}"
+                                                       FontSize="11"
+                                                       Foreground="{StaticResource TextSecondaryColor}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Margin="0,2,0,0">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding StatusMessage}" Value="">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsFailed}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                <Setter Property="Foreground" Value="#E53935"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </StackPanel>
+                                        <Border Grid.Column="1" CornerRadius="4" Padding="8,3"
+                                                VerticalAlignment="Center" Margin="12,0">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="#555555"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding State}" Value="Downloading">
+                                                            <Setter Property="Background" Value="#1DB954"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding State}" Value="Done">
+                                                            <Setter Property="Background" Value="#4CAF50"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding State}" Value="Failed">
+                                                            <Setter Property="Background" Value="#E53935"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock Text="{Binding StateLabel}"
+                                                       FontSize="11" FontWeight="SemiBold"
+                                                       Foreground="White" HorizontalAlignment="Center"/>
+                                        </Border>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Button Content="Cancel"
+                                                    Command="{Binding DataContext.CancelDownloadCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    Padding="8,4" Margin="0,0,4,0">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource DangerButton}">
+                                                        <Setter Property="Margin" Value="0,0,4,0"/>
+                                                        <Setter Property="FontSize" Value="12"/>
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsPending}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                            <Button Content="Retry"
+                                                    Command="{Binding DataContext.RetryDownloadCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    Padding="8,4">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                                        <Setter Property="Margin" Value="0"/>
+                                                        <Setter Property="FontSize" Value="12"/>
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsFailed}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Empty state for downloads -->
+                    <Border Background="{StaticResource SurfaceColor}"
+                            CornerRadius="8" Padding="24" Margin="0,4,0,0">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding DownloadQueue.Count}" Value="0">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="⬇" FontSize="36" HorizontalAlignment="Center"
+                                       Foreground="{StaticResource TextSecondaryColor}" Margin="0,0,0,10"/>
+                            <TextBlock Text="No downloads queued."
+                                       FontSize="15" FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"
+                                       Foreground="{StaticResource TextPrimaryColor}"/>
+                            <TextBlock Text="Browse Artists or Tracks and click ⬇ Download to queue a track."
+                                       FontSize="13" Foreground="{StaticResource TextSecondaryColor}"
+                                       HorizontalAlignment="Center" TextAlignment="Center"
+                                       Margin="0,6,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

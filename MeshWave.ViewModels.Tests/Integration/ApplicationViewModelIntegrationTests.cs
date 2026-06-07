@@ -1,6 +1,7 @@
-using MeshWave.Models;
-using MeshWave.Services;
 using MeshWave.TestUtilities;
+using MeshWave.Wpf.Models;
+using MeshWave.Wpf.Services;
+using MeshWave.Wpf.ViewModels;
 using Moq;
 using Xunit;
 

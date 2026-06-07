@@ -1,0 +1,32 @@
+﻿<Application x:Class="MeshWave.Wpf.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:MeshWave"
+             xmlns:converters="clr-namespace:MeshWave.Wpf.Converters"
+             ShutdownMode="OnExplicitShutdown">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Styles/SharedStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Spotify-inspired color palette -->
+            <SolidColorBrush x:Key="BackgroundColor"     Color="#FF121212"/>
+            <SolidColorBrush x:Key="SurfaceColor"        Color="#FF181818"/>
+            <SolidColorBrush x:Key="SurfaceLightColor"   Color="#FF282828"/>
+            <SolidColorBrush x:Key="SidebarBgColor"      Color="#FF000000"/>
+            <SolidColorBrush x:Key="PlayerBarBgColor"    Color="#FF181818"/>
+            <SolidColorBrush x:Key="PlayerBarBorderColor" Color="#FF282828"/>
+            <SolidColorBrush x:Key="TextPrimaryColor"    Color="#FFFFFFFF"/>
+            <SolidColorBrush x:Key="TextSecondaryColor"  Color="#FFB3B3B3"/>
+            <SolidColorBrush x:Key="TextDimColor"        Color="#FF6B6B6B"/>
+            <SolidColorBrush x:Key="AccentColor"         Color="#FF1DB954"/>
+            <SolidColorBrush x:Key="PrimaryColor"        Color="#FF1DB954"/>
+
+            <converters:ViewModelToViewConverter x:Key="ViewModelToViewConverter" />
+            <converters:TimeSpanToSecondsConverter x:Key="TimeSpanToSecondsConverter" />
+            <converters:InverseBoolConverter x:Key="InverseBoolConverter" />
+            <converters:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis" />
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

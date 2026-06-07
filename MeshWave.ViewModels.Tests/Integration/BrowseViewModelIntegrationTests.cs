@@ -2,6 +2,8 @@ using MeshWave.Common.Core.Models;
 using MeshWave.Synchronizer;
 using MeshWave.TestUtilities;
 using System.Diagnostics;
+using MeshWave.Wpf.Services;
+using MeshWave.Wpf.ViewModels;
 using Xunit;
 
 namespace MeshWave.ViewModels.Tests.Integration;
@@ -28,8 +30,8 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         var john = await _context.CreatePeerAsync("John");
         var jane = await _context.CreatePeerAsync("Jane");
 
-        var johnBrowseViewModel = new BrowseViewModel(john.Orchestrator, settingsService: new Services.SettingsService(john.AppDataRoot));
-        var janeBrowseViewModel = new BrowseViewModel(jane.Orchestrator, settingsService: new Services.SettingsService(jane.AppDataRoot));
+        var johnBrowseViewModel = new BrowseViewModel(john.Orchestrator, settingsService: new SettingsService(john.AppDataRoot));
+        var janeBrowseViewModel = new BrowseViewModel(jane.Orchestrator, settingsService: new SettingsService(jane.AppDataRoot));
 
         // Verify that john and jane are connected
         await john.WaitForConditionAsync(() => john.Orchestrator.ConnectedPeerCount > 0);
@@ -159,7 +161,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         var john = await _context.CreatePeerAsync("John");
         var jane = await _context.CreatePeerAsync("Jane");
 
-        var johnBrowseViewModel = new BrowseViewModel(john.Orchestrator, settingsService: new Services.SettingsService(john.AppDataRoot));
+        var johnBrowseViewModel = new BrowseViewModel(john.Orchestrator, settingsService: new SettingsService(john.AppDataRoot));
 
         john.AnnounceTrack("track-rock", "hash-rock", new Dictionary<string, string> { ["title"] = "Rock Song", ["album"] = "Rock Album" });
         jane.AnnounceTrack("track-pop", "hash-pop", new Dictionary<string, string> { ["title"] = "Pop Song", ["album"] = "Pop Album" });
@@ -187,7 +189,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         var john = await _context.CreatePeerAsync("John", testDataName: "John", contentProvider: h => h == hash ? content : null);
         var jane = await _context.CreatePeerAsync("Jane");
 
-        var janeBrowseViewModel = new BrowseViewModel(jane.Orchestrator, settingsService: new Services.SettingsService(jane.AppDataRoot));
+        var janeBrowseViewModel = new BrowseViewModel(jane.Orchestrator, settingsService: new SettingsService(jane.AppDataRoot));
 
         john.AnnounceTrack(trackId, hash, new Dictionary<string, string> { ["title"] = "Downloadable Track" });
 
