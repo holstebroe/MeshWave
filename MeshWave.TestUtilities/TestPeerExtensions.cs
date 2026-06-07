@@ -1,5 +1,6 @@
 using MeshWave.Common.Core.Models;
 using MeshWave.Synchronizer;
+using Xunit;
 
 namespace MeshWave.TestUtilities;
 
@@ -37,7 +38,7 @@ public static class TestPeerExtensions
         while (DateTime.UtcNow < deadline)
         {
             if (condition()) return;
-            await Task.Delay(100);
+            await Task.Delay(100, TestContext.Current.CancellationToken);
             if (deadline.Subtract(DateTime.UtcNow).TotalMilliseconds % 500 < 100)
             {
                 await peer.SyncAsync();

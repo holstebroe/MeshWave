@@ -25,7 +25,7 @@ namespace MeshWave.Services
             _appDataRoot = appDataRoot ?? MeshWaveEnvironment.GetAppDataRoot();
         }
 
-        public AppSettings LoadSettings()
+        public virtual AppSettings LoadSettings()
         {
             if (_currentSettings != null)
                 return _currentSettings;
@@ -67,7 +67,7 @@ namespace MeshWave.Services
             return _currentSettings;
         }
 
-        public void SaveSettings(AppSettings settings)
+        public virtual void SaveSettings(AppSettings settings)
         {
             try
             {

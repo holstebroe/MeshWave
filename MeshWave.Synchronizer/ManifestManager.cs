@@ -11,6 +11,7 @@ namespace MeshWave.Synchronizer;
 /// </summary>
 public class ManifestManager
 {
+
     /// <summary>
     /// Creates a new manifest for a user.
     /// </summary>
@@ -37,27 +38,30 @@ public class ManifestManager
         Dictionary<string, string>? metadata,
         string privateKeyPem)
     {
-        var operation = new ManifestOperation
+        lock (manifest)
         {
-            OperationId = Guid.NewGuid().ToString(),
-            OperationType = type,
-            TargetId = targetId,
-            TargetType = targetType,
-            ContentHash = contentHash,
-            SequenceNumber = GetNextSequenceNumber(manifest),
-            Metadata = metadata ?? [],
-            Timestamp = DateTime.UtcNow,
-            Signature = string.Empty
-        };
+            var operation = new ManifestOperation
+            {
+                OperationId = Guid.NewGuid().ToString(),
+                OperationType = type,
+                TargetId = targetId,
+                TargetType = targetType,
+                ContentHash = contentHash,
+                SequenceNumber = GetNextSequenceNumber(manifest),
+                Metadata = metadata ?? [],
+                Timestamp = DateTime.UtcNow,
+                Signature = string.Empty
+            };
 
-        var signable = BuildSignablePayload(operation);
-        operation.Signature = CryptoService.SignData(signable, privateKeyPem);
+            var signable = BuildSignablePayload(operation);
+            operation.Signature = CryptoService.SignData(signable, privateKeyPem);
 
-        manifest.Operations.Add(operation);
-        manifest.Version++;
-        manifest.LastUpdated = DateTime.UtcNow;
+            manifest.Operations.Add(operation);
+            manifest.Version++;
+            manifest.LastUpdated = DateTime.UtcNow;
 
-        return operation;
+            return operation;
+        }
     }
 
     /// <summary>
@@ -66,10 +70,13 @@ public class ManifestManager
     /// </summary>
     public void AppendOperation(Manifest manifest, ManifestOperation operation)
     {
-        operation.SequenceNumber = GetNextSequenceNumber(manifest);
-        manifest.Operations.Add(operation);
-        manifest.Version++;
-        manifest.LastUpdated = DateTime.UtcNow;
+        lock (manifest)
+        {
+            operation.SequenceNumber = GetNextSequenceNumber(manifest);
+            manifest.Operations.Add(operation);
+            manifest.Version++;
+            manifest.LastUpdated = DateTime.UtcNow;
+        }
     }
 
     private static int GetNextSequenceNumber(Manifest manifest)
@@ -93,103 +100,106 @@ public class ManifestManager
         var entities = new Dictionary<(string Id, string Type), SnapshotStateEntry>();
         var persistent = new List<ManifestOperation>();
 
-        // Start with existing snapshot if any
-        if (manifest.Snapshot != null && manifest.Snapshot.LastSequenceNumber <= upToSequenceNumber)
+        lock (manifest)
         {
-            foreach (var kv in manifest.Snapshot.PlayCounts) playCounts[kv.Key] = kv.Value;
-            foreach (var id in manifest.Snapshot.FollowedUserIds) followed.Add(id);
-            foreach (var id in manifest.Snapshot.LikedTrackIds) liked.Add(id);
-            foreach (var id in manifest.Snapshot.FriendUserIds) friends.Add(id);
-            foreach (var id in manifest.Snapshot.GroupIds) groups.Add(id);
-            foreach (var ent in manifest.Snapshot.EntityStates) entities[(ent.TargetId, ent.TargetType)] = ent;
-            persistent.AddRange(manifest.Snapshot.PersistentOperations);
-        }
-
-        // Process operations in order
-        foreach (var op in manifest.Operations.OrderBy(o => o.SequenceNumber))
-        {
-            if (op.SequenceNumber > upToSequenceNumber) break;
-
-            switch (op.OperationType)
+            // Start with existing snapshot if any
+            if (manifest.Snapshot != null && manifest.Snapshot.LastSequenceNumber <= upToSequenceNumber)
             {
-                case ManifestOperationType.Play:
-                    playCounts[op.TargetId] = playCounts.GetValueOrDefault(op.TargetId) + 1;
-                    break;
-                case ManifestOperationType.Follow:
-                    followed.Add(op.TargetId);
-                    break;
-                case ManifestOperationType.Unfollow:
-                    followed.Remove(op.TargetId);
-                    break;
-                case ManifestOperationType.Like:
-                    liked.Add(op.TargetId);
-                    break;
-                case ManifestOperationType.Unlike:
-                    liked.Remove(op.TargetId);
-                    break;
-                case ManifestOperationType.FriendAdd:
-                    friends.Add(op.TargetId);
-                    break;
-                case ManifestOperationType.FriendRemove:
-                    friends.Remove(op.TargetId);
-                    break;
-                case ManifestOperationType.GroupJoin:
-                    groups.Add(op.TargetId);
-                    break;
-                case ManifestOperationType.GroupLeave:
-                    groups.Remove(op.TargetId);
-                    break;
-                case ManifestOperationType.Create:
-                case ManifestOperationType.Update:
-                case ManifestOperationType.Profile:
-                    entities[(op.TargetId, op.TargetType)] = new SnapshotStateEntry
-                    {
-                        TargetId = op.TargetId,
-                        TargetType = op.TargetType,
-                        ContentHash = op.ContentHash,
-                        Metadata = new Dictionary<string, string>(op.Metadata)
-                    };
-                    break;
-                case ManifestOperationType.Delete:
-                    entities.Remove((op.TargetId, op.TargetType));
-                    break;
-                case ManifestOperationType.Comment:
-                case ManifestOperationType.CreateCompetition:
-                case ManifestOperationType.CompetitionSubmit:
-                case ManifestOperationType.CompetitionCastVote:
-                case ManifestOperationType.CompetitionRevealResults:
-                    persistent.Add(op);
-                    break;
-                case ManifestOperationType.CommentDelete:
-                    var commentIdToDelete = op.Metadata.GetValueOrDefault("commentOperationId");
-                    if (!string.IsNullOrEmpty(commentIdToDelete))
-                    {
-                        persistent.RemoveAll(o => o.OperationId == commentIdToDelete);
-                    }
-                    break;
+                foreach (var kv in manifest.Snapshot.PlayCounts) playCounts[kv.Key] = kv.Value;
+                foreach (var id in manifest.Snapshot.FollowedUserIds) followed.Add(id);
+                foreach (var id in manifest.Snapshot.LikedTrackIds) liked.Add(id);
+                foreach (var id in manifest.Snapshot.FriendUserIds) friends.Add(id);
+                foreach (var id in manifest.Snapshot.GroupIds) groups.Add(id);
+                foreach (var ent in manifest.Snapshot.EntityStates) entities[(ent.TargetId, ent.TargetType)] = ent;
+                persistent.AddRange(manifest.Snapshot.PersistentOperations);
             }
+
+            // Process operations in order
+            foreach (var op in manifest.Operations.OrderBy(o => o.SequenceNumber))
+            {
+                if (op.SequenceNumber > upToSequenceNumber) break;
+
+                switch (op.OperationType)
+                {
+                    case ManifestOperationType.Play:
+                        playCounts[op.TargetId] = playCounts.GetValueOrDefault(op.TargetId) + 1;
+                        break;
+                    case ManifestOperationType.Follow:
+                        followed.Add(op.TargetId);
+                        break;
+                    case ManifestOperationType.Unfollow:
+                        followed.Remove(op.TargetId);
+                        break;
+                    case ManifestOperationType.Like:
+                        liked.Add(op.TargetId);
+                        break;
+                    case ManifestOperationType.Unlike:
+                        liked.Remove(op.TargetId);
+                        break;
+                    case ManifestOperationType.FriendAdd:
+                        friends.Add(op.TargetId);
+                        break;
+                    case ManifestOperationType.FriendRemove:
+                        friends.Remove(op.TargetId);
+                        break;
+                    case ManifestOperationType.GroupJoin:
+                        groups.Add(op.TargetId);
+                        break;
+                    case ManifestOperationType.GroupLeave:
+                        groups.Remove(op.TargetId);
+                        break;
+                    case ManifestOperationType.Create:
+                    case ManifestOperationType.Update:
+                    case ManifestOperationType.Profile:
+                        entities[(op.TargetId, op.TargetType)] = new SnapshotStateEntry
+                        {
+                            TargetId = op.TargetId,
+                            TargetType = op.TargetType,
+                            ContentHash = op.ContentHash,
+                            Metadata = new Dictionary<string, string>(op.Metadata)
+                        };
+                        break;
+                    case ManifestOperationType.Delete:
+                        entities.Remove((op.TargetId, op.TargetType));
+                        break;
+                    case ManifestOperationType.Comment:
+                    case ManifestOperationType.CreateCompetition:
+                    case ManifestOperationType.CompetitionSubmit:
+                    case ManifestOperationType.CompetitionCastVote:
+                    case ManifestOperationType.CompetitionRevealResults:
+                        persistent.Add(op);
+                        break;
+                    case ManifestOperationType.CommentDelete:
+                        var commentIdToDelete = op.Metadata.GetValueOrDefault("commentOperationId");
+                        if (!string.IsNullOrEmpty(commentIdToDelete))
+                        {
+                            persistent.RemoveAll(o => o.OperationId == commentIdToDelete);
+                        }
+                        break;
+                }
+            }
+
+            var snapshot = new ManifestSnapshot
+            {
+                LastSequenceNumber = upToSequenceNumber,
+                Timestamp = DateTime.UtcNow,
+                PlayCounts = playCounts,
+                FollowedUserIds = followed.ToList(),
+                LikedTrackIds = liked.ToList(),
+                FriendUserIds = friends.ToList(),
+                GroupIds = groups.ToList(),
+                EntityStates = entities.Values.ToList(),
+                PersistentOperations = persistent,
+                Signature = string.Empty
+            };
+
+            snapshot.LibraryStateDigest = ComputeLibraryStateDigest(snapshot);
+
+            var signable = BuildSnapshotSignablePayload(snapshot);
+            snapshot.Signature = CryptoService.SignData(signable, privateKeyPem);
+
+            return snapshot;
         }
-
-        var snapshot = new ManifestSnapshot
-        {
-            LastSequenceNumber = upToSequenceNumber,
-            Timestamp = DateTime.UtcNow,
-            PlayCounts = playCounts,
-            FollowedUserIds = followed.ToList(),
-            LikedTrackIds = liked.ToList(),
-            FriendUserIds = friends.ToList(),
-            GroupIds = groups.ToList(),
-            EntityStates = entities.Values.ToList(),
-            PersistentOperations = persistent,
-            Signature = string.Empty
-        };
-
-        snapshot.LibraryStateDigest = ComputeLibraryStateDigest(snapshot);
-
-        var signable = BuildSnapshotSignablePayload(snapshot);
-        snapshot.Signature = CryptoService.SignData(signable, privateKeyPem);
-
-        return snapshot;
     }
 
     /// <summary>
@@ -198,22 +208,29 @@ public class ManifestManager
     /// </summary>
     public void Compact(Manifest manifest, string privateKeyPem, int threshold = 500, int keepRecent = 100)
     {
-        if (manifest.Operations.Count < threshold) return;
+        lock (manifest)
+        {
+            if (manifest.Operations.Count < threshold)
+            {
+                NLog.LogManager.GetCurrentClassLogger().Debug("Compact skipped: ops count {0} < threshold {1}", manifest.Operations.Count, threshold);
+                return;
+            }
 
-        // Snapshot everything except the last 'keepRecent' operations
-        int lastToSnapshot = manifest.Operations.OrderBy(o => o.SequenceNumber)
-            .ElementAt(manifest.Operations.Count - keepRecent - 1).SequenceNumber;
+            // Snapshot everything except the last 'keepRecent' operations
+            int lastToSnapshot = manifest.Operations.OrderBy(o => o.SequenceNumber)
+                .ElementAt(manifest.Operations.Count - keepRecent - 1).SequenceNumber;
 
-        var snapshot = CreateSnapshot(manifest, lastToSnapshot, privateKeyPem);
+            var snapshot = CreateSnapshot(manifest, lastToSnapshot, privateKeyPem);
 
-        manifest.Snapshot = snapshot;
-        manifest.Operations = manifest.Operations
-            .Where(o => o.SequenceNumber > lastToSnapshot)
-            .OrderBy(o => o.SequenceNumber)
-            .ToList();
+            manifest.Snapshot = snapshot;
+            manifest.Operations = manifest.Operations
+                .Where(o => o.SequenceNumber > lastToSnapshot)
+                .OrderBy(o => o.SequenceNumber)
+                .ToList();
 
-        manifest.Version++;
-        manifest.LastUpdated = DateTime.UtcNow;
+            manifest.Version++;
+            manifest.LastUpdated = DateTime.UtcNow;
+        }
     }
 
     private static string ComputeLibraryStateDigest(ManifestSnapshot snapshot)
@@ -253,50 +270,53 @@ public class ManifestManager
     /// </summary>
     public bool VerifyManifest(Manifest manifest, string userPublicKey)
     {
-        int expectedSeq = 0;
-
-        if (manifest.Snapshot != null)
+        lock (manifest)
         {
-            var snapshotSignable = BuildSnapshotSignablePayload(manifest.Snapshot);
-            if (!CryptoService.VerifySignature(snapshotSignable, manifest.Snapshot.Signature, userPublicKey))
-                return false;
+            int expectedSeq = 0;
 
-            // Set Verification: Verify library state digest
-            if (!string.IsNullOrEmpty(manifest.Snapshot.LibraryStateDigest))
+            if (manifest.Snapshot != null)
             {
-                var computedDigest = ComputeLibraryStateDigest(manifest.Snapshot);
-                if (manifest.Snapshot.LibraryStateDigest != computedDigest)
+                var snapshotSignable = BuildSnapshotSignablePayload(manifest.Snapshot);
+                if (!CryptoService.VerifySignature(snapshotSignable, manifest.Snapshot.Signature, userPublicKey))
                     return false;
+
+                // Set Verification: Verify library state digest
+                if (!string.IsNullOrEmpty(manifest.Snapshot.LibraryStateDigest))
+                {
+                    var computedDigest = ComputeLibraryStateDigest(manifest.Snapshot);
+                    if (manifest.Snapshot.LibraryStateDigest != computedDigest)
+                        return false;
+                }
+
+                // Verify persistent operations in the snapshot
+                foreach (var op in manifest.Snapshot.PersistentOperations)
+                {
+                    var signable = BuildSignablePayload(op);
+                    if (!CryptoService.VerifySignature(signable, op.Signature, userPublicKey))
+                        return false;
+                }
+
+                expectedSeq = manifest.Snapshot.LastSequenceNumber + 1;
             }
 
-            // Verify persistent operations in the snapshot
-            foreach (var op in manifest.Snapshot.PersistentOperations)
+            if (manifest.Snapshot == null && manifest.Operations.Count > 0)
             {
+                expectedSeq = manifest.Operations[0].SequenceNumber;
+            }
+
+            for (int i = 0; i < manifest.Operations.Count; i++)
+            {
+                var op = manifest.Operations[i];
+
+                if (op.SequenceNumber != expectedSeq + i)
+                    return false;
+
                 var signable = BuildSignablePayload(op);
                 if (!CryptoService.VerifySignature(signable, op.Signature, userPublicKey))
                     return false;
             }
-
-            expectedSeq = manifest.Snapshot.LastSequenceNumber + 1;
+            return true;
         }
-
-        if (manifest.Snapshot == null && manifest.Operations.Count > 0)
-        {
-            expectedSeq = manifest.Operations[0].SequenceNumber;
-        }
-
-        for (int i = 0; i < manifest.Operations.Count; i++)
-        {
-            var op = manifest.Operations[i];
-
-            if (op.SequenceNumber != expectedSeq + i)
-                return false;
-
-            var signable = BuildSignablePayload(op);
-            if (!CryptoService.VerifySignature(signable, op.Signature, userPublicKey))
-                return false;
-        }
-        return true;
     }
 
     /// <summary>
@@ -316,74 +336,82 @@ public class ManifestManager
             throw new ArgumentException($"Cannot merge manifests with different stream types ({local.StreamType} vs {remote.StreamType}).");
 
         if (remote.Operations.Count > SecurityLimits.MaxManifestOperations)
+        {
+            NLog.LogManager.GetCurrentClassLogger().Error("Merge failed: remote manifest from {0} has {1} operations, exceeding limit of {2}", remote.UserId, remote.Operations.Count, SecurityLimits.MaxManifestOperations);
             throw new InvalidDataException($"Remote manifest exceeds operation limit ({remote.Operations.Count}).");
+        }
 
         // 1. Verify remote manifest integrity before merging
         if (!VerifyManifest(remote, remoteUserPublicKey))
-            throw new InvalidDataException("Remote manifest failed signature or continuity verification.");
-
-        // 2. Handle Snapshot merge
-        // If remote has a NEWER snapshot, we adopt it and discard local operations that are now squashed.
-        if (remote.Snapshot != null)
         {
-            int localMaxSeq = (local.Snapshot?.LastSequenceNumber ?? -1) + local.Operations.Count;
-            if (remote.Snapshot.LastSequenceNumber > (local.Snapshot?.LastSequenceNumber ?? -1))
+            NLog.LogManager.GetCurrentClassLogger().Error("Merge failed: remote manifest from {0} failed verification.", remote.UserId);
+            throw new InvalidDataException("Remote manifest failed signature or continuity verification.");
+        }
+
+        lock (local)
+        {
+            // 2. Handle Snapshot merge
+            // If remote has a NEWER snapshot, we adopt it and discard local operations that are now squashed.
+            if (remote.Snapshot != null)
             {
-                // Remote snapshot is more recent than ours.
-                // We keep only the remote snapshot and remote operations.
-                local.Snapshot = remote.Snapshot;
-                local.Operations = new List<ManifestOperation>(remote.Operations);
+                if (remote.Snapshot.LastSequenceNumber > (local.Snapshot?.LastSequenceNumber ?? -1))
+                {
+                    // Remote snapshot is more recent than ours.
+                    // We keep only the remote snapshot and remote operations.
+                    local.Snapshot = remote.Snapshot;
+                    local.Operations = new List<ManifestOperation>(remote.Operations);
+                    local.Version = Math.Max(local.Version, remote.Version);
+                    local.LastUpdated = DateTime.UtcNow;
+
+                    // Since we replaced the whole state, we "added" as many ops as the remote currently has
+                    return remote.Operations.Count;
+                }
+            }
+
+            // 3. Merge individual operations
+            // Build existing play counts per (trackId, utcDate) from the local manifest so we
+            // know how much headroom remains before merging remote play ops.
+            var playCounts = BuildPlayCounts(local.Operations);
+
+            int added = 0;
+            int localMaxSeqNum = (local.Snapshot?.LastSequenceNumber ?? -1) + local.Operations.Count;
+
+            foreach (var op in remote.Operations.OrderBy(o => o.SequenceNumber))
+            {
+                if (op.SequenceNumber <= localMaxSeqNum)
+                    continue;
+
+                if (!IsOperationWithinLimits(op))
+                    continue;
+
+                // Enforce per-user daily play cap.
+                if (op.OperationType == ManifestOperationType.Play)
+                {
+                    var key = (TrackId: op.TargetId, Date: op.Timestamp.ToUniversalTime().Date);
+                    playCounts.TryGetValue(key, out var existing);
+                    if (existing >= SecurityLimits.MaxPlaysPerUserPerTrackPerDay)
+                        continue;
+                    playCounts[key] = existing + 1;
+                }
+
+                if (IsCompetitionOperation(op.OperationType))
+                {
+                    if (!ValidateCompetitionOperation(op))
+                        continue;
+                }
+
+                // We already verified all signatures in VerifyManifest call above,
+                // but we can re-verify if we want to be paranoid or if VerifyManifest was skipped.
+                // For performance, we trust the previous VerifyManifest(remote) call.
+
+                local.Operations.Add(op);
                 local.Version = Math.Max(local.Version, remote.Version);
                 local.LastUpdated = DateTime.UtcNow;
-
-                // Since we replaced the whole state, we "added" as many ops as the remote currently has
-                return remote.Operations.Count;
+                added++;
             }
+
+            return added;
         }
-
-        // 3. Merge individual operations
-        // Build existing play counts per (trackId, utcDate) from the local manifest so we
-        // know how much headroom remains before merging remote play ops.
-        var playCounts = BuildPlayCounts(local.Operations);
-
-        int added = 0;
-        int localMaxSeqNum = (local.Snapshot?.LastSequenceNumber ?? -1) + local.Operations.Count;
-
-        foreach (var op in remote.Operations.OrderBy(o => o.SequenceNumber))
-        {
-            if (op.SequenceNumber <= localMaxSeqNum)
-                continue;
-
-            if (!IsOperationWithinLimits(op))
-                continue;
-
-            // Enforce per-user daily play cap.
-            if (op.OperationType == ManifestOperationType.Play)
-            {
-                var key = (TrackId: op.TargetId, Date: op.Timestamp.ToUniversalTime().Date);
-                playCounts.TryGetValue(key, out var existing);
-                if (existing >= SecurityLimits.MaxPlaysPerUserPerTrackPerDay)
-                    continue;
-                playCounts[key] = existing + 1;
-            }
-
-            if (IsCompetitionOperation(op.OperationType))
-            {
-                if (!ValidateCompetitionOperation(op))
-                    continue;
-            }
-
-            // We already verified all signatures in VerifyManifest call above,
-            // but we can re-verify if we want to be paranoid or if VerifyManifest was skipped.
-            // For performance, we trust the previous VerifyManifest(remote) call.
-
-            local.Operations.Add(op);
-            local.Version = Math.Max(local.Version, remote.Version);
-            local.LastUpdated = DateTime.UtcNow;
-            added++;
-        }
-
-        return added;
     }
 
     /// <summary>

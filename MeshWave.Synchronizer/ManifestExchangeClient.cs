@@ -1,7 +1,10 @@
+using MeshWave.Common.Core.P2P;
 using System.Net.Sockets;
+using System.Text;
 using System.Text.Json;
 using NLog;
 using MeshWave.Common.Core.Models;
+using MeshWave.Common.Core.Serialization;
 
 namespace MeshWave.Synchronizer;
 
@@ -17,6 +20,26 @@ public class ManifestExchangeClient
     {
         _timeoutMs = timeoutMs;
         _logger = logger ?? LogManager.GetCurrentClassLogger();
+    }
+
+    /// <summary>
+    /// Fetches the manifest from a remote peer, calculating delta synchronization automatically.
+    /// </summary>
+    public async Task<Manifest?> FetchManifestAsync(
+        string address,
+        int port,
+        PeerManifestStore store,
+        string targetUserId,
+        ManifestStreamType streamType = ManifestStreamType.Content,
+        CancellationToken cancellationToken = default)
+    {
+        var existing = store.Get(targetUserId, streamType);
+        var startSeq = (existing?.Snapshot?.LastSequenceNumber ?? -1) + 1 + (existing?.Operations.Count ?? 0);
+
+        bool isBootstrap = address.Contains("bootstrap") || targetUserId.StartsWith("bootstrap:");
+        string? relayUserId = isBootstrap && !targetUserId.StartsWith("bootstrap:") ? targetUserId : null;
+
+        return await FetchManifestAsync(address, port, streamType, startSeq, null, relayUserId, cancellationToken);
     }
 
     /// <summary>
@@ -39,7 +62,7 @@ public class ManifestExchangeClient
         _logger.Debug("Connecting to {0}:{1}...", address, port);
         await client.ConnectAsync(address, port, cts.Token);
 
-        _logger.Debug("Fetching {0} manifest from {1}:{2} (start={3}, end={4})", streamType, address, port, startSequenceNumber, endSequenceNumber);
+        _logger.Debug("Fetching {0} manifest from {1}:{2} (start={3}, end={4}, target={5})", streamType, address, port, startSequenceNumber, endSequenceNumber, targetUserId ?? "direct");
         var stream = client.GetStream();
         var request = new ManifestRequest
         {
@@ -49,10 +72,20 @@ public class ManifestExchangeClient
             EndSequenceNumber = endSequenceNumber,
             TargetUserId = targetUserId
         };
-        await ManifestExchangeServer.WriteMessageAsync(stream, JsonSerializer.Serialize(request), cts.Token);
+        await ManifestExchangeServer.WriteMessageAsync(stream, request, cts.Token);
 
-        var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
-        var response = JsonSerializer.Deserialize<ManifestResponse>(responseJson);
+        var (bytes, isJson) = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
+        ManifestResponse? response;
+        if (isJson)
+        {
+            var json = Encoding.UTF8.GetString(bytes);
+            response = System.Text.Json.JsonSerializer.Deserialize<ManifestResponse>(json);
+        }
+        else
+        {
+            response = ManifestSerializer.DeserializeResponse(bytes);
+        }
+
         _logger.Debug("FetchManifest from {0}:{1} outcome: {2} ops", address, port, response?.Manifest?.Operations.Count ?? 0);
         return response?.Manifest;
     }
@@ -95,10 +128,20 @@ public class ManifestExchangeClient
             Manifest = manifest,
             AnnouncingPeer = announcingPeer
         };
-        await ManifestExchangeServer.WriteMessageAsync(stream, JsonSerializer.Serialize(request), cts.Token);
+        await ManifestExchangeServer.WriteMessageAsync(stream, request, cts.Token);
 
-        var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
-        var response = JsonSerializer.Deserialize<ManifestResponse>(responseJson);
+        var (bytes, isJson) = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
+        ManifestResponse? response;
+        if (isJson)
+        {
+            var json = Encoding.UTF8.GetString(bytes);
+            response = System.Text.Json.JsonSerializer.Deserialize<ManifestResponse>(json);
+        }
+        else
+        {
+            response = ManifestSerializer.DeserializeResponse(bytes);
+        }
+
         _logger.Debug("RelayManifestPush to {0}:{1} outcome: {2}", address, port, response?.Acknowledged == true);
         return response?.Acknowledged == true;
     }
@@ -122,10 +165,20 @@ public class ManifestExchangeClient
             Manifest = manifest,
             AnnouncingPeer = announcingPeer
         };
-        await ManifestExchangeServer.WriteMessageAsync(stream, JsonSerializer.Serialize(request), cts.Token);
+        await ManifestExchangeServer.WriteMessageAsync(stream, request, cts.Token);
 
-        var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
-        var response = JsonSerializer.Deserialize<ManifestResponse>(responseJson);
+        var (bytes, isJson) = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
+        ManifestResponse? response;
+        if (isJson)
+        {
+            var json = Encoding.UTF8.GetString(bytes);
+            response = System.Text.Json.JsonSerializer.Deserialize<ManifestResponse>(json);
+        }
+        else
+        {
+            response = ManifestSerializer.DeserializeResponse(bytes);
+        }
+
         _logger.Debug("PushManifest to {0}:{1} outcome: {2}", address, port, response?.Acknowledged == true);
         return response?.Acknowledged == true;
     }
@@ -150,10 +203,20 @@ public class ManifestExchangeClient
             _logger.Debug("Fetching {0} from {1}:{2} (PEX)", label, address, port);
             var stream = client.GetStream();
             var request = new ManifestRequest { Type = ManifestRequestType.GetPeers };
-            await ManifestExchangeServer.WriteMessageAsync(stream, JsonSerializer.Serialize(request), cts.Token);
+            await ManifestExchangeServer.WriteMessageAsync(stream, request, cts.Token);
 
-            var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
-            var response = JsonSerializer.Deserialize<ManifestResponse>(responseJson);
+            var (bytes, isJson) = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
+            ManifestResponse? response;
+            if (isJson)
+            {
+                var json = Encoding.UTF8.GetString(bytes);
+                response = System.Text.Json.JsonSerializer.Deserialize<ManifestResponse>(json);
+            }
+            else
+            {
+                response = ManifestSerializer.DeserializeResponse(bytes);
+            }
+
             var peers = response?.Peers
                 .Take(SecurityLimits.MaxPeersPerExchange)
                 .ToList() ?? [];
@@ -191,10 +254,19 @@ public class ManifestExchangeClient
             _logger.Debug("Requesting content {0} from {1}:{2}", contentHash, address, port);
             var stream = client.GetStream();
             var request = new ManifestRequest { Type = ManifestRequestType.RequestContent, ContentHash = contentHash };
-            await ManifestExchangeServer.WriteMessageAsync(stream, JsonSerializer.Serialize(request), cts.Token);
+            await ManifestExchangeServer.WriteMessageAsync(stream, request, cts.Token);
 
-            var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
-            var response = JsonSerializer.Deserialize<ManifestResponse>(responseJson);
+            var (bytes, isJson) = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
+            ManifestResponse? response;
+            if (isJson)
+            {
+                var json = Encoding.UTF8.GetString(bytes);
+                response = System.Text.Json.JsonSerializer.Deserialize<ManifestResponse>(json);
+            }
+            else
+            {
+                response = ManifestSerializer.DeserializeResponse(bytes);
+            }
 
             if (response?.Acknowledged != true || response.ContentLength <= 0)
             {
@@ -204,9 +276,9 @@ public class ManifestExchangeClient
                 return (null, reason);
             }
 
-            var bytes = new byte[response.ContentLength];
-            await stream.ReadExactlyAsync(bytes, cts.Token);
-            return (bytes, string.Empty);
+            var contentBytes = new byte[response.ContentLength];
+            await stream.ReadExactlyAsync(contentBytes, cts.Token);
+            return (contentBytes, string.Empty);
         }
         catch (OperationCanceledException)
         {
@@ -241,10 +313,19 @@ public class ManifestExchangeClient
             var stream = client.GetStream();
 
             var request = new ManifestRequest { Type = ManifestRequestType.RequestContent, ContentHash = contentHash };
-            await ManifestExchangeServer.WriteMessageAsync(stream, JsonSerializer.Serialize(request), cts.Token);
+            await ManifestExchangeServer.WriteMessageAsync(stream, request, cts.Token);
 
-            var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
-            var response = JsonSerializer.Deserialize<ManifestResponse>(responseJson);
+            var (bytes, isJson) = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
+            ManifestResponse? response;
+            if (isJson)
+            {
+                var json = Encoding.UTF8.GetString(bytes);
+                response = System.Text.Json.JsonSerializer.Deserialize<ManifestResponse>(json);
+            }
+            else
+            {
+                response = ManifestSerializer.DeserializeResponse(bytes);
+            }
 
             if (response?.Acknowledged != true || response.ContentLength <= 0)
             {
@@ -316,12 +397,21 @@ public class ManifestExchangeClient
         _logger.Debug("Requesting rendezvous from {0}:{1} for target {2}", address, port, rendezvous.TargetUserId);
         var stream = client.GetStream();
         var request = new ManifestRequest { Type = ManifestRequestType.RequestRendezvous, Rendezvous = rendezvous };
-        await ManifestExchangeServer.WriteMessageAsync(stream, JsonSerializer.Serialize(request), cts.Token);
+        await ManifestExchangeServer.WriteMessageAsync(stream, request, cts.Token);
 
-        var responseJson = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
-        var response = JsonSerializer.Deserialize<ManifestResponse>(responseJson);
+        var (bytes, isJson) = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
+        ManifestResponse? response;
+        if (isJson)
+        {
+            var json = Encoding.UTF8.GetString(bytes);
+            response = System.Text.Json.JsonSerializer.Deserialize<ManifestResponse>(json);
+        }
+        else
+        {
+            response = ManifestSerializer.DeserializeResponse(bytes);
+        }
+
         _logger.Debug("Rendezvous response from {0}:{1} outcome: {2}", address, port, response?.Rendezvous?.Success == true);
         return response?.Rendezvous;
     }
 }
-
