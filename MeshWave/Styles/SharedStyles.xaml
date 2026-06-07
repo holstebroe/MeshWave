@@ -306,7 +306,6 @@
                                     </Trigger>
                                     <Trigger Property="IsSelected" Value="True">
                                         <Setter TargetName="HoverBackground" Property="Opacity" Value="1"/>
-                                        <Setter Property="Foreground" Value="{DynamicResource AccentColor}"/>
                                     </Trigger>
                                     <!-- The magic binding for IsNowPlaying -->
                                     <DataTrigger Binding="{Binding IsNowPlaying}" Value="True">

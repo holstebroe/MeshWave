@@ -288,7 +288,7 @@
                             <GridViewColumn Header="#" Width="36">
                                 <GridViewColumn.CellTemplate>
                                     <DataTemplate>
-                                        <Grid Width="30" Height="30">
+                                        <Grid Width="26" Height="26" Margin="-6,0,0,0">
                                             <TextBlock x:Name="NumberText"
                                                        Text="{Binding TrackNumberLabel}"
                                                        FontSize="12"
