@@ -29,6 +29,9 @@ public static class ViewModelTestHelpers
                 // Ignore collection modification or other transient errors during polling
             }
             await Task.Delay(250);
+
+            // Allow synchronization tasks to pump if any are pending
+            await Task.Yield();
         }
         throw new TimeoutException($"Timed out after {timeoutMs}ms waiting for item in collection matching predicate.");
     }

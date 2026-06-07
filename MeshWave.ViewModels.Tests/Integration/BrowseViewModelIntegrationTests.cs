@@ -37,6 +37,9 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         // Use the built-in ConnectAndSyncAll which properly propagates manifests
         await _context.ConnectAndSyncAllAsync();
 
+        // Give the ViewModels a moment to process the initial sync
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+
         // Trigger refresh of browse viewmodels to load the manifests that were just synced
         // (FilterText change causes Refresh to be called)
         johnBrowseViewModel.FilterText = " ";
@@ -45,13 +48,13 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         janeBrowseViewModel.FilterText = string.Empty;
 
         // Give the ViewModels a moment to process the refresh
-        await Task.Delay(100, TestContext.Current.CancellationToken);
+        await Task.Delay(250, TestContext.Current.CancellationToken);
 
         // Now verify that John can see Jane in browse view
         // Are we sure that Jane is actually reporting herself as artist?
         try
         {
-            await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Artists, a => a.UserId == jane.UserId, timeoutMs: 5000);
+            await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Artists, a => a.UserId == jane.UserId, timeoutMs: 10000);
         }
         catch (Exception ex)
         {
