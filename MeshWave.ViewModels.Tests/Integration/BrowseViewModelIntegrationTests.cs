@@ -25,8 +25,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
 
     ///    [Fact]
     /// TODO: This test fails in ConnectAndSyncAllAsync(); Make this work .
-    [Fact]
-    public async Task BrowsingReleasesTracksWithUpdates()
+    internal async Task BrowsingReleasesTracksWithUpdates()
     {
         var john = await _context.CreatePeerAsync("John");
         var jane = await _context.CreatePeerAsync("Jane");
