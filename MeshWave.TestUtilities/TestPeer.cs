@@ -57,7 +57,7 @@ public class TestPeer : IAsyncDisposable
 
         if (BaseFolder.StartsWith(Path.GetTempPath()))
         {
-            Directory.Delete(BaseFolder, true);
+            if (Directory.Exists(BaseFolder)) { Directory.Delete(BaseFolder, true); }
         }
     }
 
