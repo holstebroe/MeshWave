@@ -61,10 +61,10 @@
                         </Setter>
                     </Style>
                 </Button.Style>
-                <Border Background="{StaticResource SurfaceColor}" CornerRadius="12" Padding="16">
+                <Border Padding="16">
                     <Border.Style>
-                        <Style TargetType="Border">
-                            <Setter Property="Background" Value="{StaticResource SurfaceColor}"/>
+                        <Style TargetType="Border" BasedOn="{StaticResource InnerViewPanel}">
+
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
                                     <Setter Property="Background" Value="#FF2D2D2D"/>
@@ -92,10 +92,10 @@
                         </Setter>
                     </Style>
                 </Button.Style>
-                <Border Background="{StaticResource SurfaceColor}" CornerRadius="12" Padding="16">
+                <Border Padding="16">
                     <Border.Style>
-                        <Style TargetType="Border">
-                            <Setter Property="Background" Value="{StaticResource SurfaceColor}"/>
+                        <Style TargetType="Border" BasedOn="{StaticResource InnerViewPanel}">
+
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
                                     <Setter Property="Background" Value="#FF2D2D2D"/>
@@ -123,10 +123,10 @@
                         </Setter>
                     </Style>
                 </Button.Style>
-                <Border Background="{StaticResource SurfaceColor}" CornerRadius="12" Padding="16">
+                <Border Padding="16">
                     <Border.Style>
-                        <Style TargetType="Border">
-                            <Setter Property="Background" Value="{StaticResource SurfaceColor}"/>
+                        <Style TargetType="Border" BasedOn="{StaticResource InnerViewPanel}">
+
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
                                     <Setter Property="Background" Value="#FF2D2D2D"/>
@@ -142,7 +142,7 @@
             </Button>
         </Grid>
 
-        <Border Grid.Row="2" Background="{StaticResource SurfaceColor}" CornerRadius="12" Padding="20">
+        <Border Style="{StaticResource InnerViewPanel}" Grid.Row="2" Padding="20">
             <StackPanel>
                 <TextBlock Text="Status" Style="{StaticResource SectionHeader}"/>
                 <TextBlock Text="{Binding StatusMessage}" FontSize="18"/>
