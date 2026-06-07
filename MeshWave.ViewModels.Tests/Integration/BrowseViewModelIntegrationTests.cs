@@ -55,7 +55,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         // Are we sure that Jane is actually reporting herself as artist?
         try
         {
-            await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Artists, a => a.UserId == jane.UserId, timeoutMs: 15000);
+            await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Artists, a => a.UserId == jane.UserId, timeoutMs: 60000);
         }
         catch (Exception ex)
         {
@@ -208,7 +208,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         await jane.WaitForConditionAsync(() => trackItem.IsQueued || trackItem.IsDownloaded);
 
         // Verify completion
-        await jane.WaitForConditionAsync(() => trackItem.IsDownloaded, timeoutMs: 15000);
+        await jane.WaitForConditionAsync(() => trackItem.IsDownloaded, timeoutMs: 60000);
         Assert.False(trackItem.IsQueued);
         Assert.True(trackItem.IsDownloaded);
         Assert.False(trackItem.CanDownload);

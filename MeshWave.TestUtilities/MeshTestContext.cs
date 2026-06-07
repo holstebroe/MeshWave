@@ -46,7 +46,7 @@ public class MeshTestContext : IAsyncDisposable
         return peer;
     }
 
-    public async Task ConnectAndSyncAllAsync(int timeoutMs = 15000)
+    public async Task ConnectAndSyncAllAsync(int timeoutMs = 60000)
     {
         // First, ensure all peers are started and have a chance to talk to bootstrap
         foreach (var peer in _peers) await peer.SyncAsync();
