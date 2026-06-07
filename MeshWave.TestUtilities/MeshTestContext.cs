@@ -1,8 +1,8 @@
-using Xunit;
-using MeshWave.Common.Core.P2P;
 using MeshWave.Bootstrap.Core;
 using MeshWave.Common.Core.Models;
+using MeshWave.Common.Core.P2P;
 using MeshWave.Synchronizer;
+using Xunit;
 
 namespace MeshWave.TestUtilities;
 
@@ -14,9 +14,9 @@ public class MeshTestContext : IAsyncDisposable
 {
     private readonly List<TestPeer> _peers = [];
     private BootstrapCoordinator? _bootstrap;
-    private int _bootstrapPort;
 
-    public int BootstrapPort => _bootstrapPort;
+    public int BootstrapPort { get; private set; }
+
     public IReadOnlyList<TestPeer> Peers => _peers;
 
     public async Task<TestPeer> CreatePeerAsync(string name, bool useBootstrap = true, string? testDataName = null, Func<string, byte[]?>? contentProvider = null)
@@ -24,21 +24,18 @@ public class MeshTestContext : IAsyncDisposable
         var peer = TestPeerFactory.CreatePeer(name);
         _peers.Add(peer);
 
-        if (testDataName != null)
-        {
-            TestPeerFactory.InitializeWithTestData(peer, testDataName);
-        }
+        if (testDataName != null) TestPeerFactory.InitializeWithTestData(peer, testDataName);
 
         List<string>? bootstrapNodes = null;
         if (useBootstrap)
         {
             if (_bootstrap == null)
             {
-                _bootstrapPort = TestPeerFactory.FindFreePort();
-                _bootstrap = new BootstrapCoordinator(_bootstrapPort, peer.Logger);
+                BootstrapPort = TestPeerFactory.FindFreePort();
+                _bootstrap = new BootstrapCoordinator(BootstrapPort, peer.Logger);
                 await _bootstrap.StartAsync();
             }
-            bootstrapNodes = [$"127.0.0.1:{_bootstrapPort}"];
+            bootstrapNodes = [$"127.0.0.1:{BootstrapPort}"];
         }
 
         await peer.StartAsync(bootstrapNodes: bootstrapNodes, contentProvider: contentProvider);
@@ -52,24 +49,20 @@ public class MeshTestContext : IAsyncDisposable
     public async Task ConnectAndSyncAllAsync(int timeoutMs = 15000)
     {
         // First, ensure all peers are started and have a chance to talk to bootstrap
-        foreach (var peer in _peers)
-        {
-            await peer.SyncAsync();
-        }
+        foreach (var peer in _peers) await peer.SyncAsync();
 
         // Wait until they see each other in routing table
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs / 2);
         while (DateTime.UtcNow < deadline)
         {
-            bool allConnected = true;
+            var allConnected = true;
             foreach (var peer in _peers)
-            {
                 if (peer.Orchestrator.GetPeers().Count() < _peers.Count - 1)
                 {
                     allConnected = false;
                     break;
                 }
-            }
+
             if (allConnected) break;
             await Task.Delay(500, TestContext.Current.CancellationToken);
             foreach (var peer in _peers) await peer.SyncAsync();
@@ -77,30 +70,25 @@ public class MeshTestContext : IAsyncDisposable
 
         // Now force a final exchange of all manifests
         foreach (var peer in _peers)
+        foreach (var other in _peers)
         {
-            foreach (var other in _peers)
+            if (peer == other) continue;
+
+            var client = new ManifestExchangeClient(timeoutMs: 2000);
+            var peerInfo = new PeerInfo
             {
-                if (peer == other) continue;
+                UserId = peer.UserId,
+                DisplayName = peer.Name,
+                Address = "127.0.0.1",
+                Port = peer.Port,
+                PublicKeyPem = peer.Identity.PublicKeyPem,
+                LastSeen = DateTime.UtcNow
+            };
 
-                var client = new ManifestExchangeClient(timeoutMs: 2000);
-                var peerInfo = new PeerInfo
-                {
-                    UserId = peer.UserId,
-                    DisplayName = peer.Name,
-                    Address = "127.0.0.1",
-                    Port = peer.Port,
-                    PublicKeyPem = peer.Identity.PublicKeyPem,
-                    LastSeen = DateTime.UtcNow
-                };
-
-                foreach (ManifestStreamType st in Enum.GetValues(typeof(ManifestStreamType)))
-                {
-                    var manifest = peer.GetLocalManifest(st);
-                    if (manifest != null)
-                    {
-                        await client.PushManifestAsync("127.0.0.1", other.Port, manifest, peerInfo);
-                    }
-                }
+            foreach (ManifestStreamType st in Enum.GetValues(typeof(ManifestStreamType)))
+            {
+                var manifest = peer.GetLocalManifest(st);
+                if (manifest != null) await client.PushManifestAsync("127.0.0.1", other.Port, manifest, peerInfo);
             }
         }
 
@@ -114,9 +102,7 @@ public class MeshTestContext : IAsyncDisposable
         {
             await peer.DisposeAsync();
             try {
-                if (Directory.Exists(peer.BaseFolder)) {
-                    Directory.Delete(peer.BaseFolder, true);
-                }
+                if (Directory.Exists(peer.BaseFolder)) Directory.Delete(peer.BaseFolder, true);
             } catch { }
         }
 

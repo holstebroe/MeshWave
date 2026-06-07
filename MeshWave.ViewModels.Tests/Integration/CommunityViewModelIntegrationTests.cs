@@ -1,7 +1,4 @@
-using MeshWave.Common.Core.Models;
-using MeshWave.Synchronizer;
 using MeshWave.TestUtilities;
-using MeshWave.ViewModels;
 using MeshWave.Wpf.Services;
 using MeshWave.Wpf.ViewModels;
 using Xunit;

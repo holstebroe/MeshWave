@@ -1,12 +1,17 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Windows.Input;
+using MeshWave.Common.Core;
 using MeshWave.LibraryManager;
 using MeshWave.Synchronizer;
 using MeshWave.Wpf.Models;
 using MeshWave.Wpf.Mvvm;
 using MeshWave.Wpf.Services;
 using MeshWave.Wpf.Views;
+using Clipboard = System.Windows.Clipboard;
+using ColorConverter = System.Windows.Media.ColorConverter;
+using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 using SolidColorBrush = System.Windows.Media.SolidColorBrush;
 
 namespace MeshWave.Wpf.ViewModels;
@@ -22,7 +27,7 @@ public class SettingsViewModel : ViewModelBase
     private readonly Action<WaveformStyle>? _onWaveformStyleSaved;
     private string _baseFolder = string.Empty;
     private string _username = string.Empty;
-    private bool _isInitialized = false;
+    private bool _isInitialized;
     private string _theme = "Dark";
     private double _volume = 0.8;
     private string _supportedExtensionsText = string.Empty;
@@ -30,7 +35,7 @@ public class SettingsViewModel : ViewModelBase
     private string _avatarIconPath = string.Empty;
 
     // Artist profile fields
-    private bool _isArtist = false;
+    private bool _isArtist;
     private string _bio = string.Empty;
     private string _website = string.Empty;
     private string _bannerImagePath = string.Empty;
@@ -252,10 +257,7 @@ public class SettingsViewModel : ViewModelBase
         set
         {
             var normalized = Math.Clamp(value, 1, 5000);
-            if (SetProperty(ref _storageQuotaWarningGb, normalized))
-            {
-                RecalculateStoragePercentages();
-            }
+            if (SetProperty(ref _storageQuotaWarningGb, normalized)) RecalculateStoragePercentages();
         }
     }
 
@@ -344,7 +346,7 @@ public class SettingsViewModel : ViewModelBase
 
     public void BrowseStorageFolder()
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog
+        var dialog = new OpenFileDialog
         {
             CheckFileExists = false,
             CheckPathExists = true,
@@ -354,42 +356,33 @@ public class SettingsViewModel : ViewModelBase
 
         if (dialog.ShowDialog() == true)
         {
-            var folder = System.IO.Path.GetDirectoryName(dialog.FileName);
-            if (folder != null)
-            {
-                BaseFolder = folder;
-            }
+            var folder = Path.GetDirectoryName(dialog.FileName);
+            if (folder != null) BaseFolder = folder;
         }
     }
 
     public void BrowseAvatarImage()
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog
+        var dialog = new OpenFileDialog
         {
             Filter = "Image Files|*.png;*.jpg;*.jpeg;*.bmp",
             CheckFileExists = true,
             Multiselect = false
         };
 
-        if (dialog.ShowDialog() == true)
-        {
-            AvatarImagePath = dialog.FileName;
-        }
+        if (dialog.ShowDialog() == true) AvatarImagePath = dialog.FileName;
     }
 
     public void BrowseBannerImage()
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog
+        var dialog = new OpenFileDialog
         {
             Filter = "Image Files|*.png;*.jpg;*.jpeg;*.bmp",
             CheckFileExists = true,
             Multiselect = false
         };
 
-        if (dialog.ShowDialog() == true)
-        {
-            BannerImagePath = dialog.FileName;
-        }
+        if (dialog.ShowDialog() == true) BannerImagePath = dialog.FileName;
     }
 
     public void SaveSettings()
@@ -472,7 +465,7 @@ public class SettingsViewModel : ViewModelBase
         {
             var myMusic = _settingsService.GetLocalMusicFolder();
             var otherMusic = _settingsService.GetPeerMusicFolder();
-            var appDataRoot = MeshWave.Common.Core.MeshWaveEnvironment.GetAppDataRoot();
+            var appDataRoot = MeshWaveEnvironment.GetAppDataRoot();
             var peerManifestFolder = Path.Combine(appDataRoot, "PeerManifests");
 
             var myMusicBytes = GetDirectorySizeSafe(myMusic);
@@ -518,10 +511,7 @@ public class SettingsViewModel : ViewModelBase
     private void RecalculateStoragePercentages()
     {
         var quotaBytes = (long)(StorageQuotaWarningGb * 1024 * 1024 * 1024);
-        foreach (var category in _storageCategories)
-        {
-            category.UpdateThreshold(quotaBytes);
-        }
+        foreach (var category in _storageCategories) category.UpdateThreshold(quotaBytes);
     }
 
     private void ClearPeerManifestCache()
@@ -530,15 +520,11 @@ public class SettingsViewModel : ViewModelBase
         {
             _sync?.ClearPeerManifestCache();
 
-            var appDataRoot = MeshWave.Common.Core.MeshWaveEnvironment.GetAppDataRoot();
+            var appDataRoot = MeshWaveEnvironment.GetAppDataRoot();
             var peerManifestFolder = Path.Combine(appDataRoot, "PeerManifests");
             if (Directory.Exists(peerManifestFolder))
-            {
                 foreach (var file in Directory.EnumerateFiles(peerManifestFolder, "*", SearchOption.TopDirectoryOnly))
-                {
                     File.Delete(file);
-                }
-            }
 
             RefreshStorageStats();
             StorageStatusMessage = "Peer manifest cache cleared.";
@@ -616,7 +602,7 @@ public class SettingsViewModel : ViewModelBase
             if (!Directory.Exists(folder))
                 Directory.CreateDirectory(folder);
 
-            System.Diagnostics.Process.Start("explorer.exe", folder);
+            Process.Start("explorer.exe", folder);
         }
         catch (Exception ex)
         {
@@ -629,7 +615,7 @@ public class SettingsViewModel : ViewModelBase
         try
         {
             var logs = LoggingConfiguration.GetRecentLogs();
-            System.Windows.Clipboard.SetText(logs);
+            Clipboard.SetText(logs);
             StorageStatusMessage = "Recent logs copied to clipboard.";
         }
         catch (Exception ex)
@@ -660,12 +646,8 @@ public class SettingsViewModel : ViewModelBase
 
         // Clean up both old and new format during transition
         foreach (var file in Directory.EnumerateFiles(rootFolder, "*.waveform*", SearchOption.AllDirectories))
-        {
             if (file.EndsWith(".waveform") || file.EndsWith(".waveform.json"))
-            {
                 File.Delete(file);
-            }
-        }
     }
 
     private static long GetWaveformCacheSize(string rootFolder)
@@ -699,7 +681,6 @@ public class SettingsViewModel : ViewModelBase
 
         long total = 0;
         foreach (var file in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories))
-        {
             try
             {
                 total += new FileInfo(file).Length;
@@ -708,7 +689,6 @@ public class SettingsViewModel : ViewModelBase
             {
                 // ignore inaccessible files
             }
-        }
 
         return total;
     }
@@ -747,7 +727,7 @@ public sealed class StorageCategoryUsage : ViewModelBase
     private const double AmberThreshold = 90;
 
     private double _percentage;
-    private Brush _barBrush = new SolidColorBrush((Color)System.Windows.Media.ColorConverter.ConvertFromString("#1DB954"));
+    private Brush _barBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1DB954"));
 
     public StorageCategoryUsage(string category, string path, long bytes)
     {
@@ -793,7 +773,9 @@ public sealed class StorageCategoryUsage : ViewModelBase
     }
 
     private static SolidColorBrush CreateBrush(string hex)
-        => new((Color)System.Windows.Media.ColorConverter.ConvertFromString(hex));
+    {
+        return new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+    }
 
     private static string FormatBytes(long bytes)
     {

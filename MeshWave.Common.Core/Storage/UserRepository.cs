@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
-using MeshWave.Common.Core.Models;
 
 namespace MeshWave.Common.Core.Storage;
 
@@ -10,14 +9,13 @@ namespace MeshWave.Common.Core.Storage;
 /// </summary>
 public class UserRepository
 {
-    private readonly string _baseDataFolder;
     private readonly string _cacheDirectory;
     private readonly string _profilesDirectory;
     private readonly ConcurrentDictionary<string, UserProfileData> _profiles = new(StringComparer.OrdinalIgnoreCase);
 
     public UserRepository(string baseDataFolder)
     {
-        _baseDataFolder = baseDataFolder;
+        BaseDataFolder = baseDataFolder;
         _cacheDirectory = Path.Combine(baseDataFolder, "UserCache", "Images");
         _profilesDirectory = Path.Combine(baseDataFolder, "UserCache", "Profiles");
         Directory.CreateDirectory(_cacheDirectory);
@@ -31,17 +29,12 @@ public class UserRepository
         profile.DisplayName = displayName;
 
         if (!string.IsNullOrWhiteSpace(iconPath) && File.Exists(iconPath))
-        {
             try
             {
                 var targetPath = Path.Combine(_cacheDirectory, $"{userId}.png");
-                if (iconPath != targetPath)
-                {
-                    File.Copy(iconPath, targetPath, true);
-                }
+                if (iconPath != targetPath) File.Copy(iconPath, targetPath, true);
             }
             catch { }
-        }
 
         SaveProfile(profile);
     }
@@ -78,7 +71,7 @@ public class UserRepository
         return GetProfile(userId)?.DisplayName ?? userId;
     }
 
-    public string BaseDataFolder => _baseDataFolder;
+    public string BaseDataFolder { get; }
 
     public string? GetUserIconPath(string userId)
     {
@@ -96,11 +89,8 @@ public class UserRepository
         if (iconBytes == null || iconBytes.Length < 4) return;
 
         // Detect format: PNG = 89 50 4E 47, JPG = FF D8 FF
-        string ext = ".png";
-        if (iconBytes[0] == 0xFF && iconBytes[1] == 0xD8 && iconBytes[2] == 0xFF)
-        {
-            ext = ".jpg";
-        }
+        var ext = ".png";
+        if (iconBytes[0] == 0xFF && iconBytes[1] == 0xD8 && iconBytes[2] == 0xFF) ext = ".jpg";
 
         var path = Path.Combine(_cacheDirectory, userId + ext);
 
@@ -117,7 +107,6 @@ public class UserRepository
         if (!Directory.Exists(_profilesDirectory)) return;
 
         foreach (var file in Directory.EnumerateFiles(_profilesDirectory, "*.json"))
-        {
             try
             {
                 var json = File.ReadAllText(file);
@@ -126,7 +115,6 @@ public class UserRepository
                     _profiles[profile.UserId] = profile;
             }
             catch { }
-        }
     }
 
     private void SaveProfile(UserProfileData profile)

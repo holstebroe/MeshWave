@@ -1,8 +1,4 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using MeshWave.Common.Core.Models;
 
 namespace MeshWave.Common.Core;
@@ -23,9 +19,7 @@ public class CatalogueService : ICatalogueService
 
         // 1. Process Snapshot if present
         if (manifest.Snapshot != null)
-        {
             foreach (var state in manifest.Snapshot.EntityStates)
-            {
                 UpdateEntry(
                     manifest.UserId,
                     state.TargetId,
@@ -35,16 +29,12 @@ public class CatalogueService : ICatalogueService
                     manifest.Snapshot.LastSequenceNumber,
                     manifest.Snapshot.Timestamp,
                     isDelete: false);
-            }
-        }
 
         // 2. Process Operations
         foreach (var op in manifest.Operations)
-        {
             if (op.OperationType == ManifestOperationType.Create ||
                 op.OperationType == ManifestOperationType.Update ||
                 op.OperationType == ManifestOperationType.Delete)
-            {
                 UpdateEntry(
                     manifest.UserId,
                     op.TargetId,
@@ -54,8 +44,6 @@ public class CatalogueService : ICatalogueService
                     op.SequenceNumber,
                     op.Timestamp,
                     op.OperationType == ManifestOperationType.Delete);
-            }
-        }
 
         return Task.CompletedTask;
     }
@@ -86,10 +74,7 @@ public class CatalogueService : ICatalogueService
         if (string.IsNullOrWhiteSpace(contentHash))
             return Task.FromResult(Enumerable.Empty<string>());
 
-        if (_peerAvailability.TryGetValue(contentHash, out var peers))
-        {
-            return Task.FromResult<IEnumerable<string>>(peers.Keys.ToList());
-        }
+        if (_peerAvailability.TryGetValue(contentHash, out var peers)) return Task.FromResult<IEnumerable<string>>(peers.Keys.ToList());
 
         return Task.FromResult(Enumerable.Empty<string>());
     }

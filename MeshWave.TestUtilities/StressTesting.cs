@@ -1,24 +1,15 @@
-using MeshWave.Common.Core.P2P;
-using MeshWave.Common.Core.Models;
-
 namespace MeshWave.TestUtilities;
 
 public static class StressTesting
 {
     public static void FloodWithComments(TestPeer peer, string targetId, int count)
     {
-        for (int i = 0; i < count; i++)
-        {
-            peer.CommentOn(targetId, $"Stress comment {i} from {peer.Name}");
-        }
+        for (var i = 0; i < count; i++) peer.CommentOn(targetId, $"Stress comment {i} from {peer.Name}");
     }
 
     public static void FloodWithPlays(TestPeer peer, string targetId, int count)
     {
-        for (int i = 0; i < count; i++)
-        {
-            peer.Play(targetId, $"Stress Title {i}", "Stress Artist");
-        }
+        for (var i = 0; i < count; i++) peer.Play(targetId, $"Stress Title {i}", "Stress Artist");
     }
 }
 

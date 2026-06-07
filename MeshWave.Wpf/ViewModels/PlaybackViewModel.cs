@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using System.Windows.Input;
+using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
 using MeshWave.Common.Core.Storage;
 using MeshWave.LibraryManager;
@@ -18,25 +20,24 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
 {
     private string _currentTrackTitle = string.Empty;
     private string _currentArtist = string.Empty;
-    private string _currentTrackId = string.Empty;
     private TimeSpan _currentPosition;
     private TimeSpan _duration;
-    private bool _isPlaying = false;
-    private bool _isBuffering = false;
+    private bool _isPlaying;
+    private bool _isBuffering;
     private double _volume = 1.0;
     private ObservableCollection<string> _comments = [];
     private ObservableCollection<TimelineCommentMarker> _timelineMarkers = [];
     private IAudioPlaybackService? _audioService;
-    private Func<IAudioPlaybackService>? _audioServiceFactory;
+    private readonly Func<IAudioPlaybackService>? _audioServiceFactory;
     private string? _currentFilePath;
-    private bool _isUpdatingPosition = false;
+    private bool _isUpdatingPosition;
     private readonly UserProfileService _profileService;
     private readonly MyMusicMetadataService _myMusicMetadataService = new();
     private string _coverImagePath = string.Empty;
     private float[] _waveformSamples = [];
     private string _trackDescription = string.Empty;
     private int _currentTrackVersion = 1;
-    private bool _isMuted = false;
+    private bool _isMuted;
     private double _preMuteVolume = 1.0;
     private ObservableCollection<PlaybackTrackListItem> _albumTracks = [];
     private PlaybackTrackListItem? _selectedAlbumTrack;
@@ -123,7 +124,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>Stable identifier for the current track (filename without extension).</summary>
-    public string CurrentTrackId => _currentTrackId;
+    public string CurrentTrackId { get; private set; } = string.Empty;
 
     /// <summary>Alias matching the ApplicationViewModel consumption pattern.</summary>
     public string TrackTitle => _currentTrackTitle;
@@ -168,10 +169,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         get => _isPlaying;
         set
         {
-            if (SetProperty(ref _isPlaying, value))
-            {
-                OnPropertyChanged(nameof(PlayPauseIcon));
-            }
+            if (SetProperty(ref _isPlaying, value)) OnPropertyChanged(nameof(PlayPauseIcon));
         }
     }
 
@@ -253,10 +251,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         get => _currentTrackVersion;
         set
         {
-            if (SetProperty(ref _currentTrackVersion, value))
-            {
-                RebuildComments();
-            }
+            if (SetProperty(ref _currentTrackVersion, value)) RebuildComments();
         }
     }
 
@@ -290,10 +285,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         get => _showOnlyCurrentVersionComments;
         set
         {
-            if (SetProperty(ref _showOnlyCurrentVersionComments, value))
-            {
-                RebuildComments();
-            }
+            if (SetProperty(ref _showOnlyCurrentVersionComments, value)) RebuildComments();
         }
     }
 
@@ -318,13 +310,9 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     public void PlayPauseToggle()
     {
         if (IsPlaying)
-        {
             Pause();
-        }
         else
-        {
             Play();
-        }
     }
 
     public void Stop()
@@ -362,10 +350,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         };
 
         var trackHash = string.Empty;
-        if (!string.IsNullOrWhiteSpace(_currentFilePath) && File.Exists(_currentFilePath))
-        {
-            trackHash = MeshWave.Common.Core.Crypto.CryptoService.ComputeFileHash(_currentFilePath);
-        }
+        if (!string.IsNullOrWhiteSpace(_currentFilePath) && File.Exists(_currentFilePath)) trackHash = CryptoService.ComputeFileHash(_currentFilePath);
 
         var syncedCommentOperationId = _sync?.RecordComment(
             trackId: string.IsNullOrWhiteSpace(trackHash) ? CurrentTrackId : trackHash,
@@ -374,7 +359,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             metadata: new Dictionary<string, string>
             {
                 ["trackVersion"] = marker.TrackVersion.ToString(),
-                ["timestampSeconds"] = marker.TimestampSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                ["timestampSeconds"] = marker.TimestampSeconds.ToString(CultureInfo.InvariantCulture)
             });
 
         if (!string.IsNullOrWhiteSpace(syncedCommentOperationId))
@@ -392,10 +377,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         TrackContextTitle = string.IsNullOrWhiteSpace(contextTitle) ? "Current Album / Playlist" : contextTitle;
         TrackContextIconPath = contextIconPath ?? string.Empty;
 
-        if (!string.IsNullOrWhiteSpace(selectedTrackId))
-        {
-            SelectedAlbumTrack = AlbumTracks.FirstOrDefault(t => string.Equals(t.TrackId, selectedTrackId, StringComparison.OrdinalIgnoreCase));
-        }
+        if (!string.IsNullOrWhiteSpace(selectedTrackId)) SelectedAlbumTrack = AlbumTracks.FirstOrDefault(t => string.Equals(t.TrackId, selectedTrackId, StringComparison.OrdinalIgnoreCase));
     }
 
     public void RefreshCurrentTrackMetadata()
@@ -429,7 +411,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         Duration = duration;
         CurrentPosition = TimeSpan.Zero;
         _currentFilePath = filePath;
-        _currentTrackId = Path.GetFileNameWithoutExtension(filePath ?? string.Empty) ?? string.Empty;
+        CurrentTrackId = Path.GetFileNameWithoutExtension(filePath ?? string.Empty) ?? string.Empty;
         RefreshCurrentTrackLikeState();
 
         if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
@@ -477,16 +459,10 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
                 IsPlaying = false;
 
                 // Ensure the playhead is at the very end when playing stops naturally
-                if (Duration > TimeSpan.Zero)
-                {
-                    CurrentPosition = Duration;
-                }
+                if (Duration > TimeSpan.Zero) CurrentPosition = Duration;
 
                 // Auto-advance to the next track if we were playing and reached the end
-                if (CanGoToNextTrack)
-                {
-                    PlayNextTrack();
-                }
+                if (CanGoToNextTrack) PlayNextTrack();
             };
 
             if (remoteContentLength > 0)
@@ -520,10 +496,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             AlbumTracks = new ObservableCollection<PlaybackTrackListItem>(remapped);
             SelectedAlbumTrack = AlbumTracks.FirstOrDefault(t => string.Equals(t.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
 
-            if (WaveformSamples.Length == 0)
-            {
-                _ = Task.Run(() => GenerateWaveformInBackground(filePath));
-            }
+            if (WaveformSamples.Length == 0) _ = Task.Run(() => GenerateWaveformInBackground(filePath));
         }
         else
         {
@@ -541,29 +514,21 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     {
         try
         {
-            var samples = WaveformService.GenerateWaveform(filePath, 4096);
-            if (samples.Length == 0)
-            {
-                return;
-            }
+            var samples = WaveformService.GenerateWaveform(filePath);
+            if (samples.Length == 0) return;
 
             var cachePath = LocalLibraryManager.GetWaveformCachePathForTrack(filePath);
             var cacheFolder = Path.GetDirectoryName(cachePath);
-            if (!string.IsNullOrWhiteSpace(cacheFolder))
-            {
-                Directory.CreateDirectory(cacheFolder);
-            }
+            if (!string.IsNullOrWhiteSpace(cacheFolder)) Directory.CreateDirectory(cacheFolder);
 
             var binaryData = WaveformBinaryFormat.Encode(samples);
             File.WriteAllBytes(cachePath, binaryData);
 
             if (string.Equals(_currentFilePath, filePath, StringComparison.OrdinalIgnoreCase))
-            {
-                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                Application.Current.Dispatcher.Invoke(() =>
                 {
                     WaveformSamples = samples;
                 });
-            }
         }
         catch
         {
@@ -573,13 +538,10 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
 
     private string GetTimelineMarkerPath()
     {
-        if (string.IsNullOrWhiteSpace(_currentFilePath))
-        {
-            return string.Empty;
-        }
+        if (string.IsNullOrWhiteSpace(_currentFilePath)) return string.Empty;
 
         var albumFolder = Path.GetDirectoryName(_currentFilePath) ?? string.Empty;
-        return Path.Combine(albumFolder, ".comments", $"{_currentTrackId}.timeline.json");
+        return Path.Combine(albumFolder, ".comments", $"{CurrentTrackId}.timeline.json");
     }
 
     private void LoadTimelineMarkers()
@@ -597,10 +559,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         {
             var json = File.ReadAllText(markerPath);
             var markers = JsonSerializer.Deserialize<List<TimelineCommentMarker>>(json) ?? [];
-            foreach (var marker in markers)
-            {
-                TimelineMarkers.Add(marker);
-            }
+            foreach (var marker in markers) TimelineMarkers.Add(marker);
 
             OnPropertyChanged(nameof(TimelineMarkers));
             RebuildComments();
@@ -613,10 +572,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
 
     private void PlayAlbumTrack(PlaybackTrackListItem? item)
     {
-        if (item == null || string.IsNullOrWhiteSpace(item.FilePath))
-        {
-            return;
-        }
+        if (item == null || string.IsNullOrWhiteSpace(item.FilePath)) return;
 
         LoadTrack(item.Title, item.Artist, item.Duration, item.FilePath);
     }
@@ -667,18 +623,12 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     private void SaveTimelineMarkers()
     {
         var markerPath = GetTimelineMarkerPath();
-        if (string.IsNullOrWhiteSpace(markerPath))
-        {
-            return;
-        }
+        if (string.IsNullOrWhiteSpace(markerPath)) return;
 
         try
         {
             var folder = Path.GetDirectoryName(markerPath);
-            if (!string.IsNullOrWhiteSpace(folder))
-            {
-                Directory.CreateDirectory(folder);
-            }
+            if (!string.IsNullOrWhiteSpace(folder)) Directory.CreateDirectory(folder);
 
             var json = JsonSerializer.Serialize(TimelineMarkers.ToList());
             File.WriteAllText(markerPath, json);
@@ -702,7 +652,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         if (!changed)
             return;
 
-        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        Application.Current.Dispatcher.Invoke(() =>
         {
             OnPropertyChanged(nameof(TimelineMarkers));
             RebuildComments();
@@ -716,10 +666,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             return;
 
         var trackHash = string.Empty;
-        if (!string.IsNullOrWhiteSpace(_currentFilePath) && File.Exists(_currentFilePath))
-        {
-            trackHash = MeshWave.Common.Core.Crypto.CryptoService.ComputeFileHash(_currentFilePath);
-        }
+        if (!string.IsNullOrWhiteSpace(_currentFilePath) && File.Exists(_currentFilePath)) trackHash = CryptoService.ComputeFileHash(_currentFilePath);
 
         if (string.IsNullOrWhiteSpace(trackHash) && string.IsNullOrWhiteSpace(CurrentTrackId))
             return;
@@ -805,10 +752,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
                             // However, CatalogueService.GetEntryAsync is Task-based.
                             // In this ViewModel, we can check if we already have the track owner.
                             var trackEntry = _sync.CatalogueService.GetEntryAsync(CurrentTrackId).GetAwaiter().GetResult();
-                            if (trackEntry != null && string.Equals(manifest.UserId, trackEntry.OwnerUserId, StringComparison.OrdinalIgnoreCase))
-                            {
-                                isTrackOwner = true;
-                            }
+                            if (trackEntry != null && string.Equals(manifest.UserId, trackEntry.OwnerUserId, StringComparison.OrdinalIgnoreCase)) isTrackOwner = true;
                         }
 
                         if (isAuthor || isTrackOwner)
@@ -863,7 +807,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
 
     private static double ParseDouble(string? value, DateTime timestamp)
     {
-        if (double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
             return parsed;
 
         return Math.Max(0, timestamp.ToUniversalTime().TimeOfDay.TotalSeconds);

@@ -38,10 +38,7 @@ public partial class LibraryViewModel : ViewModelBase
         SyncTrackCommand = new RelayCommand<LibraryTrackItem>(SyncTrack, t => CanSyncToNetwork && t != null);
         RemoveTrackFromLibraryCommand = new RelayCommand<LibraryTrackItem>(RemoveTrackFromLibrary, t => t != null && !IsMyMusicLibrary && !t.IsDownloadPlaceholder);
         ReDownloadTrackCommand = new RelayCommand<LibraryTrackItem>(ReDownloadTrack, t => t != null && !IsMyMusicLibrary && t.IsRemovedFromLibrary && !string.IsNullOrWhiteSpace(t.ContentHash));
-        if (!IsMyMusicLibrary && _applicationViewModel != null)
-        {
-            _applicationViewModel.DownloadQueueItems.CollectionChanged += OnDownloadQueueChanged;
-        }
+        if (!IsMyMusicLibrary && _applicationViewModel != null) _applicationViewModel.DownloadQueueItems.CollectionChanged += OnDownloadQueueChanged;
 
         LoadFromConfiguredBaseFolder();
     }
@@ -121,10 +118,7 @@ public partial class LibraryViewModel : ViewModelBase
         get => _isImporting;
         set
         {
-            if (SetProperty(ref _isImporting, value))
-            {
-                OnPropertyChanged(nameof(CanCancelImport));
-            }
+            if (SetProperty(ref _isImporting, value)) OnPropertyChanged(nameof(CanCancelImport));
         }
     }
 
@@ -174,10 +168,7 @@ public partial class LibraryViewModel : ViewModelBase
     {
         var track = GetTrackById(trackId);
         var playbackPath = track?.FilePath;
-        if (string.IsNullOrWhiteSpace(playbackPath))
-        {
-            return;
-        }
+        if (string.IsNullOrWhiteSpace(playbackPath)) return;
 
         var playbackContext = GetCurrentPlaybackContext(track!);
         _applicationViewModel?.PlayTrack(
@@ -195,10 +186,7 @@ public partial class LibraryViewModel : ViewModelBase
 
     public void RequestOpenMetadataEditor(string trackFilePath)
     {
-        if (!CanImportMyMusic || string.IsNullOrWhiteSpace(trackFilePath))
-        {
-            return;
-        }
+        if (!CanImportMyMusic || string.IsNullOrWhiteSpace(trackFilePath)) return;
 
         OpenMetadataEditorRequested?.Invoke(this, trackFilePath);
     }
@@ -211,14 +199,12 @@ public partial class LibraryViewModel : ViewModelBase
         _applicationViewModel.AnnounceAlbumToNetwork(album.AlbumId, album.Name, album.Artist);
 
         foreach (var track in Tracks.Where(t => t.IsReleased))
-        {
             _applicationViewModel.AnnounceTrackToNetwork(
                 track.TrackId,
                 CryptoService.ComputeFileHash(track.FilePath),
                 track.Title,
                 track.Artist,
                 album.Name);
-        }
 
         var count = Tracks.Count(t => t.IsReleased);
         SyncStatus = $"Announced album '{album.Name}' with {count} released track(s) to the network.";
@@ -254,7 +240,6 @@ public partial class LibraryViewModel : ViewModelBase
             return;
 
         if (!track.IsDownloadPlaceholder && !string.IsNullOrWhiteSpace(track.ContentHash))
-        {
             _downloadStateService.MarkRemoved(new RemovedLibraryTrackEntry
             {
                 ContentHash = track.ContentHash,
@@ -265,10 +250,8 @@ public partial class LibraryViewModel : ViewModelBase
                 AlbumId = track.AlbumId,
                 PeerUserId = track.SourcePeerUserId
             });
-        }
 
         if (!string.IsNullOrWhiteSpace(track.FilePath) && File.Exists(track.FilePath))
-        {
             try
             {
                 File.Delete(track.FilePath);
@@ -280,7 +263,6 @@ public partial class LibraryViewModel : ViewModelBase
             {
                 // best-effort delete
             }
-        }
 
         LoadFromConfiguredBaseFolder();
     }
@@ -295,15 +277,11 @@ public partial class LibraryViewModel : ViewModelBase
 
     private void OnDownloadQueueChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher != null)
-        {
             dispatcher.Invoke(RefreshAlbumAndTrackSelection);
-        }
         else
-        {
             RefreshAlbumAndTrackSelection();
-        }
     }
 }
 
@@ -313,7 +291,10 @@ public sealed class LibraryArtistItem
     public required string CoverPath { get; set; }
     public int AlbumCount { get; set; }
     public int TrackCount { get; set; }
-    public override string ToString() => Name;
+    public override string ToString()
+    {
+        return Name;
+    }
 }
 
 public sealed class LibraryAlbumItem
@@ -334,7 +315,10 @@ public sealed class LibraryAlbumItem
         : string.Empty;
     public string ReleaseBadgeColor => IsReleased ? "#27AE60" : "#E67E22"; // Green for Public, Orange for Private
     public string VersionLabel => Version > 1 ? $"v{Version}" : string.Empty;
-    public override string ToString() => Name;
+    public override string ToString()
+    {
+        return Name;
+    }
 }
 
 public sealed class LibraryTrackItem
@@ -360,5 +344,8 @@ public sealed class LibraryTrackItem
     public string ReleaseBadgeColor => IsReleased ? "#27AE60" : "#E67E22"; // Green for Public, Orange for Private
     public string VersionLabel => Version > 1 ? $"v{Version}" : string.Empty;
     public bool CanPlay => !IsDownloadPlaceholder && !IsRemovedFromLibrary && !string.IsNullOrWhiteSpace(FilePath);
-    public override string ToString() => Title;
+    public override string ToString()
+    {
+        return Title;
+    }
 }

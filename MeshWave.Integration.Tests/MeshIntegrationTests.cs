@@ -1,9 +1,5 @@
-using System.Net;
-using System.Net.Sockets;
-using MeshWave.Bootstrap.Core;
 using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
-using MeshWave.Common.Core.Storage;
 using MeshWave.Synchronizer;
 using MeshWave.TestUtilities;
 using Xunit;
@@ -81,7 +77,7 @@ public class MeshIntegrationTests : IAsyncLifetime
     public async Task ManifestExchange_ProfileBroadcast_IsRecorded()
     {
         var alice = await _context.CreatePeerAsync("Alice");
-        alice.BroadcastProfile("Alice Artist", isArtist: true, "My bio", "https://alice.example", null!);
+        alice.BroadcastProfile("Alice Artist", isArtist: true, "My bio", "https://alice.example");
 
         var manifest = alice.GetLocalManifest(ManifestStreamType.Social);
         Assert.NotNull(manifest);
@@ -139,10 +135,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         Assert.NotNull(report);
 
         _output.WriteLine($"Connection report for {report!.PeerUserId}:");
-        foreach (var attempt in report.Attempts)
-        {
-            _output.WriteLine($"  - Attempt: {attempt.Method}, Success: {attempt.Success}, Details: {attempt.Details}");
-        }
+        foreach (var attempt in report.Attempts) _output.WriteLine($"  - Attempt: {attempt.Method}, Success: {attempt.Success}, Details: {attempt.Details}");
 
         Assert.Equal(bob.UserId, report!.PeerUserId);
         Assert.Contains(report.Attempts, a => a.Method == "direct-tcp-probe");
@@ -195,7 +188,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         await _context.ConnectAndSyncAllAsync();
 
         await jane.WaitForConditionAsync(() => {
-            var manifest = jane.GetPeerManifest(john.UserId, ManifestStreamType.Content);
+            var manifest = jane.GetPeerManifest(john.UserId);
             return CountPublicTracks(manifest) == 2;
         });
 
@@ -203,7 +196,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         await john.SyncAsync();
 
         await jane.WaitForConditionAsync(() => {
-            var manifest = jane.GetPeerManifest(john.UserId, ManifestStreamType.Content);
+            var manifest = jane.GetPeerManifest(john.UserId);
             return CountPublicTracks(manifest) == 3;
         });
     }
@@ -261,10 +254,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         await _context.ConnectAndSyncAllAsync();
 
         _output.WriteLine("Alice is generating 1000 comments...");
-        for (int i = 0; i < 1000; i++)
-        {
-            alice.Orchestrator.RecordComment("main-track", $"Comment {i}");
-        }
+        for (var i = 0; i < 1000; i++) alice.Orchestrator.RecordComment("main-track", $"Comment {i}");
 
         _output.WriteLine("Alice is performing final sync/push...");
         await alice.SyncAsync();

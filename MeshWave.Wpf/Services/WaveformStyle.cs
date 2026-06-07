@@ -35,5 +35,5 @@ public enum WaveformStyle
     /// with a vertical linear gradient (bright accent at the centre fading to
     /// transparent at the edges).
     /// </summary>
-    Smooth,
+    Smooth
 }

@@ -1,6 +1,3 @@
-using MeshWave.Common.Core.P2P;
-using MeshWave.Common.Core.Models;
-using MeshWave.Synchronizer;
 using Xunit;
 
 namespace MeshWave.Synchronizer.Tests;

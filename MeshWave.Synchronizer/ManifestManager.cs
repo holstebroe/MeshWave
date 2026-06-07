@@ -1,7 +1,7 @@
 using System.Text;
-using System.Text.Json;
 using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
+using NLog;
 
 namespace MeshWave.Synchronizer;
 
@@ -171,10 +171,7 @@ public class ManifestManager
                         break;
                     case ManifestOperationType.CommentDelete:
                         var commentIdToDelete = op.Metadata.GetValueOrDefault("commentOperationId");
-                        if (!string.IsNullOrEmpty(commentIdToDelete))
-                        {
-                            persistent.RemoveAll(o => o.OperationId == commentIdToDelete);
-                        }
+                        if (!string.IsNullOrEmpty(commentIdToDelete)) persistent.RemoveAll(o => o.OperationId == commentIdToDelete);
                         break;
                 }
             }
@@ -212,12 +209,12 @@ public class ManifestManager
         {
             if (manifest.Operations.Count < threshold)
             {
-                NLog.LogManager.GetCurrentClassLogger().Debug("Compact skipped: ops count {0} < threshold {1}", manifest.Operations.Count, threshold);
+                LogManager.GetCurrentClassLogger().Debug("Compact skipped: ops count {0} < threshold {1}", manifest.Operations.Count, threshold);
                 return;
             }
 
             // Snapshot everything except the last 'keepRecent' operations
-            int lastToSnapshot = manifest.Operations.OrderBy(o => o.SequenceNumber)
+            var lastToSnapshot = manifest.Operations.OrderBy(o => o.SequenceNumber)
                 .ElementAt(manifest.Operations.Count - keepRecent - 1).SequenceNumber;
 
             var snapshot = CreateSnapshot(manifest, lastToSnapshot, privateKeyPem);
@@ -247,18 +244,12 @@ public class ManifestManager
         foreach (var ent in snapshot.EntityStates.OrderBy(e => e.TargetId).ThenBy(e => e.TargetType))
         {
             sb.Append("e:").Append(ent.TargetId).Append(':').Append(ent.TargetType).Append(':').Append(ent.ContentHash ?? string.Empty).Append('{');
-            foreach (var kv in ent.Metadata.OrderBy(k => k.Key))
-            {
-                sb.Append(kv.Key).Append('=').Append(kv.Value).Append(',');
-            }
+            foreach (var kv in ent.Metadata.OrderBy(k => k.Key)) sb.Append(kv.Key).Append('=').Append(kv.Value).Append(',');
             sb.Append("};");
         }
 
         // PlayCounts
-        foreach (var kv in snapshot.PlayCounts.OrderBy(k => k.Key))
-        {
-            sb.Append("p:").Append(kv.Key).Append('=').Append(kv.Value).Append(';');
-        }
+        foreach (var kv in snapshot.PlayCounts.OrderBy(k => k.Key)) sb.Append("p:").Append(kv.Key).Append('=').Append(kv.Value).Append(';');
 
         return CryptoService.ComputeHash(Encoding.UTF8.GetBytes(sb.ToString()));
     }
@@ -272,7 +263,7 @@ public class ManifestManager
     {
         lock (manifest)
         {
-            int expectedSeq = 0;
+            var expectedSeq = 0;
 
             if (manifest.Snapshot != null)
             {
@@ -299,12 +290,9 @@ public class ManifestManager
                 expectedSeq = manifest.Snapshot.LastSequenceNumber + 1;
             }
 
-            if (manifest.Snapshot == null && manifest.Operations.Count > 0)
-            {
-                expectedSeq = manifest.Operations[0].SequenceNumber;
-            }
+            if (manifest.Snapshot == null && manifest.Operations.Count > 0) expectedSeq = manifest.Operations[0].SequenceNumber;
 
-            for (int i = 0; i < manifest.Operations.Count; i++)
+            for (var i = 0; i < manifest.Operations.Count; i++)
             {
                 var op = manifest.Operations[i];
 
@@ -337,14 +325,14 @@ public class ManifestManager
 
         if (remote.Operations.Count > SecurityLimits.MaxManifestOperations)
         {
-            NLog.LogManager.GetCurrentClassLogger().Error("Merge failed: remote manifest from {0} has {1} operations, exceeding limit of {2}", remote.UserId, remote.Operations.Count, SecurityLimits.MaxManifestOperations);
+            LogManager.GetCurrentClassLogger().Error("Merge failed: remote manifest from {0} has {1} operations, exceeding limit of {2}", remote.UserId, remote.Operations.Count, SecurityLimits.MaxManifestOperations);
             throw new InvalidDataException($"Remote manifest exceeds operation limit ({remote.Operations.Count}).");
         }
 
         // 1. Verify remote manifest integrity before merging
         if (!VerifyManifest(remote, remoteUserPublicKey))
         {
-            NLog.LogManager.GetCurrentClassLogger().Error("Merge failed: remote manifest from {0} failed verification.", remote.UserId);
+            LogManager.GetCurrentClassLogger().Error("Merge failed: remote manifest from {0} failed verification.", remote.UserId);
             throw new InvalidDataException("Remote manifest failed signature or continuity verification.");
         }
 
@@ -353,7 +341,6 @@ public class ManifestManager
             // 2. Handle Snapshot merge
             // If remote has a NEWER snapshot, we adopt it and discard local operations that are now squashed.
             if (remote.Snapshot != null)
-            {
                 if (remote.Snapshot.LastSequenceNumber > (local.Snapshot?.LastSequenceNumber ?? -1))
                 {
                     // Remote snapshot is more recent than ours.
@@ -366,15 +353,14 @@ public class ManifestManager
                     // Since we replaced the whole state, we "added" as many ops as the remote currently has
                     return remote.Operations.Count;
                 }
-            }
 
             // 3. Merge individual operations
             // Build existing play counts per (trackId, utcDate) from the local manifest so we
             // know how much headroom remains before merging remote play ops.
             var playCounts = BuildPlayCounts(local.Operations);
 
-            int added = 0;
-            int localMaxSeqNum = (local.Snapshot?.LastSequenceNumber ?? -1) + local.Operations.Count;
+            var added = 0;
+            var localMaxSeqNum = (local.Snapshot?.LastSequenceNumber ?? -1) + local.Operations.Count;
 
             foreach (var op in remote.Operations.OrderBy(o => o.SequenceNumber))
             {
@@ -387,7 +373,7 @@ public class ManifestManager
                 // Enforce per-user daily play cap.
                 if (op.OperationType == ManifestOperationType.Play)
                 {
-                    var key = (TrackId: op.TargetId, Date: op.Timestamp.ToUniversalTime().Date);
+                    var key = (TrackId: op.TargetId, op.Timestamp.ToUniversalTime().Date);
                     playCounts.TryGetValue(key, out var existing);
                     if (existing >= SecurityLimits.MaxPlaysPerUserPerTrackPerDay)
                         continue;
@@ -395,10 +381,8 @@ public class ManifestManager
                 }
 
                 if (IsCompetitionOperation(op.OperationType))
-                {
                     if (!ValidateCompetitionOperation(op))
                         continue;
-                }
 
                 // We already verified all signatures in VerifyManifest call above,
                 // but we can re-verify if we want to be paranoid or if VerifyManifest was skipped.
@@ -424,7 +408,7 @@ public class ManifestManager
         var counts = new Dictionary<(string TrackId, DateTime Date), int>();
         foreach (var op in ops.Where(o => o.OperationType == ManifestOperationType.Play))
         {
-            var key = (TrackId: op.TargetId, Date: op.Timestamp.ToUniversalTime().Date);
+            var key = (TrackId: op.TargetId, op.Timestamp.ToUniversalTime().Date);
             counts.TryGetValue(key, out var c);
             counts[key] = c + 1;
         }

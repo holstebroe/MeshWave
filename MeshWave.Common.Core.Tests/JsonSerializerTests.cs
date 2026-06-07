@@ -235,7 +235,7 @@ public class JsonSerializerTests
             FounderUserId = "user-1",
             Operations = new List<GroupOperation>
             {
-                new GroupOperation
+                new()
                 {
                     SequenceNumber = 1,
                     UserId = "user-1",
@@ -268,7 +268,7 @@ public class JsonSerializerTests
             FounderUserId = "user-1",
             Operations = new List<GroupOperation>
             {
-                new GroupOperation
+                new()
                 {
                     SequenceNumber = 1,
                     UserId = "user-1",

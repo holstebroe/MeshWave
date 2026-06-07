@@ -1,4 +1,3 @@
-using MeshWave.Common.Core.P2P;
 namespace MeshWave.Synchronizer;
 
 /// <summary>
@@ -68,16 +67,24 @@ public static class SecurityLimits
 
     // --- Validation helpers ---
 
-    public static bool IsValidDisplayName(string? value) =>
-        !string.IsNullOrWhiteSpace(value) && value.Length <= MaxDisplayNameLength;
+    public static bool IsValidDisplayName(string? value)
+    {
+        return !string.IsNullOrWhiteSpace(value) && value.Length <= MaxDisplayNameLength;
+    }
 
-    public static bool IsValidUserId(string? value) =>
-        !string.IsNullOrWhiteSpace(value) && value.Length <= MaxTargetIdLength;
+    public static bool IsValidUserId(string? value)
+    {
+        return !string.IsNullOrWhiteSpace(value) && value.Length <= MaxTargetIdLength;
+    }
 
-    public static bool IsValidContentHash(string? value) =>
-        value == null || value.Length <= MaxContentHashLength;
+    public static bool IsValidContentHash(string? value)
+    {
+        return value == null || value.Length <= MaxContentHashLength;
+    }
 
-    public static string Truncate(string? value, int maxLength) =>
-        value == null ? string.Empty :
-        value.Length <= maxLength ? value : value[..maxLength];
+    public static string Truncate(string? value, int maxLength)
+    {
+        return value == null ? string.Empty :
+            value.Length <= maxLength ? value : value[..maxLength];
+    }
 }

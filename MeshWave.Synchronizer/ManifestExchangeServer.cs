@@ -1,13 +1,12 @@
-using MeshWave.Common.Core.P2P;
-using MeshWave.Common.Core.Models;
-using Mono.Nat.Logging;
-using NLog;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Text.Json;
-using Logger = NLog.Logger;
+using MeshWave.Common.Core.Models;
+using MeshWave.Common.Core.P2P;
 using MeshWave.Common.Core.Serialization;
+using NLog;
+using JsonSerializer = System.Text.Json.JsonSerializer;
+using Logger = NLog.Logger;
 
 namespace MeshWave.Synchronizer;
 
@@ -77,9 +76,7 @@ public class ManifestExchangeServer : IDisposable
         _listener?.Stop();
 
         if (_serverTask != null)
-        {
             try { await _serverTask; } catch { }
-        }
     }
 
     private async Task AcceptLoopAsync(CancellationToken ct)
@@ -87,7 +84,6 @@ public class ManifestExchangeServer : IDisposable
         if (_listener == null) return;
 
         while (!ct.IsCancellationRequested)
-        {
             try
             {
                 var client = await _listener.AcceptTcpClientAsync(ct);
@@ -95,7 +91,6 @@ public class ManifestExchangeServer : IDisposable
             }
             catch (OperationCanceledException) { break; }
             catch { break; }
-        }
     }
 
     private async Task HandleClientAsync(TcpClient client, CancellationToken ct)
@@ -117,7 +112,7 @@ public class ManifestExchangeServer : IDisposable
                 if (isJson)
                 {
                     var json = Encoding.UTF8.GetString(bytes);
-                    request = System.Text.Json.JsonSerializer.Deserialize<ManifestRequest>(json);
+                    request = JsonSerializer.Deserialize<ManifestRequest>(json);
                 }
                 else
                 {
@@ -154,10 +149,7 @@ public class ManifestExchangeServer : IDisposable
                             lock (originalManifest)
                             {
                                 var snapshot = originalManifest.Snapshot;
-                                if (request.StartSequenceNumber > (snapshot?.LastSequenceNumber ?? -1))
-                                {
-                                    snapshot = null;
-                                }
+                                if (request.StartSequenceNumber > (snapshot?.LastSequenceNumber ?? -1)) snapshot = null;
 
                                 var filteredOps = originalManifest.Operations
                                     .Where(op => op.SequenceNumber >= request.StartSequenceNumber &&
@@ -332,7 +324,7 @@ public class ManifestExchangeServer : IDisposable
             totalRead += read;
         }
 
-        bool isJson = body.Length > 0 && body[0] == (byte)'{';
+        var isJson = body.Length > 0 && body[0] == (byte)'{';
         return (body, isJson);
     }
 

@@ -1,4 +1,3 @@
-using MeshWave.Common.Core.P2P;
 using System.Collections.Concurrent;
 using System.Text.Json;
 using MeshWave.Common.Core;
@@ -41,7 +40,6 @@ public class PeerManifestStore
             return;
 
         foreach (var file in Directory.EnumerateFiles(_storeDirectory, "*.json"))
-        {
             try
             {
                 var json = File.ReadAllText(file);
@@ -49,21 +47,26 @@ public class PeerManifestStore
                 if (manifest != null && !string.IsNullOrWhiteSpace(manifest.UserId))
                     _manifests[(manifest.UserId, manifest.StreamType)] = manifest;
             }
-            catch { /* skip corrupted files */ }
-        }
+            catch {
+                /* skip corrupted files */
+            }
     }
 
     /// <summary>
     /// Returns the cached manifest for <paramref name="userId"/> and <paramref name="streamType"/>, or null if not yet received.
     /// </summary>
     public Manifest? Get(string userId, ManifestStreamType streamType = ManifestStreamType.Content)
-        => _manifests.GetValueOrDefault((userId, streamType));
+    {
+        return _manifests.GetValueOrDefault((userId, streamType));
+    }
 
     /// <summary>
     /// Returns all currently cached peer manifests.
     /// </summary>
     public IReadOnlyCollection<Manifest> GetAll()
-        => _manifests.Values.ToList();
+    {
+        return _manifests.Values.ToList();
+    }
 
     /// <summary>
     /// Merges <paramref name="incoming"/> into the cached manifest for its owner and stream type.
@@ -107,13 +110,11 @@ public class PeerManifestStore
             _manifests.TryRemove((userId, streamType), out _);
             var path = FilePath(userId, streamType);
             if (File.Exists(path))
-            {
                 try { File.Delete(path); }
                 catch
                 {
                     // ignored
                 }
-            }
         }
     }
 
@@ -128,13 +129,11 @@ public class PeerManifestStore
             return;
 
         foreach (var file in Directory.EnumerateFiles(_storeDirectory, "*.json", SearchOption.TopDirectoryOnly))
-        {
             try { File.Delete(file); }
             catch
             {
                 // ignored
             }
-        }
     }
 
     // ─────────────────────────────────────────────────────────────────────

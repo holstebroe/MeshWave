@@ -7,7 +7,6 @@
              mc:Ignorable="d"
              Background="{StaticResource BackgroundColor}">
     <UserControl.Resources>
-        <converters:PathToBitmapConverter x:Key="PathToBitmap"/>
         <converters:UserIconConverter x:Key="UserIconConverter"/>
     </UserControl.Resources>
     <Grid Margin="30">

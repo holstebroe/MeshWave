@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Text;
+using System.Text.Json;
 using System.Windows.Input;
 using MeshWave.Common.Core.Models;
 using MeshWave.Synchronizer;
@@ -325,10 +326,8 @@ public class BrowseViewModel : ViewModelBase
         });
 
         if (_sync != null)
-        {
             _sync.ManifestMerged += (_, _) =>
                 ExecuteOnUiOrCurrent(Refresh);
-        }
 
         Refresh();
     }
@@ -612,13 +611,9 @@ public class BrowseViewModel : ViewModelBase
                 {
                     var downloaded = downloadedEntries.FirstOrDefault(e => string.Equals(e.TrackId, entity.TargetId, StringComparison.OrdinalIgnoreCase));
                     if (downloaded != null)
-                    {
                         if (!string.Equals(downloaded.ContentHash, entity.ContentHash, StringComparison.OrdinalIgnoreCase) ||
                             entity.SequenceNumber > downloaded.SequenceNumber)
-                        {
                             needsUpdate = true;
-                        }
-                    }
                 }
 
                 var fileSize = long.TryParse(entity.Metadata.GetValueOrDefault("fileSize"), out var fs) ? fs : 0;
@@ -670,7 +665,7 @@ public class BrowseViewModel : ViewModelBase
                 List<string> trackIds = [];
                 try
                 {
-                    trackIds = System.Text.Json.JsonSerializer.Deserialize<List<string>>(trackIdsJson) ?? [];
+                    trackIds = JsonSerializer.Deserialize<List<string>>(trackIdsJson) ?? [];
                 }
                 catch { }
 
@@ -713,7 +708,7 @@ public class BrowseViewModel : ViewModelBase
     {
         if (bytes <= 0) return "Unknown";
         string[] units = { "B", "KB", "MB", "GB", "TB" };
-        int unitIndex = 0;
+        var unitIndex = 0;
         double size = bytes;
         while (size >= 1024 && unitIndex < units.Length - 1)
         {
@@ -836,7 +831,7 @@ public class BrowseViewModel : ViewModelBase
 
     private static void ExecuteOnUiOrCurrent(Action action)
     {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher != null)
             dispatcher.Invoke(action);
         else
@@ -906,11 +901,8 @@ public class BrowseViewModel : ViewModelBase
 
         // 1. Load from Snapshot
         if (manifest.Snapshot != null)
-        {
             foreach (var state in manifest.Snapshot.EntityStates)
-            {
                 if (string.Equals(state.TargetType, targetType, StringComparison.OrdinalIgnoreCase))
-                {
                     resolved[state.TargetId] = new ResolvedEntity
                     {
                         TargetId = state.TargetId,
@@ -920,9 +912,6 @@ public class BrowseViewModel : ViewModelBase
                         Timestamp = manifest.Snapshot.Timestamp,
                         IsDeleted = false
                     };
-                }
-            }
-        }
 
         // 2. Apply Operations
         foreach (var op in manifest.Operations)

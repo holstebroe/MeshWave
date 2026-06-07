@@ -1,6 +1,5 @@
-using MeshWave.Common.Core.P2P;
 using System.Collections.Concurrent;
-using System.Net.Sockets;
+using MeshWave.Common.Core.P2P;
 using NLog;
 
 namespace MeshWave.Synchronizer;
@@ -123,12 +122,8 @@ public class PeerRouter : IDisposable
 
             // Sync capabilities
             foreach (var cap in peer.Capabilities)
-            {
                 if (!existing.Info.Capabilities.Contains(cap))
-                {
                     existing.Info.Capabilities.Add(cap);
-                }
-            }
         }
         else
         {
@@ -149,10 +144,7 @@ public class PeerRouter : IDisposable
         try
         {
             var discovered = await _exchangeClient.FetchPeersAsync(peer.Address, peer.Port, cancellationToken: ct);
-            if (discovered != null)
-            {
-                LearnPeers(discovered);
-            }
+            if (discovered != null) LearnPeers(discovered);
         }
         catch { }
     }
@@ -205,12 +197,11 @@ public class PeerRouter : IDisposable
         // Periodically re-bootstrap and do PEX with random known peers.
         // Two independent counters track PEX and bootstrap intervals so
         // neither blocks the other.
-        int cyclesSinceBootstrap = 0;
+        var cyclesSinceBootstrap = 0;
         const int pexIntervalSeconds = 30;
         const int bootstrapEveryNCycles = (SecurityLimits.BootstrapRetryIntervalMinutes * 60) / pexIntervalSeconds;
 
         while (!ct.IsCancellationRequested)
-        {
             try
             {
                 await Task.Delay(TimeSpan.FromSeconds(pexIntervalSeconds), ct);
@@ -224,17 +215,12 @@ public class PeerRouter : IDisposable
                     .ToList();
 
                 foreach (var peer in sample)
-                {
                     try
                     {
                         var discovered = await _exchangeClient.FetchPeersAsync(peer.Address, peer.Port, cancellationToken: ct);
-                        if (discovered != null)
-                        {
-                            LearnPeers(discovered);
-                        }
+                        if (discovered != null) LearnPeers(discovered);
                     }
                     catch { }
-                }
 
                 // Periodic bootstrap re-contact — ensures peers can find the network
                 // even if a bootstrap node was restarted since the last connection.
@@ -246,7 +232,6 @@ public class PeerRouter : IDisposable
             }
             catch (OperationCanceledException) { break; }
             catch { }
-        }
     }
 
     private static bool TryParseEndpoint(string nodeAddress, out string host, out int port)

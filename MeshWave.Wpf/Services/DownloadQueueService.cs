@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.ObjectModel;
 using MeshWave.Wpf.Mvvm;
 
@@ -80,15 +81,13 @@ public class DownloadQueueItem : ViewModelBase
 /// </summary>
 public class DownloadQueueService
 {
-    private readonly ObservableCollection<DownloadQueueItem> _items = [];
-
-    public IReadOnlyObservableCollection Items => new ReadOnlyObservableCollectionWrapper(_items);
-    public ObservableCollection<DownloadQueueItem> AllItems => _items;
+    public IReadOnlyObservableCollection Items => new ReadOnlyObservableCollectionWrapper(AllItems);
+    public ObservableCollection<DownloadQueueItem> AllItems { get; } = [];
 
     public DownloadQueueItem Enqueue(string peerUserId, string contentHash, string title, string artist, string album, string targetType = "Track", string? trackId = null)
     {
         // Avoid duplicates by contentHash
-        var existing = _items.FirstOrDefault(i =>
+        var existing = AllItems.FirstOrDefault(i =>
             string.Equals(i.ContentHash, contentHash, StringComparison.OrdinalIgnoreCase)
             && i.State != DownloadState.Failed);
         if (existing != null)
@@ -104,17 +103,25 @@ public class DownloadQueueService
             TargetType = targetType,
             TrackId = trackId
         };
-        _items.Add(item);
+        AllItems.Add(item);
         return item;
     }
 
-    public bool IsQueued(string contentHash) =>
-        _items.Any(i => string.Equals(i.ContentHash, contentHash, StringComparison.OrdinalIgnoreCase)
-                     && (i.State == DownloadState.Pending || i.State == DownloadState.Downloading));
+    public bool IsQueued(string contentHash)
+    {
+        return AllItems.Any(i => string.Equals(i.ContentHash, contentHash, StringComparison.OrdinalIgnoreCase)
+                               && (i.State == DownloadState.Pending || i.State == DownloadState.Downloading));
+    }
 
-    public void Remove(DownloadQueueItem item) => _items.Remove(item);
-    public void ClearCompleted() =>
-        _items.Where(i => i.IsDone).ToList().ForEach(i => _items.Remove(i));
+    public void Remove(DownloadQueueItem item)
+    {
+        AllItems.Remove(item);
+    }
+
+    public void ClearCompleted()
+    {
+        AllItems.Where(i => i.IsDone).ToList().ForEach(i => AllItems.Remove(i));
+    }
 
     // Simple wrapper interfaces
     public interface IReadOnlyObservableCollection : IEnumerable<DownloadQueueItem> { }
@@ -122,7 +129,14 @@ public class DownloadQueueService
     private class ReadOnlyObservableCollectionWrapper(ObservableCollection<DownloadQueueItem> inner)
         : IReadOnlyObservableCollection
     {
-        public IEnumerator<DownloadQueueItem> GetEnumerator() => inner.GetEnumerator();
-        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => inner.GetEnumerator();
+        public IEnumerator<DownloadQueueItem> GetEnumerator()
+        {
+            return inner.GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return inner.GetEnumerator();
+        }
     }
 }

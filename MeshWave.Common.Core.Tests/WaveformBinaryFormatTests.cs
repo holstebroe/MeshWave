@@ -12,17 +12,15 @@ public class WaveformBinaryFormatTests
         float[] original = [0.0f, 0.5f, 1.0f, 0.25f, 0.75f];
 
         // Act
-        byte[] encoded = WaveformBinaryFormat.Encode(original);
-        float[]? decoded = WaveformBinaryFormat.Decode(encoded);
+        var encoded = WaveformBinaryFormat.Encode(original);
+        var decoded = WaveformBinaryFormat.Decode(encoded);
 
         // Assert
         Assert.NotNull(decoded);
         Assert.Equal(original.Length, decoded.Length);
-        for (int i = 0; i < original.Length; i++)
-        {
+        for (var i = 0; i < original.Length; i++)
             // Allow for small precision loss due to 8-bit quantization (1/255)
             Assert.Equal(original[i], decoded[i], precision: 2);
-        }
     }
 
     [Fact]
@@ -68,12 +66,12 @@ public class WaveformBinaryFormatTests
     public void Encode_HandlesLargeArrays()
     {
         // Arrange
-        float[] large = new float[10000];
-        for (int i = 0; i < large.Length; i++) large[i] = 0.1f;
+        var large = new float[10000];
+        for (var i = 0; i < large.Length; i++) large[i] = 0.1f;
 
         // Act
-        byte[] encoded = WaveformBinaryFormat.Encode(large);
-        float[]? decoded = WaveformBinaryFormat.Decode(encoded);
+        var encoded = WaveformBinaryFormat.Encode(large);
+        var decoded = WaveformBinaryFormat.Decode(encoded);
 
         // Assert
         Assert.NotNull(decoded);

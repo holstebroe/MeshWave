@@ -91,7 +91,6 @@ public sealed class NetworkDiagnosticsWindowViewModel : ViewModelBase
             Peers.Add(item);
 
         if (Peers.Count == 0)
-        {
             foreach (var routedPeer in _sync.GetPeers())
             {
                 var userId = !string.IsNullOrWhiteSpace(routedPeer.UserId) ? routedPeer.UserId : "(unknown id)";
@@ -114,7 +113,6 @@ public sealed class NetworkDiagnosticsWindowViewModel : ViewModelBase
                     RecentMessages = []
                 }));
             }
-        }
 
         var localTracks = _sync.LocalPublishedTrackCount;
         var localAlbums = _sync.LocalPublishedAlbumCount;
@@ -143,19 +141,11 @@ public sealed class NetworkDiagnosticsWindowViewModel : ViewModelBase
                     + $"Local published: {localAlbums} albums, {localTracks} tracks ({localOps} manifest ops){Environment.NewLine}"
                     + $"Known peer published totals: {peerAlbums} albums, {peerTracks} tracks";
 
-        if (SelectedPeer != null)
-        {
-            SelectedPeer = Peers.FirstOrDefault(p => string.Equals(p.UserId, SelectedPeer.UserId, StringComparison.OrdinalIgnoreCase));
-        }
+        if (SelectedPeer != null) SelectedPeer = Peers.FirstOrDefault(p => string.Equals(p.UserId, SelectedPeer.UserId, StringComparison.OrdinalIgnoreCase));
 
         if (SelectedPeer == null && Peers.Count > 0)
-        {
             SelectedPeer = Peers[0];
-        }
-        else if (SelectedPeer == null)
-        {
-            SelectedPeerLogText = "No peer diagnostics available yet.";
-        }
+        else if (SelectedPeer == null) SelectedPeerLogText = "No peer diagnostics available yet.";
     }
 
     private static string BuildPeerLogText(PeerDiagnosticsItemViewModel? peer)

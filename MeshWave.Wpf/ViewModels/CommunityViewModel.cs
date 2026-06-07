@@ -373,10 +373,7 @@ public class CommunityViewModel : ViewModelBase
         if (latestCreateSequence > lastKnown)
         {
             _lastFeedReleaseSequenceByPeer[e.UserId] = latestCreateSequence;
-            if (ActiveTab != CommunityTab.Feed)
-            {
-                ExecuteOnUi(() => NewReleaseCount++);
-            }
+            if (ActiveTab != CommunityTab.Feed) ExecuteOnUi(() => NewReleaseCount++);
         }
 
         ExecuteOnUi(() =>
@@ -424,13 +421,9 @@ public class CommunityViewModel : ViewModelBase
             {
                 var report = _sync.LastConnectionAttemptReport;
                 if (report != null)
-                {
                     SearchStatus = $"Add to Library failed for \"{item.Title}\". {report.BuildUserFacingSummary()}";
-                }
                 else
-                {
                     SearchStatus = $"Add to Library failed for \"{item.Title}\": peer did not return content.";
-                }
                 return;
             }
 
@@ -595,10 +588,8 @@ public class CommunityViewModel : ViewModelBase
                 .Select(g => g.OrderByDescending(op => op.SequenceNumber).First());
 
             foreach (var op in latestByTrack)
-            {
                 if (op.OperationType == ManifestOperationType.Like)
                     _trackLikes[op.TargetId] = _trackLikes.GetValueOrDefault(op.TargetId, 0) + 1;
-            }
         }
     }
 
@@ -651,10 +642,8 @@ public class CommunityViewModel : ViewModelBase
         var invalid = Path.GetInvalidFileNameChars();
         var sb = new StringBuilder(value.Length);
         foreach (var c in value)
-        {
             if (!invalid.Contains(c))
                 sb.Append(c);
-        }
 
         var result = sb.ToString().Trim();
         return string.IsNullOrWhiteSpace(result) ? fallback : result;
@@ -784,7 +773,7 @@ public class CommunityViewModel : ViewModelBase
 
     private static void ExecuteOnUi(Action action)
     {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher != null)
             dispatcher.Invoke(action);
         else
@@ -855,9 +844,7 @@ public class CommunityViewModel : ViewModelBase
             .ToList();
 
         foreach (var manifest in manifests)
-        {
             if (!peersByUserId.ContainsKey(manifest.UserId))
-            {
                 peersByUserId[manifest.UserId] = new PeerInfo
                 {
                     UserId = manifest.UserId,
@@ -866,8 +853,6 @@ public class CommunityViewModel : ViewModelBase
                     Port = 0,
                     LastSeen = DateTime.UtcNow
                 };
-            }
-        }
 
         var users = new List<CommunityUserItem>();
         foreach (var peer in peersByUserId.Values.OrderByDescending(p => p.LastSeen).Take(50))
@@ -921,14 +906,12 @@ public class CommunityViewModel : ViewModelBase
         }
 
         if (!string.IsNullOrWhiteSpace(filter))
-        {
             users = users
                 .Where(u =>
                     u.DisplayName.Contains(filter, StringComparison.OrdinalIgnoreCase)
                     || u.UserId.Contains(filter, StringComparison.OrdinalIgnoreCase)
                     || u.Bio.Contains(filter, StringComparison.OrdinalIgnoreCase))
                 .ToList();
-        }
 
         SearchResults = new ObservableCollection<CommunityUserItem>(users);
         GroupResults = [];

@@ -1,3 +1,5 @@
+using MeshWave.Synchronizer;
+
 namespace MeshWave.Integration.Tests;
 
 /// <summary>
@@ -5,14 +7,19 @@ namespace MeshWave.Integration.Tests;
 /// Suppresses all UDP broadcast traffic so tests run without network privileges
 /// and do not interfere with each other.
 /// </summary>
-internal sealed class NullPeerDiscovery : MeshWave.Synchronizer.PeerDiscovery
+internal sealed class NullPeerDiscovery : PeerDiscovery
 {
     public NullPeerDiscovery() : base(listenPort: 0) { }
 
     public override Task StartDiscoveryAsync(
-        MeshWave.Synchronizer.LocalPeerIdentity identity,
+        LocalPeerIdentity identity,
         CancellationToken cancellationToken = default)
-        => Task.CompletedTask;
+    {
+        return Task.CompletedTask;
+    }
 
-    public override Task StopDiscoveryAsync() => Task.CompletedTask;
+    public override Task StopDiscoveryAsync()
+    {
+        return Task.CompletedTask;
+    }
 }

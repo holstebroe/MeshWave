@@ -1,10 +1,9 @@
-namespace MeshWave.Wpf.Views
+namespace MeshWave.Wpf.Views;
+
+public partial class BrowseView : UserControl
 {
-    public partial class BrowseView : UserControl
+    public BrowseView()
     {
-        public BrowseView()
-        {
-            InitializeComponent();
-        }
+        InitializeComponent();
     }
 }

@@ -1,5 +1,3 @@
-using System;
-
 namespace MeshWave.Common.Core.Models;
 
 /// <summary>

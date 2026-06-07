@@ -1,10 +1,9 @@
-namespace MeshWave.Wpf.Views
+namespace MeshWave.Wpf.Views;
+
+public partial class MyMusicMetadataEditorView : UserControl
 {
-    public partial class MyMusicMetadataEditorView : UserControl
+    public MyMusicMetadataEditorView()
     {
-        public MyMusicMetadataEditorView()
-        {
-            InitializeComponent();
-        }
+        InitializeComponent();
     }
 }

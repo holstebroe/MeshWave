@@ -1,7 +1,5 @@
-using MeshWave.Common.Core.P2P;
 using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
-using MeshWave.Synchronizer;
 using Xunit;
 
 namespace MeshWave.Synchronizer.Tests;
@@ -138,7 +136,7 @@ public class PeerManifestStoreTests : IDisposable
     [Fact]
     public void GetAll_ReturnsAllCachedManifests()
     {
-        for (int i = 0; i < 3; i++)
+        for (var i = 0; i < 3; i++)
         {
             var (pub, priv) = GenerateKeyPair();
             var userId = CryptoService.DeriveUserIdFromPublicKey(pub);

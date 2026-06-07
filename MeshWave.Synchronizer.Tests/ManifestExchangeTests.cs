@@ -1,6 +1,7 @@
-using MeshWave.Common.Core.P2P;
+using System.Net;
+using System.Net.Sockets;
 using MeshWave.Common.Core.Models;
-using MeshWave.Synchronizer;
+using MeshWave.Common.Core.P2P;
 using Xunit;
 
 namespace MeshWave.Synchronizer.Tests;
@@ -12,9 +13,9 @@ public class ManifestExchangeTests : IAsyncDisposable
 
     private static int FindFreePort()
     {
-        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
-        var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         listener.Stop();
         return port;
     }
@@ -26,7 +27,7 @@ public class ManifestExchangeTests : IAsyncDisposable
         using var server = new ManifestExchangeServer(port);
         var manifest = _manager.CreateManifest("user-1");
 
-        await server.StartAsync((_) => manifest, cancellationToken: TestContext.Current.CancellationToken);
+        await server.StartAsync(_ => manifest, cancellationToken: TestContext.Current.CancellationToken);
 
         try
         {
@@ -50,7 +51,7 @@ public class ManifestExchangeTests : IAsyncDisposable
         server.ManifestReceived += (_, e) => receivedManifest.TrySetResult(e.Manifest);
 
         var emptyManifest = _manager.CreateManifest("user-serving");
-        await server.StartAsync((_) => emptyManifest, cancellationToken: TestContext.Current.CancellationToken);
+        await server.StartAsync(_ => emptyManifest, cancellationToken: TestContext.Current.CancellationToken);
 
         try
         {
@@ -76,7 +77,7 @@ public class ManifestExchangeTests : IAsyncDisposable
     {
         var port = FindFreePort();
         using var server = new ManifestExchangeServer(port);
-        await server.StartAsync((_) => null, cancellationToken: TestContext.Current.CancellationToken);
+        await server.StartAsync(_ => null, cancellationToken: TestContext.Current.CancellationToken);
 
         try
         {
@@ -97,7 +98,7 @@ public class ManifestExchangeTests : IAsyncDisposable
         var port = FindFreePort();
         using var server = new ManifestExchangeServer(port);
         await server.StartAsync(
-            (_) => null,
+            _ => null,
             peersProvider: null,
             rendezvousProvider: request => new RendezvousResponse
             {
@@ -134,8 +135,7 @@ public class ManifestExchangeTests : IAsyncDisposable
         var port = FindFreePort();
         using var server = new ManifestExchangeServer(port);
         var manifest = _manager.CreateManifest("user-range");
-        for (int i = 0; i < 5; i++)
-        {
+        for (var i = 0; i < 5; i++)
             manifest.Operations.Add(new ManifestOperation
             {
                 OperationId = $"op-{i}",
@@ -146,9 +146,8 @@ public class ManifestExchangeTests : IAsyncDisposable
                 Signature = "sig",
                 Timestamp = DateTime.UtcNow
             });
-        }
 
-        await server.StartAsync((_) => manifest, cancellationToken: TestContext.Current.CancellationToken);
+        await server.StartAsync(_ => manifest, cancellationToken: TestContext.Current.CancellationToken);
 
         try
         {

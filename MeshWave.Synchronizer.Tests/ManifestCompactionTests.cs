@@ -1,7 +1,5 @@
-using MeshWave.Common.Core.P2P;
 using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
-using MeshWave.Synchronizer;
 using Xunit;
 
 namespace MeshWave.Synchronizer.Tests;
@@ -17,11 +15,9 @@ public class ManifestCompactionTests
         var manifest = _manager.CreateManifest("user-1");
 
         // Add many operations
-        for (int i = 0; i < 20; i++)
-        {
+        for (var i = 0; i < 20; i++)
             _manager.AppendSignedOperation(manifest, ManifestOperationType.Play,
                 "track-1", "Track", null, null, privateKey);
-        }
 
         Assert.Equal(20, manifest.Operations.Count);
 
@@ -76,15 +72,12 @@ public class ManifestCompactionTests
         var local = _manager.CreateManifest("user-1");
 
         var remote = _manager.CreateManifest("user-1");
-        for (int i = 0; i < 10; i++)
-        {
-            _manager.AppendSignedOperation(remote, ManifestOperationType.Play, "track-1", "Track", null, null, privateKey);
-        }
+        for (var i = 0; i < 10; i++) _manager.AppendSignedOperation(remote, ManifestOperationType.Play, "track-1", "Track", null, null, privateKey);
 
         _manager.Compact(remote, privateKey, threshold: 5, keepRecent: 2);
 
         // Merge remote into local
-        int added = _manager.MergeManifest(local, remote, publicKey);
+        var added = _manager.MergeManifest(local, remote, publicKey);
 
         Assert.Equal(2, added);
         Assert.NotNull(local.Snapshot);
@@ -100,20 +93,14 @@ public class ManifestCompactionTests
         var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
 
         var local = _manager.CreateManifest("user-1");
-        for (int i = 0; i < 5; i++)
-        {
-            _manager.AppendSignedOperation(local, ManifestOperationType.Play, "track-1", "Track", null, null, privateKey);
-        }
+        for (var i = 0; i < 5; i++) _manager.AppendSignedOperation(local, ManifestOperationType.Play, "track-1", "Track", null, null, privateKey);
 
         var remote = _manager.CreateManifest("user-1");
-        for (int i = 0; i < 10; i++)
-        {
-            _manager.AppendSignedOperation(remote, ManifestOperationType.Play, "track-1", "Track", null, null, privateKey);
-        }
+        for (var i = 0; i < 10; i++) _manager.AppendSignedOperation(remote, ManifestOperationType.Play, "track-1", "Track", null, null, privateKey);
         _manager.Compact(remote, privateKey, threshold: 5, keepRecent: 2);
 
         // Local has Seq 0-4. Remote has Snapshot (up to Seq 7) + Seq 8-9.
-        int added = _manager.MergeManifest(local, remote, publicKey);
+        var added = _manager.MergeManifest(local, remote, publicKey);
 
         Assert.Equal(2, added);
         Assert.NotNull(local.Snapshot);

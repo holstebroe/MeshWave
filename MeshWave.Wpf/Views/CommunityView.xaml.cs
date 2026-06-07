@@ -1,10 +1,9 @@
-namespace MeshWave.Wpf.Views
+namespace MeshWave.Wpf.Views;
+
+public partial class CommunityView : UserControl
 {
-    public partial class CommunityView : UserControl
+    public CommunityView()
     {
-        public CommunityView()
-        {
-            InitializeComponent();
-        }
+        InitializeComponent();
     }
 }

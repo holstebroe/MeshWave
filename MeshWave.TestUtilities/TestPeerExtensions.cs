@@ -1,5 +1,4 @@
 using MeshWave.Common.Core.Models;
-using MeshWave.Synchronizer;
 using Xunit;
 
 namespace MeshWave.TestUtilities;
@@ -24,10 +23,7 @@ public static class TestPeerExtensions
     public static bool HasOperation(this TestPeer peer, string fromUserId, ManifestStreamType streamType, Func<ManifestOperation, bool> predicate)
     {
         var manifest = peer.GetPeerManifest(fromUserId, streamType);
-        if (manifest == null && fromUserId == peer.UserId)
-        {
-            manifest = peer.GetLocalManifest(streamType);
-        }
+        if (manifest == null && fromUserId == peer.UserId) manifest = peer.GetLocalManifest(streamType);
 
         return manifest?.Operations.Any(predicate) ?? false;
     }
@@ -39,10 +35,7 @@ public static class TestPeerExtensions
         {
             if (condition()) return;
             await Task.Delay(100, TestContext.Current.CancellationToken);
-            if (deadline.Subtract(DateTime.UtcNow).TotalMilliseconds % 500 < 100)
-            {
-                await peer.SyncAsync();
-            }
+            if (deadline.Subtract(DateTime.UtcNow).TotalMilliseconds % 500 < 100) await peer.SyncAsync();
         }
         throw new TimeoutException("Condition not met within timeout.");
     }

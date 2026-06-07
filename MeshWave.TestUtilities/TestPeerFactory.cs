@@ -1,8 +1,6 @@
-using MeshWave.Common.Core.P2P;
 using System.Net;
 using System.Net.Sockets;
 using MeshWave.Common.Core.Crypto;
-using MeshWave.Common.Core.Models;
 using MeshWave.Common.Core.Storage;
 using MeshWave.Synchronizer;
 using NLog;
@@ -131,7 +129,7 @@ public static class TestPeerFactory
         lock (_portLock)
         {
             int port;
-            int retry = 0;
+            var retry = 0;
             while (true)
             {
                 var listener = new TcpListener(IPAddress.Loopback, 0);
@@ -153,6 +151,13 @@ public static class TestPeerFactory
 
 public class NullPeerDiscovery : PeerDiscovery
 {
-    public override Task StartDiscoveryAsync(LocalPeerIdentity identity, CancellationToken cancellationToken = default) => Task.CompletedTask;
-    public override Task StopDiscoveryAsync() => Task.CompletedTask;
+    public override Task StartDiscoveryAsync(LocalPeerIdentity identity, CancellationToken cancellationToken = default)
+    {
+        return Task.CompletedTask;
+    }
+
+    public override Task StopDiscoveryAsync()
+    {
+        return Task.CompletedTask;
+    }
 }

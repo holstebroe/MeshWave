@@ -1,7 +1,7 @@
-using MeshWave.Common.Core.P2P;
 using System.Collections.Concurrent;
 using System.Net;
 using MeshWave.Common.Core.Models;
+using MeshWave.Common.Core.P2P;
 using MeshWave.Synchronizer;
 using NLog;
 
@@ -41,7 +41,7 @@ public sealed class BootstrapCoordinator : IDisposable
         _server.ManifestReceived += OnManifestReceived;
 
         await _server.StartAsync(
-            localManifestProvider: (_) => null,
+            localManifestProvider: _ => null,
             peersProvider: GetLivePeers,
             rendezvousProvider: OnRendezvousRequested,
             relayedManifestProvider: (userId, streamType) => streamType == ManifestStreamType.Content ? _relayedManifests.GetValueOrDefault(userId) : null,
@@ -65,7 +65,6 @@ public sealed class BootstrapCoordinator : IDisposable
             {
                 var p = e.Peer;
                 if (_relayedManifests.ContainsKey(p.UserId))
-                {
                     return new PeerInfo
                     {
                         UserId = p.UserId,
@@ -76,7 +75,6 @@ public sealed class BootstrapCoordinator : IDisposable
                         LastSeen = p.LastSeen,
                         Capabilities = p.Capabilities.Contains("relay") ? p.Capabilities : [.. p.Capabilities, "relay"]
                     };
-                }
                 return p;
             })
             .ToList();
@@ -86,22 +84,18 @@ public sealed class BootstrapCoordinator : IDisposable
     {
         var client = new ManifestExchangeClient(timeoutMs: 5_000, logger: _logger);
         foreach (var seed in seeds.Take(SecurityLimits.MaxBootstrapNodes))
-        {
             try
             {
                 var (host, port) = ParseEndpoint(seed, Port);
                 var peers = await client.FetchPeersAsync(host, port, cancellationToken: ct);
                 if (peers != null)
-                {
                     foreach (var p in peers)
                         RegisterPeer(p);
-                }
             }
             catch
             {
                 // best-effort seeding
             }
-        }
     }
 
     private void OnManifestReceived(object? sender, ManifestReceivedEventArgs e)
@@ -140,22 +134,17 @@ public sealed class BootstrapCoordinator : IDisposable
 
         RegisterPeer(peer);
 
-        if (e.IsRelay)
-        {
-            _relayedManifests[manifest.UserId] = manifest;
-        }
+        if (e.IsRelay) _relayedManifests[manifest.UserId] = manifest;
     }
 
     private RendezvousResponse OnRendezvousRequested(RendezvousRequest request)
     {
         if (request == null || !SecurityLimits.IsValidUserId(request.InitiatorUserId) || !SecurityLimits.IsValidUserId(request.TargetUserId))
-        {
             return new RendezvousResponse
             {
                 Success = false,
                 Message = "Invalid rendezvous request."
             };
-        }
 
         var now = DateTime.UtcNow;
         var probeWindow = Math.Clamp(request.RequestedProbeWindowMs, 1_500, 10_000);
@@ -223,32 +212,23 @@ public sealed class BootstrapCoordinator : IDisposable
     private void EvictStalest()
     {
         var stalest = _peers.Values.OrderBy(e => e.LastSeen).FirstOrDefault();
-        if (stalest != null && _peers.TryRemove(stalest.Peer.UserId, out var removed))
-        {
-            PeerDisconnected?.Invoke(this, new BootstrapPeerEventArgs(removed.Peer, "evicted"));
-        }
+        if (stalest != null && _peers.TryRemove(stalest.Peer.UserId, out var removed)) PeerDisconnected?.Invoke(this, new BootstrapPeerEventArgs(removed.Peer, "evicted"));
     }
 
     private void PruneStalePeers()
     {
         var cutoff = DateTime.UtcNow.AddMinutes(-10);
         foreach (var stale in _peers.Where(kv => kv.Value.LastSeen < cutoff).ToList())
-        {
             if (_peers.TryRemove(stale.Key, out var removed))
             {
                 _relayedManifests.TryRemove(stale.Key, out _);
                 PeerDisconnected?.Invoke(this, new BootstrapPeerEventArgs(removed.Peer, "stale-timeout"));
             }
-        }
 
         // Also prune relayed manifests that might not have an active peer entry
         foreach (var userId in _relayedManifests.Keys)
-        {
             if (!_peers.ContainsKey(userId))
-            {
                 _relayedManifests.TryRemove(userId, out _);
-            }
-        }
     }
 
     private static (string host, int port) ParseEndpoint(string endpoint, int defaultPort)

@@ -1,4 +1,3 @@
-using MeshWave.LibraryManager;
 using Xunit;
 
 namespace MeshWave.LibraryManager.Tests;
@@ -17,10 +16,7 @@ public class LocalLibraryManagerTests : IDisposable
 
     public void Dispose()
     {
-        if (Directory.Exists(_tempDirectory))
-        {
-            Directory.Delete(_tempDirectory, recursive: true);
-        }
+        if (Directory.Exists(_tempDirectory)) Directory.Delete(_tempDirectory, recursive: true);
     }
 
     [Fact]

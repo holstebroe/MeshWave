@@ -38,7 +38,7 @@ public static class WaveformRenderer
             WaveformStyle.Mirror  => RenderSolidPolygon(samples, canvasWidth, canvasHeight),
             WaveformStyle.Neon    => RenderSolidPolygon(samples, canvasWidth, canvasHeight),
             WaveformStyle.Smooth  => RenderSmooth(samples, canvasWidth, canvasHeight),
-            _                     => RenderSolidPolygon(samples, canvasWidth, canvasHeight),
+            _                     => RenderSolidPolygon(samples, canvasWidth, canvasHeight)
         };
     }
 
@@ -49,9 +49,9 @@ public static class WaveformRenderer
         var geometry = new StreamGeometry();
         using (var ctx = geometry.Open())
         {
-            int  count    = Math.Max(samples.Length, 1);
+            var  count    = Math.Max(samples.Length, 1);
             var  barW     = w / count;
-            double centre = h / 2.0;
+            var centre = h / 2.0;
 
             if (count > 0)
             {
@@ -59,26 +59,26 @@ public static class WaveformRenderer
                 ctx.BeginFigure(new Point(0, centre), true, true);
 
                 // Top edge (left to right)
-                for (int i = 0; i < count; i++)
+                for (var i = 0; i < count; i++)
                 {
-                    double amp       = Amplitude(samples, i);
-                    double barHeight = Math.Max(4, amp * h);
-                    double left      = Math.Floor(i * barW);
-                    double top       = (h - barHeight) / 2.0;
-                    double width     = Math.Max(1, Math.Ceiling((i + 1) * barW) - Math.Floor(i * barW));
+                    var amp       = Amplitude(samples, i);
+                    var barHeight = Math.Max(4, amp * h);
+                    var left      = Math.Floor(i * barW);
+                    var top       = (h - barHeight) / 2.0;
+                    var width     = Math.Max(1, Math.Ceiling((i + 1) * barW) - Math.Floor(i * barW));
 
                     ctx.LineTo(new Point(left, top), true, false);
                     ctx.LineTo(new Point(left + width, top), true, false);
                 }
 
                 // Bottom edge (right to left)
-                for (int i = count - 1; i >= 0; i--)
+                for (var i = count - 1; i >= 0; i--)
                 {
-                    double amp       = Amplitude(samples, i);
-                    double barHeight = Math.Max(4, amp * h);
-                    double left      = Math.Floor(i * barW);
-                    double bottom    = (h + barHeight) / 2.0;
-                    double width     = Math.Max(1, Math.Ceiling((i + 1) * barW) - Math.Floor(i * barW));
+                    var amp       = Amplitude(samples, i);
+                    var barHeight = Math.Max(4, amp * h);
+                    var left      = Math.Floor(i * barW);
+                    var bottom    = (h + barHeight) / 2.0;
+                    var width     = Math.Max(1, Math.Ceiling((i + 1) * barW) - Math.Floor(i * barW));
 
                     ctx.LineTo(new Point(left + width, bottom), true, false);
                     ctx.LineTo(new Point(left, bottom), true, false);
@@ -100,25 +100,25 @@ public static class WaveformRenderer
             const double targetGapW = 1.0;
             const double stride     = targetBarW + targetGapW;
 
-            int barCount = (int)Math.Floor(w / stride);
+            var barCount = (int)Math.Floor(w / stride);
             if (barCount <= 0) return geometry;
 
             const double centreMaskHalf = 0.75; // Thinner dividing bar (total 1.5px)
-            double centre = h / 2.0;
+            var centre = h / 2.0;
 
-            for (int i = 0; i < barCount; i++)
+            for (var i = 0; i < barCount; i++)
             {
                 // Skip every 3rd bar in pixel-scale
                 if (i % 3 == 2) continue;
 
-                double sampleIdx = (double)i / barCount * (samples.Length - 1);
-                double amp       = Amplitude(samples, (int)sampleIdx);
-                double halfMax   = (h / 2.0) - centreMaskHalf;
+                var sampleIdx = (double)i / barCount * (samples.Length - 1);
+                var amp       = Amplitude(samples, (int)sampleIdx);
+                var halfMax   = (h / 2.0) - centreMaskHalf;
 
-                double upperH   = Math.Max(2, amp * halfMax);
-                double upperTop = centre - centreMaskHalf - upperH;
+                var upperH   = Math.Max(2, amp * halfMax);
+                var upperTop = centre - centreMaskHalf - upperH;
 
-                double left = i * stride;
+                var left = i * stride;
 
                 // Upper bar
                 ctx.BeginFigure(new Point(left, upperTop), true, true);
@@ -127,8 +127,8 @@ public static class WaveformRenderer
                 ctx.LineTo(new Point(left, upperTop + upperH), true, false);
 
                 // Lower bar
-                double lowerH   = Math.Max(1, (amp * halfMax) * 0.5);
-                double lowerTop = centre + centreMaskHalf;
+                var lowerH   = Math.Max(1, (amp * halfMax) * 0.5);
+                var lowerTop = centre + centreMaskHalf;
                 ctx.BeginFigure(new Point(left, lowerTop), true, true);
                 ctx.LineTo(new Point(left + targetBarW, lowerTop), true, false);
                 ctx.LineTo(new Point(left + targetBarW, lowerTop + lowerH), true, false);
@@ -146,28 +146,28 @@ public static class WaveformRenderer
         if (samples.Length == 0)
             return new StreamGeometry();
 
-        int windowSize = Math.Max(5, (samples.Length / 20) | 1); // force odd
-        double[] smoothed = HannSmooth(samples, windowSize);
+        var windowSize = Math.Max(5, (samples.Length / 20) | 1); // force odd
+        var smoothed = HannSmooth(samples, windowSize);
 
-        int count  = smoothed.Length;
-        double centre = h / 2.0;
+        var count  = smoothed.Length;
+        var centre = h / 2.0;
 
-        int pathPoints = Math.Min(count, 400);
-        double step    = (double)(count - 1) / Math.Max(pathPoints - 1, 1);
+        var pathPoints = Math.Min(count, 400);
+        var step    = (double)(count - 1) / Math.Max(pathPoints - 1, 1);
 
         var upperPoints = new Point[pathPoints];
         var lowerPoints = new Point[pathPoints];
 
-        for (int pi = 0; pi < pathPoints; pi++)
+        for (var pi = 0; pi < pathPoints; pi++)
         {
-            double sampleIndex = pi * step;
-            int    lo          = (int)sampleIndex;
-            int    hi          = Math.Min(lo + 1, count - 1);
-            double frac        = sampleIndex - lo;
-            double amp         = smoothed[lo] * (1 - frac) + smoothed[hi] * frac;
+            var sampleIndex = pi * step;
+            var    lo          = (int)sampleIndex;
+            var    hi          = Math.Min(lo + 1, count - 1);
+            var frac        = sampleIndex - lo;
+            var amp         = smoothed[lo] * (1 - frac) + smoothed[hi] * frac;
 
-            double halfH    = Math.Max(2, amp * centre);
-            double x        = (pi / (double)(pathPoints - 1)) * w;
+            var halfH    = Math.Max(2, amp * centre);
+            var x        = (pi / (double)(pathPoints - 1)) * w;
 
             upperPoints[pi] = new Point(x, centre - halfH);
             lowerPoints[pi] = new Point(x, centre + halfH);
@@ -177,12 +177,12 @@ public static class WaveformRenderer
         using (var ctx = geometry.Open())
         {
             ctx.BeginFigure(upperPoints[0], true, true);
-            for (int i = 1; i < upperPoints.Length; i++)
+            for (var i = 1; i < upperPoints.Length; i++)
                 ctx.LineTo(upperPoints[i], true, false);
 
             ctx.LineTo(lowerPoints[lowerPoints.Length - 1], true, false);
 
-            for (int i = lowerPoints.Length - 2; i >= 0; i--)
+            for (var i = lowerPoints.Length - 2; i >= 0; i--)
                 ctx.LineTo(lowerPoints[i], true, false);
         }
         geometry.Freeze();
@@ -193,25 +193,25 @@ public static class WaveformRenderer
 
     private static double[] HannSmooth(float[] samples, int windowSize)
     {
-        int n = samples.Length;
+        var n = samples.Length;
         var result = new double[n];
 
         var weights = new double[windowSize];
         double weightSum = 0;
-        for (int k = 0; k < windowSize; k++)
+        for (var k = 0; k < windowSize; k++)
         {
             weights[k] = 0.5 * (1.0 - Math.Cos(2.0 * Math.PI * k / (windowSize - 1)));
             weightSum  += weights[k];
         }
 
-        int half = windowSize / 2;
+        var half = windowSize / 2;
 
-        for (int i = 0; i < n; i++)
+        for (var i = 0; i < n; i++)
         {
             double acc = 0, wAcc = 0;
-            for (int k = 0; k < windowSize; k++)
+            for (var k = 0; k < windowSize; k++)
             {
-                int idx = i - half + k;
+                var idx = i - half + k;
                 if (idx < 0) idx = 0;
                 else if (idx >= n) idx = n - 1;
                 acc  += samples[idx] * weights[k];
@@ -226,5 +226,7 @@ public static class WaveformRenderer
     // ─── Shared helpers ───────────────────────────────────────────────────────
 
     private static double Amplitude(float[] samples, int index)
-        => samples.Length > index ? Math.Clamp(samples[index], 0f, 1f) : 0.2;
+    {
+        return samples.Length > index ? Math.Clamp(samples[index], 0f, 1f) : 0.2;
+    }
 }

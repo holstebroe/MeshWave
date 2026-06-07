@@ -1,10 +1,10 @@
-using MeshWave.Common.Core.P2P;
 using System.Net.Sockets;
 using System.Text;
-using System.Text.Json;
-using NLog;
 using MeshWave.Common.Core.Models;
+using MeshWave.Common.Core.P2P;
 using MeshWave.Common.Core.Serialization;
+using NLog;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace MeshWave.Synchronizer;
 
@@ -36,8 +36,8 @@ public class ManifestExchangeClient
         var existing = store.Get(targetUserId, streamType);
         var startSeq = (existing?.Snapshot?.LastSequenceNumber ?? -1) + 1 + (existing?.Operations.Count ?? 0);
 
-        bool isBootstrap = address.Contains("bootstrap") || targetUserId.StartsWith("bootstrap:");
-        string? relayUserId = isBootstrap && !targetUserId.StartsWith("bootstrap:") ? targetUserId : null;
+        var isBootstrap = address.Contains("bootstrap") || targetUserId.StartsWith("bootstrap:");
+        var relayUserId = isBootstrap && !targetUserId.StartsWith("bootstrap:") ? targetUserId : null;
 
         return await FetchManifestAsync(address, port, streamType, startSeq, null, relayUserId, cancellationToken);
     }
@@ -79,7 +79,7 @@ public class ManifestExchangeClient
         if (isJson)
         {
             var json = Encoding.UTF8.GetString(bytes);
-            response = System.Text.Json.JsonSerializer.Deserialize<ManifestResponse>(json);
+            response = JsonSerializer.Deserialize<ManifestResponse>(json);
         }
         else
         {
@@ -135,7 +135,7 @@ public class ManifestExchangeClient
         if (isJson)
         {
             var json = Encoding.UTF8.GetString(bytes);
-            response = System.Text.Json.JsonSerializer.Deserialize<ManifestResponse>(json);
+            response = JsonSerializer.Deserialize<ManifestResponse>(json);
         }
         else
         {
@@ -172,7 +172,7 @@ public class ManifestExchangeClient
         if (isJson)
         {
             var json = Encoding.UTF8.GetString(bytes);
-            response = System.Text.Json.JsonSerializer.Deserialize<ManifestResponse>(json);
+            response = JsonSerializer.Deserialize<ManifestResponse>(json);
         }
         else
         {
@@ -210,7 +210,7 @@ public class ManifestExchangeClient
             if (isJson)
             {
                 var json = Encoding.UTF8.GetString(bytes);
-                response = System.Text.Json.JsonSerializer.Deserialize<ManifestResponse>(json);
+                response = JsonSerializer.Deserialize<ManifestResponse>(json);
             }
             else
             {
@@ -261,7 +261,7 @@ public class ManifestExchangeClient
             if (isJson)
             {
                 var json = Encoding.UTF8.GetString(bytes);
-                response = System.Text.Json.JsonSerializer.Deserialize<ManifestResponse>(json);
+                response = JsonSerializer.Deserialize<ManifestResponse>(json);
             }
             else
             {
@@ -320,7 +320,7 @@ public class ManifestExchangeClient
             if (isJson)
             {
                 var json = Encoding.UTF8.GetString(bytes);
-                response = System.Text.Json.JsonSerializer.Deserialize<ManifestResponse>(json);
+                response = JsonSerializer.Deserialize<ManifestResponse>(json);
             }
             else
             {
@@ -364,12 +364,35 @@ public class ManifestExchangeClient
         public override bool CanWrite => _stream.CanWrite;
         public override long Length => _length;
         public override long Position { get => _stream.Position; set => _stream.Position = value; }
-        public override void Flush() => _stream.Flush();
-        public override int Read(byte[] buffer, int offset, int count) => _stream.Read(buffer, offset, count);
-        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => _stream.ReadAsync(buffer, offset, count, cancellationToken);
-        public override long Seek(long offset, SeekOrigin origin) => _stream.Seek(offset, origin);
-        public override void SetLength(long value) => _stream.SetLength(value);
-        public override void Write(byte[] buffer, int offset, int count) => _stream.Write(buffer, offset, count);
+        public override void Flush()
+        {
+            _stream.Flush();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            return _stream.Read(buffer, offset, count);
+        }
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            return _stream.ReadAsync(buffer, offset, count, cancellationToken);
+        }
+
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            return _stream.Seek(offset, origin);
+        }
+
+        public override void SetLength(long value)
+        {
+            _stream.SetLength(value);
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            _stream.Write(buffer, offset, count);
+        }
 
         protected override void Dispose(bool disposing)
         {
@@ -404,7 +427,7 @@ public class ManifestExchangeClient
         if (isJson)
         {
             var json = Encoding.UTF8.GetString(bytes);
-            response = System.Text.Json.JsonSerializer.Deserialize<ManifestResponse>(json);
+            response = JsonSerializer.Deserialize<ManifestResponse>(json);
         }
         else
         {

@@ -3,6 +3,8 @@ using System.Text;
 using System.Text.Json;
 using MeshWave.Common.Core.Models;
 using MeshWave.Common.Core.Storage;
+using TagLib;
+using File = System.IO.File;
 
 namespace MeshWave.LibraryManager;
 
@@ -33,14 +35,10 @@ public class LocalLibraryManager
         _tracks.Clear();
         _albums.Clear();
 
-        if (!Directory.Exists(_basePath))
-        {
-            return;
-        }
+        if (!Directory.Exists(_basePath)) return;
 
         var albumDict = new Dictionary<string, Album>(StringComparer.OrdinalIgnoreCase);
         foreach (var file in EnumerateSupportedFiles(_basePath, _supportedExtensions))
-        {
             try
             {
                 var metadata = TryReadCachedMetadata(file) ?? ExtractMetadata(file);
@@ -85,7 +83,6 @@ public class LocalLibraryManager
             {
                 // skip unreadable files
             }
-        }
 
         _albums.AddRange(albumDict.Values);
     }
@@ -120,10 +117,7 @@ public class LocalLibraryManager
 
             try
             {
-                if (TryImportSingleFile(file, myMusicBaseFolder, normalizedExtensions))
-                {
-                    imported++;
-                }
+                if (TryImportSingleFile(file, myMusicBaseFolder, normalizedExtensions)) imported++;
             }
             catch
             {
@@ -144,10 +138,7 @@ public class LocalLibraryManager
         string myMusicBaseFolder,
         IEnumerable<string>? supportedExtensions = null)
     {
-        if (string.IsNullOrWhiteSpace(sourceFile) || !File.Exists(sourceFile))
-        {
-            return false;
-        }
+        if (string.IsNullOrWhiteSpace(sourceFile) || !File.Exists(sourceFile)) return false;
 
         Directory.CreateDirectory(myMusicBaseFolder);
         var normalizedExtensions = NormalizeExtensions(supportedExtensions);
@@ -167,23 +158,14 @@ public class LocalLibraryManager
         string existingTrackFilePath,
         bool preserveExistingMetadata = true)
     {
-        if (string.IsNullOrWhiteSpace(sourceFile) || string.IsNullOrWhiteSpace(existingTrackFilePath))
-        {
-            return false;
-        }
+        if (string.IsNullOrWhiteSpace(sourceFile) || string.IsNullOrWhiteSpace(existingTrackFilePath)) return false;
 
-        if (!File.Exists(sourceFile) || !File.Exists(existingTrackFilePath))
-        {
-            return false;
-        }
+        if (!File.Exists(sourceFile) || !File.Exists(existingTrackFilePath)) return false;
 
         try
         {
             var backupPath = existingTrackFilePath + ".bak";
-            if (File.Exists(backupPath))
-            {
-                File.Delete(backupPath);
-            }
+            if (File.Exists(backupPath)) File.Delete(backupPath);
 
             File.Copy(existingTrackFilePath, backupPath, overwrite: true);
             File.Copy(sourceFile, existingTrackFilePath, overwrite: true);
@@ -203,10 +185,7 @@ public class LocalLibraryManager
     private static bool TryImportSingleFile(string sourceFile, string myMusicBaseFolder, HashSet<string> normalizedExtensions)
     {
         var extension = Path.GetExtension(sourceFile);
-        if (!normalizedExtensions.Contains(extension))
-        {
-            return false;
-        }
+        if (!normalizedExtensions.Contains(extension)) return false;
 
         var metadata = ExtractMetadata(sourceFile);
         var albumFolder = Path.Combine(myMusicBaseFolder, metadata.Artist, metadata.Album);
@@ -219,9 +198,9 @@ public class LocalLibraryManager
 
         var destinationFile = Path.Combine(albumFolder, $"{metadata.Title}{extension}");
         var imported = false;
-        if (!System.IO.File.Exists(destinationFile))
+        if (!File.Exists(destinationFile))
         {
-            System.IO.File.Copy(sourceFile, destinationFile, overwrite: false);
+            File.Copy(sourceFile, destinationFile, overwrite: false);
             imported = true;
         }
 
@@ -272,42 +251,37 @@ public class LocalLibraryManager
         File.WriteAllText(path, json);
     }
 
-    public IEnumerable<Track> GetAllTracks() => _tracks;
-    public IEnumerable<Album> GetAllAlbums() => _albums;
+    public IEnumerable<Track> GetAllTracks()
+    {
+        return _tracks;
+    }
+
+    public IEnumerable<Album> GetAllAlbums()
+    {
+        return _albums;
+    }
 
 
     public string GetTrackCoverPath(string filePath)
     {
-        if (string.IsNullOrWhiteSpace(filePath) || !System.IO.File.Exists(filePath))
-        {
-            return string.Empty;
-        }
+        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath)) return string.Empty;
 
         var cachePath = GetCoverCachePath(filePath);
-        if (!System.IO.File.Exists(cachePath))
-        {
-            EnsureCoverCached(filePath);
-        }
+        if (!File.Exists(cachePath)) EnsureCoverCached(filePath);
 
-        return System.IO.File.Exists(cachePath) ? cachePath : string.Empty;
+        return File.Exists(cachePath) ? cachePath : string.Empty;
     }
 
     public float[] GetTrackWaveform(string filePath)
     {
-        if (string.IsNullOrWhiteSpace(filePath) || !System.IO.File.Exists(filePath))
-        {
-            return [];
-        }
+        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath)) return [];
 
         var waveformPath = GetWaveformCachePathForTrack(filePath);
-        if (!System.IO.File.Exists(waveformPath))
-        {
-            return [];
-        }
+        if (!File.Exists(waveformPath)) return [];
 
         try
         {
-            var data = System.IO.File.ReadAllBytes(waveformPath);
+            var data = File.ReadAllBytes(waveformPath);
             var waveform = WaveformBinaryFormat.Decode(data);
             return waveform ?? [];
         }
@@ -353,28 +327,22 @@ public class LocalLibraryManager
             Artist = artist,
             Album = album,
             DurationSeconds = duration.TotalSeconds,
-            SourceLastWriteUtc = System.IO.File.GetLastWriteTimeUtc(filePath)
+            SourceLastWriteUtc = File.GetLastWriteTimeUtc(filePath)
         };
     }
 
     private static CachedTrackMetadata? TryReadCachedMetadata(string filePath)
     {
         var cachePath = GetCacheMetadataPath(filePath);
-        if (!System.IO.File.Exists(cachePath))
-        {
-            return null;
-        }
+        if (!File.Exists(cachePath)) return null;
 
-        var cacheWrite = System.IO.File.GetLastWriteTimeUtc(cachePath);
-        var sourceWrite = System.IO.File.GetLastWriteTimeUtc(filePath);
-        if (cacheWrite < sourceWrite)
-        {
-            return null;
-        }
+        var cacheWrite = File.GetLastWriteTimeUtc(cachePath);
+        var sourceWrite = File.GetLastWriteTimeUtc(filePath);
+        if (cacheWrite < sourceWrite) return null;
 
         try
         {
-            var json = System.IO.File.ReadAllText(cachePath);
+            var json = File.ReadAllText(cachePath);
             var metadata = JsonSerializer.Deserialize<CachedTrackMetadata>(json);
             return metadata;
         }
@@ -388,13 +356,10 @@ public class LocalLibraryManager
     {
         var cachePath = GetCacheMetadataPath(filePath);
         var cacheDir = Path.GetDirectoryName(cachePath);
-        if (!string.IsNullOrWhiteSpace(cacheDir))
-        {
-            Directory.CreateDirectory(cacheDir);
-        }
+        if (!string.IsNullOrWhiteSpace(cacheDir)) Directory.CreateDirectory(cacheDir);
 
         var json = JsonSerializer.Serialize(metadata, new JsonSerializerOptions { WriteIndented = true });
-        System.IO.File.WriteAllText(cachePath, json);
+        File.WriteAllText(cachePath, json);
     }
 
     private static string GetCacheMetadataPath(string filePath)
@@ -423,27 +388,18 @@ public class LocalLibraryManager
         try
         {
             var coverPath = GetCoverCachePath(filePath);
-            if (File.Exists(coverPath))
-            {
-                return;
-            }
+            if (File.Exists(coverPath)) return;
 
             using var tagFile = TagLib.File.Create(filePath);
             var picture = tagFile.Tag.Pictures?
-                .FirstOrDefault(p => p.Type == TagLib.PictureType.FrontCover)
+                .FirstOrDefault(p => p.Type == PictureType.FrontCover)
                 ?? tagFile.Tag.Pictures?.FirstOrDefault();
 
             // TODO: consider resizing large cover images to save space and memory when loading.
-            if (picture == null || picture.Data == null || picture.Data.Count == 0)
-            {
-                return;
-            }
+            if (picture == null || picture.Data == null || picture.Data.Count == 0) return;
 
             var coverDir = Path.GetDirectoryName(coverPath);
-            if (!string.IsNullOrWhiteSpace(coverDir))
-            {
-                Directory.CreateDirectory(coverDir);
-            }
+            if (!string.IsNullOrWhiteSpace(coverDir)) Directory.CreateDirectory(coverDir);
 
             var cacheFileName = Path.GetFileNameWithoutExtension(coverPath) + ".jpg";
             var normalizedCoverPath = Path.Combine(coverDir ?? string.Empty, cacheFileName);

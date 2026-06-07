@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using MeshWave.Common.Core.Models;
 using Xunit;
 
@@ -18,7 +14,7 @@ public class CatalogueServiceTests
             UserId = "user1",
             Operations = new List<ManifestOperation>
             {
-                new ManifestOperation
+                new()
                 {
                     OperationId = "op1",
                     OperationType = ManifestOperationType.Create,
@@ -54,7 +50,7 @@ public class CatalogueServiceTests
             UserId = "user1",
             Operations = new List<ManifestOperation>
             {
-                new ManifestOperation
+                new()
                 {
                     OperationId = "op1",
                     OperationType = ManifestOperationType.Create,
@@ -72,7 +68,7 @@ public class CatalogueServiceTests
             UserId = "user2",
             Operations = new List<ManifestOperation>
             {
-                new ManifestOperation
+                new()
                 {
                     OperationId = "op2",
                     OperationType = ManifestOperationType.Update,
@@ -104,7 +100,7 @@ public class CatalogueServiceTests
             UserId = "user1",
             Operations = new List<ManifestOperation>
             {
-                new ManifestOperation
+                new()
                 {
                     OperationId = "op1",
                     OperationType = ManifestOperationType.Create,
@@ -114,7 +110,7 @@ public class CatalogueServiceTests
                     Signature = "sig",
                     Metadata = new Dictionary<string, string> { { "title", "Yellow Submarine" }, { "artist", "The Beatles" } }
                 },
-                new ManifestOperation
+                new()
                 {
                     OperationId = "op2",
                     OperationType = ManifestOperationType.Create,
@@ -150,7 +146,7 @@ public class CatalogueServiceTests
                 Signature = "sig",
                 EntityStates = new List<SnapshotStateEntry>
                 {
-                    new SnapshotStateEntry
+                    new()
                     {
                         TargetId = "album1",
                         TargetType = "Album",

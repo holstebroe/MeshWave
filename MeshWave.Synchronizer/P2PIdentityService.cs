@@ -1,4 +1,3 @@
-using MeshWave.Common.Core.P2P;
 using System.Text.Json;
 using MeshWave.Common.Core;
 using MeshWave.Common.Core.Crypto;
@@ -38,7 +37,10 @@ public class P2PIdentityService
     /// <summary>
     /// Returns true if an identity file already exists on disk.
     /// </summary>
-    public bool IdentityExists() => File.Exists(_identityFilePath);
+    public bool IdentityExists()
+    {
+        return File.Exists(_identityFilePath);
+    }
 
     /// <summary>
     /// Regenerates a fresh keypair and saves it (call only when user explicitly resets identity).
@@ -99,22 +101,28 @@ public class P2PIdentityService
         public string PrivateKeyPem { get; set; } = string.Empty;
         public int ManifestPort { get; set; } = ManifestExchangeServer.DefaultPort;
 
-        public LocalPeerIdentity ToLocalPeerIdentity() => new()
+        public LocalPeerIdentity ToLocalPeerIdentity()
         {
-            UserId = UserId,
-            DisplayName = DisplayName,
-            PublicKeyPem = PublicKeyPem,
-            PrivateKeyPem = PrivateKeyPem,
-            ManifestPort = ManifestPort
-        };
+            return new LocalPeerIdentity
+            {
+                UserId = UserId,
+                DisplayName = DisplayName,
+                PublicKeyPem = PublicKeyPem,
+                PrivateKeyPem = PrivateKeyPem,
+                ManifestPort = ManifestPort
+            };
+        }
 
-        public static StoredIdentity From(LocalPeerIdentity id) => new()
+        public static StoredIdentity From(LocalPeerIdentity id)
         {
-            UserId = id.UserId,
-            DisplayName = id.DisplayName,
-            PublicKeyPem = id.PublicKeyPem,
-            PrivateKeyPem = id.PrivateKeyPem,
-            ManifestPort = id.ManifestPort
-        };
+            return new StoredIdentity
+            {
+                UserId = id.UserId,
+                DisplayName = id.DisplayName,
+                PublicKeyPem = id.PublicKeyPem,
+                PrivateKeyPem = id.PrivateKeyPem,
+                ManifestPort = id.ManifestPort
+            };
+        }
     }
 }

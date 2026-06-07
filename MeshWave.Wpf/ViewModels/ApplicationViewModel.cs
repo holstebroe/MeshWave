@@ -1,4 +1,7 @@
+using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Sockets;
 using System.Windows.Input;
@@ -22,13 +25,11 @@ public class ApplicationViewModel : ViewModelBase
 {
     private string _applicationTitle = "MeshWave";
     private ViewModelBase _currentViewModel;
-    private readonly PlaybackViewModel _playbackViewModel;
 
     private readonly SettingsService _settingsService;
     private readonly UserProfileService _profileService;
     private readonly P2PIdentityService _identityService = new();
     private readonly ManifestManager _manifestManager = new();
-    private readonly SyncOrchestrator _syncOrchestrator;
     private readonly DownloadQueueService _downloadQueue = new();
     private readonly UserRepository _userRepository;
     private readonly MetadataLookupRepository _metadataLookup;
@@ -52,17 +53,17 @@ public class ApplicationViewModel : ViewModelBase
         _userRepository = new UserRepository(settings.BaseFolder);
         _metadataLookup = new MetadataLookupRepository(_settingsService.GetLocalMusicFolder());
         var catalogueService = new CatalogueService();
-        _syncOrchestrator = new SyncOrchestrator(userRepository: _userRepository, catalogueService: catalogueService);
+        SyncOrchestrator = new SyncOrchestrator(userRepository: _userRepository, catalogueService: catalogueService);
 
-        _playbackViewModel = new PlaybackViewModel(_syncOrchestrator, _userRepository, _metadataLookup, audioServiceFactory);
+        Playback = new PlaybackViewModel(SyncOrchestrator, _userRepository, _metadataLookup, audioServiceFactory);
         _currentViewModel = new HomeViewModel();
 
         // Apply persisted waveform style immediately
         var savedSettings = settings;
         if (Enum.TryParse<WaveformStyle>(savedSettings.Playback.WaveformStyle, out var savedStyle))
-            _playbackViewModel.WaveformStyle = savedStyle;
+            Playback.WaveformStyle = savedStyle;
 
-        _playbackViewModel.PropertyChanged += (_, e) =>
+        Playback.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(PlaybackViewModel.CurrentTrackTitle)
                 || e.PropertyName == nameof(PlaybackViewModel.CurrentPosition)
@@ -72,9 +73,7 @@ public class ApplicationViewModel : ViewModelBase
                 || e.PropertyName == nameof(PlaybackViewModel.AlbumTracks)
                 || e.PropertyName == nameof(PlaybackViewModel.TrackContextTitle)
                 || e.PropertyName == nameof(PlaybackViewModel.TrackContextIconPath))
-            {
                 _resumeStateDirty = true;
-            }
         };
 
         RestorePlaybackState(savedSettings);
@@ -82,13 +81,13 @@ public class ApplicationViewModel : ViewModelBase
         ConnectP2PCommand = new RelayCommand(_ => _ = ConnectP2PAsync(), _ => !P2PIsConnected);
         DisconnectP2PCommand = new RelayCommand(_ => _ = DisconnectP2PAsync(), _ => P2PIsConnected);
 
-        _syncOrchestrator.PeerCountChanged += (_, _) =>
+        SyncOrchestrator.PeerCountChanged += (_, _) =>
         {
-            P2PPeerCount = _syncOrchestrator.ConnectedPeerCount;
+            P2PPeerCount = SyncOrchestrator.ConnectedPeerCount;
             UpdateP2PStatusText();
         };
 
-        _syncOrchestrator.ManifestMerged += (_, e) =>
+        SyncOrchestrator.ManifestMerged += (_, e) =>
         {
             if (CurrentViewModel is CommunityViewModel)
                 return;
@@ -97,28 +96,23 @@ public class ApplicationViewModel : ViewModelBase
                 HasCommunityNotification = true;
         };
 
-        _syncOrchestrator.PeerCountChanged += (_, _) =>
+        SyncOrchestrator.PeerCountChanged += (_, _) =>
         {
-            if (_syncOrchestrator.IsRunning)
+            if (SyncOrchestrator.IsRunning)
             {
                 var current = CurrentViewModel;
-                if (current is LibraryViewModel lib && lib.IsMyMusicLibrary)
-                {
-                    lib.LoadFromConfiguredBaseFolder();
-                }
+                if (current is LibraryViewModel lib && lib.IsMyMusicLibrary) lib.LoadFromConfiguredBaseFolder();
             }
         };
 
         // Record a signed Play operation the first time each track starts playing.
-        _playbackViewModel.PropertyChanged += (_, e) =>
+        Playback.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(PlaybackViewModel.IsPlaying) && _playbackViewModel.IsPlaying)
-            {
-                _syncOrchestrator.RecordPlay(
-                    _playbackViewModel.CurrentTrackId,
-                    _playbackViewModel.TrackTitle,
-                    _playbackViewModel.Artist);
-            }
+            if (e.PropertyName == nameof(PlaybackViewModel.IsPlaying) && Playback.IsPlaying)
+                SyncOrchestrator.RecordPlay(
+                    Playback.CurrentTrackId,
+                    Playback.TrackTitle,
+                    Playback.Artist);
         };
 
         DownloadQueueItems.CollectionChanged += (_, e) =>
@@ -133,15 +127,11 @@ public class ApplicationViewModel : ViewModelBase
             else
             {
                 if (e.NewItems != null)
-                {
                     foreach (DownloadQueueItem item in e.NewItems)
                         item.PropertyChanged += OnDownloadItemPropertyChanged;
-                }
                 if (e.OldItems != null)
-                {
                     foreach (DownloadQueueItem item in e.OldItems)
                         item.PropertyChanged -= OnDownloadItemPropertyChanged;
-                }
                 UpdateDownloadStats();
             }
         };
@@ -154,17 +144,14 @@ public class ApplicationViewModel : ViewModelBase
         InitializeP2PAsync();
     }
 
-    private void OnDownloadItemPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    private void OnDownloadItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(DownloadQueueItem.State))
-        {
-            UpdateDownloadStats();
-        }
+        if (e.PropertyName == nameof(DownloadQueueItem.State)) UpdateDownloadStats();
     }
 
     private void UpdateDownloadStats()
     {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher != null && !dispatcher.CheckAccess())
         {
             dispatcher.Invoke(UpdateDownloadStats);
@@ -205,7 +192,7 @@ public class ApplicationViewModel : ViewModelBase
         get
         {
             if (!P2PIsConnected) return "#555555"; // Gray
-            if (_syncOrchestrator.MeshPeerCount == 0) return "#F1C40F"; // Yellow
+            if (SyncOrchestrator.MeshPeerCount == 0) return "#F1C40F"; // Yellow
             return "#1DB954"; // Green
         }
     }
@@ -219,9 +206,11 @@ public class ApplicationViewModel : ViewModelBase
     public ICommand ConnectP2PCommand { get; }
     public ICommand DisconnectP2PCommand { get; }
 
-    public SyncOrchestrator SyncOrchestrator => _syncOrchestrator;
-    public PlaybackViewModel Playback => _playbackViewModel;
-    public System.Collections.ObjectModel.ObservableCollection<DownloadQueueItem> DownloadQueueItems => _downloadQueue.AllItems;
+    public SyncOrchestrator SyncOrchestrator { get; }
+
+    public PlaybackViewModel Playback { get; }
+
+    public ObservableCollection<DownloadQueueItem> DownloadQueueItems => _downloadQueue.AllItems;
 
     public int ActiveDownloadCount
     {
@@ -239,8 +228,8 @@ public class ApplicationViewModel : ViewModelBase
 
     public string BuildMeshDiagnosticsSummary()
     {
-        var snapshots = _syncOrchestrator.GetPeerDiagnosticsSnapshots().ToList();
-        var routingPeers = _syncOrchestrator.GetPeers().ToList();
+        var snapshots = SyncOrchestrator.GetPeerDiagnosticsSnapshots().ToList();
+        var routingPeers = SyncOrchestrator.GetPeers().ToList();
 
         var routingMesh = routingPeers.Count(p => !p.UserId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase));
         var routingBootstrap = routingPeers.Count - routingMesh;
@@ -253,9 +242,9 @@ public class ApplicationViewModel : ViewModelBase
         var peerTracks = meshPeers.Sum(p => p.PublishedTrackCount);
         var peerAlbums = meshPeers.Sum(p => p.PublishedAlbumCount);
 
-        return $"Routing: {_syncOrchestrator.ConnectedPeerCount} ({routingMesh} mesh, {routingBootstrap} bootstrap) · "
+        return $"Routing: {SyncOrchestrator.ConnectedPeerCount} ({routingMesh} mesh, {routingBootstrap} bootstrap) · "
              + $"Mesh diagnostics: {meshOnline}/{meshPeers.Count} online, {meshWithManifest} with manifest, {meshWithoutManifest} without manifest · "
-             + $"Local published: {_syncOrchestrator.LocalPublishedAlbumCount} albums, {_syncOrchestrator.LocalPublishedTrackCount} tracks · "
+             + $"Local published: {SyncOrchestrator.LocalPublishedAlbumCount} albums, {SyncOrchestrator.LocalPublishedTrackCount} tracks · "
              + $"Peer totals: {peerAlbums} albums, {peerTracks} tracks";
     }
 
@@ -276,17 +265,17 @@ public class ApplicationViewModel : ViewModelBase
 
     public void NavigateToSettings()
     {
-        CurrentViewModel = new SettingsViewModel(style => _playbackViewModel.WaveformStyle = style, _syncOrchestrator);
+        CurrentViewModel = new SettingsViewModel(style => Playback.WaveformStyle = style, SyncOrchestrator);
     }
 
     public void NavigateToBrowse(string? artistUserId = null)
     {
-        var vm = new BrowseViewModel(_syncOrchestrator, _downloadQueue,
+        var vm = new BrowseViewModel(SyncOrchestrator, _downloadQueue,
             (title, artist, duration, filePath, length) =>
             {
-                _playbackViewModel.Stop();
-                _playbackViewModel.LoadTrack(title, artist, duration, filePath, remoteContentLength: length);
-                CurrentViewModel = _playbackViewModel;
+                Playback.Stop();
+                Playback.LoadTrack(title, artist, duration, filePath, remoteContentLength: length);
+                CurrentViewModel = Playback;
             },
             settingsService: _settingsService);
         if (!string.IsNullOrWhiteSpace(artistUserId))
@@ -304,7 +293,7 @@ public class ApplicationViewModel : ViewModelBase
 
     public void NavigateToCommunity()
     {
-        var vm = new CommunityViewModel(_syncOrchestrator, NavigateToBrowse, settingsService: _settingsService);
+        var vm = new CommunityViewModel(SyncOrchestrator, NavigateToBrowse, settingsService: _settingsService);
         vm.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(CommunityViewModel.HasNewReleases))
@@ -316,21 +305,18 @@ public class ApplicationViewModel : ViewModelBase
 
     public void NavigateToPlayback()
     {
-        CurrentViewModel = _playbackViewModel;
+        CurrentViewModel = Playback;
     }
 
     public void PlayTrack(string trackTitle, string artist, TimeSpan duration, string filePath, IEnumerable<PlaybackTrackListItem>? contextTracks = null, string? selectedTrackId = null, string? contextTitle = null, string? contextIconPath = null)
     {
-        if (contextTracks != null)
-        {
-            _playbackViewModel.SetAlbumTrackContext(contextTracks, selectedTrackId, contextTitle, contextIconPath);
-        }
+        if (contextTracks != null) Playback.SetAlbumTrackContext(contextTracks, selectedTrackId, contextTitle, contextIconPath);
 
-        _playbackViewModel.Stop();
-        _playbackViewModel.LoadTrack(trackTitle, artist, duration, filePath);
+        Playback.Stop();
+        Playback.LoadTrack(trackTitle, artist, duration, filePath);
         _resumeStateDirty = true;
         PersistPlaybackState();
-        CurrentViewModel = _playbackViewModel;
+        CurrentViewModel = Playback;
     }
 
     /// <summary>
@@ -339,7 +325,7 @@ public class ApplicationViewModel : ViewModelBase
     public void AnnounceTrackToNetwork(string trackId, string contentHash, string title, string artist, string album)
     {
         if (!P2PIsConnected) return;
-        _syncOrchestrator.AnnounceTrack(trackId, contentHash, new Dictionary<string, string>
+        SyncOrchestrator.AnnounceTrack(trackId, contentHash, new Dictionary<string, string>
         {
             ["title"] = SecurityLimits.Truncate(title, SecurityLimits.MaxTrackTitleLength),
             ["artist"] = SecurityLimits.Truncate(artist, SecurityLimits.MaxArtistNameLength),
@@ -353,7 +339,7 @@ public class ApplicationViewModel : ViewModelBase
     public void AnnounceAlbumToNetwork(string albumId, string name, string artist)
     {
         if (!P2PIsConnected) return;
-        _syncOrchestrator.AnnounceAlbum(albumId, null, new Dictionary<string, string>
+        SyncOrchestrator.AnnounceAlbum(albumId, null, new Dictionary<string, string>
         {
             ["name"] = SecurityLimits.Truncate(name, SecurityLimits.MaxAlbumNameLength),
             ["artist"] = SecurityLimits.Truncate(artist, SecurityLimits.MaxArtistNameLength)
@@ -366,7 +352,7 @@ public class ApplicationViewModel : ViewModelBase
     public async Task ShutdownAsync()
     {
         PersistPlaybackState(force: true);
-        await _syncOrchestrator.StopAsync();
+        await SyncOrchestrator.StopAsync();
     }
 
     private async Task ConnectP2PAsync()
@@ -405,7 +391,7 @@ public class ApplicationViewModel : ViewModelBase
             var localManifests = new List<Manifest>();
             foreach (ManifestStreamType streamType in Enum.GetValues(typeof(ManifestStreamType)))
             {
-                var m = _syncOrchestrator.LoadLocalManifest(identity.UserId, streamType)
+                var m = SyncOrchestrator.LoadLocalManifest(identity.UserId, streamType)
                         ?? _manifestManager.CreateManifest(identity.UserId);
                 m.StreamType = streamType;
                 localManifests.Add(m);
@@ -413,14 +399,14 @@ public class ApplicationViewModel : ViewModelBase
 
             _userRepository.RegisterLocalUser(identity.UserId, profile.DisplayName, profile.AvatarIconPath);
 
-            await _syncOrchestrator.StartAsync(
+            await SyncOrchestrator.StartAsync(
                 identity,
                 localManifests,
                 bootstrapNodes,
                 actAsListener: _p2pActAsListener,
                 contentProvider: TryGetLocalContentByHash);
             P2PIsConnected = true;
-            P2PPeerCount = _syncOrchestrator.ConnectedPeerCount;
+            P2PPeerCount = SyncOrchestrator.ConnectedPeerCount;
             UpdateP2PStatusText();
             PublishReleasedMyMusicToMesh();
         }
@@ -433,7 +419,7 @@ public class ApplicationViewModel : ViewModelBase
 
     private async Task DisconnectP2PAsync()
     {
-        await _syncOrchestrator.StopAsync();
+        await SyncOrchestrator.StopAsync();
         P2PIsConnected = false;
         P2PPeerCount = 0;
         P2PStatusText = "Disconnected";
@@ -452,7 +438,7 @@ public class ApplicationViewModel : ViewModelBase
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[P2P] Auto-start error: {ex.Message}");
+                Debug.WriteLine($"[P2P] Auto-start error: {ex.Message}");
             }
         });
     }
@@ -465,7 +451,7 @@ public class ApplicationViewModel : ViewModelBase
         if (!IsPeerFollowed(peerUserId))
             return false;
 
-        var manifest = _syncOrchestrator.GetPeerManifest(peerUserId);
+        var manifest = SyncOrchestrator.GetPeerManifest(peerUserId);
         if (manifest == null)
             return false;
 
@@ -485,7 +471,7 @@ public class ApplicationViewModel : ViewModelBase
 
     private bool IsPeerFollowed(string peerUserId)
     {
-        var manifest = _syncOrchestrator.GetLocalManifest(ManifestStreamType.Social);
+        var manifest = SyncOrchestrator.GetLocalManifest(ManifestStreamType.Social);
         if (manifest == null)
             return false;
 
@@ -503,13 +489,13 @@ public class ApplicationViewModel : ViewModelBase
         {
             P2PStatusText = "Disconnected";
         }
-        else if (_syncOrchestrator.MeshPeerCount == 0)
+        else if (SyncOrchestrator.MeshPeerCount == 0)
         {
             P2PStatusText = "Connecting…";
         }
         else
         {
-            var meshPeers = _syncOrchestrator.MeshPeerCount;
+            var meshPeers = SyncOrchestrator.MeshPeerCount;
             P2PStatusText = $"Connected · {meshPeers} mesh peer{(meshPeers == 1 ? "" : "s")}";
         }
         OnPropertyChanged(nameof(P2PStatusColor));
@@ -629,7 +615,7 @@ public class ApplicationViewModel : ViewModelBase
 
             foreach (var album in albums)
             {
-                if (_syncOrchestrator.LocalManifest?.Operations.Any(op => op.OperationType == ManifestOperationType.Create && op.TargetType == "Album" && string.Equals(op.TargetId, album.AlbumId, StringComparison.OrdinalIgnoreCase)) == true)
+                if (SyncOrchestrator.LocalManifest?.Operations.Any(op => op.OperationType == ManifestOperationType.Create && op.TargetType == "Album" && string.Equals(op.TargetId, album.AlbumId, StringComparison.OrdinalIgnoreCase)) == true)
                     continue;
 
                 var tracksInAlbum = tracks.Where(t => string.Equals(t.AlbumId, album.AlbumId, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -668,12 +654,12 @@ public class ApplicationViewModel : ViewModelBase
                 if (!string.IsNullOrWhiteSpace(iconHash))
                     metadata["iconHash"] = iconHash;
 
-                _syncOrchestrator.AnnounceAlbum(album.AlbumId, coverHash, metadata);
+                SyncOrchestrator.AnnounceAlbum(album.AlbumId, coverHash, metadata);
             }
 
             foreach (var track in tracks)
             {
-                if (_syncOrchestrator.LocalManifest?.Operations.Any(op => op.OperationType == ManifestOperationType.Create && op.TargetType == "Track" && string.Equals(op.TargetId, track.TrackId, StringComparison.OrdinalIgnoreCase)) == true)
+                if (SyncOrchestrator.LocalManifest?.Operations.Any(op => op.OperationType == ManifestOperationType.Create && op.TargetType == "Track" && string.Equals(op.TargetId, track.TrackId, StringComparison.OrdinalIgnoreCase)) == true)
                     continue;
 
                 if (string.IsNullOrWhiteSpace(track.FilePath) || !File.Exists(track.FilePath))
@@ -705,7 +691,7 @@ public class ApplicationViewModel : ViewModelBase
                 if (!string.IsNullOrWhiteSpace(iconHash))
                     metadata["iconHash"] = iconHash;
 
-                _syncOrchestrator.AnnounceTrack(track.TrackId, CryptoService.ComputeFileHash(track.FilePath), metadata);
+                SyncOrchestrator.AnnounceTrack(track.TrackId, CryptoService.ComputeFileHash(track.FilePath), metadata);
             }
         }
         catch
@@ -720,7 +706,7 @@ public class ApplicationViewModel : ViewModelBase
         if (resume == null || string.IsNullOrWhiteSpace(resume.TrackFilePath))
             return;
 
-        _playbackViewModel.RestoreFromResumeState(resume);
+        Playback.RestoreFromResumeState(resume);
     }
 
     public void PersistPlaybackState(bool force = false)
@@ -730,8 +716,8 @@ public class ApplicationViewModel : ViewModelBase
 
         var settings = _settingsService.LoadSettings();
 
-        if (_playbackViewModel.HasTrackLoaded)
-            settings.Playback.ResumeState = _playbackViewModel.BuildResumeState();
+        if (Playback.HasTrackLoaded)
+            settings.Playback.ResumeState = Playback.BuildResumeState();
         else
             settings.Playback.ResumeState = new PlaybackResumeState();
 

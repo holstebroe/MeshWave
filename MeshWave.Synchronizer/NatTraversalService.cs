@@ -1,11 +1,9 @@
-using MeshWave.Common.Core.P2P;
-using Mono.Nat;
-using Mono.Nat.Logging;
-using NLog;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using Mono.Nat;
+using NLog;
 using Logger = NLog.Logger;
 
 namespace MeshWave.Synchronizer;
@@ -30,12 +28,12 @@ public sealed class NatTraversalService : IDisposable
     private INatDevice? _natDevice;
     private Mapping? _tcpMapping;
     private Mapping? _udpMapping;
-    private string? _externalIp;
-    private string _natStatus = "Not attempted";
 
     public bool IsRunning => _udp != null;
-    public string? ExternalIPAddress => _externalIp;
-    public string NatStatus => _natStatus;
+    public string? ExternalIPAddress { get; private set; }
+
+    public string NatStatus { get; private set; } = "Not attempted";
+
     public string? MappingProtocol => _natDevice?.NatProtocol.ToString();
 
     public NatTraversalService(Logger? logger)
@@ -77,9 +75,7 @@ public sealed class NatTraversalService : IDisposable
         _udp?.Close();
 
         if (_receiveTask != null)
-        {
             try { await _receiveTask; } catch { }
-        }
 
         await RemovePortMappingsAsync();
 
@@ -93,7 +89,7 @@ public sealed class NatTraversalService : IDisposable
 
     public async Task SetupPortMappingAsync(int port, CancellationToken cancellationToken = default)
     {
-        _natStatus = "Discovering NAT devices...";
+        NatStatus = "Discovering NAT devices...";
         _logger.Info("Starting NAT discovery for port {0} (TCP/UDP)", port);
 
         var tcs = new TaskCompletionSource<INatDevice>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -117,10 +113,10 @@ public sealed class NatTraversalService : IDisposable
             if (completedTask == discoveryTask)
             {
                 _natDevice = await discoveryTask;
-                _externalIp = (await _natDevice.GetExternalIPAsync()).ToString();
+                ExternalIPAddress = (await _natDevice.GetExternalIPAsync()).ToString();
 
                 _logger.Info("Found NAT device: {0} ({1}). External IP: {2}",
-                    _natDevice.NatProtocol, _natDevice.DeviceEndpoint, _externalIp);
+                    _natDevice.NatProtocol, _natDevice.DeviceEndpoint, ExternalIPAddress);
 
                 _tcpMapping = new Mapping(Protocol.Tcp, port, port, 0, "MeshWave P2P (TCP)");
                 _udpMapping = new Mapping(Protocol.Udp, port, port, 0, "MeshWave P2P (UDP)");
@@ -145,21 +141,21 @@ public sealed class NatTraversalService : IDisposable
                     _logger.Warn("Failed to map UDP port {0}: {1}", port, ex.Message);
                 }
 
-                _natStatus = $"Mapped via {_natDevice.NatProtocol}";
+                NatStatus = $"Mapped via {_natDevice.NatProtocol}";
             }
             else
             {
-                _natStatus = "No NAT device discovered (UPnP/NAT-PMP may be disabled)";
-                _logger.Info(_natStatus);
+                NatStatus = "No NAT device discovered (UPnP/NAT-PMP may be disabled)";
+                _logger.Info(NatStatus);
             }
         }
         catch (OperationCanceledException)
         {
-            _natStatus = "NAT discovery canceled";
+            NatStatus = "NAT discovery canceled";
         }
         catch (Exception ex)
         {
-            _natStatus = $"NAT error: {ex.Message}";
+            NatStatus = $"NAT error: {ex.Message}";
             _logger.Warn("NAT mapping error: {0}", ex.Message);
         }
         finally
@@ -195,8 +191,8 @@ public sealed class NatTraversalService : IDisposable
             _tcpMapping = null;
             _udpMapping = null;
             _natDevice = null;
-            _externalIp = null;
-            _natStatus = "Mappings removed";
+            ExternalIPAddress = null;
+            NatStatus = "Mappings removed";
         }
     }
 
@@ -249,7 +245,6 @@ public sealed class NatTraversalService : IDisposable
             return;
 
         while (!cancellationToken.IsCancellationRequested)
-        {
             try
             {
                 var result = await _udp.ReceiveAsync(cancellationToken);
@@ -279,7 +274,6 @@ public sealed class NatTraversalService : IDisposable
             {
                 // best-effort probing, ignore transient network errors
             }
-        }
     }
 
     public void Dispose()

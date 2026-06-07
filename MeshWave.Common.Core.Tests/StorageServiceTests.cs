@@ -1,3 +1,4 @@
+using System.Text;
 using MeshWave.Common.Core.Storage;
 using Xunit;
 
@@ -16,10 +17,7 @@ public class StorageServiceTests : IDisposable
 
     public void Dispose()
     {
-        if (Directory.Exists(_tempDirectory))
-        {
-            Directory.Delete(_tempDirectory, recursive: true);
-        }
+        if (Directory.Exists(_tempDirectory)) Directory.Delete(_tempDirectory, recursive: true);
     }
 
     [Fact]
@@ -35,7 +33,7 @@ public class StorageServiceTests : IDisposable
     public void StoreBlob_StoresContentAndReturnsHash()
     {
         // Arrange
-        var content = System.Text.Encoding.UTF8.GetBytes("Test blob content");
+        var content = Encoding.UTF8.GetBytes("Test blob content");
 
         // Act
         var hash = _storageService.StoreBlob(content);
@@ -49,7 +47,7 @@ public class StorageServiceTests : IDisposable
     public void GetBlob_ReturnsStoredContent()
     {
         // Arrange
-        var content = System.Text.Encoding.UTF8.GetBytes("Test blob content");
+        var content = Encoding.UTF8.GetBytes("Test blob content");
         var hash = _storageService.StoreBlob(content);
 
         // Act
@@ -74,7 +72,7 @@ public class StorageServiceTests : IDisposable
     public void BlobExists_ReturnsTrueForExistingBlob()
     {
         // Arrange
-        var content = System.Text.Encoding.UTF8.GetBytes("Test content");
+        var content = Encoding.UTF8.GetBytes("Test content");
         var hash = _storageService.StoreBlob(content);
 
         // Act
@@ -120,7 +118,7 @@ public class StorageServiceTests : IDisposable
     public void ExtractBlobToFile_WritesBlobToFile()
     {
         // Arrange
-        var content = System.Text.Encoding.UTF8.GetBytes("Test blob content");
+        var content = Encoding.UTF8.GetBytes("Test blob content");
         var hash = _storageService.StoreBlob(content);
         var outputFile = Path.Combine(Path.GetTempPath(), $"extracted_{Guid.NewGuid()}.txt");
 
@@ -146,7 +144,7 @@ public class StorageServiceTests : IDisposable
     public void GetBlobSize_ReturnsCorrectSize()
     {
         // Arrange
-        var content = System.Text.Encoding.UTF8.GetBytes("Test blob content");
+        var content = Encoding.UTF8.GetBytes("Test blob content");
         var hash = _storageService.StoreBlob(content);
 
         // Act
@@ -197,7 +195,7 @@ public class StorageServiceTests : IDisposable
     public void DeleteBlob_RemovesBlobSuccessfully()
     {
         // Arrange
-        var content = System.Text.Encoding.UTF8.GetBytes("Test content");
+        var content = Encoding.UTF8.GetBytes("Test content");
         var hash = _storageService.StoreBlob(content);
 
         // Act
@@ -212,8 +210,8 @@ public class StorageServiceTests : IDisposable
     public void GetTotalBlobSize_ReturnsCorrectTotal()
     {
         // Arrange
-        var content1 = System.Text.Encoding.UTF8.GetBytes("Content 1");
-        var content2 = System.Text.Encoding.UTF8.GetBytes("Content 2 longer");
+        var content1 = Encoding.UTF8.GetBytes("Content 1");
+        var content2 = Encoding.UTF8.GetBytes("Content 2 longer");
         _storageService.StoreBlob(content1);
         _storageService.StoreBlob(content2);
 
@@ -228,8 +226,8 @@ public class StorageServiceTests : IDisposable
     public void ListBlobs_ReturnsAllStoredBlobs()
     {
         // Arrange
-        var hash1 = _storageService.StoreBlob(System.Text.Encoding.UTF8.GetBytes("Content 1"));
-        var hash2 = _storageService.StoreBlob(System.Text.Encoding.UTF8.GetBytes("Content 2"));
+        var hash1 = _storageService.StoreBlob(Encoding.UTF8.GetBytes("Content 1"));
+        var hash2 = _storageService.StoreBlob(Encoding.UTF8.GetBytes("Content 2"));
 
         // Act
         var blobs = _storageService.ListBlobs().ToList();

@@ -1,3 +1,5 @@
+using MeshWave.Common.Core.Crypto;
+
 namespace MeshWave.Common.Core.Storage;
 
 /// <summary>
@@ -32,13 +34,10 @@ public class StorageService
     /// </summary>
     public string StoreBlob(byte[] content, string? proposedHash = null)
     {
-        var hash = proposedHash ?? Crypto.CryptoService.ComputeHash(content);
+        var hash = proposedHash ?? CryptoService.ComputeHash(content);
         var blobPath = Path.Combine(_blobsPath, hash);
 
-        if (!File.Exists(blobPath))
-        {
-            File.WriteAllBytes(blobPath, content);
-        }
+        if (!File.Exists(blobPath)) File.WriteAllBytes(blobPath, content);
 
         return hash;
     }
@@ -59,10 +58,7 @@ public class StorageService
     public byte[]? GetBlob(string hash)
     {
         var blobPath = Path.Combine(_blobsPath, hash);
-        if (File.Exists(blobPath))
-        {
-            return File.ReadAllBytes(blobPath);
-        }
+        if (File.Exists(blobPath)) return File.ReadAllBytes(blobPath);
 
         return null;
     }
@@ -106,10 +102,7 @@ public class StorageService
     public string? GetMetadata(string entityId)
     {
         var metadataFile = Path.Combine(_metadataPath, $"{entityId}.json");
-        if (File.Exists(metadataFile))
-        {
-            return File.ReadAllText(metadataFile);
-        }
+        if (File.Exists(metadataFile)) return File.ReadAllText(metadataFile);
 
         return null;
     }
@@ -120,10 +113,7 @@ public class StorageService
     public long? GetBlobSize(string hash)
     {
         var blobPath = Path.Combine(_blobsPath, hash);
-        if (File.Exists(blobPath))
-        {
-            return new FileInfo(blobPath).Length;
-        }
+        if (File.Exists(blobPath)) return new FileInfo(blobPath).Length;
 
         return null;
     }

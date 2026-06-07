@@ -1,4 +1,3 @@
-using MeshWave.Common.Core.P2P;
 using MeshWave.Common.Core.Models;
 using MeshWave.Synchronizer;
 using NLog;
@@ -57,23 +56,42 @@ public class TestPeer : IAsyncDisposable
         Orchestrator.Dispose();
 
         if (BaseFolder.StartsWith(Path.GetTempPath()))
-        {
-            if (Directory.Exists(BaseFolder)) { Directory.Delete(BaseFolder, true); }
-        }
+            if (Directory.Exists(BaseFolder))
+                Directory.Delete(BaseFolder, true);
     }
 
-    public Manifest? GetLocalManifest(ManifestStreamType streamType) => Orchestrator.GetLocalManifest(streamType);
-    public Manifest? GetPeerManifest(string userId, ManifestStreamType streamType = ManifestStreamType.Content) => Orchestrator.GetPeerManifest(userId, streamType);
+    public Manifest? GetLocalManifest(ManifestStreamType streamType)
+    {
+        return Orchestrator.GetLocalManifest(streamType);
+    }
+
+    public Manifest? GetPeerManifest(string userId, ManifestStreamType streamType = ManifestStreamType.Content)
+    {
+        return Orchestrator.GetPeerManifest(userId, streamType);
+    }
 
     public void AnnounceTrack(string trackId, string hash, Dictionary<string, string>? metadata = null)
-        => Orchestrator.AnnounceTrack(trackId, hash, metadata);
+    {
+        Orchestrator.AnnounceTrack(trackId, hash, metadata);
+    }
 
     public void BroadcastProfile(string displayName, bool isArtist, string bio = "", string? website = null, string? iconHash = null)
-        => Orchestrator.BroadcastProfile(displayName, isArtist, bio, website, iconHash);
+    {
+        Orchestrator.BroadcastProfile(displayName, isArtist, bio, website, iconHash);
+    }
 
-    public async Task SyncAsync() => await Orchestrator.SyncAllPeersAsync();
+    public async Task SyncAsync()
+    {
+        await Orchestrator.SyncAllPeersAsync();
+    }
 
-    public IReadOnlyList<string> GetLogs() => _memoryTarget.Logs.AsReadOnly();
+    public IReadOnlyList<string> GetLogs()
+    {
+        return _memoryTarget.Logs.AsReadOnly();
+    }
 
-    public string GetLogsAsString() => string.Join(Environment.NewLine, _memoryTarget.Logs);
+    public string GetLogsAsString()
+    {
+        return string.Join(Environment.NewLine, _memoryTarget.Logs);
+    }
 }

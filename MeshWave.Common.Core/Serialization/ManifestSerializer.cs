@@ -1,8 +1,8 @@
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using MeshWave.Common.Core.Models;
-using MeshWave.Common.Core.Serialization.Protobuf;
 using MeshWave.Common.Core.P2P;
+using MeshWave.Common.Core.Serialization.Protobuf;
 
 namespace MeshWave.Common.Core.Serialization;
 
@@ -145,9 +145,7 @@ public static class ManifestSerializer
 
         if (op.ContentHash != null) proto.ContentHash = op.ContentHash;
         if (op.Metadata != null)
-        {
             foreach (var kv in op.Metadata) proto.Metadata.Add(kv.Key, kv.Value);
-        }
 
         return proto;
     }
@@ -180,9 +178,7 @@ public static class ManifestSerializer
 
         if (snapshot.LibraryStateDigest != null) proto.LibraryStateDigest = snapshot.LibraryStateDigest;
         if (snapshot.PlayCounts != null)
-        {
             foreach (var kv in snapshot.PlayCounts) proto.PlayCounts.Add(kv.Key, kv.Value);
-        }
         if (snapshot.FollowedUserIds != null) proto.FollowedUserIds.AddRange(snapshot.FollowedUserIds);
         if (snapshot.LikedTrackIds != null) proto.LikedTrackIds.AddRange(snapshot.LikedTrackIds);
         if (snapshot.FriendUserIds != null) proto.FriendUserIds.AddRange(snapshot.FriendUserIds);
@@ -220,9 +216,7 @@ public static class ManifestSerializer
         };
         if (entry.ContentHash != null) proto.ContentHash = entry.ContentHash;
         if (entry.Metadata != null)
-        {
             foreach (var kv in entry.Metadata) proto.Metadata.Add(kv.Key, kv.Value);
-        }
         return proto;
     }
 

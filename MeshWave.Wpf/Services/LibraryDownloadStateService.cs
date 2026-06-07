@@ -58,7 +58,10 @@ public sealed class LibraryDownloadStateService
         }
     }
 
-    private string GetPath() => Path.Combine(_appDataRoot, "removed-library-tracks.json");
+    private string GetPath()
+    {
+        return Path.Combine(_appDataRoot, "removed-library-tracks.json");
+    }
 
     private List<RemovedLibraryTrackEntry> LoadInternal()
     {
@@ -119,7 +122,10 @@ public sealed class LibraryDownloadStateService
         }
     }
 
-    private string GetDownloadedPath() => Path.Combine(_appDataRoot, "downloaded-tracks.json");
+    private string GetDownloadedPath()
+    {
+        return Path.Combine(_appDataRoot, "downloaded-tracks.json");
+    }
 
     private List<DownloadedTrackEntry> LoadDownloadedInternal()
     {

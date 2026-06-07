@@ -9,10 +9,10 @@ namespace MeshWave.Common.Core.Serialization;
 /// </summary>
 public class JsonSerializer
 {
-    private static readonly System.Text.Json.JsonSerializerOptions Options = new()
+    private static readonly JsonSerializerOptions Options = new()
     {
         PropertyNameCaseInsensitive = false,
-        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         WriteIndented = true,
         Converters = { new JsonStringEnumConverter() }

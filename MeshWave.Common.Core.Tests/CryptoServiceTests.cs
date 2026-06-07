@@ -1,5 +1,5 @@
+using System.Text;
 using MeshWave.Common.Core.Crypto;
-using MeshWave.Common.Core.Models;
 using Xunit;
 
 namespace MeshWave.Common.Core.Tests;
@@ -104,7 +104,7 @@ public class CryptoServiceTests
     public void ComputeHash_ReturnsConsistentHash()
     {
         // Arrange
-        var data = System.Text.Encoding.UTF8.GetBytes("Test data");
+        var data = Encoding.UTF8.GetBytes("Test data");
 
         // Act
         var hash1 = CryptoService.ComputeHash(data);

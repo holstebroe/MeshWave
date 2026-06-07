@@ -1,7 +1,5 @@
-using MeshWave.Common.Core.P2P;
 using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
-using MeshWave.Synchronizer;
 using Xunit;
 
 namespace MeshWave.Synchronizer.Tests;
@@ -30,7 +28,7 @@ public class PlayCountTests
     private static void AppendPlayAt(
         Manifest manifest, string trackId, DateTime utcTimestamp, string privateKeyPem)
     {
-        int seq = manifest.Operations.Count;
+        var seq = manifest.Operations.Count;
         var op = new ManifestOperation
         {
             OperationId  = Guid.NewGuid().ToString(),
@@ -77,7 +75,7 @@ public class PlayCountTests
         var local  = _manager.CreateManifest("user-merge-1");
         var remote = _manager.CreateManifest("user-merge-1");
 
-        for (int i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay; i++)
+        for (var i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay; i++)
             AppendPlayAt(remote, "track-a", DateTime.UtcNow, priv);
 
         var added = _manager.MergeManifest(local, remote, pub);
@@ -92,8 +90,8 @@ public class PlayCountTests
         var local  = _manager.CreateManifest("user-merge-2");
         var remote = _manager.CreateManifest("user-merge-2");
 
-        int overCount = SecurityLimits.MaxPlaysPerUserPerTrackPerDay + 5;
-        for (int i = 0; i < overCount; i++)
+        var overCount = SecurityLimits.MaxPlaysPerUserPerTrackPerDay + 5;
+        for (var i = 0; i < overCount; i++)
             AppendPlayAt(remote, "track-b", DateTime.UtcNow, priv);
 
         var added = _manager.MergeManifest(local, remote, pub);
@@ -108,16 +106,16 @@ public class PlayCountTests
 
         // Local already has (cap-1) plays — built properly via AppendPlayAt
         var local = _manager.CreateManifest("user-merge-3");
-        for (int i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay - 1; i++)
+        for (var i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay - 1; i++)
             AppendPlayAt(local, "track-c", DateTime.UtcNow, priv);
 
         // Remote must be a valid full manifest (or at least continuous from 0 if no snapshot)
         var remote = _manager.CreateManifest("user-merge-3");
         // Add same initial plays
-        for (int i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay - 1; i++)
+        for (var i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay - 1; i++)
             AppendPlayAt(remote, "track-c", DateTime.UtcNow, priv);
         // Add 3 new ones
-        for (int i = 0; i < 3; i++)
+        for (var i = 0; i < 3; i++)
             AppendPlayAt(remote, "track-c", DateTime.UtcNow, priv);
 
         var added = _manager.MergeManifest(local, remote, pub);
@@ -134,9 +132,9 @@ public class PlayCountTests
         var remote = _manager.CreateManifest("user-merge-4");
 
         // Add cap plays for track-x then cap plays for track-y in one sequential manifest
-        for (int i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay; i++)
+        for (var i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay; i++)
             AppendPlayAt(remote, "track-x", DateTime.UtcNow, priv);
-        for (int i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay; i++)
+        for (var i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay; i++)
             AppendPlayAt(remote, "track-y", DateTime.UtcNow, priv);
 
         var added = _manager.MergeManifest(local, remote, pub);
@@ -154,9 +152,9 @@ public class PlayCountTests
         var today     = DateTime.UtcNow.Date.AddHours(12);
         var yesterday = today.AddDays(-1);
 
-        for (int i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay; i++)
+        for (var i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay; i++)
             AppendPlayAt(remote, "track-d", today, priv);
-        for (int i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay; i++)
+        for (var i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay; i++)
             AppendPlayAt(remote, "track-d", yesterday, priv);
 
         var added = _manager.MergeManifest(local, remote, pub);
@@ -172,8 +170,8 @@ public class PlayCountTests
         var local  = _manager.CreateManifest("user-merge-6");
         var remote = _manager.CreateManifest("user-merge-6");
 
-        int overCount = SecurityLimits.MaxPlaysPerUserPerTrackPerDay + 2;
-        for (int i = 0; i < overCount; i++)
+        var overCount = SecurityLimits.MaxPlaysPerUserPerTrackPerDay + 2;
+        for (var i = 0; i < overCount; i++)
             AppendPlayAt(remote, "track-e", DateTime.UtcNow, priv);
 
         // Append a Create op — not subject to play cap

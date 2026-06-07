@@ -1,7 +1,7 @@
-using MeshWave.Common.Core.P2P;
+using System.Text.Json;
 using MeshWave.Common.Core.Models;
+using MeshWave.Common.Core.P2P;
 using MeshWave.Synchronizer;
-using MeshWave.ViewModels;
 using MeshWave.Wpf.Services;
 using MeshWave.Wpf.ViewModels;
 using Moq;
@@ -103,7 +103,7 @@ public class BrowseViewModelTests
     {
         var artistId = "artist-1";
         var trackIds = new List<string> { "track-1", "track-2" };
-        var trackIdsJson = System.Text.Json.JsonSerializer.Serialize(trackIds);
+        var trackIdsJson = JsonSerializer.Serialize(trackIds);
 
         var manifest = new Manifest
         {
@@ -145,7 +145,7 @@ public class BrowseViewModelTests
     {
         var artistId = "artist-1";
         var trackIds = new List<string> { "track-1" };
-        var trackIdsJson = System.Text.Json.JsonSerializer.Serialize(trackIds);
+        var trackIdsJson = JsonSerializer.Serialize(trackIds);
 
         var manifest = new Manifest
         {

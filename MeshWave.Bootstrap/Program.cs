@@ -79,7 +79,6 @@ internal class Program
     private static async Task StatusLoopAsync(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
-        {
             try
             {
                 await Task.Delay(TimeSpan.FromMinutes(1), ct);
@@ -90,7 +89,6 @@ internal class Program
                 Console.WriteLine($"[status] {DateTime.UtcNow:HH:mm:ss}  live={live}/{total}  total-requests={requests}");
             }
             catch (OperationCanceledException) { break; }
-        }
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -99,16 +97,14 @@ internal class Program
 
     private static (int port, List<string> seeds) ParseArgs(string[] args)
     {
-        int port = ManifestExchangeServer.DefaultPort;
+        var port = ManifestExchangeServer.DefaultPort;
         var seeds = new List<string>();
 
-        for (int i = 0; i < args.Length - 1; i++)
-        {
+        for (var i = 0; i < args.Length - 1; i++)
             if (args[i] == "--port" && int.TryParse(args[i + 1], out var p))
                 port = p;
             else if (args[i] == "--seeds")
                 seeds.AddRange(args[i + 1].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
-        }
 
         return (port, seeds);
     }

@@ -180,7 +180,6 @@
                                     <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
                                         <Setter Property="FontSize" Value="12"/>
                                         <Setter Property="Margin" Value="0"/>
-                                        <Setter Property="Padding" Value="10,4"/>
                                     </Style>
                                 </Button.Style>
                             </Button>

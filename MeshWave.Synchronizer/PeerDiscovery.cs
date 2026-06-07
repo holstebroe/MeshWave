@@ -1,8 +1,8 @@
-using MeshWave.Common.Core.P2P;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using MeshWave.Common.Core.P2P;
 
 namespace MeshWave.Synchronizer;
 
@@ -54,13 +54,10 @@ public class PeerDiscovery(int listenPort = PeerDiscovery.DefaultDiscoveryPort) 
         _udpClient?.Close();
 
         if (_listenTask != null)
-        {
             try { await _listenTask; } catch { }
-        }
+
         if (_announceTask != null)
-        {
             try { await _announceTask; } catch { }
-        }
 
         _udpClient?.Dispose();
         _udpClient = null;
@@ -111,7 +108,6 @@ public class PeerDiscovery(int listenPort = PeerDiscovery.DefaultDiscoveryPort) 
         if (_udpClient == null) return;
 
         while (!ct.IsCancellationRequested)
-        {
             try
             {
                 var result = await _udpClient.ReceiveAsync(ct);
@@ -119,8 +115,9 @@ public class PeerDiscovery(int listenPort = PeerDiscovery.DefaultDiscoveryPort) 
                 ProcessAnnouncement(json, result.RemoteEndPoint.Address.ToString());
             }
             catch (OperationCanceledException) { break; }
-            catch { /* ignore malformed packets */ }
-        }
+            catch {
+                /* ignore malformed packets */
+            }
     }
 
     private void ProcessAnnouncement(string json, string sourceAddress)
@@ -128,15 +125,9 @@ public class PeerDiscovery(int listenPort = PeerDiscovery.DefaultDiscoveryPort) 
         try
         {
             var announcement = JsonSerializer.Deserialize<PeerAnnouncement>(json);
-            if (announcement == null || string.IsNullOrWhiteSpace(announcement.UserId))
-            {
-                return;
-            }
+            if (announcement == null || string.IsNullOrWhiteSpace(announcement.UserId)) return;
 
-            if (string.Equals(announcement.UserId, _identity?.UserId, StringComparison.OrdinalIgnoreCase))
-            {
-                return; // ignore own announcements
-            }
+            if (string.Equals(announcement.UserId, _identity?.UserId, StringComparison.OrdinalIgnoreCase)) return; // ignore own announcements
 
             lock (_peersLock)
             {

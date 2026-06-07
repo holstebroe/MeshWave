@@ -1,4 +1,3 @@
-using MeshWave.Common.Core.P2P;
 namespace MeshWave.Synchronizer;
 
 /// <summary>
