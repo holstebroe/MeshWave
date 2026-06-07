@@ -57,7 +57,15 @@ public class TestPeer : IAsyncDisposable
 
         if (BaseFolder.StartsWith(Path.GetTempPath()))
         {
-            Directory.Delete(BaseFolder, true);
+            try
+            {
+                if (Directory.Exists(BaseFolder))
+                {
+                    Directory.Delete(BaseFolder, true);
+                }
+            }
+            catch (DirectoryNotFoundException) { }
+            catch (Exception ex) { Console.WriteLine($"Cleanup warning: {ex.Message}"); }
         }
     }
 
