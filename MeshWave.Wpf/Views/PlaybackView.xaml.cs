@@ -82,7 +82,7 @@ public partial class PlaybackView : UserControl
         }
 
         WaveformPath.Data = WaveformRenderer.Render(samples, width, height, style);
-        UpdateWaveformBrush(style);
+        UpdateWaveformColorShading(style);
 
         // Timeline markers on top of bars (but below overlay/cursor)
         DrawTimelineMarkers(width, height);
@@ -90,7 +90,7 @@ public partial class PlaybackView : UserControl
         UpdatePlaybackCursor();
     }
 
-    private void UpdateWaveformBrush(WaveformStyle style)
+    private void UpdateWaveformColorShading(WaveformStyle style)
     {
         switch (style)
         {
@@ -104,8 +104,11 @@ public partial class PlaybackView : UserControl
                     StartPoint = new Point(0, 0),
                     EndPoint = new Point(0, 1)
                 };
-                cloudyBrush.GradientStops.Add(new GradientStop(Color.FromRgb(64, 128, 192), 0.45));
-                cloudyBrush.GradientStops.Add(new GradientStop(Color.FromArgb(102, 72, 160, 176), 0.55));
+                cloudyBrush.GradientStops.Add(new GradientStop(Color.FromArgb(100,64, 128, 192), 0.1));
+                cloudyBrush.GradientStops.Add(new GradientStop(Color.FromRgb(64, 128, 192), 0.28));
+                cloudyBrush.GradientStops.Add(new GradientStop(Color.FromRgb(64, 128, 192), 0.58));
+                cloudyBrush.GradientStops.Add(new GradientStop(Color.FromArgb(102, 72, 160, 176), 0.65));
+                cloudyBrush.GradientStops.Add(new GradientStop(Color.FromArgb(30, 72, 160, 176), 0.85));
                 WaveformPath.Fill = cloudyBrush;
                 WaveformPath.Opacity = 1.0;
                 break;

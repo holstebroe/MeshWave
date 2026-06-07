@@ -6,7 +6,7 @@ using MeshWave.Wpf.ViewModels;
 
 namespace MeshWave.Wpf.Views;
 
-public partial class PlayerBarView : UserControl
+public partial class PlayerBarView
 {
     private PlaybackViewModel? _boundViewModel;
 
@@ -71,9 +71,11 @@ public partial class PlayerBarView : UserControl
             StartPoint = new Point(0, 0),
             EndPoint = new Point(1, 0)
         };
-        rainbowBrush.GradientStops.Add(new GradientStop(Color.FromRgb(85, 185, 150), 0.0));   // Mint Green
-        rainbowBrush.GradientStops.Add(new GradientStop(Color.FromRgb(150, 180, 120), 0.5));  // Transition
-        rainbowBrush.GradientStops.Add(new GradientStop(Color.FromRgb(210, 175, 90), 1.0));   // Yellow/Orange
+        rainbowBrush.GradientStops.Add(new GradientStop(Color.FromRgb(30, 45, 200), 0.0));
+        rainbowBrush.GradientStops.Add(new GradientStop(Color.FromRgb(85, 185, 150), 0.2));   // Mint Green
+        rainbowBrush.GradientStops.Add(new GradientStop(Color.FromRgb(250, 10, 120), 0.5));  // Transition
+        rainbowBrush.GradientStops.Add(new GradientStop(Color.FromRgb(210, 165, 90), 0.8));   // Yellow/Orange
+        rainbowBrush.GradientStops.Add(new GradientStop(Color.FromRgb(240, 225, 20), 1.0));   // Yellow/Orange
 
         WaveformPathDim.Fill = rainbowBrush;
         WaveformPathBright.Fill = rainbowBrush;

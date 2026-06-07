@@ -96,21 +96,18 @@ public static class WaveformRenderer
         var geometry = new StreamGeometry();
         using (var ctx = geometry.Open())
         {
-            const double targetBarW = 3.0; // Fixed pixel width
+            const double targetBarW = 2.0; // Fixed pixel width
             const double targetGapW = 1.0;
             const double stride     = targetBarW + targetGapW;
 
             var barCount = (int)Math.Floor(w / stride);
             if (barCount <= 0) return geometry;
 
-            const double centreMaskHalf = 0.75; // Thinner dividing bar (total 1.5px)
+            const double centreMaskHalf = 0.5; // Thinner dividing bar (total 1.5px)
             var centre = h / 2.0;
 
             for (var i = 0; i < barCount; i++)
             {
-                // Skip every 3rd bar in pixel-scale
-                if (i % 3 == 2) continue;
-
                 var sampleIdx = (double)i / barCount * (samples.Length - 1);
                 var amp       = Amplitude(samples, (int)sampleIdx);
                 var halfMax   = (h / 2.0) - centreMaskHalf;
