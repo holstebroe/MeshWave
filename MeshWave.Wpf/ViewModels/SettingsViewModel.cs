@@ -31,6 +31,7 @@ public class SettingsViewModel : ViewModelBase
     private string _theme = "Dark";
     private double _volume = 0.8;
     private string _supportedExtensionsText = string.Empty;
+    private string _preferredAudioQuality = "Original";
     private string _avatarImagePath = string.Empty;
     private string _avatarIconPath = string.Empty;
 
@@ -157,6 +158,12 @@ public class SettingsViewModel : ViewModelBase
     {
         get => _theme;
         set => SetProperty(ref _theme, value);
+    }
+
+    public string PreferredAudioQuality
+    {
+        get => _preferredAudioQuality;
+        set => SetProperty(ref _preferredAudioQuality, value);
     }
 
     public double Volume
@@ -289,6 +296,7 @@ public class SettingsViewModel : ViewModelBase
         BaseFolder = settings.BaseFolder;
         Theme = settings.Theme;
         Volume = settings.Playback.Volume;
+        PreferredAudioQuality = settings.Playback.PreferredAudioQuality;
 
         var extensions = settings.SupportedExtensions.Count > 0
             ? settings.SupportedExtensions
@@ -406,7 +414,8 @@ public class SettingsViewModel : ViewModelBase
             {
                 Volume = Volume,
                 RegisterPlayAt = 0.5,
-                WaveformStyle = WaveformStyle.ToString()
+                WaveformStyle = WaveformStyle.ToString(),
+                PreferredAudioQuality = PreferredAudioQuality
             },
             P2P = new P2PSettings
             {

@@ -253,6 +253,18 @@
                                            Width="50"/>
                             </Grid>
 
+                            <!-- Audio Quality -->
+                            <TextBlock Text="🎵 Preferred Audio Quality" Margin="0,0,0,6"/>
+                            <ComboBox SelectedValue="{Binding PreferredAudioQuality, Mode=TwoWay}"
+                                      SelectedValuePath="Content"
+                                      Margin="0,0,0,20" Width="200" HorizontalAlignment="Left">
+                                <ComboBoxItem Content="Original"/>
+                                <ComboBoxItem Content="Compressed"/>
+                            </ComboBox>
+                            <TextBlock Foreground="{StaticResource TextSecondaryColor}"
+                                       Text="If 'Compressed' is selected but unavailable, the original version will be downloaded."
+                                       Margin="0,-16,0,20" FontSize="12"/>
+
                             <!-- Waveform style -->
                             <TextBlock Text="Waveform Style" Margin="0,0,0,6"/>
                             <TextBlock Foreground="{StaticResource TextSecondaryColor}"

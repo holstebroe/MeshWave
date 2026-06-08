@@ -147,6 +147,16 @@ public class CatalogueService : ICatalogueService
                 else
                     peers.TryAdd(userId, true);
             }
+
+            var compressedHash = metadata.GetValueOrDefault("compressedHash");
+            if (!string.IsNullOrEmpty(compressedHash))
+            {
+                var peers = _peerAvailability.GetOrAdd(compressedHash, _ => new ConcurrentDictionary<string, bool>(StringComparer.OrdinalIgnoreCase));
+                if (isDelete)
+                    peers.TryRemove(userId, out _);
+                else
+                    peers.TryAdd(userId, true);
+            }
         }
     }
 
