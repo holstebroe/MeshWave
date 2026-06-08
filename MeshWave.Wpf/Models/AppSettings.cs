@@ -46,6 +46,7 @@ public class PlaybackSettings
     public double Volume { get; set; } = 0.8;
     public double CrossfadeDuration { get; set; } = 2.0; // seconds
     public string WaveformStyle { get; set; } = "Filled";
+    public string PreferredAudioQuality { get; set; } = "Original"; // "Original" or "Compressed"
     public PlaybackResumeState ResumeState { get; set; } = new();
 }
 

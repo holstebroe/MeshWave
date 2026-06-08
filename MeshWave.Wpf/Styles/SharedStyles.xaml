@@ -749,4 +749,29 @@
         </Setter>
     </Style>
 
+
+    <!-- ===== Inner View Panel ===== -->
+    <Style x:Key="InnerViewPanel" TargetType="Border">
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Background">
+            <Setter.Value>
+                <VisualBrush Stretch="None" TileMode="Tile" Viewport="0,0,128,128" ViewportUnits="Absolute">
+                    <VisualBrush.Visual>
+                        <Grid Width="128" Height="128">
+                            <Rectangle Fill="{DynamicResource SurfaceColor}" />
+                            <Image Source="pack://application:,,,/Assets/MeshWaveIcon128.png" Opacity="0.05" Stretch="None"/>
+                        </Grid>
+                    </VisualBrush.Visual>
+                </VisualBrush>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="BorderBrush" Value="{DynamicResource SurfaceLightColor}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Effect">
+            <Setter.Value>
+                <DropShadowEffect Color="Black" BlurRadius="10" ShadowDepth="2" Opacity="0.3" />
+            </Setter.Value>
+        </Setter>
+    </Style>
+
 </ResourceDictionary>

@@ -89,8 +89,9 @@ public class PeerManifestStore
         {
             added = manager.MergeManifest(local, incoming, peerPublicKeyPem);
         }
-        catch
+        catch (Exception ex)
         {
+            NLog.LogManager.GetCurrentClassLogger().Warn("Merge failed for manifest from user {0} stream {1}: {2}", incoming.UserId, incoming.StreamType, ex.Message);
             return 0; // reject tampered / over-limit manifests
         }
 

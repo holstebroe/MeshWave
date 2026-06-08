@@ -157,7 +157,7 @@ public class ManifestExchangeClient
         _logger.Debug("Connecting to {0}:{1}...", address, port);
         await client.ConnectAsync(address, port, cts.Token);
 
-        _logger.Debug("Pushing manifest for {0} to {1}:{2}", manifest.UserId, address, port);
+        _logger.Debug($"Pushing {manifest.StreamType} manifest for {manifest.UserId} to {address}:{port}");
         var stream = client.GetStream();
 
         var request = new ManifestRequest

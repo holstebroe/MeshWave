@@ -253,6 +253,18 @@
                                            Width="50"/>
                             </Grid>
 
+                            <!-- Audio Quality -->
+                            <TextBlock Text="🎵 Preferred Audio Quality" Margin="0,0,0,6"/>
+                            <ComboBox SelectedValue="{Binding PreferredAudioQuality, Mode=TwoWay}"
+                                      SelectedValuePath="Content"
+                                      Margin="0,0,0,20" Width="200" HorizontalAlignment="Left">
+                                <ComboBoxItem Content="Original"/>
+                                <ComboBoxItem Content="Compressed"/>
+                            </ComboBox>
+                            <TextBlock Foreground="{StaticResource TextSecondaryColor}"
+                                       Text="If 'Compressed' is selected but unavailable, the original version will be downloaded."
+                                       Margin="0,-16,0,20" FontSize="12"/>
+
                             <!-- Waveform style -->
                             <TextBlock Text="Waveform Style" Margin="0,0,0,6"/>
                             <TextBlock Foreground="{StaticResource TextSecondaryColor}"
@@ -441,8 +453,7 @@
                                        Style="{StaticResource SectionHeader}"
                                        Margin="0,0,0,12"/>
 
-                            <Border Background="{StaticResource SurfaceLightColor}"
-                                    CornerRadius="6" Padding="16" Margin="0,0,0,12">
+                            <Border Style="{StaticResource InnerViewPanel}" Padding="16" Margin="0,0,0,12">
                                 <StackPanel>
                                     <TextBlock Text="Base Folder"
                                                Foreground="{StaticResource TextSecondaryColor}"
@@ -501,7 +512,7 @@
                             <ItemsControl ItemsSource="{Binding StorageCategories}" Margin="0,0,0,14">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Background="{StaticResource SurfaceLightColor}" CornerRadius="6" Padding="12" Margin="0,0,0,8">
+                                        <Border Style="{StaticResource InnerViewPanel}" Padding="12" Margin="0,0,0,8">
                                             <StackPanel>
                                                 <Grid Margin="0,0,0,4">
                                                     <Grid.ColumnDefinitions>

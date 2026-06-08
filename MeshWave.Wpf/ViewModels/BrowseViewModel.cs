@@ -112,6 +112,7 @@ public class BrowseTrackItem : ViewModelBase
     public string ArtistDisplayName { get; set; } = string.Empty;
     public string Album { get; set; } = string.Empty;
     public string? ContentHash { get; set; }
+    public string? CompressedContentHash { get; set; }
     public long FileSize { get; set; }
     public string FileSizeDisplay { get; set; } = string.Empty;
     public DateTime? ReleasedAt { get; set; }
@@ -174,7 +175,7 @@ public class BrowseTrackItem : ViewModelBase
         IsDownloaded ? "✅ Downloaded" :
         "⬇ Download";
 
-    public bool CanDownload => !IsLocal && !IsQueued && (!IsDownloaded || NeedsUpdate);
+    public bool CanDownload => !IsLocal && !IsQueued && (!IsDownloaded || NeedsUpdate) && (!string.IsNullOrWhiteSpace(ContentHash) || !string.IsNullOrWhiteSpace(CompressedContentHash));
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -226,11 +227,11 @@ public class BrowseViewModel : ViewModelBase
         }, a => a != null);
 
         DownloadTrackCommand = new RelayCommand<BrowseTrackItem>(EnqueueTrackDownload,
-            t => t != null && !string.IsNullOrWhiteSpace(t.ContentHash) && !t.IsQueued);
+            t => t != null && (!string.IsNullOrWhiteSpace(t.ContentHash) || !string.IsNullOrWhiteSpace(t.CompressedContentHash)) && !t.IsQueued);
 
         PlayRemoteTrackCommand = new RelayCommand<BrowseTrackItem>(async t =>
         {
-            if (t == null || string.IsNullOrWhiteSpace(t.ContentHash)) return;
+            if (t == null || (string.IsNullOrWhiteSpace(t.ContentHash) && string.IsNullOrWhiteSpace(t.CompressedContentHash))) return;
             if (_sync == null) return;
 
             // Trigger download + stream playback
@@ -242,12 +243,15 @@ public class BrowseViewModel : ViewModelBase
             if (!string.IsNullOrWhiteSpace(t.Title) && Path.HasExtension(t.Title))
                 extension = Path.GetExtension(t.Title);
 
-            var tempPath = Path.Combine(tempRoot, t.ContentHash + extension);
+            var targetHash = await ResolveBestQualityHashAsync(t);
+            if (string.IsNullOrWhiteSpace(targetHash)) return;
+
+            var tempPath = Path.Combine(tempRoot, targetHash + extension);
 
             // If it already exists in Library, just play it
             // (A more robust check would be to see if it's already fully downloaded)
 
-            var (stream, length) = await _sync.RequestContentStreamAsync(t.ArtistUserId, t.ContentHash);
+            var (stream, length) = await _sync.RequestContentStreamAsync(t.ArtistUserId, targetHash);
             if (stream == null) return;
 
             // Start writing to temp file in background
@@ -268,7 +272,7 @@ public class BrowseViewModel : ViewModelBase
             // Attempt to resolve duration if the manifest provides it, or use a 3-min default for remote
             var duration = TimeSpan.FromMinutes(3);
             onPlayRemote?.Invoke(t.Title, t.ArtistDisplayName, duration, tempPath, length);
-        }, t => t != null && !string.IsNullOrWhiteSpace(t.ContentHash));
+        }, t => t != null && (!string.IsNullOrWhiteSpace(t.ContentHash) || !string.IsNullOrWhiteSpace(t.CompressedContentHash)));
 
         DownloadArtistCommand = new RelayCommand<BrowseArtistItem>(a =>
         {
@@ -307,7 +311,7 @@ public class BrowseViewModel : ViewModelBase
             if (item == null) return;
             _downloadQueue.Remove(item);
             var track = Tracks.FirstOrDefault(t =>
-                string.Equals(t.ContentHash, item.ContentHash, StringComparison.OrdinalIgnoreCase));
+                string.Equals(t.ContentHash, item.ContentHash, StringComparison.OrdinalIgnoreCase) || string.Equals(t.CompressedContentHash, item.ContentHash, StringComparison.OrdinalIgnoreCase));
             if (track != null)
             {
                 track.IsQueued = false;
@@ -596,24 +600,31 @@ public class BrowseViewModel : ViewModelBase
                 if (entity.Metadata.TryGetValue("releasedAt", out var rat) && DateTime.TryParse(rat, out var dt))
                     releasedAt = dt;
 
-                var queueItem = !string.IsNullOrWhiteSpace(entity.ContentHash)
-                    ? _downloadQueue.AllItems.FirstOrDefault(i => string.Equals(i.ContentHash, entity.ContentHash, StringComparison.OrdinalIgnoreCase))
+                var compressedHash = entity.Metadata.GetValueOrDefault("compressedHash");
+
+                var queueItem = (!string.IsNullOrWhiteSpace(entity.ContentHash) || !string.IsNullOrWhiteSpace(compressedHash))
+                    ? _downloadQueue.AllItems.FirstOrDefault(i => string.Equals(i.ContentHash, entity.ContentHash, StringComparison.OrdinalIgnoreCase) || string.Equals(i.ContentHash, compressedHash, StringComparison.OrdinalIgnoreCase))
                     : null;
                 var isQueued = queueItem != null && (queueItem.State == DownloadState.Pending || queueItem.State == DownloadState.Downloading);
                 var isDownloaded = queueItem?.State == DownloadState.Done;
-                if (!isDownloaded && !string.IsNullOrWhiteSpace(entity.ContentHash) && _sync != null)
-                    isDownloaded = await _sync.IsContentAvailableLocallyAsync(entity.ContentHash);
+                if (!isDownloaded && _sync != null && (!string.IsNullOrWhiteSpace(entity.ContentHash) || !string.IsNullOrWhiteSpace(compressedHash)))
+                    isDownloaded = (!string.IsNullOrWhiteSpace(entity.ContentHash) && await _sync.IsContentAvailableLocallyAsync(entity.ContentHash)) || (!string.IsNullOrWhiteSpace(compressedHash) && await _sync.IsContentAvailableLocallyAsync(compressedHash));
 
                 var isLocal = _sync?.LocalManifest != null && string.Equals(manifest.UserId, _sync.LocalManifest.UserId, StringComparison.OrdinalIgnoreCase);
 
                 var needsUpdate = false;
-                if (!isLocal && !string.IsNullOrWhiteSpace(entity.ContentHash))
+                if (!isLocal && (!string.IsNullOrWhiteSpace(entity.ContentHash) || !string.IsNullOrWhiteSpace(compressedHash)))
                 {
                     var downloaded = downloadedEntries.FirstOrDefault(e => string.Equals(e.TrackId, entity.TargetId, StringComparison.OrdinalIgnoreCase));
                     if (downloaded != null)
-                        if (!string.Equals(downloaded.ContentHash, entity.ContentHash, StringComparison.OrdinalIgnoreCase) ||
-                            entity.SequenceNumber > downloaded.SequenceNumber)
+                    {
+                        if (entity.SequenceNumber > downloaded.SequenceNumber)
+                        {
                             needsUpdate = true;
+                        }
+                        else if (!string.Equals(downloaded.ContentHash, entity.ContentHash, StringComparison.OrdinalIgnoreCase) && !string.Equals(downloaded.ContentHash, compressedHash, StringComparison.OrdinalIgnoreCase))
+                            needsUpdate = true;
+                    }
                 }
 
                 var fileSize = long.TryParse(entity.Metadata.GetValueOrDefault("fileSize"), out var fs) ? fs : 0;
@@ -626,6 +637,7 @@ public class BrowseViewModel : ViewModelBase
                     ArtistDisplayName = artistName,
                     Album = album,
                     ContentHash = entity.ContentHash,
+                    CompressedContentHash = compressedHash,
                     FileSize = fileSize,
                     FileSizeDisplay = FormatFileSize(fileSize),
                     ReleasedAt = releasedAt,
@@ -724,11 +736,11 @@ public class BrowseViewModel : ViewModelBase
     // ─────────────────────────────────────────────────────────────────────
     private void EnqueueTrackDownload(BrowseTrackItem? track)
     {
-        if (track == null || string.IsNullOrWhiteSpace(track.ContentHash)) return;
+        if (track == null || (string.IsNullOrWhiteSpace(track.ContentHash) && string.IsNullOrWhiteSpace(track.CompressedContentHash))) return;
 
         var item = _downloadQueue.Enqueue(
             track.ArtistUserId,
-            track.ContentHash!,
+            string.IsNullOrWhiteSpace(track.ContentHash) ? track.CompressedContentHash! : track.ContentHash, // temporary, will update in async block
             track.Title,
             track.ArtistDisplayName,
             track.Album,
@@ -743,6 +755,13 @@ public class BrowseViewModel : ViewModelBase
 
         _ = Task.Run(async () =>
         {
+            var targetHash = await ResolveBestQualityHashAsync(track);
+
+            if (string.IsNullOrWhiteSpace(targetHash)) return;
+
+            // Update queued item hash
+            ExecuteOnUiOrCurrent(() => item.ContentHash = targetHash);
+
             ExecuteOnUiOrCurrent(() => item.State = DownloadState.Downloading);
 
             try
@@ -751,7 +770,7 @@ public class BrowseViewModel : ViewModelBase
                 if (_sync.LocalManifest != null)
                     manifests.Add(_sync.LocalManifest);
 
-                var bytes = await _sync.RequestContentAsync(item.PeerUserId, item.ContentHash);
+                var bytes = await _sync.RequestContentAsync(item.PeerUserId, targetHash);
                 if (bytes == null || bytes.Length == 0)
                 {
                     var details = _sync.LastConnectionAttemptReport?.BuildUserFacingSummary() ?? "Peer did not return content.";
@@ -786,11 +805,11 @@ public class BrowseViewModel : ViewModelBase
                     item.StatusMessage = destPath;
                     track.IsQueued = false;
                     track.IsDownloaded = true;
-                    if (!string.IsNullOrWhiteSpace(track.TrackId) && !string.IsNullOrWhiteSpace(track.ContentHash))
+                    if (!string.IsNullOrWhiteSpace(track.TrackId))
                     {
                         var meshTrack = manifests.SelectMany(m => GetLatestEntities(m, "Track"))
                             .FirstOrDefault(e => string.Equals(e.TargetId, track.TrackId, StringComparison.OrdinalIgnoreCase));
-                        _downloadState.MarkDownloaded(track.TrackId, track.ContentHash, meshTrack?.SequenceNumber ?? 0);
+                        _downloadState.MarkDownloaded(track.TrackId, targetHash, meshTrack?.SequenceNumber ?? 0);
                     }
                     StatusText = $"Downloaded \"{track.Title}\" to Library.";
                     Refresh(); // Full refresh to re-evaluate states
@@ -808,6 +827,32 @@ public class BrowseViewModel : ViewModelBase
                 ScheduleAutoRetry(track, item);
             }
         });
+    }
+
+    private async Task<string?> ResolveBestQualityHashAsync(BrowseTrackItem track)
+    {
+        var originalHash = track.ContentHash;
+        var compressedHash = track.CompressedContentHash;
+
+        if (string.IsNullOrWhiteSpace(originalHash) && string.IsNullOrWhiteSpace(compressedHash)) return null;
+        if (string.IsNullOrWhiteSpace(originalHash)) return compressedHash;
+        if (string.IsNullOrWhiteSpace(compressedHash)) return originalHash;
+
+        var preferredQuality = _settingsService.LoadSettings().Playback.PreferredAudioQuality;
+        var primaryHash = preferredQuality == "Compressed" ? compressedHash : originalHash;
+        var fallbackHash = preferredQuality == "Compressed" ? originalHash : compressedHash;
+
+        if (_sync != null)
+        {
+            var primaryPeers = await _sync.CatalogueService.GetPeersForContentAsync(primaryHash);
+            if (primaryPeers.Any()) return primaryHash;
+
+            var fallbackPeers = await _sync.CatalogueService.GetPeersForContentAsync(fallbackHash);
+            if (fallbackPeers.Any()) return fallbackHash;
+        }
+
+        // Default to primary if we couldn't resolve peers (e.g. sync unavailable)
+        return primaryHash;
     }
 
     private void ScheduleAutoRetry(BrowseTrackItem track, DownloadQueueItem item)

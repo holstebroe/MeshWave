@@ -3,6 +3,7 @@ using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
 using MeshWave.Synchronizer;
 using MeshWave.TestUtilities;
+using NLog.Targets;
 using Xunit;
 
 namespace MeshWave.Integration.Tests;
@@ -188,7 +189,8 @@ public class MeshIntegrationTests : IAsyncLifetime
 
         await _context.ConnectAndSyncAllAsync();
 
-        await jane.WaitForConditionAsync(() => {
+        await jane.WaitForConditionAsync(() =>
+        {
             var manifest = jane.GetPeerManifest(john.UserId);
             return CountPublicTracks(manifest) == 2;
         });
@@ -196,7 +198,8 @@ public class MeshIntegrationTests : IAsyncLifetime
         john.AnnounceTrack("john-track-3", "hash3", new Dictionary<string, string> { ["title"] = "Track 3" });
         await john.SyncAsync();
 
-        await jane.WaitForConditionAsync(() => {
+        await jane.WaitForConditionAsync(() =>
+        {
             var manifest = jane.GetPeerManifest(john.UserId);
             return CountPublicTracks(manifest) == 3;
         });
@@ -223,6 +226,56 @@ public class MeshIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ProfileOperationsAreExchanged()
+    {
+        var john = await _context.CreatePeerAsync("John");
+        var jane = await _context.CreatePeerAsync("Jane");
+
+        var johnSync = john.Orchestrator;
+        var janeSync = jane.Orchestrator;
+
+        // Verify that john and jane are connected
+        await john.WaitForConditionAsync(() => johnSync.ConnectedPeerCount > 0);
+        await jane.WaitForConditionAsync(() => janeSync.ConnectedPeerCount > 0);
+
+        // Use the built-in ConnectAndSyncAll which properly propagates manifests
+        await _context.ConnectAndSyncAllAsync();
+
+        // First check if any operations are exchanged at all.
+        // We expect at least a profile operation to be exchanged by BroadcastProfile called by CreatePeerAsync.
+        try
+        {
+            await TestWaiter.WaitForItemPollingAsync(() => johnSync.PeerManifests,
+                x => x.Operations.Count > 0, timeoutMs: 2000, cancellationToken: TestContext.Current.CancellationToken);
+        }
+        catch (Exception)
+        {
+            foreach (var streamType in Enum.GetValues<ManifestStreamType>())
+            {
+                _output.WriteLine($"Stats for manifest type {streamType}");
+                var johnLocalManifest = johnSync.GetLocalManifest(streamType);
+                var johnManifestOpCount = johnLocalManifest?.Operations.Count ?? -1;
+                var johnManifestProfileOpCount = johnLocalManifest?.Operations.Count(x => x.OperationType == ManifestOperationType.Profile) ?? -1;
+                var johnRemoteManifestsCount = johnSync.PeerManifests.Where(x => x.StreamType == streamType).Select(x => x.Operations.Count).Sum();
+                var janeLocalManifest = janeSync.GetLocalManifest(streamType);
+                var janeManifestOpCount = janeLocalManifest?.Operations.Count ?? -1;
+                var janeManifestProfileOpCount = janeLocalManifest?.Operations.Count(x => x.OperationType == ManifestOperationType.Profile) ?? -1;
+                var janeRemoteManifestsCount = janeSync.PeerManifests.Where(x => x.StreamType == streamType).Select(x => x.Operations.Count).Sum();
+
+                _output.WriteLine($"John {streamType} manifest counts: Local ops {johnManifestOpCount}. Local profile ops {johnManifestProfileOpCount}. Remote ops: {johnRemoteManifestsCount}");
+                _output.WriteLine($"Jane {streamType} manifest counts: Local ops {janeManifestOpCount}. Local profile ops {janeManifestProfileOpCount}. Remote ops: {janeRemoteManifestsCount}");
+
+            }
+
+            _output.WriteLine("=== JOHN'S LOGS ===");
+            _output.WriteLine(john.GetLogsAsString());
+            _output.WriteLine("\n=== JANE'S LOGS ===");
+            _output.WriteLine(jane.GetLogsAsString());
+            throw;
+        }
+    }
+
+    [Fact]
     [Trait(TestTraits.Category, TestTraits.Stress)]
     public async Task StressTest_ManyComments_AreDistributed()
     {
@@ -237,7 +290,8 @@ public class MeshIntegrationTests : IAsyncLifetime
 
         await john.SyncAsync();
 
-        await jane.WaitForConditionAsync(() => {
+        await jane.WaitForConditionAsync(() =>
+        {
             var manifest = jane.GetPeerManifest(john.UserId, ManifestStreamType.Interaction);
             return manifest?.Operations.Count(op => op.OperationType == ManifestOperationType.Comment) == commentCount;
         }, timeoutMs: 15000);
@@ -262,7 +316,8 @@ public class MeshIntegrationTests : IAsyncLifetime
         await bob.SyncAsync();
 
         _output.WriteLine("Waiting for Bob to receive all 1000 comments via delta-sync and Protobuf...");
-        await bob.WaitForConditionAsync(() => {
+        await bob.WaitForConditionAsync(() =>
+        {
             var manifest = bob.GetPeerManifest(alice.UserId, ManifestStreamType.Interaction);
             var totalOps = (manifest?.Operations.Count ?? 0) + (manifest?.Snapshot?.PersistentOperations.Count ?? 0);
             _output.WriteLine($"Current total ops for Alice in Bob's store: {totalOps}");

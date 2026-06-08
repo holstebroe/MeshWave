@@ -70,12 +70,6 @@ public partial class MainWindow : Window
         }
     }
 
-    private void HomeMenu_Click(object sender, RoutedEventArgs e)
-    {
-        ViewModel.PersistPlaybackState();
-        ViewModel.NavigateToHome();
-    }
-
     private void LibraryMenu_Click(object sender, RoutedEventArgs e)
     {
         ViewModel.PersistPlaybackState();
