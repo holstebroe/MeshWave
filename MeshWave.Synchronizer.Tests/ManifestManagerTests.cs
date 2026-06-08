@@ -1,3 +1,4 @@
+using MeshWave.Common.Core;
 using MeshWave.Common.Core.Models;
 using Xunit;
 
@@ -90,5 +91,27 @@ public class ManifestManagerTests
 
         // Assert
         Assert.True(isValid);
+    }
+
+    [Fact]
+    public void MergeManifest_ThrowsInvalidDataException_WhenOperationsExceedLimit()
+    {
+        var local = _manifestManager.CreateManifest("user-4");
+        var remote = _manifestManager.CreateManifest("user-4");
+
+        for (int i = 0; i <= SecurityLimits.MaxManifestOperations; i++)
+        {
+            remote.Operations.Add(new ManifestOperation
+            {
+                OperationId = $"op-{i}",
+                OperationType = ManifestOperationType.Create,
+                TargetId = "target",
+                TargetType = "Track",
+                Signature = "sig",
+                SequenceNumber = i
+            });
+        }
+
+        Assert.Throws<System.IO.InvalidDataException>(() => _manifestManager.MergeManifest(local, remote, "mocked-key"));
     }
 }

@@ -1,6 +1,8 @@
+using MeshWave.Common.Core;
 using System.Text;
 using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
+using MeshWave.Common.Core;
 using NLog;
 
 namespace MeshWave.Synchronizer;
@@ -325,7 +327,7 @@ public class ManifestManager
 
         if (remote.Operations.Count > SecurityLimits.MaxManifestOperations)
         {
-            LogManager.GetCurrentClassLogger().Error("Merge failed: remote manifest from {0} has {1} operations, exceeding limit of {2}", remote.UserId, remote.Operations.Count, SecurityLimits.MaxManifestOperations);
+            LogManager.GetCurrentClassLogger().Warn("Merge failed: remote manifest from {0} has {1} operations, exceeding limit of {2}", remote.UserId, remote.Operations.Count, SecurityLimits.MaxManifestOperations);
             throw new InvalidDataException($"Remote manifest exceeds operation limit ({remote.Operations.Count}).");
         }
 
@@ -367,7 +369,7 @@ public class ManifestManager
                 if (op.SequenceNumber <= localMaxSeqNum)
                     continue;
 
-                if (!IsOperationWithinLimits(op))
+                if (!IsOperationWithinLimits(op, remote.UserId))
                     continue;
 
                 // Enforce per-user daily play cap.
@@ -433,18 +435,47 @@ public class ManifestManager
         return true;
     }
 
-    private static bool IsOperationWithinLimits(ManifestOperation op)
+    private static bool IsOperationWithinLimits(ManifestOperation op, string peerId)
     {
-        if (op.OperationId.Length > SecurityLimits.MaxOperationIdLength) return false;
-        if (op.TargetId.Length > SecurityLimits.MaxTargetIdLength) return false;
-        if (op.TargetType.Length > SecurityLimits.MaxTargetTypeLength) return false;
-        if (op.ContentHash?.Length > SecurityLimits.MaxContentHashLength) return false;
-        if (op.Metadata.Count > SecurityLimits.MaxMetadataEntries) return false;
+        var logger = LogManager.GetCurrentClassLogger();
+        if (op.OperationId.Length > SecurityLimits.MaxOperationIdLength)
+        {
+            logger.Warn("Rejected operation from {0}: OperationId length {1} exceeds limit {2}", peerId, op.OperationId.Length, SecurityLimits.MaxOperationIdLength);
+            return false;
+        }
+        if (op.TargetId.Length > SecurityLimits.MaxTargetIdLength)
+        {
+            logger.Warn("Rejected operation from {0}: TargetId length {1} exceeds limit {2}", peerId, op.TargetId.Length, SecurityLimits.MaxTargetIdLength);
+            return false;
+        }
+        if (op.TargetType.Length > SecurityLimits.MaxTargetTypeLength)
+        {
+            logger.Warn("Rejected operation from {0}: TargetType length {1} exceeds limit {2}", peerId, op.TargetType.Length, SecurityLimits.MaxTargetTypeLength);
+            return false;
+        }
+        if (op.ContentHash?.Length > SecurityLimits.MaxContentHashLength)
+        {
+            logger.Warn("Rejected operation from {0}: ContentHash length {1} exceeds limit {2}", peerId, op.ContentHash.Length, SecurityLimits.MaxContentHashLength);
+            return false;
+        }
+        if (op.Metadata.Count > SecurityLimits.MaxMetadataEntries)
+        {
+            logger.Warn("Rejected operation from {0}: Metadata count {1} exceeds limit {2}", peerId, op.Metadata.Count, SecurityLimits.MaxMetadataEntries);
+            return false;
+        }
 
         foreach (var kv in op.Metadata)
         {
-            if (kv.Key.Length > SecurityLimits.MaxMetadataKeyLength) return false;
-            if (kv.Value.Length > SecurityLimits.MaxMetadataValueLength) return false;
+            if (kv.Key.Length > SecurityLimits.MaxMetadataKeyLength)
+            {
+                logger.Warn("Rejected operation from {0}: Metadata Key length {1} exceeds limit {2}", peerId, kv.Key.Length, SecurityLimits.MaxMetadataKeyLength);
+                return false;
+            }
+            if (kv.Value.Length > SecurityLimits.MaxMetadataValueLength)
+            {
+                logger.Warn("Rejected operation from {0}: Metadata Value length {1} exceeds limit {2}", peerId, kv.Value.Length, SecurityLimits.MaxMetadataValueLength);
+                return false;
+            }
         }
 
         return true;
