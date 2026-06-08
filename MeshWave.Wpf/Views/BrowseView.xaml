@@ -59,8 +59,7 @@
                    Margin="0,0,0,12"/>
 
         <!-- Filter box -->
-        <Border Grid.Row="2" Background="{StaticResource SurfaceColor}"
-                CornerRadius="6" Padding="10,6" Margin="0,0,0,12">
+        <Border Style="{StaticResource InnerViewPanel}" Grid.Row="2" Padding="10,6" Margin="0,0,0,12">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -173,8 +172,7 @@
                     </ItemsControl.Style>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Border Background="{StaticResource SurfaceColor}"
-                                    CornerRadius="8" Padding="16,12" Margin="0,0,0,8"
+                            <Border Style="{StaticResource InnerViewPanel}" Padding="16,12" Margin="0,0,0,8"
                                     Cursor="Hand">
                                 <Border.InputBindings>
                                     <MouseBinding MouseAction="LeftDoubleClick"
@@ -280,8 +278,7 @@
                     </ItemsControl.Style>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Border Background="{StaticResource SurfaceColor}"
-                                    CornerRadius="8" Padding="16,12" Margin="0,0,0,8">
+                            <Border Style="{StaticResource InnerViewPanel}" Padding="16,12" Margin="0,0,0,8">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
@@ -363,8 +360,7 @@
                     </ItemsControl.Style>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Border Background="{StaticResource SurfaceColor}"
-                                    CornerRadius="8" Padding="16,12" Margin="0,0,0,8">
+                            <Border Style="{StaticResource InnerViewPanel}" Padding="16,12" Margin="0,0,0,8">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
@@ -451,8 +447,7 @@
                     </ItemsControl.Style>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Border Background="{StaticResource SurfaceColor}"
-                                    CornerRadius="6" Padding="14,10" Margin="0,0,0,6">
+                            <Border Style="{StaticResource InnerViewPanel}" Padding="14,10" Margin="0,0,0,6">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
@@ -552,8 +547,7 @@
                     <ItemsControl ItemsSource="{Binding DownloadQueue}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border Background="{StaticResource SurfaceColor}"
-                                        CornerRadius="6" Padding="14,10" Margin="0,0,0,6">
+                                <Border Style="{StaticResource InnerViewPanel}" Padding="14,10" Margin="0,0,0,6">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -676,10 +670,9 @@
                     </ItemsControl>
 
                     <!-- Empty state for downloads -->
-                    <Border Background="{StaticResource SurfaceColor}"
-                            CornerRadius="8" Padding="24" Margin="0,4,0,0">
+                    <Border Padding="24" Margin="0,4,0,0">
                         <Border.Style>
-                            <Style TargetType="Border">
+                            <Style TargetType="Border" BasedOn="{StaticResource InnerViewPanel}">
                                 <Setter Property="Visibility" Value="Collapsed"/>
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding DownloadQueue.Count}" Value="0">

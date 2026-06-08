@@ -441,8 +441,7 @@
                                        Style="{StaticResource SectionHeader}"
                                        Margin="0,0,0,12"/>
 
-                            <Border Background="{StaticResource SurfaceLightColor}"
-                                    CornerRadius="6" Padding="16" Margin="0,0,0,12">
+                            <Border Style="{StaticResource InnerViewPanel}" Padding="16" Margin="0,0,0,12">
                                 <StackPanel>
                                     <TextBlock Text="Base Folder"
                                                Foreground="{StaticResource TextSecondaryColor}"
@@ -501,7 +500,7 @@
                             <ItemsControl ItemsSource="{Binding StorageCategories}" Margin="0,0,0,14">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Background="{StaticResource SurfaceLightColor}" CornerRadius="6" Padding="12" Margin="0,0,0,8">
+                                        <Border Style="{StaticResource InnerViewPanel}" Padding="12" Margin="0,0,0,8">
                                             <StackPanel>
                                                 <Grid Margin="0,0,0,4">
                                                     <Grid.ColumnDefinitions>

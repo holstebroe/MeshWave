@@ -33,8 +33,6 @@ public class AuthorityTests
 
         entry = await service.GetEntryAsync(trackId);
         Assert.NotNull(entry);
-        Assert.NotNull(entry);
-        Assert.NotNull(entry);
         Assert.Equal("Title 1", entry.Title); // Still Title 1
         Assert.Equal(user1, entry.OwnerUserId);
     }
