@@ -25,7 +25,6 @@ public class AuthorityTests
         var entry = await service.GetEntryAsync(trackId);
         Assert.NotNull(entry);
         Assert.Equal("Title 1", entry.Title);
-        Assert.NotNull(entry);
         Assert.Equal(user1, entry.OwnerUserId);
 
         // User 2 tries to update User 1's track - should be REJECTED
@@ -35,7 +34,6 @@ public class AuthorityTests
         entry = await service.GetEntryAsync(trackId);
         Assert.NotNull(entry);
         Assert.Equal("Title 1", entry.Title); // Still Title 1
-        Assert.NotNull(entry);
         Assert.Equal(user1, entry.OwnerUserId);
     }
 
