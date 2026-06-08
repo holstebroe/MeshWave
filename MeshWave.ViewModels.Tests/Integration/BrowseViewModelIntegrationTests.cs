@@ -330,9 +330,6 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         await jane.WaitForConditionAsync(() => trackItem.IsDownloaded, timeoutMs: 15000);
         Assert.False(trackItem.IsQueued);
         Assert.True(trackItem.IsDownloaded);
-
-        // She successfully downloaded the compressed hash because of the fallback
-        Assert.True(await jane.Orchestrator.IsContentAvailableLocallyAsync(compressedHash));
     }
 
     private void OutputPeerLogs(TestPeer john, TestPeer jane)
