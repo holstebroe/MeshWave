@@ -157,7 +157,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         _router = router ?? new PeerRouter(logger: _logger);
         _server = server;
         _client = client ?? new ManifestExchangeClient(timeoutMs: SecurityLimits.ConnectTimeoutMs, logger: _logger);
-        _manifestManager = manifestManager ?? new ManifestManager();
+        _manifestManager = manifestManager ?? new ManifestManager(_logger);
         UserRepository = userRepository;
         CatalogueService = catalogueService ?? new CatalogueService();
 
@@ -564,7 +564,12 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             foreach (var streamType in Enum.GetValues<ManifestStreamType>())
             {
                 var manifest = GetLocalManifest(streamType);
-                if (manifest == null) continue;
+                if (manifest == null)
+                {
+                    _logger.Debug($"OnPeerAdded: No {streamType} manifest available for {peer.UserId}");
+                    continue;
+                }
+                _logger.Debug($"OnPeerAdded: Pushing {streamType} manifest ({manifest.Operations.Count} ops) to {peer.UserId}");
 
                 Manifest manifestToPush;
                 lock (manifest)
@@ -708,8 +713,10 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                 }
 
                 Interlocked.Increment(ref _outboundManifestFetchCount);
+                var details = $"Fetched {streamType} manifest with {remoteManifest.Operations.Count} operation(s) (delta sync from seq {startSeq}). FromPeer={fetchedFromPeer}";
+                _logger.Debug(details);
                 RecordPeerMessage(peer.UserId, "FetchManifest", success: true,
-                    $"Fetched {streamType} manifest with {remoteManifest.Operations.Count} operation(s) (delta sync from seq {startSeq}). FromPeer={fetchedFromPeer}");
+                    details);
                 TryMerge(remoteManifest, peer.PublicKeyPem);
             }
             catch (Exception ex)

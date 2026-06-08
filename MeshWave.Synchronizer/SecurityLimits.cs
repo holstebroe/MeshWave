@@ -40,7 +40,7 @@ public static class SecurityLimits
     public const int MaxTargetTypeLength = 32;
     public const int MaxTargetIdLength = 64;
     public const int MaxMetadataKeyLength = 64;
-    public const int MaxMetadataValueLength = 512;
+    public const int MaxMetadataValueLength = 2048;
     public const int MaxMetadataEntries = 20;
 
     // --- Rate limiting ---

@@ -230,9 +230,12 @@ public class MeshIntegrationTests : IAsyncLifetime
         var john = await _context.CreatePeerAsync("John");
         var jane = await _context.CreatePeerAsync("Jane");
 
+        var johnSync = john.Orchestrator;
+        var janeSync = jane.Orchestrator;
+
         // Verify that john and jane are connected
-        await john.WaitForConditionAsync(() => john.Orchestrator.ConnectedPeerCount > 0);
-        await jane.WaitForConditionAsync(() => jane.Orchestrator.ConnectedPeerCount > 0);
+        await john.WaitForConditionAsync(() => johnSync.ConnectedPeerCount > 0);
+        await jane.WaitForConditionAsync(() => janeSync.ConnectedPeerCount > 0);
 
         // Use the built-in ConnectAndSyncAll which properly propagates manifests
         await _context.ConnectAndSyncAllAsync();
@@ -241,11 +244,28 @@ public class MeshIntegrationTests : IAsyncLifetime
         // We expect at least a profile operation to be exchanged by BroadcastProfile called by CreatePeerAsync.
         try
         {
-            await TestWaiter.WaitForItemPollingAsync(() => john.Orchestrator.PeerManifests,
+            await TestWaiter.WaitForItemPollingAsync(() => johnSync.PeerManifests,
                 x => x.Operations.Count > 0, timeoutMs: 2000, cancellationToken: TestContext.Current.CancellationToken);
         }
         catch (Exception)
         {
+            foreach (var streamType in Enum.GetValues<ManifestStreamType>())
+            {
+                _output.WriteLine($"Stats for manifest type {streamType}");
+                var johnLocalManifest = johnSync.GetLocalManifest(streamType);
+                var johnManifestOpCount = johnLocalManifest?.Operations.Count ?? -1;
+                var johnManifestProfileOpCount = johnLocalManifest?.Operations.Count(x => x.OperationType == ManifestOperationType.Profile) ?? -1;
+                var johnRemoteManifestsCount = johnSync.PeerManifests.Where(x => x.StreamType == streamType).Select(x => x.Operations.Count).Sum();
+                var janeLocalManifest = janeSync.GetLocalManifest(streamType);
+                var janeManifestOpCount = janeLocalManifest?.Operations.Count ?? -1;
+                var janeManifestProfileOpCount = janeLocalManifest?.Operations.Count(x => x.OperationType == ManifestOperationType.Profile) ?? -1;
+                var janeRemoteManifestsCount = janeSync.PeerManifests.Where(x => x.StreamType == streamType).Select(x => x.Operations.Count).Sum();
+
+                _output.WriteLine($"John {streamType} manifest counts: Local ops {johnManifestOpCount}. Local profile ops {johnManifestProfileOpCount}. Remote ops: {johnRemoteManifestsCount}");
+                _output.WriteLine($"Jane {streamType} manifest counts: Local ops {janeManifestOpCount}. Local profile ops {janeManifestProfileOpCount}. Remote ops: {janeRemoteManifestsCount}");
+
+            }
+
             _output.WriteLine("=== JOHN'S LOGS ===");
             _output.WriteLine(john.GetLogsAsString());
             _output.WriteLine("\n=== JANE'S LOGS ===");
