@@ -1367,7 +1367,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         }
         else
         {
-            _logger.Debug("Merge of manifest from peer {0} resulted in 0 new operations.", remote.UserId);
+            _logger.Trace("Merge of manifest from peer {0} resulted in 0 new operations.", remote.UserId);
         }
     }
 
