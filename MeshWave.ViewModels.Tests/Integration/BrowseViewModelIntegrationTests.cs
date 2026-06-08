@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using MeshWave.Common.Core.Models;
 using MeshWave.Synchronizer;
 using MeshWave.TestUtilities;
@@ -25,6 +24,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
 
 
     [Fact(Skip = "Failing in ConnectAndSyncAllAsync, skipped to pass CI temporarily")]
+    //[Fact]
     public async Task BrowsingReleasesTracksWithUpdates()
     {
         var john = await _context.CreatePeerAsync("John");
@@ -54,7 +54,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         // Are we sure that Jane is actually reporting herself as artist?
         try
         {
-            await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Artists, a => a.UserId == jane.UserId, timeoutMs: 60000);
+            await TestWaiter.WaitForItemPollingAsync(() => johnBrowseViewModel.Artists, a => a.UserId == jane.UserId, timeoutMs: 15000);
         }
         catch (Exception ex)
         {
@@ -99,7 +99,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         // Verify that john can see jane's track and vice versa
         try
         {
-            await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "jane-track-1", timeoutMs: 30000);
+            await TestWaiter.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "jane-track-1", timeoutMs: 30000);
         }
         catch (Exception ex)
         {
@@ -109,7 +109,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
 
         try
         {
-            await ViewModelTestHelpers.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == "john-track-1", timeoutMs: 30000);
+            await TestWaiter.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == "john-track-1", timeoutMs: 30000);
         }
         catch (Exception ex)
         {
@@ -119,7 +119,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
 
         try
         {
-            await ViewModelTestHelpers.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == "john-track-2", timeoutMs: 30000);
+            await TestWaiter.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == "john-track-2", timeoutMs: 30000);
         }
         catch (Exception ex)
         {
@@ -134,8 +134,8 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         await _context.ConnectAndSyncAllAsync();
 
         // Verify that john can see all of jane's released tracks
-        await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "jane-track-2", timeoutMs: 30000);
-        await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "jane-track-3", timeoutMs: 30000);
+        await TestWaiter.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "jane-track-2", timeoutMs: 30000);
+        await TestWaiter.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "jane-track-3", timeoutMs: 30000);
         Assert.Equal(3, johnBrowseViewModel.Tracks.Count(t => t.ArtistUserId == jane.UserId));
 
         // Action: John un-releases one of his tracks (deletes it from manifest)
@@ -168,7 +168,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
 
         await _context.ConnectAndSyncAllAsync();
 
-        await ViewModelTestHelpers.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "track-pop", timeoutMs: 30000);
+        await TestWaiter.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "track-pop", timeoutMs: 30000);
 
         johnBrowseViewModel.FilterText = "Rock";
         Assert.Contains(johnBrowseViewModel.Tracks, t => t.Title.Contains("Rock"));
@@ -195,7 +195,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
 
         await _context.ConnectAndSyncAllAsync();
 
-        await ViewModelTestHelpers.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == trackId, timeoutMs: 30000);
+        await TestWaiter.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == trackId, timeoutMs: 30000);
         var trackItem = janeBrowseViewModel.Tracks.First(t => t.TrackId == trackId);
 
         Assert.True(trackItem.CanDownload);
@@ -247,7 +247,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
 
         await _context.ConnectAndSyncAllAsync();
 
-        await ViewModelTestHelpers.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == trackId, timeoutMs: 30000);
+        await TestWaiter.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == trackId, timeoutMs: 30000);
         var trackItem = janeBrowseViewModel.Tracks.First(t => t.TrackId == trackId);
 
         Assert.True(trackItem.CanDownload);
@@ -314,7 +314,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
 
         await _context.ConnectAndSyncAllAsync();
 
-        await ViewModelTestHelpers.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == trackId, timeoutMs: 30000);
+        await TestWaiter.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == trackId, timeoutMs: 30000);
         var trackItem = janeBrowseViewModel.Tracks.First(t => t.TrackId == trackId);
 
         Assert.True(trackItem.CanDownload);
@@ -333,10 +333,10 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
 
     private void OutputPeerLogs(TestPeer john, TestPeer jane)
     {
-        Debug.WriteLine("=== JOHN'S LOGS ===");
-        Debug.WriteLine(john.GetLogsAsString());
-        Debug.WriteLine("\n=== JANE'S LOGS ===");
-        Debug.WriteLine(jane.GetLogsAsString());
+        //Debug.WriteLine("=== JOHN'S LOGS ===");
+        //Debug.WriteLine(john.GetLogsAsString());
+        //Debug.WriteLine("\n=== JANE'S LOGS ===");
+        //Debug.WriteLine(jane.GetLogsAsString());
 
         // Also output to console for visibility in test output
         Console.WriteLine("=== JOHN'S LOGS ===");

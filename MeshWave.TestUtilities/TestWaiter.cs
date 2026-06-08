@@ -1,6 +1,6 @@
 namespace MeshWave.TestUtilities;
 
-public static class ViewModelTestHelpers
+public static class TestWaiter
 {
     /// <summary>
     /// Waits for an item matching the predicate to appear in a collection.

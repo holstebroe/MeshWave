@@ -3,13 +3,14 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:MeshWave"
         xmlns:views="clr-namespace:MeshWave.Wpf.Views"
+        xmlns:viewModels="clr-namespace:MeshWave.Wpf.ViewModels"
         mc:Ignorable="d"
         Title="MeshWave - Decentralized Music Sharing" 
         Height="760" Width="1240"
         MinHeight="600" MinWidth="900"
-        Background="{StaticResource BackgroundColor}">
+        Background="{StaticResource BackgroundColor}"
+        d:DataContext="{d:DesignInstance viewModels:ApplicationViewModel}">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
@@ -43,10 +44,10 @@
                 </StackPanel>
 
                 <!-- Navigation section -->
-                <StackPanel DockPanel.Dock="Top">
+                <StackPanel DockPanel.Dock="Top" >
                     <Button Content="🏠  Home" 
                             Style="{StaticResource SidebarNavButton}"
-                            Click="HomeMenu_Click"/>
+                            Command="{Binding Path=HomeMenuNavCommand}" />
                     <Button Content="🎵  Now Playing" 
                             Style="{StaticResource SidebarNavButton}"
                             Click="PlaybackMenu_Click"/>
