@@ -23,9 +23,8 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         await _context.DisposeAsync();
     }
 
-    ///    [Fact]
-    /// TODO: This test fails in ConnectAndSyncAllAsync(); Make this work .
-    internal async Task BrowsingReleasesTracksWithUpdates()
+    [Fact(Skip = "TODO: This test fails in ConnectAndSyncAllAsync(); Make this work.")]
+    public async Task BrowsingReleasesTracksWithUpdates()
     {
         var john = await _context.CreatePeerAsync("John");
         var jane = await _context.CreatePeerAsync("Jane");
