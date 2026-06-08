@@ -14,7 +14,7 @@ namespace MeshWave.Synchronizer;
 /// The store is the single source of truth for all received peer data.
 /// The local user's own manifest is intentionally NOT stored here.
 /// </summary>
-public class PeerManifestStore
+public class PeerManifestStore : IManifestStore
 {
     private const string PeerManifestsFolderName = "PeerManifests";
     private readonly string _storeDirectory;

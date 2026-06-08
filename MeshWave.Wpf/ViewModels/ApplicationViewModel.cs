@@ -55,7 +55,14 @@ public class ApplicationViewModel : ViewModelBase
         _userRepository = new UserRepository(settings.BaseFolder);
         _metadataLookup = new MetadataLookupRepository(_settingsService.GetLocalMusicFolder());
         var catalogueService = new CatalogueService();
-        SyncOrchestrator = new SyncOrchestrator(userRepository: _userRepository, catalogueService: catalogueService);
+
+        // DI wire-up of the default file-based PeerManifestStore
+        var manifestStore = PeerManifestStore.CreateAtBase(_userRepository.BaseDataFolder);
+
+        SyncOrchestrator = new SyncOrchestrator(
+            userRepository: _userRepository,
+            catalogueService: catalogueService,
+            peerManifestStore: manifestStore);
 
         Playback = new PlaybackViewModel(SyncOrchestrator, _userRepository, _metadataLookup, audioServiceFactory);
         _currentViewModel = new HomeViewModel();
