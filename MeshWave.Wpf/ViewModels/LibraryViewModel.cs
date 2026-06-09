@@ -37,7 +37,7 @@ public partial class LibraryViewModel : ViewModelBase
         SyncAlbumCommand = new RelayCommand(_ => SyncSelectedAlbum(), _ => CanSyncToNetwork);
         SyncTrackCommand = new RelayCommand<LibraryTrackItem>(SyncTrack, t => CanSyncToNetwork && t != null);
         RemoveTrackFromLibraryCommand = new RelayCommand<LibraryTrackItem>(RemoveTrackFromLibrary, t => t != null && !IsMyMusicLibrary && !t.IsDownloadPlaceholder);
-        ReDownloadTrackCommand = new RelayCommand<LibraryTrackItem>(ReDownloadTrack, t => t != null && !IsMyMusicLibrary && t.IsRemovedFromLibrary && !string.IsNullOrWhiteSpace(t.ContentHash));
+        ReDownloadTrackCommand = new RelayCommand<LibraryTrackItem>(ReDownloadTrack, t => t != null && ((!IsMyMusicLibrary && t.IsRemovedFromLibrary) || (IsMyMusicLibrary && !t.IsDownloaded)) && !string.IsNullOrWhiteSpace(t.ContentHash));
         if (!IsMyMusicLibrary && _applicationViewModel != null) _applicationViewModel.DownloadQueueItems.CollectionChanged += OnDownloadQueueChanged;
 
         LoadFromConfiguredBaseFolder();
@@ -269,7 +269,7 @@ public partial class LibraryViewModel : ViewModelBase
 
     private void ReDownloadTrack(LibraryTrackItem? track)
     {
-        if (track == null || IsMyMusicLibrary)
+        if (track == null)
             return;
 
         QueueTrackRedownload(track);
@@ -339,11 +339,12 @@ public sealed class LibraryTrackItem
     public int PlayCount { get; set; }
     public bool IsDownloadPlaceholder { get; set; }
     public bool IsRemovedFromLibrary { get; set; }
+    public bool IsDownloaded { get; set; } = true;
     public string DownloadStateLabel { get; set; } = "Downloaded";
-    public string StatusBadge => IsRemovedFromLibrary ? "Not Downloaded" : IsDownloadPlaceholder ? DownloadStateLabel : string.Empty;
+    public string StatusBadge => IsRemovedFromLibrary || !IsDownloaded ? "Not Downloaded" : IsDownloadPlaceholder ? DownloadStateLabel : string.Empty;
     public string ReleaseBadgeColor => IsReleased ? "#27AE60" : "#E67E22"; // Green for Public, Orange for Private
     public string VersionLabel => Version > 1 ? $"v{Version}" : string.Empty;
-    public bool CanPlay => !IsDownloadPlaceholder && !IsRemovedFromLibrary && !string.IsNullOrWhiteSpace(FilePath);
+    public bool CanPlay => !IsDownloadPlaceholder && !IsRemovedFromLibrary && IsDownloaded && !string.IsNullOrWhiteSpace(FilePath);
     public override string ToString()
     {
         return Title;

@@ -38,10 +38,20 @@ public class LocalLibraryManager
         if (!Directory.Exists(_basePath)) return;
 
         var albumDict = new Dictionary<string, Album>(StringComparer.OrdinalIgnoreCase);
+        var discoveredPhysicalFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var file in EnumerateSupportedFiles(_basePath, _supportedExtensions))
             try
             {
+                discoveredPhysicalFiles.Add(file);
                 var metadata = TryReadCachedMetadata(file) ?? ExtractMetadata(file);
+                // Ensure cached metadata is up to date with paths and hashes if they were missing
+                if (string.IsNullOrWhiteSpace(metadata.OriginalFilePath) || string.IsNullOrWhiteSpace(metadata.ContentHash))
+                {
+                    var fresh = ExtractMetadata(file);
+                    metadata.OriginalFilePath = fresh.OriginalFilePath;
+                    metadata.ContentHash = fresh.ContentHash;
+                }
                 WriteMetadataCache(file, metadata);
                 EnsureCoverCached(file);
 
@@ -60,7 +70,9 @@ public class LocalLibraryManager
                     FileSize = fileInfo.Length,
                     CoverImageHash = null,
                     Description = metadata.Artist,
-                    Signature = "local"
+                    Signature = "local",
+                    IsDownloaded = true,
+                    ContentHash = metadata.ContentHash
                 };
                 _tracks.Add(track);
 
@@ -83,6 +95,60 @@ public class LocalLibraryManager
             {
                 // skip unreadable files
             }
+
+        // Second pass: find missing files via .meta.json cache
+        foreach (var cacheFile in Directory.EnumerateFiles(_basePath, "*.meta.json", SearchOption.AllDirectories))
+        {
+            try
+            {
+                var json = File.ReadAllText(cacheFile);
+                var metadata = System.Text.Json.JsonSerializer.Deserialize<CachedTrackMetadata>(json);
+                if (metadata != null && !string.IsNullOrWhiteSpace(metadata.OriginalFilePath) && !discoveredPhysicalFiles.Contains(metadata.OriginalFilePath))
+                {
+                    if (!File.Exists(metadata.OriginalFilePath))
+                    {
+                        var trackId = ComputeStableId(metadata.OriginalFilePath);
+                        var albumId = ComputeStableId($"{metadata.Artist}|{metadata.Album}");
+                        var track = new Track
+                        {
+                            TrackId = trackId,
+                            AlbumId = albumId,
+                            OwnerUserId = "local",
+                            Title = metadata.Title,
+                            Duration = TimeSpan.FromSeconds(metadata.DurationSeconds),
+                            FileHash = ComputeStableId(metadata.OriginalFilePath),
+                            FilePath = metadata.OriginalFilePath,
+                            FileSize = 0,
+                            CoverImageHash = null,
+                            Description = metadata.Artist,
+                            Signature = "local",
+                            IsDownloaded = false,
+                            ContentHash = metadata.ContentHash
+                        };
+                        _tracks.Add(track);
+
+                        if (!albumDict.TryGetValue(albumId, out var album))
+                        {
+                            album = new Album
+                            {
+                                AlbumId = albumId,
+                                OwnerUserId = "local",
+                                Title = metadata.Album,
+                                CoverImageHash = null,
+                                Description = null,
+                                Signature = "local"
+                            };
+                            albumDict[albumId] = album;
+                        }
+                        album.TrackIds.Add(trackId);
+                    }
+                }
+            }
+            catch
+            {
+                // skip unreadable cache files
+            }
+        }
 
         _albums.AddRange(albumDict.Values);
     }
@@ -327,7 +393,9 @@ public class LocalLibraryManager
             Artist = artist,
             Album = album,
             DurationSeconds = duration.TotalSeconds,
-            SourceLastWriteUtc = File.GetLastWriteTimeUtc(filePath)
+            SourceLastWriteUtc = File.GetLastWriteTimeUtc(filePath),
+            OriginalFilePath = filePath,
+            ContentHash = MeshWave.Common.Core.Crypto.CryptoService.ComputeFileHash(filePath)
         };
     }
 
@@ -431,6 +499,8 @@ public class LocalLibraryManager
         public string Album { get; set; } = "_singles_";
         public double DurationSeconds { get; set; }
         public DateTime SourceLastWriteUtc { get; set; }
+        public string OriginalFilePath { get; set; } = string.Empty;
+        public string ContentHash { get; set; } = string.Empty;
     }
 }
 

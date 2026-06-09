@@ -138,13 +138,14 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
                 AlbumName = album?.Title ?? string.Empty,
                 CoverPath = coverPath,
                 FilePath = resolvedPath,
-                ContentHash = CryptoService.ComputeFileHash(resolvedPath),
+                ContentHash = !string.IsNullOrWhiteSpace(t.ContentHash) ? t.ContentHash : CryptoService.ComputeFileHash(resolvedPath),
                 IsReleased = effectiveRelease,
                 Version = trackMeta.Version <= 0 ? 1 : trackMeta.Version,
                 TrackNumber = trackMeta.TrackNumber,
                 Duration = t.Duration,
                 PlayCount = trackMeta.PlayCount,
-                SourcePeerUserId = string.Empty
+                SourcePeerUserId = string.Empty,
+                IsDownloaded = t.IsDownloaded
             };
         }).ToList();
 

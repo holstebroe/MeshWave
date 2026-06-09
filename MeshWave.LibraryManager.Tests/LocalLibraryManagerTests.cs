@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Xunit;
 
 namespace MeshWave.LibraryManager.Tests;
@@ -53,5 +54,48 @@ public class LocalLibraryManagerTests : IDisposable
         _libraryManager.IndexLibrary();
     }
 
+
+
+    [Fact]
+    public void IndexLibrary_IncludesMissingFilesWithMetadataAsNotDownloaded()
+    {
+        // Arrange
+        var tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(tempDir);
+
+        var cacheDir = Path.Combine(tempDir, "Artist", "Album", ".cache");
+        Directory.CreateDirectory(cacheDir);
+
+        var originalFile = Path.Combine(tempDir, "Artist", "Album", "Song.mp3");
+        var metaFile = Path.Combine(cacheDir, "Song.meta.json");
+
+        // We will construct the JSON via an object to avoid string escaping issues
+        var cacheData = new {
+            Title = "Missing Song",
+            Artist = "Artist",
+            Album = "Album",
+            DurationSeconds = 120.0,
+            SourceLastWriteUtc = System.DateTime.UtcNow,
+            OriginalFilePath = originalFile,
+            ContentHash = "hash123"
+        };
+        var cacheContent = System.Text.Json.JsonSerializer.Serialize(cacheData);
+        File.WriteAllText(metaFile, cacheContent);
+
+        var manager = new LocalLibraryManager(tempDir);
+
+        // Act
+        manager.IndexLibrary();
+
+        // Assert
+        var tracks = manager.GetAllTracks().ToList();
+        Assert.Single(tracks);
+        Assert.Equal("Missing Song", tracks[0].Title);
+        Assert.False(tracks[0].IsDownloaded);
+        Assert.Equal("hash123", tracks[0].ContentHash);
+
+        // Cleanup
+        Directory.Delete(tempDir, true);
+    }
 
 }

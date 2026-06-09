@@ -139,16 +139,18 @@
                                       Command="{Binding PlacementTarget.DataContext.RemoveTrackFromLibraryCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                       CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                       Visibility="{Binding PlacementTarget.DataContext.CanImportMyMusic, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource InverseBoolToVis}}"/>
-                            <MenuItem Header="Re-download"
+                                                        <MenuItem Header="Re-download"
                                       Command="{Binding PlacementTarget.DataContext.ReDownloadTrackCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                      Visibility="{Binding PlacementTarget.DataContext.CanImportMyMusic, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource InverseBoolToVis}}">
+                                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
                                 <MenuItem.Style>
                                     <Style TargetType="MenuItem">
-                                        <Setter Property="IsEnabled" Value="False"/>
+                                        <Setter Property="Visibility" Value="Collapsed"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding PlacementTarget.SelectedItem.IsRemovedFromLibrary, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Value="True">
-                                                <Setter Property="IsEnabled" Value="True"/>
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding PlacementTarget.SelectedItem.IsDownloaded, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Value="False">
+                                                <Setter Property="Visibility" Value="Visible"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
