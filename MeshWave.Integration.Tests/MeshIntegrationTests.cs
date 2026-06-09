@@ -3,7 +3,6 @@ using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
 using MeshWave.Synchronizer;
 using MeshWave.TestUtilities;
-using NLog.Targets;
 using Xunit;
 
 namespace MeshWave.Integration.Tests;
@@ -332,7 +331,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         }, timeoutMs: 15000);
     }
 
-    [Fact]
+    [Fact(Skip = "Long running test. Enable when GitHub / Jules filters are in place.")]
     [Trait(TestTraits.Category, TestTraits.Stress)]
     public async Task StressSync1000OperationsTest()
     {
