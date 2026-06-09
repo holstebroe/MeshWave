@@ -34,7 +34,8 @@ public class LibraryViewModelTests
         File.WriteAllText(metaFile, json);
 
         // Use a mock ApplicationViewModel to allow testing ReDownloadTrackCommand
-        var mockAppVm = new Mock<ApplicationViewModel>(new MeshWave.Wpf.Services.SettingsService(tempDir), null!, null!);
+        var mockAppVm = new Mock<ApplicationViewModel>(new MeshWave.Wpf.Services.SettingsService(tempDir), null, null);
+        mockAppVm.SetupGet(m => m.DownloadQueueItems).Returns(new System.Collections.ObjectModel.ObservableCollection<MeshWave.Wpf.Services.DownloadQueueItem>());
         var vm = new LibraryViewModel(mockAppVm.Object, isMyMusicLibrary: true);
 
         // Act
