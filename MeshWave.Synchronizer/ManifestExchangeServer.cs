@@ -75,7 +75,10 @@ public class ManifestExchangeServer : IDisposable
     /// </summary>
     public async Task StopAsync()
     {
-        _cts?.Cancel();
+        if (_cts != null && !_cts.IsCancellationRequested)
+        {
+            try { _cts.Cancel(); } catch (ObjectDisposedException) { }
+        }
         _listener?.Stop();
 
         if (_serverTask != null)
@@ -344,7 +347,10 @@ public class ManifestExchangeServer : IDisposable
 
     public void Dispose()
     {
-        _cts?.Cancel();
+        if (_cts != null && !_cts.IsCancellationRequested)
+        {
+            try { _cts.Cancel(); } catch (ObjectDisposedException) { }
+        }
         _listener?.Stop();
         _cts?.Dispose();
     }
