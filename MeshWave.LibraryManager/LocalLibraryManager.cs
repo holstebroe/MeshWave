@@ -37,7 +37,21 @@ public class LocalLibraryManager
 
         if (!Directory.Exists(_basePath)) return;
 
+        var indexPath = Path.Combine(_basePath, "library_index.json");
+        var libraryIndex = new LibraryIndex();
+        if (File.Exists(indexPath))
+        {
+            try
+            {
+                var json = File.ReadAllText(indexPath);
+                libraryIndex = JsonSerializer.Deserialize<LibraryIndex>(json) ?? new LibraryIndex();
+            }
+            catch { }
+        }
+
+        var indexUpdated = false;
         var albumDict = new Dictionary<string, Album>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var file in EnumerateSupportedFiles(_basePath, _supportedExtensions))
             try
             {
@@ -46,8 +60,48 @@ public class LocalLibraryManager
                 EnsureCoverCached(file);
 
                 var fileInfo = new FileInfo(file);
+                var albumFolder = fileInfo.DirectoryName ?? string.Empty;
+                var fileName = fileInfo.Name;
+
+                var meshwaveId = TryReadIdFile(albumFolder);
                 var trackId = ComputeStableId(fileInfo.FullName);
                 var albumId = ComputeStableId($"{metadata.Artist}|{metadata.Album}");
+
+                if (!string.IsNullOrWhiteSpace(meshwaveId))
+                {
+                    if (libraryIndex.Albums.TryGetValue(meshwaveId, out var albumInfo))
+                    {
+                        albumId = albumInfo.AlbumId;
+                        if (albumInfo.Tracks.TryGetValue(fileName, out var oldTrackId))
+                        {
+                            trackId = oldTrackId;
+                        }
+                        else
+                        {
+                            albumInfo.Tracks[fileName] = trackId;
+                            indexUpdated = true;
+                        }
+
+                        if (!string.Equals(albumInfo.KnownPath, albumFolder, StringComparison.OrdinalIgnoreCase))
+                        {
+                            albumInfo.KnownPath = albumFolder;
+                            indexUpdated = true;
+                        }
+                    }
+                    else
+                    {
+                        var newAlbumInfo = new AlbumIndexInfo
+                        {
+                            AlbumId = albumId,
+                            KnownPath = albumFolder
+                        };
+                        newAlbumInfo.Tracks[fileName] = trackId;
+                        libraryIndex.Albums[meshwaveId] = newAlbumInfo;
+                        indexUpdated = true;
+                    }
+                }
+
+
                 var track = new Track
                 {
                     TrackId = trackId,
@@ -85,6 +139,16 @@ public class LocalLibraryManager
             }
 
         _albums.AddRange(albumDict.Values);
+
+        if (indexUpdated)
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(libraryIndex, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(indexPath, json);
+            }
+            catch { }
+        }
     }
 
     public static void ImportMusicToOrganizedStructure(
@@ -212,6 +276,34 @@ public class LocalLibraryManager
         UpdateMappingFiles(myMusicBaseFolder, destinationFile, metadata);
         return imported;
     }
+
+    public class LibraryIndex
+    {
+        public Dictionary<string, AlbumIndexInfo> Albums { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    }
+
+    public class AlbumIndexInfo
+    {
+        public string AlbumId { get; set; } = string.Empty;
+        public string KnownPath { get; set; } = string.Empty;
+        public Dictionary<string, string> Tracks { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string? TryReadIdFile(string folderPath)
+    {
+        try
+        {
+            var idFilePath = Path.Combine(folderPath, ".meshwave-id");
+            if (File.Exists(idFilePath))
+            {
+                var id = File.ReadAllText(idFilePath).Trim();
+                if (!string.IsNullOrWhiteSpace(id)) return id;
+            }
+        }
+        catch { }
+        return null;
+    }
+
     private static void EnsureIdFile(string folderPath)
     {
         try
