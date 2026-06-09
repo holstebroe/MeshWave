@@ -24,6 +24,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     private readonly ManifestExchangeClient _client;
     private readonly ManifestManager _manifestManager;
     private readonly PeerManifestStore _peerStore;
+    private readonly KnownPeersStore _knownPeersStore;
     private readonly ContentExchange _contentExchange;
     private readonly NatTraversalService _natTraversal;
 
@@ -146,6 +147,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         ManifestExchangeClient? client = null,
         ManifestManager? manifestManager = null,
         PeerManifestStore? peerManifestStore = null,
+        KnownPeersStore? knownPeersStore = null,
         ContentExchange? contentExchange = null,
         NatTraversalService? natTraversal = null,
         UserRepository? userRepository = null,
@@ -154,7 +156,6 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     {
         _logger = logger ?? LogManager.GetCurrentClassLogger();
 
-        _router = router ?? new PeerRouter(logger: _logger);
         _server = server;
         _client = client ?? new ManifestExchangeClient(timeoutMs: SecurityLimits.ConnectTimeoutMs, logger: _logger);
         _manifestManager = manifestManager ?? new ManifestManager();
@@ -165,6 +166,13 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             _peerStore = PeerManifestStore.CreateAtBase(UserRepository.BaseDataFolder);
         else
             _peerStore = peerManifestStore ?? new PeerManifestStore();
+
+        if (knownPeersStore == null && UserRepository != null)
+            _knownPeersStore = new KnownPeersStore(UserRepository.BaseDataFolder);
+        else
+            _knownPeersStore = knownPeersStore ?? new KnownPeersStore();
+
+        _router = router ?? new PeerRouter(logger: _logger, knownPeersStore: _knownPeersStore);
 
         _contentExchange = contentExchange ?? new ContentExchange();
         _natTraversal = natTraversal ?? new NatTraversalService(logger: _logger);
@@ -251,7 +259,10 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         if (_server != null)
             await _server.StopAsync();
         await _natTraversal.StopAsync();
-        _cts?.Cancel();
+        if (_cts != null && !_cts.IsCancellationRequested)
+        {
+            try { _cts.Cancel(); } catch (ObjectDisposedException) { }
+        }
     }
 
     /// <summary>
