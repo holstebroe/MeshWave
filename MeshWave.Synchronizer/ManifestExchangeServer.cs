@@ -40,6 +40,7 @@ public class ManifestExchangeServer : IDisposable
     }
 
     public event EventHandler<ManifestReceivedEventArgs>? ManifestReceived;
+    public event EventHandler<NotifyNewOperationEventArgs>? NotificationReceived;
 
     /// <summary>
     /// Starts the TCP server.
@@ -210,6 +211,17 @@ public class ManifestExchangeServer : IDisposable
                         await WriteMessageAsync(stream, ack, ct);
                         break;
                     }
+                    case ManifestRequestType.NotifyNewOperation when !string.IsNullOrWhiteSpace(request.TargetUserId):
+                    {
+                        _logger.Debug("Received NotifyNewOperation from {0} for user {1} stream {2} seq {3}",
+                            remoteEndpoint, request.TargetUserId, request.StreamType, request.StartSequenceNumber);
+
+                        NotificationReceived?.Invoke(this, new NotifyNewOperationEventArgs(request.TargetUserId, request.StreamType, request.StartSequenceNumber, remoteEndpoint, request.AnnouncingPeer));
+
+                        var ack = new ManifestResponse { Acknowledged = true };
+                        await WriteMessageAsync(stream, ack, ct);
+                        break;
+                    }
                     case ManifestRequestType.GetPeers:
                     {
                         var peers = _peersProvider?.Invoke()
@@ -336,6 +348,15 @@ public class ManifestExchangeServer : IDisposable
         _listener?.Stop();
         _cts?.Dispose();
     }
+}
+
+public class NotifyNewOperationEventArgs(string targetUserId, ManifestStreamType streamType, int startSequenceNumber, string peerAddress, PeerInfo? announcingPeer) : EventArgs
+{
+    public string TargetUserId { get; } = targetUserId;
+    public ManifestStreamType StreamType { get; } = streamType;
+    public int StartSequenceNumber { get; } = startSequenceNumber;
+    public string PeerAddress { get; } = peerAddress;
+    public PeerInfo? AnnouncingPeer { get; } = announcingPeer;
 }
 
 public class ManifestReceivedEventArgs(Manifest manifest, string peerAddress, PeerInfo? announcingPeer, bool isRelay) : EventArgs
