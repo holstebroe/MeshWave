@@ -25,7 +25,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     private ManifestExchangeServer? _server;
     private readonly ManifestExchangeClient _client;
     private readonly ManifestManager _manifestManager;
-    private readonly PeerManifestStore _peerStore;
+    private readonly IManifestStore _peerStore;
     private readonly ContentExchange _contentExchange;
     private readonly NatTraversalService _natTraversal;
 
@@ -147,7 +147,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         ManifestExchangeServer? server = null,
         ManifestExchangeClient? client = null,
         ManifestManager? manifestManager = null,
-        PeerManifestStore? peerManifestStore = null,
+        IManifestStore? peerManifestStore = null,
         ContentExchange? contentExchange = null,
         NatTraversalService? natTraversal = null,
         UserRepository? userRepository = null,
@@ -163,10 +163,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         UserRepository = userRepository;
         CatalogueService = catalogueService ?? new CatalogueService();
 
-        if (peerManifestStore == null && UserRepository != null)
-            _peerStore = PeerManifestStore.CreateAtBase(UserRepository.BaseDataFolder);
-        else
-            _peerStore = peerManifestStore ?? new PeerManifestStore();
+        _peerStore = peerManifestStore ?? new PeerManifestStore();
 
         _contentExchange = contentExchange ?? new ContentExchange();
         _natTraversal = natTraversal ?? new NatTraversalService(logger: _logger);

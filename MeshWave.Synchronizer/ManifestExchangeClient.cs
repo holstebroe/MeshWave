@@ -30,7 +30,7 @@ public class ManifestExchangeClient
     public async Task<Manifest?> FetchManifestAsync(
         string address,
         int port,
-        PeerManifestStore store,
+        IManifestStore store,
         string targetUserId,
         ManifestStreamType streamType = ManifestStreamType.Content,
         CancellationToken cancellationToken = default)
