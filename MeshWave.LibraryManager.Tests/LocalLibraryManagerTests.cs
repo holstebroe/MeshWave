@@ -54,4 +54,53 @@ public class LocalLibraryManagerTests : IDisposable
     }
 
 
+    [Fact]
+    public void ImportSingleFileToOrganizedStructure_CreatesMeshwaveIdFiles()
+    {
+        // Arrange
+        var sourceDir = Path.GetFullPath("../../../../TestData/John/RockPlastic");
+        if (!Directory.Exists(sourceDir))
+        {
+            var current = Directory.GetCurrentDirectory();
+            while (current != null && !Directory.Exists(Path.Combine(current, "TestData")))
+            {
+                current = Directory.GetParent(current)?.FullName;
+            }
+            if (current != null)
+                sourceDir = Path.Combine(current, "TestData", "John", "RockPlastic");
+        }
+        var sourceFile = Directory.GetFiles(sourceDir, "*.mp3").FirstOrDefault();
+        Assert.NotNull(sourceFile);
+        var myMusicBaseFolder = Path.Combine(_tempDirectory, "MyMusic");
+
+        // Act
+        var result = LocalLibraryManager.ImportSingleFileToOrganizedStructure(sourceFile, myMusicBaseFolder);
+
+        // Assert
+        Assert.True(result);
+
+        var dirs = Directory.GetDirectories(myMusicBaseFolder);
+        Assert.NotEmpty(dirs);
+        var artistFolder = dirs[0];
+
+        var albumDirs = Directory.GetDirectories(artistFolder);
+        Assert.NotEmpty(albumDirs);
+        var albumFolder = albumDirs[0];
+
+        var artistIdPath = Path.Combine(artistFolder, ".meshwave-id");
+        var albumIdPath = Path.Combine(albumFolder, ".meshwave-id");
+
+        Assert.True(File.Exists(artistIdPath));
+        Assert.True(File.Exists(albumIdPath));
+
+        var artistIdContent = File.ReadAllText(artistIdPath);
+        var albumIdContent = File.ReadAllText(albumIdPath);
+
+        Assert.True(Guid.TryParse(artistIdContent, out _));
+        Assert.True(Guid.TryParse(albumIdContent, out _));
+
+        // File should be hidden
+        Assert.True(File.GetAttributes(artistIdPath).HasFlag(FileAttributes.Hidden));
+        Assert.True(File.GetAttributes(albumIdPath).HasFlag(FileAttributes.Hidden));
+    }
 }
