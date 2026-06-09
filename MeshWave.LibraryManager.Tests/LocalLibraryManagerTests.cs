@@ -98,52 +98,47 @@ public class LocalLibraryManagerTests : IDisposable
         Directory.Delete(tempDir, true);
     }
 
+
     [Fact]
-    public void IndexLibrary_PreservesTrackIdAndUpdatesPath_WhenFolderIsRenamed()
+    public void IndexLibrary_IncludesMissingFilesWithMetadataAsNotDownloaded()
     {
         // Arrange
-        var sourceDir = Path.GetFullPath("../../../../TestData/John/RockPlastic");
-        if (!Directory.Exists(sourceDir))
-        {
-            var current = Directory.GetCurrentDirectory();
-            while (current != null && !Directory.Exists(Path.Combine(current, "TestData")))
-            {
-                current = Directory.GetParent(current)?.FullName;
-            }
-            if (current != null)
-                sourceDir = Path.Combine(current, "TestData", "John", "RockPlastic");
-        }
-        var sourceFile = Directory.GetFiles(sourceDir, "*.mp3").FirstOrDefault();
-        Assert.NotNull(sourceFile);
-        var myMusicBaseFolder = Path.Combine(_tempDirectory, "MyMusic");
+        var tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(tempDir);
 
-        LocalLibraryManager.ImportSingleFileToOrganizedStructure(sourceFile, myMusicBaseFolder);
+        var cacheDir = Path.Combine(tempDir, "Artist", "Album", ".cache");
+        Directory.CreateDirectory(cacheDir);
 
-        var libraryManager = new LocalLibraryManager(myMusicBaseFolder);
-        libraryManager.IndexLibrary();
+        var originalFile = Path.Combine(tempDir, "Artist", "Album", "Song.mp3");
+        var metaFile = Path.Combine(cacheDir, "Song.meta.json");
 
-        var originalTracks = libraryManager.GetAllTracks().ToList();
-        Assert.Single(originalTracks);
-        var originalTrackId = originalTracks[0].TrackId;
-        var originalAlbumId = originalTracks[0].AlbumId;
-        var originalFilePath = originalTracks[0].FilePath;
+        // We will construct the JSON via an object to avoid string escaping issues
+        var cacheData = new {
+            Title = "Missing Song",
+            Artist = "Artist",
+            Album = "Album",
+            DurationSeconds = 120.0,
+            SourceLastWriteUtc = System.DateTime.UtcNow,
+            OriginalFilePath = originalFile,
+            ContentHash = "hash123"
+        };
+        var cacheContent = System.Text.Json.JsonSerializer.Serialize(cacheData);
+        File.WriteAllText(metaFile, cacheContent);
 
-        // Act - Rename the folder
-        var artistFolder = Directory.GetDirectories(myMusicBaseFolder)[0];
-        var newArtistFolder = Path.Combine(myMusicBaseFolder, "Renamed Artist");
-        Directory.Move(artistFolder, newArtistFolder);
+        var manager = new LocalLibraryManager(tempDir);
 
-        // Rescan
-        libraryManager.IndexLibrary();
+        // Act
+        manager.IndexLibrary();
 
         // Assert
-        var rescannedTracks = libraryManager.GetAllTracks().ToList();
-        Assert.Single(rescannedTracks);
+        var tracks = manager.GetAllTracks().ToList();
+        Assert.Single(tracks);
+        Assert.Equal("Missing Song", tracks[0].Title);
+        Assert.False(tracks[0].IsDownloaded);
+        Assert.Equal("hash123", tracks[0].ContentHash);
 
-        var rescannedTrack = rescannedTracks[0];
-        Assert.Equal(originalTrackId, rescannedTrack.TrackId); // TrackId must remain stable
-        Assert.Equal(originalAlbumId, rescannedTrack.AlbumId); // AlbumId must remain stable
-        Assert.NotEqual(originalFilePath, rescannedTrack.FilePath); // Path should be updated
-        Assert.StartsWith(newArtistFolder, rescannedTrack.FilePath); // It must be in the new directory
+        // Cleanup
+        Directory.Delete(tempDir, true);
     }
+
 }

@@ -139,7 +139,7 @@
                                       Command="{Binding PlacementTarget.DataContext.RemoveTrackFromLibraryCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                       CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                       Visibility="{Binding PlacementTarget.DataContext.CanImportMyMusic, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource InverseBoolToVis}}"/>
-                                                        <MenuItem Header="Re-download"
+                                                                                                                <MenuItem Header="Re-download"
                                       Command="{Binding PlacementTarget.DataContext.ReDownloadTrackCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                       CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
                                 <MenuItem.Style>
