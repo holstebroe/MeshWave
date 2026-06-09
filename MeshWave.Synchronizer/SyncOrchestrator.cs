@@ -1,9 +1,11 @@
+using MeshWave.Common.Core;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text.Json;
 using MeshWave.Common.Core;
 using MeshWave.Common.Core.Models;
+using MeshWave.Common.Core;
 using MeshWave.Common.Core.P2P;
 using MeshWave.Common.Core.Storage;
 using NLog;
@@ -23,7 +25,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     private ManifestExchangeServer? _server;
     private readonly ManifestExchangeClient _client;
     private readonly ManifestManager _manifestManager;
-    private readonly PeerManifestStore _peerStore;
+    private readonly IManifestStore _peerStore;
     private readonly KnownPeersStore _knownPeersStore;
     private readonly ContentExchange _contentExchange;
     private readonly NatTraversalService _natTraversal;
@@ -146,7 +148,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         ManifestExchangeServer? server = null,
         ManifestExchangeClient? client = null,
         ManifestManager? manifestManager = null,
-        PeerManifestStore? peerManifestStore = null,
+        IManifestStore? peerManifestStore = null,
         KnownPeersStore? knownPeersStore = null,
         ContentExchange? contentExchange = null,
         NatTraversalService? natTraversal = null,
@@ -158,14 +160,11 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
         _server = server;
         _client = client ?? new ManifestExchangeClient(timeoutMs: SecurityLimits.ConnectTimeoutMs, logger: _logger);
-        _manifestManager = manifestManager ?? new ManifestManager();
+        _manifestManager = manifestManager ?? new ManifestManager(_logger);
         UserRepository = userRepository;
         CatalogueService = catalogueService ?? new CatalogueService();
 
-        if (peerManifestStore == null && UserRepository != null)
-            _peerStore = PeerManifestStore.CreateAtBase(UserRepository.BaseDataFolder);
-        else
-            _peerStore = peerManifestStore ?? new PeerManifestStore();
+        _peerStore = peerManifestStore ?? new PeerManifestStore();
 
         if (knownPeersStore == null && UserRepository != null)
             _knownPeersStore = new KnownPeersStore(UserRepository.BaseDataFolder);
@@ -226,6 +225,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         {
             _server ??= new ManifestExchangeServer(identity.ManifestPort, logger: _logger);
             _server.ManifestReceived += OnManifestReceived;
+            _server.NotificationReceived += OnNotificationReceived;
 
             await _natTraversal.StartAsync(identity.ManifestPort, _cts.Token);
             await _natTraversal.SetupPortMappingAsync(identity.ManifestPort, _cts.Token);
@@ -253,7 +253,10 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         _router.PeerAdded -= OnPeerAdded;
         _router.PeerRemoved -= OnPeerRemoved;
         if (_server != null)
+        {
             _server.ManifestReceived -= OnManifestReceived;
+            _server.NotificationReceived -= OnNotificationReceived;
+        }
 
         await _router.StopAsync();
         if (_server != null)
@@ -575,7 +578,12 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             foreach (var streamType in Enum.GetValues<ManifestStreamType>())
             {
                 var manifest = GetLocalManifest(streamType);
-                if (manifest == null) continue;
+                if (manifest == null)
+                {
+                    _logger.Debug($"OnPeerAdded: No {streamType} manifest available for {peer.UserId}");
+                    continue;
+                }
+                _logger.Debug($"OnPeerAdded: Pushing {streamType} manifest ({manifest.Operations.Count} ops) to {peer.UserId}");
 
                 Manifest manifestToPush;
                 lock (manifest)
@@ -609,6 +617,36 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     private void OnPeerRemoved(object? sender, string userId)
     {
         PeerCountChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnNotificationReceived(object? sender, NotifyNewOperationEventArgs e)
+    {
+        if (e.TargetUserId == Identity?.UserId) return; // Ignore notifications from ourselves
+
+        _logger.Debug("Received NotifyNewOperation for {0} stream {1} seq {2} from {3}", e.TargetUserId, e.StreamType, e.StartSequenceNumber, e.PeerAddress);
+        RecordPeerMessage(e.TargetUserId, "NotifyNewOperation", success: true, $"Received notification for seq {e.StartSequenceNumber} from {e.PeerAddress}.");
+
+        var peer = _router.GetPeers().FirstOrDefault(p => p.UserId == e.TargetUserId);
+        if (peer == null)
+        {
+            if (e.AnnouncingPeer != null)
+            {
+                // We cannot call AddOrRefreshPeer directly as it's private in PeerRouter.
+                // The router learns about peers via PeerExchange or LAN discovery.
+                // For targeted notifications, we just use the AnnouncingPeer directly to fetch.
+                peer = e.AnnouncingPeer;
+                peer.LastSeen = DateTime.UtcNow;
+            }
+            else
+            {
+                return;
+            }
+        }
+
+        if (_cts != null && !_cts.IsCancellationRequested)
+        {
+            _ = Task.Run(async () => await TryFetchAndMergeAsync(peer, _cts.Token));
+        }
     }
 
     private void OnManifestReceived(object? sender, ManifestReceivedEventArgs e)
@@ -719,8 +757,10 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                 }
 
                 Interlocked.Increment(ref _outboundManifestFetchCount);
+                var details = $"Fetched {streamType} manifest with {remoteManifest.Operations.Count} operation(s) (delta sync from seq {startSeq}). FromPeer={fetchedFromPeer}";
+                _logger.Debug(details);
                 RecordPeerMessage(peer.UserId, "FetchManifest", success: true,
-                    $"Fetched {streamType} manifest with {remoteManifest.Operations.Count} operation(s) (delta sync from seq {startSeq}). FromPeer={fetchedFromPeer}");
+                    details);
                 TryMerge(remoteManifest, peer.PublicKeyPem);
             }
             catch (Exception ex)
@@ -1378,7 +1418,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         }
         else
         {
-            _logger.Debug("Merge of manifest from peer {0} resulted in 0 new operations.", remote.UserId);
+            _logger.Trace("Merge of manifest from peer {0} resulted in 0 new operations.", remote.UserId);
         }
     }
 

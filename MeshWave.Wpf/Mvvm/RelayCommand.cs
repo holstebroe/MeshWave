@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Windows.Input;
 
 namespace MeshWave.Wpf.Mvvm;
@@ -17,6 +18,11 @@ public class RelayCommand : ICommand
         remove => CommandManager.RequerySuggested -= value;
     }
 
+    public RelayCommand(Action execute, Func<bool>? canExecute = null)
+    :this(o => execute(), o => canExecute?.Invoke() ?? true)
+    {
+
+    }
     public RelayCommand(Action<object?> execute, Predicate<object?>? canExecute = null)
     {
         _execute = execute ?? throw new ArgumentNullException(nameof(execute));

@@ -1,10 +1,4 @@
-using System.Collections.ObjectModel;
-using System.Collections.Specialized;
-using System.ComponentModel;
-using System.Diagnostics;
-using System.IO;
-using System.Net.Sockets;
-using System.Windows.Input;
+using AsyncAwaitBestPractices.MVVM;
 using MeshWave.Common.Core;
 using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
@@ -14,6 +8,14 @@ using MeshWave.Synchronizer;
 using MeshWave.Wpf.Models;
 using MeshWave.Wpf.Mvvm;
 using MeshWave.Wpf.Services;
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
+using System.Net.Sockets;
+using System.Windows;
+using System.Windows.Input;
 
 namespace MeshWave.Wpf.ViewModels;
 
@@ -53,10 +55,21 @@ public class ApplicationViewModel : ViewModelBase
         _userRepository = new UserRepository(settings.BaseFolder);
         _metadataLookup = new MetadataLookupRepository(_settingsService.GetLocalMusicFolder());
         var catalogueService = new CatalogueService();
-        SyncOrchestrator = new SyncOrchestrator(userRepository: _userRepository, catalogueService: catalogueService);
+
+        // DI wire-up of the default file-based PeerManifestStore
+        var manifestStore = PeerManifestStore.CreateAtBase(_userRepository.BaseDataFolder);
+
+        SyncOrchestrator = new SyncOrchestrator(
+            userRepository: _userRepository,
+            catalogueService: catalogueService,
+            peerManifestStore: manifestStore);
 
         Playback = new PlaybackViewModel(SyncOrchestrator, _userRepository, _metadataLookup, audioServiceFactory);
         _currentViewModel = new HomeViewModel();
+
+
+        HomeMenuNavCommand = new RelayCommand(HomeMenuNav);
+
 
         // Apply persisted waveform style immediately
         var savedSettings = settings;
@@ -142,6 +155,8 @@ public class ApplicationViewModel : ViewModelBase
         UpdateDownloadStats();
 
         InitializeP2PAsync();
+
+
     }
 
     private void OnDownloadItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -289,6 +304,13 @@ public class ApplicationViewModel : ViewModelBase
     {
         get => _hasCommunityNotification;
         private set => SetProperty(ref _hasCommunityNotification, value);
+    }
+
+    public ICommand HomeMenuNavCommand { get; }
+    private void HomeMenuNav()
+    {
+        PersistPlaybackState();
+        NavigateToHome();
     }
 
     public void NavigateToCommunity()

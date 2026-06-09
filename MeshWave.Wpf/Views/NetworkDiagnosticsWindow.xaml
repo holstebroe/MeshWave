@@ -54,7 +54,7 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" Background="{StaticResource SurfaceColor}" CornerRadius="8" Padding="10">
+            <Border Style="{StaticResource InnerViewPanel}" Grid.Column="0" Padding="10">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -96,7 +96,7 @@
                 </Grid>
             </Border>
 
-            <Border Grid.Column="2" Background="{StaticResource SurfaceColor}" CornerRadius="8" Padding="10">
+            <Border Style="{StaticResource InnerViewPanel}" Grid.Column="2" Padding="10">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>

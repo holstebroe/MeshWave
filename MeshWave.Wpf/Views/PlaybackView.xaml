@@ -133,9 +133,7 @@
         </Border>
 
         <!-- Waveform with played-region overlay + cursor -->
-        <Border Grid.Row="1" Grid.Column="0"
-                Background="{StaticResource SurfaceColor}"
-                CornerRadius="8" Padding="10"
+        <Border Style="{StaticResource InnerViewPanel}" Grid.Row="1" Grid.Column="0" Padding="10"
                 Margin="0,0,0,16">
             <Grid>
                 <Canvas x:Name="WaveformCanvas"
@@ -175,9 +173,7 @@
         </Border>
 
         <!-- Comments Panel -->
-        <Border Grid.Row="2" Grid.Column="0"
-                Background="{StaticResource SurfaceColor}"
-                CornerRadius="8" Padding="15"
+        <Border Style="{StaticResource InnerViewPanel}" Grid.Row="2" Grid.Column="0" Padding="15"
                 Margin="0,0,0,0">
             <Grid>
                 <Grid.RowDefinitions>
@@ -248,9 +244,7 @@
         </Border>
 
         <!-- Right panel: album/context track list as GridView -->
-        <Border Grid.Row="0" Grid.RowSpan="3" Grid.Column="1"
-                Background="{StaticResource SurfaceColor}"
-                CornerRadius="8" Padding="12"
+        <Border Style="{StaticResource InnerViewPanel}" Grid.Row="0" Grid.RowSpan="3" Grid.Column="1" Padding="12"
                 Margin="16,0,0,0">
             <Grid>
                 <Grid.RowDefinitions>

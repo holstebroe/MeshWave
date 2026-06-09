@@ -1,3 +1,4 @@
+using MeshWave.Common.Core;
 using System.Text;
 using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
@@ -9,8 +10,11 @@ namespace MeshWave.Synchronizer;
 /// ManifestManager handles creation, signing, and management of user manifests.
 /// Manifests are append-only, signed lists of operations on the user's content.
 /// </summary>
-public class ManifestManager
+public class ManifestManager(ILogger logger)
 {
+    public ManifestManager() : this(LogManager.GetCurrentClassLogger())
+    {
+    }
 
     /// <summary>
     /// Creates a new manifest for a user.
@@ -269,14 +273,20 @@ public class ManifestManager
             {
                 var snapshotSignable = BuildSnapshotSignablePayload(manifest.Snapshot);
                 if (!CryptoService.VerifySignature(snapshotSignable, manifest.Snapshot.Signature, userPublicKey))
+                {
+                    logger.Debug("Manifest verification failed for user {0} stream {1}: Invalid snapshot signature.", manifest.UserId, manifest.StreamType);
                     return false;
+                }
 
                 // Set Verification: Verify library state digest
                 if (!string.IsNullOrEmpty(manifest.Snapshot.LibraryStateDigest))
                 {
                     var computedDigest = ComputeLibraryStateDigest(manifest.Snapshot);
                     if (manifest.Snapshot.LibraryStateDigest != computedDigest)
+                    {
+                        logger.Debug("Manifest verification failed for user {0} stream {1}: LibraryStateDigest mismatch.", manifest.UserId, manifest.StreamType);
                         return false;
+                    }
                 }
 
                 // Verify persistent operations in the snapshot
@@ -284,7 +294,10 @@ public class ManifestManager
                 {
                     var signable = BuildSignablePayload(op);
                     if (!CryptoService.VerifySignature(signable, op.Signature, userPublicKey))
+                    {
+                        logger.Debug("Manifest verification failed for user {0} stream {1}: Invalid persistent operation signature for sequence {2}.", manifest.UserId, manifest.StreamType, op.SequenceNumber);
                         return false;
+                    }
                 }
 
                 expectedSeq = manifest.Snapshot.LastSequenceNumber + 1;
@@ -297,11 +310,17 @@ public class ManifestManager
                 var op = manifest.Operations[i];
 
                 if (op.SequenceNumber != expectedSeq + i)
+                {
+                    logger.Debug("Manifest verification failed for user {0} stream {1}: Expected sequence {2} but got {3}.", manifest.UserId, manifest.StreamType, expectedSeq + i, op.SequenceNumber);
                     return false;
+                }
 
                 var signable = BuildSignablePayload(op);
                 if (!CryptoService.VerifySignature(signable, op.Signature, userPublicKey))
+                {
+                    logger.Debug("Manifest verification failed for user {0} stream {1}: Invalid operation signature for sequence {2}.", manifest.UserId, manifest.StreamType, op.SequenceNumber);
                     return false;
+                }
             }
             return true;
         }
@@ -325,14 +344,14 @@ public class ManifestManager
 
         if (remote.Operations.Count > SecurityLimits.MaxManifestOperations)
         {
-            LogManager.GetCurrentClassLogger().Error("Merge failed: remote manifest from {0} has {1} operations, exceeding limit of {2}", remote.UserId, remote.Operations.Count, SecurityLimits.MaxManifestOperations);
+            logger.Warn("Merge failed: remote manifest from {0} stream {1} has {2} operations, exceeding limit of {3}", remote.UserId, remote.StreamType, remote.Operations.Count, SecurityLimits.MaxManifestOperations);
             throw new InvalidDataException($"Remote manifest exceeds operation limit ({remote.Operations.Count}).");
         }
 
         // 1. Verify remote manifest integrity before merging
         if (!VerifyManifest(remote, remoteUserPublicKey))
         {
-            LogManager.GetCurrentClassLogger().Error("Merge failed: remote manifest from {0} failed verification.", remote.UserId);
+            logger.Debug("Merge failed: remote manifest from {0} stream {1} failed verification.", remote.UserId, remote.StreamType);
             throw new InvalidDataException("Remote manifest failed signature or continuity verification.");
         }
 
@@ -341,6 +360,7 @@ public class ManifestManager
             // 2. Handle Snapshot merge
             // If remote has a NEWER snapshot, we adopt it and discard local operations that are now squashed.
             if (remote.Snapshot != null)
+            {
                 if (remote.Snapshot.LastSequenceNumber > (local.Snapshot?.LastSequenceNumber ?? -1))
                 {
                     // Remote snapshot is more recent than ours.
@@ -353,6 +373,7 @@ public class ManifestManager
                     // Since we replaced the whole state, we "added" as many ops as the remote currently has
                     return remote.Operations.Count;
                 }
+            }
 
             // 3. Merge individual operations
             // Build existing play counts per (trackId, utcDate) from the local manifest so we
@@ -365,9 +386,12 @@ public class ManifestManager
             foreach (var op in remote.Operations.OrderBy(o => o.SequenceNumber))
             {
                 if (op.SequenceNumber <= localMaxSeqNum)
+                {
+                    logger.Trace("Skipping operation {0} for user {1} stream {2}: Sequence number already applied.", op.SequenceNumber, remote.UserId, remote.StreamType);
                     continue;
+                }
 
-                if (!IsOperationWithinLimits(op))
+                if (!IsOperationWithinLimits(remote, op))
                     continue;
 
                 // Enforce per-user daily play cap.
@@ -376,13 +400,19 @@ public class ManifestManager
                     var key = (TrackId: op.TargetId, op.Timestamp.ToUniversalTime().Date);
                     playCounts.TryGetValue(key, out var existing);
                     if (existing >= SecurityLimits.MaxPlaysPerUserPerTrackPerDay)
+                    {
+                        logger.Debug("Discarding operation {0} in stream {1} for user {2}: Max plays per user per track per day exceeded.", op.SequenceNumber, remote.StreamType, remote.UserId);
                         continue;
+                    }
                     playCounts[key] = existing + 1;
                 }
 
                 if (IsCompetitionOperation(op.OperationType))
                     if (!ValidateCompetitionOperation(op))
+                    {
+                        logger.Debug("Discarding operation {0} in stream {1} for user {2}: Invalid competition operation.", op.SequenceNumber, remote.StreamType, remote.UserId);
                         continue;
+                    }
 
                 // We already verified all signatures in VerifyManifest call above,
                 // but we can re-verify if we want to be paranoid or if VerifyManifest was skipped.
@@ -433,18 +463,46 @@ public class ManifestManager
         return true;
     }
 
-    private static bool IsOperationWithinLimits(ManifestOperation op)
+    private bool IsOperationWithinLimits(Manifest manifest, ManifestOperation op)
     {
-        if (op.OperationId.Length > SecurityLimits.MaxOperationIdLength) return false;
-        if (op.TargetId.Length > SecurityLimits.MaxTargetIdLength) return false;
-        if (op.TargetType.Length > SecurityLimits.MaxTargetTypeLength) return false;
-        if (op.ContentHash?.Length > SecurityLimits.MaxContentHashLength) return false;
-        if (op.Metadata.Count > SecurityLimits.MaxMetadataEntries) return false;
+        if (op.OperationId.Length > SecurityLimits.MaxOperationIdLength)
+        {
+            logger.Debug("Discarding operation {0} in stream {1} for user {2}: OperationId exceeds max length.", op.SequenceNumber, manifest.StreamType, manifest.UserId);
+            return false;
+        }
+        if (op.TargetId.Length > SecurityLimits.MaxTargetIdLength)
+        {
+            logger.Debug("Discarding operation {0} in stream {1} for user {2}: TargetId exceeds max length.", op.SequenceNumber, manifest.StreamType, manifest.UserId);
+            return false;
+        }
+        if (op.TargetType.Length > SecurityLimits.MaxTargetTypeLength)
+        {
+            logger.Debug("Discarding operation {0} in stream {1} for user {2}: TargetType exceeds max length.", op.SequenceNumber, manifest.StreamType, manifest.UserId);
+            return false;
+        }
+        if (op.ContentHash?.Length > SecurityLimits.MaxContentHashLength)
+        {
+            logger.Debug("Discarding operation {0} in stream {1} for user {2}: ContentHash exceeds max length.", op.SequenceNumber, manifest.StreamType, manifest.UserId);
+            return false;
+        }
+        if (op.Metadata.Count > SecurityLimits.MaxMetadataEntries)
+        {
+            logger.Debug("Discarding operation {0} in stream {1} for user {2}: Metadata entries exceed max limit.", op.SequenceNumber, manifest.StreamType, manifest.UserId);
+            return false;
+        }
 
         foreach (var kv in op.Metadata)
         {
-            if (kv.Key.Length > SecurityLimits.MaxMetadataKeyLength) return false;
-            if (kv.Value.Length > SecurityLimits.MaxMetadataValueLength) return false;
+            if (kv.Key.Length > SecurityLimits.MaxMetadataKeyLength)
+            {
+                logger.Warn("Discarding operation {0} in stream {1} for user {2}: Metadata key exceeds max length.", op.SequenceNumber, manifest.StreamType, manifest.UserId);
+                return false;
+            }
+            if (kv.Value.Length > SecurityLimits.MaxMetadataValueLength)
+            {
+                logger.Warn("Discarding operation {0} in stream {1} for user {2}: Metadata value exceeds max length.", op.SequenceNumber, manifest.StreamType, manifest.UserId);
+                return false;
+            }
         }
 
         return true;

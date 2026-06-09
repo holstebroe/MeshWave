@@ -14,7 +14,7 @@ namespace MeshWave.Synchronizer;
 /// The store is the single source of truth for all received peer data.
 /// The local user's own manifest is intentionally NOT stored here.
 /// </summary>
-public class PeerManifestStore
+public class PeerManifestStore : IManifestStore
 {
     private const string PeerManifestsFolderName = "PeerManifests";
     private readonly string _storeDirectory;
@@ -89,8 +89,9 @@ public class PeerManifestStore
         {
             added = manager.MergeManifest(local, incoming, peerPublicKeyPem);
         }
-        catch
+        catch (Exception ex)
         {
+            NLog.LogManager.GetCurrentClassLogger().Warn("Merge failed for manifest from user {0} stream {1}: {2}", incoming.UserId, incoming.StreamType, ex.Message);
             return 0; // reject tampered / over-limit manifests
         }
 

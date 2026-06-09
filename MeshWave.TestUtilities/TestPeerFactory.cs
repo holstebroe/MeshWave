@@ -46,7 +46,7 @@ public static class TestPeerFactory
         var peerRouter = new PeerRouter(lanDiscovery: discovery, logger:logger);
         var server = new ManifestExchangeServer(port, logger: logger);
         var client = new ManifestExchangeClient(timeoutMs: 2000, logger: logger);
-        var mgr = new ManifestManager();
+        var mgr = new ManifestManager(logger);
         var userRepo = new UserRepository(tempDir);
         var store = PeerManifestStore.CreateAtBase(tempDir);
 
