@@ -276,25 +276,6 @@ public class LocalLibraryManager
         UpdateMappingFiles(myMusicBaseFolder, destinationFile, metadata);
         return imported;
     }
-    private static void EnsureIdFile(string folderPath)
-    {
-        try
-        {
-            Directory.CreateDirectory(folderPath);
-            var idFilePath = Path.Combine(folderPath, ".meshwave-id");
-            if (!File.Exists(idFilePath))
-            {
-                var id = Guid.NewGuid().ToString();
-                File.WriteAllText(idFilePath, id);
-                File.SetAttributes(idFilePath, File.GetAttributes(idFilePath) | FileAttributes.Hidden);
-            }
-        }
-        catch
-        {
-            // Fail gracefully if directory is read-only or permission is denied
-        }
-    }
-
 
     public class LibraryIndex
     {
