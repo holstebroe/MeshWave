@@ -188,11 +188,14 @@ public class LocalLibraryManager
         if (!normalizedExtensions.Contains(extension)) return false;
 
         var metadata = ExtractMetadata(sourceFile);
-        var albumFolder = Path.Combine(myMusicBaseFolder, metadata.Artist, metadata.Album);
+        var artistFolder = Path.Combine(myMusicBaseFolder, metadata.Artist);
+        var albumFolder = Path.Combine(artistFolder, metadata.Album);
         var cacheFolder = Path.Combine(albumFolder, ".cache");
         var commentsFolder = Path.Combine(albumFolder, ".comments");
 
         Directory.CreateDirectory(albumFolder);
+        EnsureIdFile(artistFolder);
+        EnsureIdFile(albumFolder);
         Directory.CreateDirectory(cacheFolder);
         Directory.CreateDirectory(commentsFolder);
 
@@ -209,6 +212,25 @@ public class LocalLibraryManager
         UpdateMappingFiles(myMusicBaseFolder, destinationFile, metadata);
         return imported;
     }
+    private static void EnsureIdFile(string folderPath)
+    {
+        try
+        {
+            Directory.CreateDirectory(folderPath);
+            var idFilePath = Path.Combine(folderPath, ".meshwave-id");
+            if (!File.Exists(idFilePath))
+            {
+                var id = Guid.NewGuid().ToString();
+                File.WriteAllText(idFilePath, id);
+                File.SetAttributes(idFilePath, File.GetAttributes(idFilePath) | FileAttributes.Hidden);
+            }
+        }
+        catch
+        {
+            // Fail gracefully if directory is read-only or permission is denied
+        }
+    }
+
 
     private static void UpdateMappingFiles(string myMusicBaseFolder, string trackFilePath, CachedTrackMetadata metadata)
     {
