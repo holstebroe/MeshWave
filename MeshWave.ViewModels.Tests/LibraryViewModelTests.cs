@@ -34,7 +34,7 @@ public class LibraryViewModelTests
         File.WriteAllText(metaFile, json);
 
         // Use a mock ApplicationViewModel to allow testing ReDownloadTrackCommand
-        var mockAppVm = new Mock<ApplicationViewModel>(null, null, null, null, null, null, null);
+        var mockAppVm = new Mock<ApplicationViewModel>(null!, null!, null!, null!, null!, null!, null!);
         var vm = new LibraryViewModel(mockAppVm.Object, isMyMusicLibrary: true);
 
         // Act
