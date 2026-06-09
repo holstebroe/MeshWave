@@ -194,7 +194,7 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
 
         if (previousAlbumId != null) SelectedAlbum = _allAlbumItems.FirstOrDefault(a => a.AlbumId == previousAlbumId);
 
-        RefreshAlbumAndTrackSelection();
+        _ = RefreshAlbumAndTrackSelectionAsync();
 
         AnnounceReleasedContentToMesh();
 
@@ -304,7 +304,7 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
         });
     }
 
-    private void RefreshAlbumAndTrackSelection()
+    private async Task RefreshAlbumAndTrackSelectionAsync()
     {
         var removedEntries = !IsMyMusicLibrary
             ? _downloadStateService.GetRemovedEntries()
@@ -341,9 +341,22 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
             if (addedRemovedShells) EnsureQueueAlbumShells(_allAlbumItems, []);
         }
 
-        var filteredAlbums = SelectedArtist == null
-            ? _allAlbumItems
-            : _allAlbumItems.Where(a => a.Artist == SelectedArtist.Name).ToList();
+        var isSearching = !string.IsNullOrWhiteSpace(SearchQuery) && _libraryManager != null;
+
+        var searchResults = isSearching ? await _libraryManager!.SearchTracksAsync(SearchQuery) : [];
+        var searchResultTrackIds = searchResults.Select(r => r.TrackId).ToHashSet();
+        var searchResultAlbumNames = searchResults.Select(r => r.Album).ToHashSet();
+
+        var filteredAlbums = _allAlbumItems;
+
+        if (isSearching)
+        {
+            filteredAlbums = filteredAlbums.Where(a => searchResultAlbumNames.Contains(a.Name)).ToList();
+        }
+        else if (SelectedArtist != null)
+        {
+            filteredAlbums = filteredAlbums.Where(a => a.Artist == SelectedArtist.Name).ToList();
+        }
 
         if (!IsMyMusicLibrary && _applicationViewModel != null)
             foreach (var album in filteredAlbums)
@@ -368,14 +381,28 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
 
         Albums = filteredAlbums;
 
-        var filteredTracks = SelectedAlbum == null
-            ? []
-            : _allTrackItems
-                .Where(t => t.AlbumId == SelectedAlbum.AlbumId)
+        List<LibraryTrackItem> filteredTracks;
+
+        if (isSearching)
+        {
+             filteredTracks = _allTrackItems
+                .Where(t => searchResultTrackIds.Contains(t.TrackId))
                 .OrderBy(t => t.TrackNumber <= 0 ? 1 : 0)
                 .ThenBy(t => t.TrackNumber <= 0 ? int.MaxValue : t.TrackNumber)
                 .ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase)
                 .ToList();
+        }
+        else
+        {
+            filteredTracks = SelectedAlbum == null
+                ? []
+                : _allTrackItems
+                    .Where(t => t.AlbumId == SelectedAlbum.AlbumId)
+                    .OrderBy(t => t.TrackNumber <= 0 ? 1 : 0)
+                    .ThenBy(t => t.TrackNumber <= 0 ? int.MaxValue : t.TrackNumber)
+                    .ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+        }
 
         var removedTrackPlaceholders = removedEntries
             .Where(e => string.IsNullOrWhiteSpace(SelectedAlbum?.Name)

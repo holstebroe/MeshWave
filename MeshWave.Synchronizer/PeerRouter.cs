@@ -19,6 +19,7 @@ public class PeerRouter : IDisposable
     private readonly ConcurrentDictionary<string, RoutedPeer> _table = new(StringComparer.OrdinalIgnoreCase);
     private readonly PeerDiscovery _lanDiscovery;
     private readonly ManifestExchangeClient _exchangeClient;
+    private readonly KnownPeersStore _knownPeersStore;
     private readonly Lock _bootstrapLock = new();
 
     private IReadOnlyList<string> _bootstrapNodes = [];
@@ -26,10 +27,11 @@ public class PeerRouter : IDisposable
     private Task? _bootstrapTask;
     private Task? _maintenanceTask;
 
-    public PeerRouter(PeerDiscovery? lanDiscovery = null, ManifestExchangeClient? exchangeClient = null, Logger? logger = null)
+    public PeerRouter(PeerDiscovery? lanDiscovery = null, ManifestExchangeClient? exchangeClient = null, KnownPeersStore? knownPeersStore = null, Logger? logger = null)
     {
         _lanDiscovery = lanDiscovery ?? new PeerDiscovery();
         _exchangeClient = exchangeClient ?? new ManifestExchangeClient(timeoutMs: SecurityLimits.ConnectTimeoutMs, logger:logger);
+        _knownPeersStore = knownPeersStore ?? new KnownPeersStore();
     }
 
     public event EventHandler<PeerInfo>? PeerAdded;
@@ -44,10 +46,26 @@ public class PeerRouter : IDisposable
 
         _bootstrapNodes = bootstrapNodes;   // remember for periodic re-contact
 
+        _knownPeersStore.LoadAll();
+        var knownPeers = _knownPeersStore.GetAll();
+
+        // Add the known peers to the routing table immediately so they are available
+        // to GetPeers() and MaintenanceLoopAsync.
+        foreach (var p in knownPeers)
+        {
+            AddOrRefreshPeer(p);
+        }
+
+        var knownPeersEndpoints = knownPeers
+            .Select(p => $"{p.Address}:{p.Port}")
+            .Where(addr => !string.IsNullOrWhiteSpace(addr))
+            .Distinct()
+            .ToList();
+
         _lanDiscovery.PeerDiscovered += OnLanPeerDiscovered;
         await _lanDiscovery.StartDiscoveryAsync(identity, _cts.Token);
 
-        _bootstrapTask = BootstrapAsync(bootstrapNodes, _cts.Token);
+        _bootstrapTask = BootstrapAsync(bootstrapNodes.Concat(knownPeersEndpoints).ToList(), _cts.Token);
         _maintenanceTask = MaintenanceLoopAsync(_cts.Token);
     }
 
@@ -56,10 +74,15 @@ public class PeerRouter : IDisposable
         _lanDiscovery.PeerDiscovered -= OnLanPeerDiscovered;
         await _lanDiscovery.StopDiscoveryAsync();
 
-        _cts?.Cancel();
+        if (_cts != null && !_cts.IsCancellationRequested)
+        {
+            try { _cts.Cancel(); } catch (ObjectDisposedException) { }
+        }
 
         if (_bootstrapTask != null) try { await _bootstrapTask; } catch { }
         if (_maintenanceTask != null) try { await _maintenanceTask; } catch { }
+
+        _knownPeersStore.Flush();
     }
 
     /// <summary>
@@ -125,6 +148,8 @@ public class PeerRouter : IDisposable
             foreach (var cap in peer.Capabilities)
                 if (!existing.Info.Capabilities.Contains(cap))
                     existing.Info.Capabilities.Add(cap);
+
+            _knownPeersStore.AddOrUpdate(existing.Info);
         }
         else
         {
@@ -134,6 +159,7 @@ public class PeerRouter : IDisposable
             var routed = new RoutedPeer { Info = peer, LastSeen = DateTime.UtcNow, Source = PeerSource.Unknown };
             if (_table.TryAdd(peer.UserId, routed))
             {
+                _knownPeersStore.AddOrUpdate(peer);
                 PeerAdded?.Invoke(this, peer);
                 _ = Task.Run(() => TryPexWithPeerAsync(peer, _cts?.Token ?? CancellationToken.None));
             }
@@ -208,6 +234,9 @@ public class PeerRouter : IDisposable
                 await Task.Delay(TimeSpan.FromSeconds(pexIntervalSeconds), ct);
                 cyclesSinceBootstrap++;
 
+                // Prune stale peers from the known peers store
+                _knownPeersStore.PruneStale(TimeSpan.FromDays(7));
+
                 // PEX: ask a sample of known peers for their peer lists
                 var sample = GetPeers()
                     .Where(p => !p.UserId.StartsWith("bootstrap:"))
@@ -249,7 +278,10 @@ public class PeerRouter : IDisposable
 
     public void Dispose()
     {
-        _cts?.Cancel();
+        if (_cts != null && !_cts.IsCancellationRequested)
+        {
+            try { _cts.Cancel(); } catch (ObjectDisposedException) { }
+        }
         _lanDiscovery.Dispose();
         _cts?.Dispose();
     }
