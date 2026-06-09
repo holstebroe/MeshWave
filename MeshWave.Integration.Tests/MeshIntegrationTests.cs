@@ -275,6 +275,41 @@ public class MeshIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SocialInteractions_ArePropagatedImmediatelyToOwner()
+    {
+        _output.WriteLine("Starting SocialInteractions_ArePropagatedImmediatelyToOwner");
+        var owner = await _context.CreatePeerAsync("TrackOwner");
+        var listener = await _context.CreatePeerAsync("Listener");
+
+        await owner.WaitForConditionAsync(() => owner.Orchestrator.ConnectedPeerCount > 0);
+        await listener.WaitForConditionAsync(() => listener.Orchestrator.ConnectedPeerCount > 0);
+
+        await _context.ConnectAndSyncAllAsync();
+
+        // Owner publishes a track
+        var contentHash = "hash123";
+        var meta = new Dictionary<string, string> { { "title", "Test Song" } };
+        owner.Orchestrator.AnnounceTrack("track1", contentHash, meta);
+
+        // Wait for listener to receive the track
+        await TestWaiter.WaitForItemPollingAsync(() => listener.Orchestrator.PeerManifests,
+            x => x.UserId == owner.Orchestrator.Identity?.UserId && x.Operations.Any(o => o.OperationType == ManifestOperationType.Create),
+            timeoutMs: 2000, cancellationToken: TestContext.Current.CancellationToken);
+
+        // Listener comments on the track
+        listener.Orchestrator.RecordComment("track1", "Great track!");
+
+        // Owner should receive the comment very quickly via targeted notification
+        await TestWaiter.WaitForItemPollingAsync(() => owner.Orchestrator.PeerManifests,
+            x => x.UserId == listener.Orchestrator.Identity?.UserId && x.StreamType == ManifestStreamType.Interaction && x.Operations.Any(o => o.OperationType == ManifestOperationType.Comment),
+            timeoutMs: 1000, cancellationToken: TestContext.Current.CancellationToken);
+
+        var ownerInteractionManifests = owner.Orchestrator.PeerManifests.FirstOrDefault(m => m.UserId == listener.Orchestrator.Identity?.UserId && m.StreamType == ManifestStreamType.Interaction);
+        Assert.NotNull(ownerInteractionManifests);
+        Assert.Contains(ownerInteractionManifests.Operations, o => o.OperationType == ManifestOperationType.Comment && o.TargetId == "track1");
+    }
+
+    [Fact]
     [Trait(TestTraits.Category, TestTraits.Stress)]
     public async Task StressTest_ManyComments_AreDistributed()
     {

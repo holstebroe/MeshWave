@@ -218,6 +218,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         {
             _server ??= new ManifestExchangeServer(identity.ManifestPort, logger: _logger);
             _server.ManifestReceived += OnManifestReceived;
+            _server.NotificationReceived += OnNotificationReceived;
 
             await _natTraversal.StartAsync(identity.ManifestPort, _cts.Token);
             await _natTraversal.SetupPortMappingAsync(identity.ManifestPort, _cts.Token);
@@ -245,7 +246,10 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         _router.PeerAdded -= OnPeerAdded;
         _router.PeerRemoved -= OnPeerRemoved;
         if (_server != null)
+        {
             _server.ManifestReceived -= OnManifestReceived;
+            _server.NotificationReceived -= OnNotificationReceived;
+        }
 
         await _router.StopAsync();
         if (_server != null)
@@ -603,6 +607,36 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     private void OnPeerRemoved(object? sender, string userId)
     {
         PeerCountChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnNotificationReceived(object? sender, NotifyNewOperationEventArgs e)
+    {
+        if (e.TargetUserId == Identity?.UserId) return; // Ignore notifications from ourselves
+
+        _logger.Debug("Received NotifyNewOperation for {0} stream {1} seq {2} from {3}", e.TargetUserId, e.StreamType, e.StartSequenceNumber, e.PeerAddress);
+        RecordPeerMessage(e.TargetUserId, "NotifyNewOperation", success: true, $"Received notification for seq {e.StartSequenceNumber} from {e.PeerAddress}.");
+
+        var peer = _router.GetPeers().FirstOrDefault(p => p.UserId == e.TargetUserId);
+        if (peer == null)
+        {
+            if (e.AnnouncingPeer != null)
+            {
+                // We cannot call AddOrRefreshPeer directly as it's private in PeerRouter.
+                // The router learns about peers via PeerExchange or LAN discovery.
+                // For targeted notifications, we just use the AnnouncingPeer directly to fetch.
+                peer = e.AnnouncingPeer;
+                peer.LastSeen = DateTime.UtcNow;
+            }
+            else
+            {
+                return;
+            }
+        }
+
+        if (_cts != null && !_cts.IsCancellationRequested)
+        {
+            _ = Task.Run(async () => await TryFetchAndMergeAsync(peer, _cts.Token));
+        }
     }
 
     private void OnManifestReceived(object? sender, ManifestReceivedEventArgs e)
