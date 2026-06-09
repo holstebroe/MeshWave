@@ -31,7 +31,7 @@ public class LocalLibraryManager
     private SqliteConnection CreateDbConnection()
     {
         var dbPath = Path.Combine(_basePath, "library_index.db");
-        var connection = new SqliteConnection($"Data Source={dbPath}");
+        var connection = new SqliteConnection($"Data Source={dbPath};Pooling=False;");
         connection.Open();
         return connection;
     }
@@ -50,17 +50,6 @@ public class LocalLibraryManager
 
         using var connection = CreateDbConnection();
         InitializeDatabase(connection);
-
-        var currentDbTrackIds = new HashSet<string>();
-        using (var cmd = connection.CreateCommand())
-        {
-            cmd.CommandText = "SELECT TrackId FROM TrackIndex";
-            using var reader = cmd.ExecuteReader();
-            while (reader.Read())
-            {
-                currentDbTrackIds.Add(reader.GetString(0));
-            }
-        }
 
         var activeTrackIds = new HashSet<string>();
         foreach (var file in EnumerateSupportedFiles(_basePath, _supportedExtensions))
@@ -114,12 +103,10 @@ public class LocalLibraryManager
         using var transaction = connection.BeginTransaction();
         try
         {
-            using var deleteCmd = connection.CreateCommand();
-            deleteCmd.Transaction = transaction;
-            deleteCmd.CommandText = "DELETE FROM TrackIndex WHERE TrackId = $TrackId";
-            var pDeleteTrackId = deleteCmd.CreateParameter();
-            pDeleteTrackId.ParameterName = "$TrackId";
-            deleteCmd.Parameters.Add(pDeleteTrackId);
+            using var clearCmd = connection.CreateCommand();
+            clearCmd.Transaction = transaction;
+            clearCmd.CommandText = "DELETE FROM TrackIndex";
+            clearCmd.ExecuteNonQuery();
 
             using var insertCmd = connection.CreateCommand();
             insertCmd.Transaction = transaction;
@@ -149,11 +136,7 @@ public class LocalLibraryManager
 
             foreach (var track in _tracks)
             {
-                activeTrackIds.Add(track.TrackId);
                 var album = _albums.FirstOrDefault(a => a.AlbumId == track.AlbumId);
-
-                pDeleteTrackId.Value = track.TrackId;
-                deleteCmd.ExecuteNonQuery();
 
                 pTrackId.Value = track.TrackId;
                 pTitle.Value = track.Title;
@@ -162,23 +145,6 @@ public class LocalLibraryManager
                 pFilePath.Value = track.FilePath ?? string.Empty;
 
                 insertCmd.ExecuteNonQuery();
-            }
-
-            var tracksToRemove = currentDbTrackIds.Where(id => !activeTrackIds.Contains(id)).ToList();
-            if (tracksToRemove.Count > 0)
-            {
-                using var bulkDeleteCmd = connection.CreateCommand();
-                bulkDeleteCmd.Transaction = transaction;
-                var parameters = new List<string>();
-                for (int i = 0; i < tracksToRemove.Count; i++)
-                {
-                    var paramName = $"$p{i}";
-                    parameters.Add(paramName);
-                    bulkDeleteCmd.Parameters.AddWithValue(paramName, tracksToRemove[i]);
-                }
-
-                bulkDeleteCmd.CommandText = $"DELETE FROM TrackIndex WHERE TrackId IN ({string.Join(",", parameters)})";
-                bulkDeleteCmd.ExecuteNonQuery();
             }
 
             transaction.Commit();
@@ -398,28 +364,35 @@ public class LocalLibraryManager
 
         var results = new List<SearchResultItem>();
 
-        using var connection = CreateDbConnection();
-        using var cmd = connection.CreateCommand();
-
-        cmd.CommandText = @"
-            SELECT TrackId, Title, Artist, Album, FilePath
-            FROM TrackIndex
-            WHERE TrackIndex MATCH $query
-            ORDER BY rank";
-
-        cmd.Parameters.AddWithValue("$query", EscapeFtsQuery(query));
-
-        using var reader = await cmd.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
+        try
         {
-            results.Add(new SearchResultItem
+            using var connection = CreateDbConnection();
+            using var cmd = connection.CreateCommand();
+
+            cmd.CommandText = @"
+                SELECT TrackId, Title, Artist, Album, FilePath
+                FROM TrackIndex
+                WHERE TrackIndex MATCH $query
+                ORDER BY rank";
+
+            cmd.Parameters.AddWithValue("$query", EscapeFtsQuery(query));
+
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
             {
-                TrackId = reader.GetString(0),
-                Title = reader.GetString(1),
-                Artist = reader.GetString(2),
-                Album = reader.GetString(3),
-                FilePath = reader.GetString(4)
-            });
+                results.Add(new SearchResultItem
+                {
+                    TrackId = reader.GetString(0),
+                    Title = reader.GetString(1),
+                    Artist = reader.GetString(2),
+                    Album = reader.GetString(3),
+                    FilePath = reader.GetString(4)
+                });
+            }
+        }
+        catch (SqliteException ex)
+        {
+            Console.WriteLine($"[LocalLibraryManager] FTS syntax error during search: {ex.Message}");
         }
 
         return results;
