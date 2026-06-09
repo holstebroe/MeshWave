@@ -63,10 +63,37 @@ public partial class LibraryViewModel : ViewModelBase
         set => SetProperty(ref _syncStatus, value);
     }
 
+    private CancellationTokenSource? _searchCts;
     public string SearchQuery
     {
         get => _searchQuery;
-        set => SetProperty(ref _searchQuery, value);
+        set
+        {
+            if (SetProperty(ref _searchQuery, value))
+            {
+                DebounceSearchAsync();
+            }
+        }
+    }
+
+    private async void DebounceSearchAsync()
+    {
+        _searchCts?.Cancel();
+        _searchCts = new CancellationTokenSource();
+        var token = _searchCts.Token;
+
+        try
+        {
+            await Task.Delay(300, token); // 300ms debounce
+            if (!token.IsCancellationRequested)
+            {
+                await SearchAsync();
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            // Ignore cancellation
+        }
     }
 
     public List<LibraryTrackItem> Tracks
@@ -95,7 +122,7 @@ public partial class LibraryViewModel : ViewModelBase
             if (SetProperty(ref _selectedArtist, value))
             {
                 SelectedAlbum = null;
-                RefreshAlbumAndTrackSelection();
+                _ = RefreshAlbumAndTrackSelectionAsync();
             }
         }
     }
@@ -107,7 +134,7 @@ public partial class LibraryViewModel : ViewModelBase
         {
             if (SetProperty(ref _selectedAlbum, value))
             {
-                RefreshAlbumAndTrackSelection();
+                _ = RefreshAlbumAndTrackSelectionAsync();
                 OnPropertyChanged(nameof(CanSyncToNetwork));
             }
         }
@@ -224,9 +251,16 @@ public partial class LibraryViewModel : ViewModelBase
         SyncStatus = $"Announced '{track.Title}' to the network.";
     }
 
-    public void Search()
+    public async Task SearchAsync()
     {
-        // TODO: Implement library search
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher != null && !dispatcher.CheckAccess())
+        {
+            await dispatcher.InvokeAsync(SearchAsync);
+            return;
+        }
+
+        await RefreshAlbumAndTrackSelectionAsync();
     }
 
     public void RefreshLibrary()
@@ -279,9 +313,9 @@ public partial class LibraryViewModel : ViewModelBase
     {
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher != null)
-            dispatcher.Invoke(RefreshAlbumAndTrackSelection);
+            dispatcher.Invoke(() => _ = RefreshAlbumAndTrackSelectionAsync());
         else
-            RefreshAlbumAndTrackSelection();
+            _ = RefreshAlbumAndTrackSelectionAsync();
     }
 }
 

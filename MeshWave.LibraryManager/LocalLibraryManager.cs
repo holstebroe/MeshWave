@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Data.Sqlite;
 using MeshWave.Common.Core.Models;
 using MeshWave.Common.Core.Storage;
 using TagLib;
@@ -27,6 +28,14 @@ public class LocalLibraryManager
 
     public static IReadOnlyList<string> SupportedExtensions => DefaultExtensionList;
 
+    private SqliteConnection CreateDbConnection()
+    {
+        var dbPath = Path.Combine(_basePath, "library_index.db");
+        var connection = new SqliteConnection($"Data Source={dbPath};Pooling=False;");
+        connection.Open();
+        return connection;
+    }
+
     /// <summary>
     /// Indexes music files in the local library. Reads cached metadata when available.
     /// </summary>
@@ -52,6 +61,10 @@ public class LocalLibraryManager
         var indexUpdated = false;
         var albumDict = new Dictionary<string, Album>(StringComparer.OrdinalIgnoreCase);
 
+        using var connection = CreateDbConnection();
+        InitializeDatabase(connection);
+
+        var activeTrackIds = new HashSet<string>();
         foreach (var file in EnumerateSupportedFiles(_basePath, _supportedExtensions))
             try
             {
@@ -149,6 +162,75 @@ public class LocalLibraryManager
             }
             catch { }
         }
+        using var transaction = connection.BeginTransaction();
+        try
+        {
+            using var clearCmd = connection.CreateCommand();
+            clearCmd.Transaction = transaction;
+            clearCmd.CommandText = "DELETE FROM TrackIndex";
+            clearCmd.ExecuteNonQuery();
+
+            using var insertCmd = connection.CreateCommand();
+            insertCmd.Transaction = transaction;
+            insertCmd.CommandText = @"
+                INSERT INTO TrackIndex (TrackId, Title, Artist, Album, FilePath)
+                VALUES ($TrackId, $Title, $Artist, $Album, $FilePath)";
+
+            var pTrackId = insertCmd.CreateParameter();
+            pTrackId.ParameterName = "$TrackId";
+            insertCmd.Parameters.Add(pTrackId);
+
+            var pTitle = insertCmd.CreateParameter();
+            pTitle.ParameterName = "$Title";
+            insertCmd.Parameters.Add(pTitle);
+
+            var pArtist = insertCmd.CreateParameter();
+            pArtist.ParameterName = "$Artist";
+            insertCmd.Parameters.Add(pArtist);
+
+            var pAlbum = insertCmd.CreateParameter();
+            pAlbum.ParameterName = "$Album";
+            insertCmd.Parameters.Add(pAlbum);
+
+            var pFilePath = insertCmd.CreateParameter();
+            pFilePath.ParameterName = "$FilePath";
+            insertCmd.Parameters.Add(pFilePath);
+
+            foreach (var track in _tracks)
+            {
+                var album = _albums.FirstOrDefault(a => a.AlbumId == track.AlbumId);
+
+                pTrackId.Value = track.TrackId;
+                pTitle.Value = track.Title;
+                pArtist.Value = track.Description ?? "Unknown Artist";
+                pAlbum.Value = album?.Title ?? string.Empty;
+                pFilePath.Value = track.FilePath ?? string.Empty;
+
+                insertCmd.ExecuteNonQuery();
+            }
+
+            transaction.Commit();
+        }
+        catch (Exception ex)
+        {
+            transaction.Rollback();
+            Console.WriteLine($"[LocalLibraryManager] Failed to update library index: {ex.Message}");
+        }
+    }
+
+    private void InitializeDatabase(SqliteConnection connection)
+    {
+        using var cmd = connection.CreateCommand();
+        // Create an FTS5 virtual table for efficient full-text search
+        cmd.CommandText = @"
+            CREATE VIRTUAL TABLE IF NOT EXISTS TrackIndex USING fts5(
+                TrackId UNINDEXED,
+                Title,
+                Artist,
+                Album,
+                FilePath UNINDEXED
+            );";
+        cmd.ExecuteNonQuery();
     }
 
     public static void ImportMusicToOrganizedStructure(
@@ -375,6 +457,66 @@ public class LocalLibraryManager
         return _albums;
     }
 
+    public class SearchResultItem
+    {
+        public string TrackId { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public string Artist { get; set; } = string.Empty;
+        public string Album { get; set; } = string.Empty;
+        public string FilePath { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Searches the local library database for tracks matching the given query across Title, Artist, and Album fields asynchronously.
+    /// </summary>
+    public async Task<List<SearchResultItem>> SearchTracksAsync(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return new List<SearchResultItem>();
+
+        var results = new List<SearchResultItem>();
+
+        try
+        {
+            using var connection = CreateDbConnection();
+            using var cmd = connection.CreateCommand();
+
+            cmd.CommandText = @"
+                SELECT TrackId, Title, Artist, Album, FilePath
+                FROM TrackIndex
+                WHERE TrackIndex MATCH $query
+                ORDER BY rank";
+
+            cmd.Parameters.AddWithValue("$query", EscapeFtsQuery(query));
+
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                results.Add(new SearchResultItem
+                {
+                    TrackId = reader.GetString(0),
+                    Title = reader.GetString(1),
+                    Artist = reader.GetString(2),
+                    Album = reader.GetString(3),
+                    FilePath = reader.GetString(4)
+                });
+            }
+        }
+        catch (SqliteException ex)
+        {
+            Console.WriteLine($"[LocalLibraryManager] FTS syntax error during search: {ex.Message}");
+        }
+
+        return results;
+    }
+
+    private string EscapeFtsQuery(string query)
+    {
+        // Simple tokenization for FTS5: split by whitespace and add wildcard to each term
+        var terms = query.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+        var escapedTerms = terms.Select(t => $"\"{t.Replace("\"", "\"\"")}\"*");
+        return string.Join(" AND ", escapedTerms);
+    }
 
     public string GetTrackCoverPath(string filePath)
     {
