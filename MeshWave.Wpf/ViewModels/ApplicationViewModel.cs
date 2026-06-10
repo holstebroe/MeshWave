@@ -374,12 +374,39 @@ public class ApplicationViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// Updates a released track in the P2P network.
+    /// </summary>
+    public void UpdateTrackInNetwork(string trackId, string contentHash, string title, string artist, string album)
+    {
+        if (!P2PIsConnected) return;
+        SyncOrchestrator.UpdateTrack(trackId, contentHash, new Dictionary<string, string>
+        {
+            ["title"] = SecurityLimits.Truncate(title, SecurityLimits.MaxTrackTitleLength),
+            ["artist"] = SecurityLimits.Truncate(artist, SecurityLimits.MaxArtistNameLength),
+            ["album"] = SecurityLimits.Truncate(album, SecurityLimits.MaxAlbumNameLength)
+        });
+    }
+
+    /// <summary>
     /// Announces a released album to the P2P network.
     /// </summary>
     public void AnnounceAlbumToNetwork(string albumId, string name, string artist)
     {
         if (!P2PIsConnected) return;
         SyncOrchestrator.AnnounceAlbum(albumId, null, new Dictionary<string, string>
+        {
+            ["name"] = SecurityLimits.Truncate(name, SecurityLimits.MaxAlbumNameLength),
+            ["artist"] = SecurityLimits.Truncate(artist, SecurityLimits.MaxArtistNameLength)
+        });
+    }
+
+    /// <summary>
+    /// Updates a released album in the P2P network.
+    /// </summary>
+    public void UpdateAlbumInNetwork(string albumId, string name, string artist)
+    {
+        if (!P2PIsConnected) return;
+        SyncOrchestrator.UpdateAlbum(albumId, null, new Dictionary<string, string>
         {
             ["name"] = SecurityLimits.Truncate(name, SecurityLimits.MaxAlbumNameLength),
             ["artist"] = SecurityLimits.Truncate(artist, SecurityLimits.MaxArtistNameLength)
