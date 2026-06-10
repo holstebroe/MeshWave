@@ -1074,6 +1074,29 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     }
 
     /// <summary>
+    /// Updates a released track in the network by appending a signed Update operation to the local manifest.
+    /// </summary>
+    public void UpdateTrack(string trackId, string contentHash, Dictionary<string, string>? metadata = null)
+    {
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Update));
+        if (manifest == null || Identity == null) return;
+        var meta = metadata != null ? new Dictionary<string, string>(metadata) : [];
+
+        var title = meta.GetValueOrDefault("title") ?? trackId;
+        _logger.Info("Announcing track update: '{0}' (ID: {1}, Hash: {2})", title, trackId, contentHash);
+
+        _manifestManager.AppendSignedOperation(
+            manifest,
+            ManifestOperationType.Update,
+            trackId,
+            "Track",
+            contentHash,
+            meta,
+            Identity.PrivateKeyPem);
+        PersistAndFanoutLocalManifest(manifest.StreamType);
+    }
+
+    /// <summary>
     /// Announces an album release to the network.
     /// Automatically stamps <c>releasedAt</c> (ISO-8601 UTC) into the metadata dictionary if not already set.
     /// </summary>
@@ -1090,6 +1113,29 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         _manifestManager.AppendSignedOperation(
             manifest,
             ManifestOperationType.Create,
+            albumId,
+            "Album",
+            contentHash,
+            meta,
+            Identity.PrivateKeyPem);
+        PersistAndFanoutLocalManifest(manifest.StreamType);
+    }
+
+    /// <summary>
+    /// Updates a released album in the network by appending a signed Update operation to the local manifest.
+    /// </summary>
+    public void UpdateAlbum(string albumId, string? contentHash, Dictionary<string, string>? metadata = null)
+    {
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Update));
+        if (manifest == null || Identity == null) return;
+        var meta = metadata != null ? new Dictionary<string, string>(metadata) : [];
+
+        var name = meta.GetValueOrDefault("name") ?? albumId;
+        _logger.Info("Announcing album update: '{0}' (ID: {1})", name, albumId);
+
+        _manifestManager.AppendSignedOperation(
+            manifest,
+            ManifestOperationType.Update,
             albumId,
             "Album",
             contentHash,
