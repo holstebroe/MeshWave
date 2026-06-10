@@ -28,7 +28,7 @@ public class ApplicationViewModel : ViewModelBase
     private string _applicationTitle = "MeshWave";
     private ViewModelBase _currentViewModel;
 
-    private readonly SettingsService _settingsService;
+    public SettingsService ServiceSettings { get; }
     private readonly UserProfileService _profileService;
     private readonly P2PIdentityService _identityService = new();
     private readonly ManifestManager _manifestManager = new();
@@ -48,12 +48,12 @@ public class ApplicationViewModel : ViewModelBase
         UserProfileService? profileService = null,
         Func<IAudioPlaybackService>? audioServiceFactory = null)
     {
-        _settingsService = settingsService;
+        ServiceSettings = settingsService;
         _profileService = profileService ?? new UserProfileService();
 
-        var settings = _settingsService.LoadSettings();
+        var settings = ServiceSettings.LoadSettings();
         _userRepository = new UserRepository(settings.BaseFolder);
-        _metadataLookup = new MetadataLookupRepository(_settingsService.GetLocalMusicFolder());
+        _metadataLookup = new MetadataLookupRepository(ServiceSettings.GetLocalMusicFolder());
         var catalogueService = new CatalogueService();
 
         // DI wire-up of the default file-based PeerManifestStore
@@ -292,7 +292,7 @@ public class ApplicationViewModel : ViewModelBase
                 Playback.LoadTrack(title, artist, duration, filePath, remoteContentLength: length);
                 CurrentViewModel = Playback;
             },
-            settingsService: _settingsService);
+            settingsService: ServiceSettings);
         if (!string.IsNullOrWhiteSpace(artistUserId))
             vm.NavigateToArtist(artistUserId);
         CurrentViewModel = vm;
@@ -315,7 +315,7 @@ public class ApplicationViewModel : ViewModelBase
 
     public void NavigateToCommunity()
     {
-        var vm = new CommunityViewModel(SyncOrchestrator, NavigateToBrowse, settingsService: _settingsService);
+        var vm = new CommunityViewModel(SyncOrchestrator, NavigateToBrowse, settingsService: ServiceSettings);
         vm.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(CommunityViewModel.HasNewReleases))
@@ -382,7 +382,7 @@ public class ApplicationViewModel : ViewModelBase
         try
         {
             P2PStatusText = "Connecting…";
-            var settings = _settingsService.LoadSettings();
+            var settings = ServiceSettings.LoadSettings();
             _p2pActAsListener = settings.P2P.ActAsListener;
             var profile = _profileService.LoadProfile();
             var identity = _identityService.LoadOrCreate(profile.DisplayName);
@@ -453,7 +453,7 @@ public class ApplicationViewModel : ViewModelBase
         {
             try
             {
-                var settings = _settingsService.LoadSettings();
+                var settings = ServiceSettings.LoadSettings();
                 if (!settings.P2P.Enabled) return;
 
                 await ConnectP2PAsync();
@@ -530,15 +530,15 @@ public class ApplicationViewModel : ViewModelBase
 
         try
         {
-            var settings = _settingsService.LoadSettings();
+            var settings = ServiceSettings.LoadSettings();
             var supportedExtensions = settings.SupportedExtensions
                 .Select(static ext => ext.StartsWith('.') ? ext : "." + ext)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             var roots = new[]
             {
-                _settingsService.GetLocalMusicFolder(),
-                _settingsService.GetPeerMusicFolder(),
+                ServiceSettings.GetLocalMusicFolder(),
+                ServiceSettings.GetPeerMusicFolder(),
                 Path.Combine(settings.BaseFolder, "UserCache", "Images")
             }
             .Where(static p => !string.IsNullOrWhiteSpace(p))
@@ -624,8 +624,8 @@ public class ApplicationViewModel : ViewModelBase
         try
         {
             var metadataService = new MyMusicMetadataService();
-            var settings = _settingsService.LoadSettings();
-            var myMusicFolder = _settingsService.GetLocalMusicFolder();
+            var settings = ServiceSettings.LoadSettings();
+            var myMusicFolder = ServiceSettings.GetLocalMusicFolder();
             if (!Directory.Exists(myMusicFolder))
                 return;
 
@@ -736,14 +736,14 @@ public class ApplicationViewModel : ViewModelBase
         if (!force && !_resumeStateDirty)
             return;
 
-        var settings = _settingsService.LoadSettings();
+        var settings = ServiceSettings.LoadSettings();
 
         if (Playback.HasTrackLoaded)
             settings.Playback.ResumeState = Playback.BuildResumeState();
         else
             settings.Playback.ResumeState = new PlaybackResumeState();
 
-        _settingsService.SaveSettings(settings);
+        ServiceSettings.SaveSettings(settings);
         _resumeStateDirty = false;
     }
 }

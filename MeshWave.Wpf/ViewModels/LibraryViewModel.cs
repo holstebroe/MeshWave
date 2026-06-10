@@ -29,9 +29,10 @@ public partial class LibraryViewModel : ViewModelBase
     private string _syncStatus = string.Empty;
     private readonly LibraryDownloadStateService _downloadStateService = new();
 
-    public LibraryViewModel(ApplicationViewModel? applicationViewModel = null, bool isMyMusicLibrary = false)
+    public LibraryViewModel(ApplicationViewModel applicationViewModel, bool isMyMusicLibrary = false)
     {
         _applicationViewModel = applicationViewModel;
+        _settingsService = applicationViewModel.ServiceSettings;
         IsMyMusicLibrary = isMyMusicLibrary;
         CancelImportCommand = new RelayCommand(_ => CancelImport(), _ => IsImporting);
         SyncAlbumCommand = new RelayCommand(_ => SyncSelectedAlbum(), _ => CanSyncToNetwork);

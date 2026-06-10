@@ -1,8 +1,6 @@
 using Moq;
 using Xunit;
 using MeshWave.Wpf.ViewModels;
-using MeshWave.LibraryManager;
-using System.IO;
 
 namespace MeshWave.ViewModels.Tests;
 

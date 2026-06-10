@@ -9,7 +9,7 @@ namespace MeshWave.Wpf.ViewModels;
 
 public partial class LibraryViewModel : ViewModelBase, IDisposable
 {
-    private readonly SettingsService _settingsService = new();
+    private readonly SettingsService _settingsService;
     private readonly MyMusicMetadataService _myMusicMetadataService = new();
     private LocalLibraryManager? _libraryManager;
     private MusicFolderWatcher? _folderWatcher;
