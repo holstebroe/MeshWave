@@ -1,3 +1,4 @@
+using MeshWave.Common.Core.Models;
 using System.Collections.Specialized;
 using System.IO;
 using System.Windows.Input;
@@ -37,7 +38,7 @@ public partial class LibraryViewModel : ViewModelBase
         SyncAlbumCommand = new RelayCommand(_ => SyncSelectedAlbum(), _ => CanSyncToNetwork);
         SyncTrackCommand = new RelayCommand<LibraryTrackItem>(SyncTrack, t => CanSyncToNetwork && t != null);
         RemoveTrackFromLibraryCommand = new RelayCommand<LibraryTrackItem>(RemoveTrackFromLibrary, t => t != null && !IsMyMusicLibrary && !t.IsDownloadPlaceholder);
-        ReDownloadTrackCommand = new RelayCommand<LibraryTrackItem>(ReDownloadTrack, t => t != null && !IsMyMusicLibrary && t.IsRemovedFromLibrary && !string.IsNullOrWhiteSpace(t.ContentHash));
+        ReDownloadTrackCommand = new RelayCommand<LibraryTrackItem>(ReDownloadTrack, t => t != null && !IsMyMusicLibrary && t.IsRemovedFromLibrary && !string.IsNullOrWhiteSpace(t.AudioVersions.Values.FirstOrDefault()?.FileHash));
         if (!IsMyMusicLibrary && _applicationViewModel != null) _applicationViewModel.DownloadQueueItems.CollectionChanged += OnDownloadQueueChanged;
 
         LoadFromConfiguredBaseFolder();
@@ -201,7 +202,7 @@ public partial class LibraryViewModel : ViewModelBase
         foreach (var track in Tracks.Where(t => t.IsReleased))
             _applicationViewModel.AnnounceTrackToNetwork(
                 track.TrackId,
-                CryptoService.ComputeFileHash(track.FilePath),
+                new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = CryptoService.ComputeFileHash(track.FilePath), FileSize = new System.IO.FileInfo(track.FilePath).Length } } },
                 track.Title,
                 track.Artist,
                 album.Name);
@@ -216,7 +217,7 @@ public partial class LibraryViewModel : ViewModelBase
 
         _applicationViewModel.AnnounceTrackToNetwork(
             track.TrackId,
-            CryptoService.ComputeFileHash(track.FilePath),
+            new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = CryptoService.ComputeFileHash(track.FilePath), FileSize = new System.IO.FileInfo(track.FilePath).Length } } },
             track.Title,
             track.Artist,
             SelectedAlbum?.Name ?? string.Empty);
@@ -239,10 +240,10 @@ public partial class LibraryViewModel : ViewModelBase
         if (track == null || IsMyMusicLibrary)
             return;
 
-        if (!track.IsDownloadPlaceholder && !string.IsNullOrWhiteSpace(track.ContentHash))
+        if (!track.IsDownloadPlaceholder && !string.IsNullOrWhiteSpace(track.AudioVersions.Values.FirstOrDefault()?.FileHash))
             _downloadStateService.MarkRemoved(new RemovedLibraryTrackEntry
             {
-                ContentHash = track.ContentHash,
+                AudioVersions = track.AudioVersions,
                 TrackId = track.TrackId,
                 Title = track.Title,
                 Artist = track.Artist,
@@ -330,7 +331,7 @@ public sealed class LibraryTrackItem
     public string AlbumName { get; set; } = string.Empty;
     public required string CoverPath { get; set; }
     public required string FilePath { get; set; }
-    public string? ContentHash { get; set; }
+    public Dictionary<AudioQuality, AudioVersionInfo> AudioVersions { get; set; } = new();
     public string SourcePeerUserId { get; set; } = string.Empty;
     public bool IsReleased { get; set; }
     public int Version { get; set; } = 1;

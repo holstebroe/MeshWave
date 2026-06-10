@@ -83,7 +83,7 @@ public class AuthorityTests
 
         var entry = await service.GetEntryAsync(trackId);
         Assert.NotNull(entry);
-        Assert.Equal("hash1", entry.ContentHash);
+        Assert.Equal("hash1", entry.AudioVersions.Values.FirstOrDefault()?.FileHash);
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public class AuthorityTests
                     OperationType = opType,
                     TargetId = targetId,
                     TargetType = targetType,
-                    ContentHash = contentHash,
+                    AudioVersions = new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = contentHash, FileSize = 0 } } },
                     Metadata = meta,
                     SequenceNumber = seq,
                     Signature = "fake-sig"

@@ -125,7 +125,7 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
         var trackItems = _trackObjects.Select(t =>
         {
             var album = _albumObjects.FirstOrDefault(a => a.AlbumId == t.AlbumId);
-            var resolvedPath = string.IsNullOrWhiteSpace(t.FilePath) ? t.FileHash : t.FilePath;
+            var resolvedPath = string.IsNullOrWhiteSpace(t.FilePath) ? t.AudioVersions.Values.FirstOrDefault()?.FileHash : t.FilePath;
             var coverPath = _libraryManager.GetTrackCoverPath(resolvedPath);
             var trackMeta = _myMusicMetadataService.LoadForTrack(resolvedPath);
             var effectiveRelease = trackMeta.IsReleased;
@@ -138,7 +138,7 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
                 AlbumName = album?.Title ?? string.Empty,
                 CoverPath = coverPath,
                 FilePath = resolvedPath,
-                ContentHash = CryptoService.ComputeFileHash(resolvedPath),
+                AudioVersions = new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = CryptoService.ComputeFileHash(resolvedPath), FileSize = new System.IO.FileInfo(resolvedPath).Length } } },
                 IsReleased = effectiveRelease,
                 Version = trackMeta.Version <= 0 ? 1 : trackMeta.Version,
                 TrackNumber = trackMeta.TrackNumber,
@@ -274,11 +274,11 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
 
     private void QueueTrackRedownload(LibraryTrackItem track)
     {
-        if (_applicationViewModel == null || string.IsNullOrWhiteSpace(track.ContentHash))
+        if (_applicationViewModel == null || string.IsNullOrWhiteSpace(track.AudioVersions.Values.FirstOrDefault()?.FileHash))
             return;
 
         var existing = _applicationViewModel.DownloadQueueItems.FirstOrDefault(q =>
-            string.Equals(q.ContentHash, track.ContentHash, StringComparison.OrdinalIgnoreCase)
+            string.Equals(q.AudioVersions.Values.FirstOrDefault()?.FileHash, track.AudioVersions.Values.FirstOrDefault()?.FileHash, StringComparison.OrdinalIgnoreCase)
             && q.State != DownloadState.Done);
         if (existing != null)
         {
@@ -293,7 +293,7 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
         _applicationViewModel.DownloadQueueItems.Add(new DownloadQueueItem
         {
             PeerUserId = track.SourcePeerUserId,
-            ContentHash = track.ContentHash,
+            AudioVersions = track.AudioVersions,
             Title = track.Title,
             Artist = track.Artist,
             Album = track.AlbumName,
@@ -381,14 +381,14 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
                         || string.Equals(e.Album, SelectedAlbum.Name, StringComparison.OrdinalIgnoreCase))
             .Select(e => new LibraryTrackItem
             {
-                TrackId = string.IsNullOrWhiteSpace(e.TrackId) ? e.ContentHash : e.TrackId,
+                TrackId = string.IsNullOrWhiteSpace(e.TrackId) ? e.AudioVersions.Values.FirstOrDefault()?.FileHash : e.TrackId,
                 Title = e.Title,
                 Artist = e.Artist,
                 AlbumId = string.IsNullOrWhiteSpace(e.AlbumId) ? ResolveAlbumId(_allAlbumItems, e.Artist, e.Album) : e.AlbumId,
                 AlbumName = e.Album,
                 CoverPath = string.Empty,
                 FilePath = string.Empty,
-                ContentHash = e.ContentHash,
+                AudioVersions = e.AudioVersions,
                 SourcePeerUserId = e.PeerUserId,
                 IsReleased = true,
                 Version = 1,
@@ -404,30 +404,30 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
         if (!IsMyMusicLibrary && _applicationViewModel != null)
         {
             var existingHashes = filteredTracks
-                .Select(t => t.ContentHash)
+                .Select(t => t.AudioVersions.Values.FirstOrDefault()?.FileHash)
                 .Where(static h => !string.IsNullOrWhiteSpace(h))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             var activeAlbumName = SelectedAlbum?.Name;
             var activeAlbumArtist = SelectedAlbum?.Artist;
             var pendingPlaceholders = _applicationViewModel.DownloadQueueItems
-                .Where(q => !string.IsNullOrWhiteSpace(q.ContentHash)
+                .Where(q => !string.IsNullOrWhiteSpace(q.AudioVersions.Values.FirstOrDefault()?.FileHash)
                             && (q.State == DownloadState.Pending || q.State == DownloadState.Downloading || q.State == DownloadState.Failed)
-                            && !existingHashes.Contains(q.ContentHash)
+                            && !existingHashes.Contains(q.AudioVersions.Values.FirstOrDefault()?.FileHash)
                             && (string.IsNullOrWhiteSpace(activeAlbumName)
                                 || (string.Equals(q.Album, activeAlbumName, StringComparison.OrdinalIgnoreCase)
                                     && (string.IsNullOrWhiteSpace(activeAlbumArtist)
                                         || string.Equals(q.Artist, activeAlbumArtist, StringComparison.OrdinalIgnoreCase)))))
                 .Select(q => new LibraryTrackItem
                 {
-                    TrackId = q.ContentHash,
+                    TrackId = q.AudioVersions.Values.FirstOrDefault()?.FileHash,
                     Title = q.Title,
                     Artist = q.Artist,
                     AlbumId = ResolveAlbumId(_allAlbumItems, q.Artist, q.Album),
                     AlbumName = q.Album,
                     CoverPath = string.Empty,
                     FilePath = string.Empty,
-                    ContentHash = q.ContentHash,
+                    AudioVersions = q.AudioVersions,
                     SourcePeerUserId = q.PeerUserId,
                     IsReleased = true,
                     Version = 1,
@@ -448,19 +448,19 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
                 .ToList();
 
             foreach (var queueItem in _applicationViewModel.DownloadQueueItems.Where(q => q.State == DownloadState.Done))
-                if (!string.IsNullOrWhiteSpace(queueItem.ContentHash))
-                    _downloadStateService.ClearRemoved(queueItem.ContentHash);
+                if (!string.IsNullOrWhiteSpace(queueItem.AudioVersions.Values.FirstOrDefault()?.FileHash))
+                    _downloadStateService.ClearRemoved(queueItem.AudioVersions.Values.FirstOrDefault()?.FileHash);
 
             var pendingHashes = pendingPlaceholders
-                .Select(p => p.ContentHash)
+                .Select(p => p.AudioVersions.Values.FirstOrDefault()?.FileHash)
                 .Where(static h => !string.IsNullOrWhiteSpace(h))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             var removedFiltered = removedTrackPlaceholders
                 .Where(p => string.IsNullOrWhiteSpace(activeAlbumName)
                             || string.Equals(p.AlbumName, activeAlbumName, StringComparison.OrdinalIgnoreCase))
-                .Where(p => string.IsNullOrWhiteSpace(p.ContentHash)
-                            || (!existingHashes.Contains(p.ContentHash) && !pendingHashes.Contains(p.ContentHash)))
+                .Where(p => string.IsNullOrWhiteSpace(p.AudioVersions.Values.FirstOrDefault()?.FileHash)
+                            || (!existingHashes.Contains(p.AudioVersions.Values.FirstOrDefault()?.FileHash) && !pendingHashes.Contains(p.AudioVersions.Values.FirstOrDefault()?.FileHash)))
                 .ToList();
 
             filteredTracks.AddRange(pendingPlaceholders);
@@ -483,7 +483,7 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
             if (_autoAnnouncedTrackIds.Add(track.TrackId))
                 _applicationViewModel.AnnounceTrackToNetwork(
                     track.TrackId,
-                    CryptoService.ComputeFileHash(track.FilePath),
+                    new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = CryptoService.ComputeFileHash(track.FilePath), FileSize = new System.IO.FileInfo(track.FilePath).Length } } },
                     track.Title,
                     track.Artist,
                     _allAlbumItems.FirstOrDefault(a => a.AlbumId == track.AlbumId)?.Name ?? string.Empty);

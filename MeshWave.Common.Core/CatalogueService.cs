@@ -24,7 +24,7 @@ public class CatalogueService : ICatalogueService
                     manifest.UserId,
                     state.TargetId,
                     state.TargetType,
-                    state.ContentHash,
+                    state.AudioVersions,
                     state.Metadata,
                     manifest.Snapshot.LastSequenceNumber,
                     manifest.Snapshot.Timestamp,
@@ -39,7 +39,7 @@ public class CatalogueService : ICatalogueService
                     manifest.UserId,
                     op.TargetId,
                     op.TargetType,
-                    op.ContentHash,
+                    op.AudioVersions,
                     op.Metadata,
                     op.SequenceNumber,
                     op.Timestamp,
@@ -79,7 +79,7 @@ public class CatalogueService : ICatalogueService
         return Task.FromResult(Enumerable.Empty<string>());
     }
 
-    private void UpdateEntry(string userId, string targetId, string targetType, string? contentHash, Dictionary<string, string> metadata, int sequenceNumber, DateTime timestamp, bool isDelete)
+    private void UpdateEntry(string userId, string targetId, string targetType, Dictionary<AudioQuality, AudioVersionInfo> audioVersions, Dictionary<string, string> metadata, int sequenceNumber, DateTime timestamp, bool isDelete)
     {
         if (string.IsNullOrWhiteSpace(targetId)) return;
         if (targetType != "Artist" && targetType != "Album" && targetType != "Track" && targetType != "Playlist") return;
@@ -101,7 +101,7 @@ public class CatalogueService : ICatalogueService
                     if (incomingVersion < existingEntry.Version)
                         return; // Reject older versions
 
-                    if (incomingVersion == existingEntry.Version && !string.Equals(existingEntry.ContentHash, contentHash, StringComparison.OrdinalIgnoreCase))
+                    if (incomingVersion == existingEntry.Version)
                         return; // Hash immutability: same version must have same hash
                 }
             }
@@ -127,10 +127,9 @@ public class CatalogueService : ICatalogueService
                     ArtistName = metadata.GetValueOrDefault("artist") ?? metadata.GetValueOrDefault("artistName"),
                     AlbumName = metadata.GetValueOrDefault("album") ?? metadata.GetValueOrDefault("albumName"),
                     Duration = ParseDuration(metadata.GetValueOrDefault("duration")),
-                    ContentHash = contentHash,
+                    AudioVersions = audioVersions,
                     ReleaseDate = ParseDate(metadata.GetValueOrDefault("releasedAt") ?? metadata.GetValueOrDefault("releaseDate")),
                     Genre = metadata.GetValueOrDefault("genre"),
-                    FileSize = long.TryParse(metadata.GetValueOrDefault("fileSize"), out var fs) ? fs : 0,
                     Version = int.TryParse(metadata.GetValueOrDefault("version") ?? metadata.GetValueOrDefault("trackVersion"), out var v) ? v : 1,
                     SequenceNumber = sequenceNumber,
                     Timestamp = timestamp
@@ -139,6 +138,7 @@ public class CatalogueService : ICatalogueService
             }
 
             // Update Peer Availability
+            foreach(var contentHash in audioVersions.Values.Select(v => v.FileHash))
             if (!string.IsNullOrEmpty(contentHash))
             {
                 var peers = _peerAvailability.GetOrAdd(contentHash, _ => new ConcurrentDictionary<string, bool>(StringComparer.OrdinalIgnoreCase));

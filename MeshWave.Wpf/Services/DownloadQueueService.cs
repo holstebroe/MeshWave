@@ -1,3 +1,4 @@
+using MeshWave.Common.Core.Models;
 using System.Collections;
 using System.Collections.ObjectModel;
 using MeshWave.Wpf.Mvvm;
@@ -18,7 +19,7 @@ public class DownloadQueueItem : ViewModelBase
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string? TrackId { get; set; }
     public string PeerUserId { get; set; } = string.Empty;
-    public string ContentHash { get; set; } = string.Empty;
+    public Dictionary<AudioQuality, AudioVersionInfo> AudioVersions { get; set; } = new();
     public string Title { get; set; } = string.Empty;
     public string Artist { get; set; } = string.Empty;
     public string Album { get; set; } = string.Empty;
@@ -88,7 +89,7 @@ public class DownloadQueueService
     {
         // Avoid duplicates by contentHash
         var existing = AllItems.FirstOrDefault(i =>
-            string.Equals(i.ContentHash, contentHash, StringComparison.OrdinalIgnoreCase)
+            string.Equals(i.AudioVersions.Values.FirstOrDefault()?.FileHash, contentHash, StringComparison.OrdinalIgnoreCase)
             && i.State != DownloadState.Failed);
         if (existing != null)
             return existing;
@@ -96,7 +97,7 @@ public class DownloadQueueService
         var item = new DownloadQueueItem
         {
             PeerUserId = peerUserId,
-            ContentHash = contentHash,
+            AudioVersions = new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = contentHash, FileSize = 0 } } },
             Title = title,
             Artist = artist,
             Album = album,
@@ -109,7 +110,7 @@ public class DownloadQueueService
 
     public bool IsQueued(string contentHash)
     {
-        return AllItems.Any(i => string.Equals(i.ContentHash, contentHash, StringComparison.OrdinalIgnoreCase)
+        return AllItems.Any(i => string.Equals(i.AudioVersions.Values.FirstOrDefault()?.FileHash, contentHash, StringComparison.OrdinalIgnoreCase)
                                && (i.State == DownloadState.Pending || i.State == DownloadState.Downloading));
     }
 

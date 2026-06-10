@@ -143,7 +143,17 @@ public static class ManifestSerializer
             Timestamp = Timestamp.FromDateTime(op.Timestamp.ToUniversalTime())
         };
 
-        if (op.ContentHash != null) proto.ContentHash = op.ContentHash;
+        if (op.AudioVersions != null)
+        {
+            foreach (var kv in op.AudioVersions)
+            {
+                proto.AudioVersions.Add((int)kv.Key, new ProtoAudioVersionInfo
+                {
+                    FileHash = kv.Value.FileHash,
+                    FileSize = kv.Value.FileSize
+                });
+            }
+        }
         if (op.Metadata != null)
             foreach (var kv in op.Metadata) proto.Metadata.Add(kv.Key, kv.Value);
 
@@ -158,7 +168,13 @@ public static class ManifestSerializer
             OperationType = (ManifestOperationType)proto.OperationType,
             TargetId = proto.TargetId,
             TargetType = proto.TargetType,
-            ContentHash = proto.HasContentHash ? proto.ContentHash : null,
+            AudioVersions = proto.AudioVersions.ToDictionary(
+                kv => (AudioQuality)kv.Key,
+                kv => new AudioVersionInfo
+                {
+                    FileHash = kv.Value.FileHash,
+                    FileSize = kv.Value.FileSize
+                }),
             SequenceNumber = proto.SequenceNumber,
             Signature = proto.Signature,
             Timestamp = proto.Timestamp.ToDateTime(),
@@ -214,7 +230,17 @@ public static class ManifestSerializer
             TargetId = entry.TargetId,
             TargetType = entry.TargetType
         };
-        if (entry.ContentHash != null) proto.ContentHash = entry.ContentHash;
+        if (entry.AudioVersions != null)
+        {
+            foreach (var kv in entry.AudioVersions)
+            {
+                proto.AudioVersions.Add((int)kv.Key, new ProtoAudioVersionInfo
+                {
+                    FileHash = kv.Value.FileHash,
+                    FileSize = kv.Value.FileSize
+                });
+            }
+        }
         if (entry.Metadata != null)
             foreach (var kv in entry.Metadata) proto.Metadata.Add(kv.Key, kv.Value);
         return proto;
@@ -226,7 +252,13 @@ public static class ManifestSerializer
         {
             TargetId = proto.TargetId,
             TargetType = proto.TargetType,
-            ContentHash = proto.HasContentHash ? proto.ContentHash : null,
+            AudioVersions = proto.AudioVersions.ToDictionary(
+                kv => (AudioQuality)kv.Key,
+                kv => new AudioVersionInfo
+                {
+                    FileHash = kv.Value.FileHash,
+                    FileSize = kv.Value.FileSize
+                }),
             Metadata = new Dictionary<string, string>(proto.Metadata)
         };
     }

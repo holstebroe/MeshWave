@@ -1,3 +1,4 @@
+using MeshWave.Common.Core.Models;
 using System.Text.Json;
 using MeshWave.Common.Core.Models;
 using MeshWave.Common.Core.P2P;
@@ -33,21 +34,21 @@ public class BrowseViewModelTests
                 new ManifestOperation
                 {
                     OperationId = "2", OperationType = ManifestOperationType.Create,
-                    TargetId = "track-a", TargetType = "Track", ContentHash = "hash-a",
+                    TargetId = "track-a", TargetType = "Track", AudioVersions = new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = "hash-a", FileSize = 0 } } },
                     Signature = "sig", SequenceNumber = 1,
                     Metadata = new Dictionary<string, string> { ["title"] = "A", ["album"] = "DeskPlastic" }
                 },
                 new ManifestOperation
                 {
                     OperationId = "3", OperationType = ManifestOperationType.Update,
-                    TargetId = "track-a", TargetType = "Track", ContentHash = "hash-a2",
+                    TargetId = "track-a", TargetType = "Track", AudioVersions = new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = "hash-a2", FileSize = 0 } } },
                     Signature = "sig", SequenceNumber = 2,
                     Metadata = new Dictionary<string, string> { ["title"] = "A (Remaster)", ["album"] = "DeskPlastic" }
                 },
                 new ManifestOperation
                 {
                     OperationId = "4", OperationType = ManifestOperationType.Create,
-                    TargetId = "track-b", TargetType = "Track", ContentHash = "hash-b",
+                    TargetId = "track-b", TargetType = "Track", AudioVersions = new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = "hash-b", FileSize = 0 } } },
                     Signature = "sig", SequenceNumber = 3,
                     Metadata = new Dictionary<string, string> { ["title"] = "B", ["album"] = "DeskPlastic" }
                 },
@@ -155,7 +156,7 @@ public class BrowseViewModelTests
                 new ManifestOperation
                 {
                     OperationId = "t1", OperationType = ManifestOperationType.Create,
-                    TargetId = "track-1", TargetType = "Track", ContentHash = "hash-1", Signature = "sig",
+                    TargetId = "track-1", TargetType = "Track", AudioVersions = new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = "hash-1", FileSize = 0 } } }, Signature = "sig",
                     Metadata = new Dictionary<string, string> { ["title"] = "Track 1", ["album"] = "Album A" }
                 },
                 new ManifestOperation
@@ -184,7 +185,7 @@ public class BrowseViewModelTests
         vm.DownloadPlaylistCommand.Execute(vm.Playlists[0]);
 
         Assert.Single(downloadQueue.AllItems);
-        Assert.Equal("hash-1", downloadQueue.AllItems[0].ContentHash);
+        Assert.Equal("hash-1", downloadQueue.AllItems[0].AudioVersions.Values.FirstOrDefault()?.FileHash);
     }
 
     [Fact]
@@ -319,7 +320,7 @@ public class BrowseViewModelTests
                 new ManifestOperation
                 {
                     OperationId = $"t-{userId}", OperationType = ManifestOperationType.Create,
-                    TargetId = trackId, TargetType = "Track", ContentHash = hash,
+                    TargetId = trackId, TargetType = "Track", AudioVersions = new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = hash, FileSize = 0 } } },
                     Signature = "sig", SequenceNumber = 1,
                     Metadata = new Dictionary<string, string> { ["title"] = trackId, ["album"] = "AlbumX" }
                 }

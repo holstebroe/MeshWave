@@ -175,9 +175,7 @@ public class PlayCountTests
             AppendPlayAt(remote, "track-e", DateTime.UtcNow, priv);
 
         // Append a Create op — not subject to play cap
-        _manager.AppendSignedOperation(
-            remote, ManifestOperationType.Create, "track-e", "Track",
-            "hash-abc", null, priv);
+        _manager.AppendSignedOperation(remote, ManifestOperationType.Create, "track-e", "Track", new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "hash-abc", FileSize = 0 } } }, null, priv);
 
         var added = _manager.MergeManifest(local, remote, pub);
 

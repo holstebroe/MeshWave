@@ -31,7 +31,7 @@ public class ManifestManagerTests
             OperationType = ManifestOperationType.Create,
             TargetId = "track-1",
             TargetType = "Track",
-            ContentHash = "hash123",
+            AudioVersions = new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "hash123", FileSize = 0 } } },
             Signature = "sig123"
         };
 
@@ -55,7 +55,7 @@ public class ManifestManagerTests
             OperationType = ManifestOperationType.Create,
             TargetId = "track-1",
             TargetType = "Track",
-            ContentHash = "hash123",
+            AudioVersions = new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "hash123", FileSize = 0 } } },
             Signature = "sig123"
         };
         var op2 = new ManifestOperation
@@ -64,7 +64,7 @@ public class ManifestManagerTests
             OperationType = ManifestOperationType.Create,
             TargetId = "track-2",
             TargetType = "Track",
-            ContentHash = "hash456",
+            AudioVersions = new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "hash456", FileSize = 0 } } },
             Signature = "sig456"
         };
 

@@ -55,9 +55,8 @@ public class LocalLibraryManager
                     OwnerUserId = "local",
                     Title = metadata.Title,
                     Duration = TimeSpan.FromSeconds(metadata.DurationSeconds),
-                    FileHash = ComputeStableId(fileInfo.FullName),
+                    AudioVersions = new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = ComputeStableId(fileInfo.FullName), FileSize = fileInfo.Length } } },
                     FilePath = fileInfo.FullName,
-                    FileSize = fileInfo.Length,
                     CoverImageHash = null,
                     Description = metadata.Artist,
                     Signature = "local"

@@ -337,10 +337,10 @@ public class ApplicationViewModel : ViewModelBase
     /// <summary>
     /// Announces a released track to the P2P network.
     /// </summary>
-    public void AnnounceTrackToNetwork(string trackId, string contentHash, string title, string artist, string album)
+    public void AnnounceTrackToNetwork(string trackId, Dictionary<AudioQuality, AudioVersionInfo> audioVersions, string title, string artist, string album)
     {
         if (!P2PIsConnected) return;
-        SyncOrchestrator.AnnounceTrack(trackId, contentHash, new Dictionary<string, string>
+        SyncOrchestrator.AnnounceTrack(trackId, audioVersions, new Dictionary<string, string>
         {
             ["title"] = SecurityLimits.Truncate(title, SecurityLimits.MaxTrackTitleLength),
             ["artist"] = SecurityLimits.Truncate(artist, SecurityLimits.MaxArtistNameLength),
@@ -669,7 +669,7 @@ public class ApplicationViewModel : ViewModelBase
                 if (!string.IsNullOrWhiteSpace(iconHash))
                     metadata["iconHash"] = iconHash;
 
-                SyncOrchestrator.AnnounceAlbum(album.AlbumId, coverHash, metadata);
+                SyncOrchestrator.AnnounceAlbum(album.AlbumId, new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = coverHash ?? string.Empty, FileSize = 0 } } }, metadata);
             }
 
             foreach (var track in tracks)
@@ -706,7 +706,7 @@ public class ApplicationViewModel : ViewModelBase
                 if (!string.IsNullOrWhiteSpace(iconHash))
                     metadata["iconHash"] = iconHash;
 
-                SyncOrchestrator.AnnounceTrack(track.TrackId, CryptoService.ComputeFileHash(track.FilePath), metadata);
+                SyncOrchestrator.AnnounceTrack(track.TrackId, new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = CryptoService.ComputeFileHash(track.FilePath), FileSize = 0 } } }, metadata);
             }
         }
         catch

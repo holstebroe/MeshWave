@@ -1,3 +1,4 @@
+using MeshWave.Common.Core.Models;
 using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
 using MeshWave.Synchronizer;
@@ -58,7 +59,7 @@ public class MeshIntegrationTests : IAsyncLifetime
     {
         var alice = await _context.CreatePeerAsync("Alice");
 
-        alice.AnnounceTrack("track-001", "abc123hash", new Dictionary<string, string>
+        alice.AnnounceTrack("track-001", new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = "abc123hash", FileSize = 0 } } }, new Dictionary<string, string>
         {
             ["title"] = "Test Song",
             ["artist"] = "Alice"
@@ -70,7 +71,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         Assert.Contains(manifest.Operations, op =>
             op.OperationType == ManifestOperationType.Create &&
             op.TargetId == "track-001" &&
-            op.ContentHash == "abc123hash" &&
+            op.AudioVersions.Values.FirstOrDefault()?.FileHash == "abc123hash" &&
             !string.IsNullOrWhiteSpace(op.Signature));
     }
 
@@ -112,7 +113,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         var mergeEvents = new List<ManifestMergedEventArgs>();
         bob.Orchestrator.ManifestMerged += (_, args) => mergeEvents.Add(args);
 
-        alice.AnnounceTrack("test-track", "hashvalue");
+        alice.AnnounceTrack("test-track", new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = "hashvalue", FileSize = 0 } } });
         await _context.ConnectAndSyncAllAsync();
 
         Assert.True(mergeEvents.Count >= 0, "ManifestMerged event mechanism is wired.");
@@ -157,7 +158,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         var hash = CryptoService.ComputeFileHash(firstMp3);
         var trackId = "test-track-deskplastic";
 
-        john.AnnounceTrack(trackId, hash, new Dictionary<string, string> { ["title"] = "DeskPlastic Track" });
+        john.AnnounceTrack(trackId, new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = hash, FileSize = 0 } } }, new Dictionary<string, string> { ["title"] = "DeskPlastic Track" });
 
         var johnContentIndex = new Dictionary<string, byte[]>();
         johnContentIndex[hash] = File.ReadAllBytes(firstMp3);
@@ -183,8 +184,8 @@ public class MeshIntegrationTests : IAsyncLifetime
         var john = await _context.CreatePeerAsync("John", testDataName: "John");
         var jane = await _context.CreatePeerAsync("Jane", testDataName: "Jane");
 
-        john.AnnounceTrack("john-track-1", "hash1", new Dictionary<string, string> { ["title"] = "Track 1" });
-        john.AnnounceTrack("john-track-2", "hash2", new Dictionary<string, string> { ["title"] = "Track 2" });
+        john.AnnounceTrack("john-track-1", new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = "hash1", FileSize = 0 } } }, new Dictionary<string, string> { ["title"] = "Track 1" });
+        john.AnnounceTrack("john-track-2", new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = "hash2", FileSize = 0 } } }, new Dictionary<string, string> { ["title"] = "Track 2" });
 
         await _context.ConnectAndSyncAllAsync();
 
@@ -194,7 +195,7 @@ public class MeshIntegrationTests : IAsyncLifetime
             return CountPublicTracks(manifest) == 2;
         });
 
-        john.AnnounceTrack("john-track-3", "hash3", new Dictionary<string, string> { ["title"] = "Track 3" });
+        john.AnnounceTrack("john-track-3", new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = "hash3", FileSize = 0 } } }, new Dictionary<string, string> { ["title"] = "Track 3" });
         await john.SyncAsync();
 
         await jane.WaitForConditionAsync(() =>
@@ -210,7 +211,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         var john = await _context.CreatePeerAsync("John");
         var jane = await _context.CreatePeerAsync("Jane");
 
-        jane.AnnounceTrack("jane-track-1", "jane-hash-1", new Dictionary<string, string> { ["title"] = "Jane Song" });
+        jane.AnnounceTrack("jane-track-1", new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = "jane-hash-1", FileSize = 0 } } }, new Dictionary<string, string> { ["title"] = "Jane Song" });
         await _context.ConnectAndSyncAllAsync();
 
         john.CommentOn("jane-track-1", "Love this track!");
@@ -281,7 +282,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         var john = await _context.CreatePeerAsync("John");
         var jane = await _context.CreatePeerAsync("Jane");
 
-        jane.AnnounceTrack("jane-track-1", "jane-hash-1");
+        jane.AnnounceTrack("jane-track-1", new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = "jane-hash-1", FileSize = 0 } } });
         await _context.ConnectAndSyncAllAsync();
 
         const int commentCount = 50;
@@ -304,7 +305,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         var alice = await _context.CreatePeerAsync("Alice");
         var bob = await _context.CreatePeerAsync("Bob");
 
-        alice.AnnounceTrack("main-track", "alice-hash-1");
+        alice.AnnounceTrack("main-track", new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = "alice-hash-1", FileSize = 0 } } });
         await _context.ConnectAndSyncAllAsync();
 
         _output.WriteLine("Alice is generating 1000 comments...");

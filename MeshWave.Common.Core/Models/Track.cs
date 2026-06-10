@@ -10,9 +10,8 @@ public class Track
     public required string OwnerUserId { get; set; }
     public required string Title { get; set; }
     public TimeSpan Duration { get; set; }
-    public required string FileHash { get; set; }
+    public Dictionary<AudioQuality, AudioVersionInfo> AudioVersions { get; set; } = new();
     public string? FilePath { get; set; }
-    public long FileSize { get; set; }
     public string? CoverImageHash { get; set; }
     public string? Description { get; set; }
     public int MetaVersion { get; set; } = 1;

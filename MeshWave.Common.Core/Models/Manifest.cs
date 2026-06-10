@@ -10,7 +10,7 @@ public class ManifestOperation
     public required ManifestOperationType OperationType { get; set; }
     public required string TargetId { get; set; }
     public required string TargetType { get; set; }
-    public string? ContentHash { get; set; }
+    public Dictionary<AudioQuality, AudioVersionInfo> AudioVersions { get; set; } = new();
     public int SequenceNumber { get; set; }
     public required string Signature { get; set; }
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
@@ -144,7 +144,7 @@ public class SnapshotStateEntry
 {
     public required string TargetId { get; set; }
     public required string TargetType { get; set; }
-    public string? ContentHash { get; set; }
+    public Dictionary<AudioQuality, AudioVersionInfo> AudioVersions { get; set; } = new();
     public Dictionary<string, string> Metadata { get; set; } = [];
 }
 

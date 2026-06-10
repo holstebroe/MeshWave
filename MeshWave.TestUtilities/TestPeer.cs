@@ -70,9 +70,9 @@ public class TestPeer : IAsyncDisposable
         return Orchestrator.GetPeerManifest(userId, streamType);
     }
 
-    public void AnnounceTrack(string trackId, string hash, Dictionary<string, string>? metadata = null)
+    public void AnnounceTrack(string trackId, Dictionary<AudioQuality, AudioVersionInfo>? audioVersions, Dictionary<string, string>? metadata = null)
     {
-        Orchestrator.AnnounceTrack(trackId, hash, metadata);
+        Orchestrator.AnnounceTrack(trackId, audioVersions, metadata);
     }
 
     public void BroadcastProfile(string displayName, bool isArtist, string bio = "", string? website = null, string? iconHash = null)

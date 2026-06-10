@@ -111,10 +111,7 @@ public class BrowseTrackItem : ViewModelBase
     public string ArtistUserId { get; set; } = string.Empty;
     public string ArtistDisplayName { get; set; } = string.Empty;
     public string Album { get; set; } = string.Empty;
-    public string? ContentHash { get; set; }
-    public string? CompressedContentHash { get; set; }
-    public long FileSize { get; set; }
-    public string FileSizeDisplay { get; set; } = string.Empty;
+    public Dictionary<AudioQuality, AudioVersionInfo> AudioVersions { get; set; } = new();
     public DateTime? ReleasedAt { get; set; }
     public string ReleasedAtDisplay => ReleasedAt.HasValue ? ReleasedAt.Value.ToLocalTime().ToString("MMM d, yyyy") : string.Empty;
 
@@ -175,7 +172,7 @@ public class BrowseTrackItem : ViewModelBase
         IsDownloaded ? "✅ Downloaded" :
         "⬇ Download";
 
-    public bool CanDownload => !IsLocal && !IsQueued && (!IsDownloaded || NeedsUpdate) && (!string.IsNullOrWhiteSpace(ContentHash) || !string.IsNullOrWhiteSpace(CompressedContentHash));
+    public bool CanDownload => !IsLocal && !IsQueued && (!IsDownloaded || NeedsUpdate) && AudioVersions.Count > 0;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -227,11 +224,11 @@ public class BrowseViewModel : ViewModelBase
         }, a => a != null);
 
         DownloadTrackCommand = new RelayCommand<BrowseTrackItem>(EnqueueTrackDownload,
-            t => t != null && (!string.IsNullOrWhiteSpace(t.ContentHash) || !string.IsNullOrWhiteSpace(t.CompressedContentHash)) && !t.IsQueued);
+            t => t != null && t.AudioVersions.Count > 0 && !t.IsQueued);
 
         PlayRemoteTrackCommand = new RelayCommand<BrowseTrackItem>(async t =>
         {
-            if (t == null || (string.IsNullOrWhiteSpace(t.ContentHash) && string.IsNullOrWhiteSpace(t.CompressedContentHash))) return;
+            if (t == null || t.AudioVersions.Count == 0) return;
             if (_sync == null) return;
 
             // Trigger download + stream playback
@@ -272,7 +269,7 @@ public class BrowseViewModel : ViewModelBase
             // Attempt to resolve duration if the manifest provides it, or use a 3-min default for remote
             var duration = TimeSpan.FromMinutes(3);
             onPlayRemote?.Invoke(t.Title, t.ArtistDisplayName, duration, tempPath, length);
-        }, t => t != null && (!string.IsNullOrWhiteSpace(t.ContentHash) || !string.IsNullOrWhiteSpace(t.CompressedContentHash)));
+        }, t => t != null && t.AudioVersions.Count > 0);
 
         DownloadArtistCommand = new RelayCommand<BrowseArtistItem>(a =>
         {
@@ -311,7 +308,7 @@ public class BrowseViewModel : ViewModelBase
             if (item == null) return;
             _downloadQueue.Remove(item);
             var track = Tracks.FirstOrDefault(t =>
-                string.Equals(t.ContentHash, item.ContentHash, StringComparison.OrdinalIgnoreCase) || string.Equals(t.CompressedContentHash, item.ContentHash, StringComparison.OrdinalIgnoreCase));
+                t.AudioVersions.Values.Any(v => string.Equals(v.FileHash, item.AudioVersions.Values.FirstOrDefault()?.FileHash, StringComparison.OrdinalIgnoreCase)));
             if (track != null)
             {
                 track.IsQueued = false;
@@ -600,20 +597,20 @@ public class BrowseViewModel : ViewModelBase
                 if (entity.Metadata.TryGetValue("releasedAt", out var rat) && DateTime.TryParse(rat, out var dt))
                     releasedAt = dt;
 
-                var compressedHash = entity.Metadata.GetValueOrDefault("compressedHash");
 
-                var queueItem = (!string.IsNullOrWhiteSpace(entity.ContentHash) || !string.IsNullOrWhiteSpace(compressedHash))
-                    ? _downloadQueue.AllItems.FirstOrDefault(i => string.Equals(i.ContentHash, entity.ContentHash, StringComparison.OrdinalIgnoreCase) || string.Equals(i.ContentHash, compressedHash, StringComparison.OrdinalIgnoreCase))
+
+                var queueItem = (entity.AudioVersions.Count > 0)
+                    ? _downloadQueue.AllItems.FirstOrDefault(i => entity.AudioVersions.Values.Any(v => string.Equals(i.AudioVersions.Values.FirstOrDefault()?.FileHash, v.FileHash, StringComparison.OrdinalIgnoreCase)))
                     : null;
                 var isQueued = queueItem != null && (queueItem.State == DownloadState.Pending || queueItem.State == DownloadState.Downloading);
                 var isDownloaded = queueItem?.State == DownloadState.Done;
-                if (!isDownloaded && _sync != null && (!string.IsNullOrWhiteSpace(entity.ContentHash) || !string.IsNullOrWhiteSpace(compressedHash)))
-                    isDownloaded = (!string.IsNullOrWhiteSpace(entity.ContentHash) && await _sync.IsContentAvailableLocallyAsync(entity.ContentHash)) || (!string.IsNullOrWhiteSpace(compressedHash) && await _sync.IsContentAvailableLocallyAsync(compressedHash));
+                if (!isDownloaded && _sync != null && (entity.AudioVersions.Count > 0))
+                    isDownloaded = entity.AudioVersions.Values.Any(v => _sync.IsContentAvailableLocallyAsync(v.FileHash).Result);
 
                 var isLocal = _sync?.LocalManifest != null && string.Equals(manifest.UserId, _sync.LocalManifest.UserId, StringComparison.OrdinalIgnoreCase);
 
                 var needsUpdate = false;
-                if (!isLocal && (!string.IsNullOrWhiteSpace(entity.ContentHash) || !string.IsNullOrWhiteSpace(compressedHash)))
+                if (!isLocal && (entity.AudioVersions.Count > 0))
                 {
                     var downloaded = downloadedEntries.FirstOrDefault(e => string.Equals(e.TrackId, entity.TargetId, StringComparison.OrdinalIgnoreCase));
                     if (downloaded != null)
@@ -622,7 +619,7 @@ public class BrowseViewModel : ViewModelBase
                         {
                             needsUpdate = true;
                         }
-                        else if (!string.Equals(downloaded.ContentHash, entity.ContentHash, StringComparison.OrdinalIgnoreCase) && !string.Equals(downloaded.ContentHash, compressedHash, StringComparison.OrdinalIgnoreCase))
+                        else if (!entity.AudioVersions.Values.Any(v => string.Equals(v.FileHash, downloaded.AudioVersions.Values.FirstOrDefault()?.FileHash, StringComparison.OrdinalIgnoreCase)))
                             needsUpdate = true;
                     }
                 }
@@ -636,10 +633,7 @@ public class BrowseViewModel : ViewModelBase
                     ArtistUserId = manifest.UserId,
                     ArtistDisplayName = artistName,
                     Album = album,
-                    ContentHash = entity.ContentHash,
-                    CompressedContentHash = compressedHash,
-                    FileSize = fileSize,
-                    FileSizeDisplay = FormatFileSize(fileSize),
+                    AudioVersions = entity.AudioVersions,
                     ReleasedAt = releasedAt,
                     IconPath = _sync?.UserRepository?.GetUserIconPath(entity.TargetId) ?? string.Empty,
                     IsQueued = isQueued,
@@ -736,11 +730,11 @@ public class BrowseViewModel : ViewModelBase
     // ─────────────────────────────────────────────────────────────────────
     private void EnqueueTrackDownload(BrowseTrackItem? track)
     {
-        if (track == null || (string.IsNullOrWhiteSpace(track.ContentHash) && string.IsNullOrWhiteSpace(track.CompressedContentHash))) return;
+        if (track == null || track.AudioVersions.Count == 0) return;
 
         var item = _downloadQueue.Enqueue(
             track.ArtistUserId,
-            string.IsNullOrWhiteSpace(track.ContentHash) ? track.CompressedContentHash! : track.ContentHash, // temporary, will update in async block
+            track.AudioVersions.Values.First().FileHash, // temporary, will update in async block
             track.Title,
             track.ArtistDisplayName,
             track.Album,
@@ -760,7 +754,7 @@ public class BrowseViewModel : ViewModelBase
             if (string.IsNullOrWhiteSpace(targetHash)) return;
 
             // Update queued item hash
-            ExecuteOnUiOrCurrent(() => item.ContentHash = targetHash);
+            ExecuteOnUiOrCurrent(() => { if (item.AudioVersions.ContainsKey(MeshWave.Common.Core.Models.AudioQuality.Original)) item.AudioVersions[MeshWave.Common.Core.Models.AudioQuality.Original].FileHash = targetHash; else item.AudioVersions[MeshWave.Common.Core.Models.AudioQuality.Original] = new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = targetHash, FileSize = 0 }; });
 
             ExecuteOnUiOrCurrent(() => item.State = DownloadState.Downloading);
 
@@ -831,8 +825,8 @@ public class BrowseViewModel : ViewModelBase
 
     private async Task<string?> ResolveBestQualityHashAsync(BrowseTrackItem track)
     {
-        var originalHash = track.ContentHash;
-        var compressedHash = track.CompressedContentHash;
+        var originalHash = track.AudioVersions.ContainsKey(MeshWave.Common.Core.Models.AudioQuality.Original) ? track.AudioVersions[MeshWave.Common.Core.Models.AudioQuality.Original].FileHash : null;
+        var compressedHash = track.AudioVersions.ContainsKey(MeshWave.Common.Core.Models.AudioQuality.Compressed) ? track.AudioVersions[MeshWave.Common.Core.Models.AudioQuality.Compressed].FileHash : null;
 
         if (string.IsNullOrWhiteSpace(originalHash) && string.IsNullOrWhiteSpace(compressedHash)) return null;
         if (string.IsNullOrWhiteSpace(originalHash)) return compressedHash;
@@ -933,7 +927,7 @@ public class BrowseViewModel : ViewModelBase
     private class ResolvedEntity
     {
         public string TargetId { get; set; } = string.Empty;
-        public string? ContentHash { get; set; }
+        public Dictionary<AudioQuality, AudioVersionInfo> AudioVersions { get; set; } = new();
         public Dictionary<string, string> Metadata { get; set; } = [];
         public int SequenceNumber { get; set; }
         public DateTime Timestamp { get; set; }
@@ -951,7 +945,7 @@ public class BrowseViewModel : ViewModelBase
                     resolved[state.TargetId] = new ResolvedEntity
                     {
                         TargetId = state.TargetId,
-                        ContentHash = state.ContentHash,
+                        AudioVersions = state.AudioVersions,
                         Metadata = new Dictionary<string, string>(state.Metadata, StringComparer.OrdinalIgnoreCase),
                         SequenceNumber = manifest.Snapshot.LastSequenceNumber,
                         Timestamp = manifest.Snapshot.Timestamp,
@@ -975,7 +969,7 @@ public class BrowseViewModel : ViewModelBase
             resolved[op.TargetId] = new ResolvedEntity
             {
                 TargetId = op.TargetId,
-                ContentHash = op.ContentHash,
+                AudioVersions = op.AudioVersions,
                 Metadata = new Dictionary<string, string>(op.Metadata, StringComparer.OrdinalIgnoreCase),
                 SequenceNumber = op.SequenceNumber,
                 Timestamp = op.Timestamp,

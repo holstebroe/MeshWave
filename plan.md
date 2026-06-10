@@ -1,0 +1,1 @@
+We are getting close. We need to complete step 4 to add AudioVersions to `ManifestOperation` and `SnapshotStateEntry`, which will fix the remaining compile errors in `BrowseViewModel` and `CommunityViewModel`. I will mark step 3 as complete and move to step 4.

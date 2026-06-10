@@ -338,10 +338,10 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// <summary>
     /// Requests content bytes from a currently known peer by content hash.
     /// </summary>
-    public async Task<bool> IsContentAvailableLocallyAsync(string contentHash)
+    public async Task<bool> IsContentAvailableLocallyAsync(string audioVersions)
     {
-        if (string.IsNullOrWhiteSpace(contentHash)) return false;
-        var peers = await CatalogueService.GetPeersForContentAsync(contentHash);
+        if (string.IsNullOrWhiteSpace(audioVersions)) return false;
+        var peers = await CatalogueService.GetPeersForContentAsync(audioVersions);
         return peers.Any(uid => string.Equals(uid, Identity?.UserId, StringComparison.OrdinalIgnoreCase));
     }
 
@@ -992,7 +992,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             ManifestOperationType.Play,
             SecurityLimits.Truncate(trackId, SecurityLimits.MaxTargetIdLength),
             "Track",
-            contentHash: null,
+            audioVersions: null,
             new Dictionary<string, string>
             {
                 ["title"]  = SecurityLimits.Truncate(title,  SecurityLimits.MaxTrackTitleLength),
@@ -1008,7 +1008,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// Automatically stamps <c>releasedAt</c> (ISO-8601 UTC) into the metadata dictionary if not already set.
     /// Call this when the user marks a track as released and wants peers to discover it.
     /// </summary>
-    public void AnnounceTrack(string trackId, string contentHash, Dictionary<string, string>? metadata = null)
+    public void AnnounceTrack(string trackId, Dictionary<AudioQuality, AudioVersionInfo>? audioVersions, Dictionary<string, string>? metadata = null)
     {
         var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Create));
         if (manifest == null || Identity == null) return;
@@ -1016,14 +1016,14 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         meta.TryAdd("releasedAt", DateTime.UtcNow.ToString("O"));
 
         var title = meta.GetValueOrDefault("title") ?? trackId;
-        _logger.Info("Announcing track release: '{0}' (ID: {1}, Hash: {2})", title, trackId, contentHash);
+        _logger.Info("Announcing track release: '{0}' (ID: {1}, Versions: {2})", title, trackId, audioVersions);
 
         _manifestManager.AppendSignedOperation(
             manifest,
             ManifestOperationType.Create,
             trackId,
             "Track",
-            contentHash,
+            audioVersions,
             meta,
             Identity.PrivateKeyPem);
         PersistAndFanoutLocalManifest(manifest.StreamType);
@@ -1033,7 +1033,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// Announces an album release to the network.
     /// Automatically stamps <c>releasedAt</c> (ISO-8601 UTC) into the metadata dictionary if not already set.
     /// </summary>
-    public void AnnounceAlbum(string albumId, string? contentHash, Dictionary<string, string>? metadata = null)
+    public void AnnounceAlbum(string albumId, Dictionary<AudioQuality, AudioVersionInfo>? audioVersions, Dictionary<string, string>? metadata = null)
     {
         var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Create));
         if (manifest == null || Identity == null) return;
@@ -1048,7 +1048,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             ManifestOperationType.Create,
             albumId,
             "Album",
-            contentHash,
+            audioVersions,
             meta,
             Identity.PrivateKeyPem);
         PersistAndFanoutLocalManifest(manifest.StreamType);
@@ -1070,7 +1070,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             ManifestOperationType.Follow,
             SecurityLimits.Truncate(targetUserId, SecurityLimits.MaxTargetIdLength),
             "User",
-            contentHash: null,
+            audioVersions: null,
             metadata: null,
             Identity.PrivateKeyPem);
         PersistAndFanoutLocalManifest(manifest.StreamType);
@@ -1091,7 +1091,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             ManifestOperationType.FriendAdd,
             SecurityLimits.Truncate(targetUserId, SecurityLimits.MaxTargetIdLength),
             "User",
-            contentHash: null,
+            audioVersions: null,
             metadata: null,
             Identity.PrivateKeyPem);
         PersistAndFanoutLocalManifest(manifest.StreamType);
@@ -1112,7 +1112,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             ManifestOperationType.FriendRemove,
             SecurityLimits.Truncate(targetUserId, SecurityLimits.MaxTargetIdLength),
             "User",
-            contentHash: null,
+            audioVersions: null,
             metadata: null,
             Identity.PrivateKeyPem);
         PersistAndFanoutLocalManifest(manifest.StreamType);
@@ -1133,7 +1133,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             ManifestOperationType.GroupJoin,
             SecurityLimits.Truncate(groupId, SecurityLimits.MaxTargetIdLength),
             "Group",
-            contentHash: null,
+            audioVersions: null,
             metadata: null,
             Identity.PrivateKeyPem);
         PersistAndFanoutLocalManifest(manifest.StreamType);
@@ -1154,7 +1154,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             ManifestOperationType.GroupLeave,
             SecurityLimits.Truncate(groupId, SecurityLimits.MaxTargetIdLength),
             "Group",
-            contentHash: null,
+            audioVersions: null,
             metadata: null,
             Identity.PrivateKeyPem);
         PersistAndFanoutLocalManifest(manifest.StreamType);
@@ -1175,7 +1175,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             ManifestOperationType.Unfollow,
             SecurityLimits.Truncate(targetUserId, SecurityLimits.MaxTargetIdLength),
             "User",
-            contentHash: null,
+            audioVersions: null,
             metadata: null,
             Identity.PrivateKeyPem);
         PersistAndFanoutLocalManifest(manifest.StreamType);
@@ -1201,7 +1201,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             ManifestOperationType.Comment,
             SecurityLimits.Truncate(trackId, SecurityLimits.MaxTargetIdLength),
             "Track",
-            contentHash: null,
+            audioVersions: null,
             metadata: meta,
             Identity.PrivateKeyPem);
 
@@ -1224,7 +1224,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             ManifestOperationType.CommentDelete,
             SecurityLimits.Truncate(trackId, SecurityLimits.MaxTargetIdLength),
             "Track",
-            contentHash: null,
+            audioVersions: null,
             metadata: new Dictionary<string, string>
             {
                 ["commentOperationId"] = SecurityLimits.Truncate(commentOperationId, SecurityLimits.MaxOperationIdLength)
@@ -1248,7 +1248,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             ManifestOperationType.Like,
             SecurityLimits.Truncate(trackId, SecurityLimits.MaxTargetIdLength),
             "Track",
-            contentHash: null,
+            audioVersions: null,
             metadata: null,
             Identity.PrivateKeyPem);
         PersistAndFanoutLocalManifest(manifest.StreamType);
@@ -1269,7 +1269,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             ManifestOperationType.Unlike,
             SecurityLimits.Truncate(trackId, SecurityLimits.MaxTargetIdLength),
             "Track",
-            contentHash: null,
+            audioVersions: null,
             metadata: null,
             Identity.PrivateKeyPem);
         PersistAndFanoutLocalManifest(manifest.StreamType);
@@ -1301,7 +1301,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             ManifestOperationType.Profile,
             Identity.UserId,
             "User",
-            contentHash: bannerImageHash,
+            audioVersions: string.IsNullOrEmpty(bannerImageHash) ? null : new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = bannerImageHash, FileSize = 0 } } },
             meta,
             Identity.PrivateKeyPem);
         PersistAndFanoutLocalManifest(manifest.StreamType);
@@ -1325,7 +1325,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             {
                 _logger.Debug("Updating profile for {0} from merged manifest", remote.UserId);
                 UserRepository?.UpdateProfile(remote.UserId, profileOp.Metadata);
-                var iconHash = profileOp.ContentHash;
+                var iconHash = profileOp.AudioVersions.Values.FirstOrDefault()?.FileHash;
                 if (!string.IsNullOrWhiteSpace(iconHash))
                     _ = Task.Run(async () =>
                     {
@@ -1346,7 +1346,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                 {
                     var iconHash = op.Metadata.GetValueOrDefault("iconHash");
                     if (string.IsNullOrWhiteSpace(iconHash) && op.TargetType == "User")
-                        iconHash = op.ContentHash;
+                        iconHash = op.AudioVersions.Values.FirstOrDefault()?.FileHash;
 
                     if (!string.IsNullOrWhiteSpace(iconHash))
                         _ = Task.Run(async () =>
@@ -1358,12 +1358,12 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                             }
                             catch { }
                         });
-                    else if (!string.IsNullOrWhiteSpace(op.ContentHash) && (op.Metadata.ContainsKey("isIcon") && op.Metadata["isIcon"] == "True"))
+                    else if (op.AudioVersions.Count > 0 && (op.Metadata.ContainsKey("isIcon") && op.Metadata["isIcon"] == "True"))
                         _ = Task.Run(async () =>
                         {
                             try
                             {
-                                var bytes = await RequestContentAsync(remote.UserId, op.ContentHash!);
+                                var bytes = await RequestContentAsync(remote.UserId, op.AudioVersions.Values.FirstOrDefault()?.FileHash!);
                                 if (bytes != null && UserRepository != null) UserRepository.SaveUserIcon(op.TargetId, bytes);
                             }
                             catch { }

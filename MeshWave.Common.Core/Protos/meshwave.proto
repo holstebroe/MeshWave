@@ -4,6 +4,16 @@ option csharp_namespace = "MeshWave.Common.Core.Serialization.Protobuf";
 
 import "google/protobuf/timestamp.proto";
 
+enum ProtoAudioQuality {
+    AUDIO_QUALITY_ORIGINAL = 0;
+    AUDIO_QUALITY_COMPRESSED = 1;
+}
+
+message ProtoAudioVersionInfo {
+    string file_hash = 1;
+    int64 file_size = 2;
+}
+
 enum ProtoManifestStreamType {
     CONTENT = 0;
     INTERACTION = 1;
@@ -37,7 +47,7 @@ message ProtoManifestOperation {
     ProtoManifestOperationType operation_type = 2;
     string target_id = 3;
     string target_type = 4;
-    optional string content_hash = 5;
+    map<int32, ProtoAudioVersionInfo> audio_versions = 10;
     int32 sequence_number = 6;
     string signature = 7;
     google.protobuf.Timestamp timestamp = 8;
@@ -47,7 +57,7 @@ message ProtoManifestOperation {
 message ProtoSnapshotStateEntry {
     string target_id = 1;
     string target_type = 2;
-    optional string content_hash = 3;
+    map<int32, ProtoAudioVersionInfo> audio_versions = 11;
     map<string, string> metadata = 4;
 }
 

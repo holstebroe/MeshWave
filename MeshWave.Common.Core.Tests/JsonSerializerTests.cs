@@ -59,9 +59,8 @@ public class JsonSerializerTests
             OwnerUserId = "user-1",
             Title = "Test Song",
             Duration = TimeSpan.FromSeconds(180),
-            FileHash = "abc123",
+            AudioVersions = new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "abc123", FileSize = 1024000 } } },
             FilePath = @"C:\\Music\\Test Song.mp3",
-            FileSize = 1024000,
             Signature = "sig123"
         };
 
@@ -84,9 +83,8 @@ public class JsonSerializerTests
             OwnerUserId = "user-1",
             Title = "Test Song",
             Duration = TimeSpan.FromSeconds(180),
-            FileHash = "abc123",
+            AudioVersions = new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "abc123", FileSize = 1024000 } } },
             FilePath = @"C:\\Music\\Test Song.mp3",
-            FileSize = 1024000,
             Signature = "sig123"
         };
         var json = JsonSerializer.SerializeTrack(track);
@@ -188,7 +186,7 @@ public class JsonSerializerTests
                     OperationType = ManifestOperationType.Create,
                     TargetId = "track-1",
                     TargetType = "Track",
-                    ContentHash = "hash123",
+                    AudioVersions = new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "hash123", FileSize = 0 } } },
                     SequenceNumber = 0,
                     Signature = "sig123"
                 }

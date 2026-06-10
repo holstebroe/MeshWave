@@ -12,10 +12,9 @@ public class CatalogueEntry
     public string? ArtistName { get; set; }
     public string? AlbumName { get; set; }
     public TimeSpan? Duration { get; set; }
-    public string? ContentHash { get; set; }
+    public Dictionary<AudioQuality, AudioVersionInfo> AudioVersions { get; set; } = new();
     public DateTime? ReleaseDate { get; set; }
     public string? Genre { get; set; }
-    public long FileSize { get; set; }
     public int Version { get; set; }
     public int SequenceNumber { get; set; }
     public DateTime Timestamp { get; set; }

@@ -1,3 +1,4 @@
+using MeshWave.Common.Core.Models;
 using MeshWave.TestUtilities;
 using MeshWave.Wpf.Services;
 using MeshWave.Wpf.ViewModels;
@@ -29,7 +30,7 @@ public class CommunityViewModelIntegrationTests : IAsyncLifetime
         var aliceCommunityVm = new CommunityViewModel(alice.Orchestrator, settingsService: new SettingsService(alice.AppDataRoot));
 
         // Bob releases a track
-        bob.AnnounceTrack("bob-track-1", "hash-bob-1", new Dictionary<string, string> { ["title"] = "Bob's Hit" });
+        bob.AnnounceTrack("bob-track-1", new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = "hash-bob-1", FileSize = 0 } } }, new Dictionary<string, string> { ["title"] = "Bob's Hit" });
         await _context.ConnectAndSyncAllAsync();
 
         // Alice finds Bob in Discover
@@ -58,7 +59,7 @@ public class CommunityViewModelIntegrationTests : IAsyncLifetime
         var charlieCommunityVm = new CommunityViewModel(charlie.Orchestrator, settingsService: new SettingsService(charlie.AppDataRoot));
 
         // Alice releases a track
-        alice.AnnounceTrack("alice-track-1", "hash-alice-1", new Dictionary<string, string> { ["title"] = "Alice's Hit" });
+        alice.AnnounceTrack("alice-track-1", new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = "hash-alice-1", FileSize = 0 } } }, new Dictionary<string, string> { ["title"] = "Alice's Hit" });
         await _context.ConnectAndSyncAllAsync();
 
         // Bob follows Alice and sees the track

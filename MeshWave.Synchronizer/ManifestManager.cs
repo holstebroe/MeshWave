@@ -37,7 +37,7 @@ public class ManifestManager(ILogger logger)
         ManifestOperationType type,
         string targetId,
         string targetType,
-        string? contentHash,
+        Dictionary<AudioQuality, AudioVersionInfo>? audioVersions,
         Dictionary<string, string>? metadata,
         string privateKeyPem)
     {
@@ -49,7 +49,7 @@ public class ManifestManager(ILogger logger)
                 OperationType = type,
                 TargetId = targetId,
                 TargetType = targetType,
-                ContentHash = contentHash,
+                AudioVersions = audioVersions ?? new(),
                 SequenceNumber = GetNextSequenceNumber(manifest),
                 Metadata = metadata ?? [],
                 Timestamp = DateTime.UtcNow,
@@ -158,7 +158,7 @@ public class ManifestManager(ILogger logger)
                         {
                             TargetId = op.TargetId,
                             TargetType = op.TargetType,
-                            ContentHash = op.ContentHash,
+                            AudioVersions = op.AudioVersions,
                             Metadata = new Dictionary<string, string>(op.Metadata)
                         };
                         break;
@@ -246,7 +246,7 @@ public class ManifestManager(ILogger logger)
         // EntityStates
         foreach (var ent in snapshot.EntityStates.OrderBy(e => e.TargetId).ThenBy(e => e.TargetType))
         {
-            sb.Append("e:").Append(ent.TargetId).Append(':').Append(ent.TargetType).Append(':').Append(ent.ContentHash ?? string.Empty).Append('{');
+            sb.Append("e:").Append(ent.TargetId).Append(':').Append(ent.TargetType).Append(':').Append(ent.AudioVersions.Values.FirstOrDefault()?.FileHash ?? string.Empty).Append('{');
             foreach (var kv in ent.Metadata.OrderBy(k => k.Key)) sb.Append(kv.Key).Append('=').Append(kv.Value).Append(',');
             sb.Append("};");
         }
@@ -479,7 +479,7 @@ public class ManifestManager(ILogger logger)
             logger.Debug("Discarding operation {0} in stream {1} for user {2}: TargetType exceeds max length.", op.SequenceNumber, manifest.StreamType, manifest.UserId);
             return false;
         }
-        if (op.ContentHash?.Length > SecurityLimits.MaxContentHashLength)
+        if (op.AudioVersions.Values.Any(v => v.FileHash.Length > SecurityLimits.MaxContentHashLength))
         {
             logger.Debug("Discarding operation {0} in stream {1} for user {2}: ContentHash exceeds max length.", op.SequenceNumber, manifest.StreamType, manifest.UserId);
             return false;
@@ -518,7 +518,10 @@ public class ManifestManager(ILogger logger)
         sb.Append('|');
         sb.Append(op.TargetType);
         sb.Append('|');
-        sb.Append(op.ContentHash ?? string.Empty);
+        foreach (var kv in op.AudioVersions.OrderBy(k => k.Key))
+        {
+            sb.Append((int)kv.Key).Append(':').Append(kv.Value.FileHash).Append(':').Append(kv.Value.FileSize).Append(';');
+        }
         sb.Append('|');
         sb.Append(op.SequenceNumber);
         sb.Append('|');
@@ -583,7 +586,7 @@ public class ManifestManager(ILogger logger)
             sb.Append(':');
             sb.Append(entity.TargetType);
             sb.Append(':');
-            sb.Append(entity.ContentHash ?? string.Empty);
+            sb.Append(entity.AudioVersions.Values.FirstOrDefault()?.FileHash ?? string.Empty);
             sb.Append(':');
             // Sorted Metadata
             foreach (var kv in entity.Metadata.OrderBy(k => k.Key))

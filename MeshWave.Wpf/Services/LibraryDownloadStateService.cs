@@ -1,3 +1,4 @@
+using MeshWave.Common.Core.Models;
 using System.IO;
 using System.Text.Json;
 using MeshWave.Common.Core;
@@ -28,13 +29,13 @@ public sealed class LibraryDownloadStateService
 
     public void MarkRemoved(RemovedLibraryTrackEntry entry)
     {
-        if (string.IsNullOrWhiteSpace(entry.ContentHash))
+        if (entry.AudioVersions.Count == 0)
             return;
 
         lock (Sync)
         {
             var entries = LoadInternal();
-            entries.RemoveAll(e => string.Equals(e.ContentHash, entry.ContentHash, StringComparison.OrdinalIgnoreCase));
+            entries.RemoveAll(e => string.Equals(e.AudioVersions.Values.FirstOrDefault()?.FileHash, entry.AudioVersions.Values.FirstOrDefault()?.FileHash, StringComparison.OrdinalIgnoreCase));
             entries.Add(entry);
             SaveInternal(entries);
             _removedCache = entries;
@@ -49,7 +50,7 @@ public sealed class LibraryDownloadStateService
         lock (Sync)
         {
             var entries = LoadInternal();
-            var removed = entries.RemoveAll(e => string.Equals(e.ContentHash, contentHash, StringComparison.OrdinalIgnoreCase));
+            var removed = entries.RemoveAll(e => string.Equals(e.AudioVersions.Values.FirstOrDefault()?.FileHash, contentHash, StringComparison.OrdinalIgnoreCase));
             if (removed > 0)
             {
                 SaveInternal(entries);
@@ -114,7 +115,7 @@ public sealed class LibraryDownloadStateService
             entries.Add(new DownloadedTrackEntry
             {
                 TrackId = trackId,
-                ContentHash = contentHash,
+                AudioVersions = new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = contentHash, FileSize = 0 } } },
                 SequenceNumber = sequenceNumber
             });
             SaveDownloadedInternal(entries);
@@ -162,14 +163,14 @@ public sealed class LibraryDownloadStateService
 public sealed class DownloadedTrackEntry
 {
     public required string TrackId { get; set; }
-    public required string ContentHash { get; set; }
+    public Dictionary<AudioQuality, AudioVersionInfo> AudioVersions { get; set; } = new();
     public int SequenceNumber { get; set; }
     public DateTime DownloadedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
 public sealed class RemovedLibraryTrackEntry
 {
-    public string ContentHash { get; set; } = string.Empty;
+    public Dictionary<AudioQuality, AudioVersionInfo> AudioVersions { get; set; } = new();
     public string TrackId { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public string Artist { get; set; } = string.Empty;

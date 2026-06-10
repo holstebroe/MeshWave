@@ -14,8 +14,7 @@ public class ManifestManagerSigningTests
         var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
         var manifest = _manager.CreateManifest("user-1");
 
-        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create,
-            "track-1", "Track", "hash123", null, privateKey);
+        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create, "track-1", "Track", new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "hash123", FileSize = 0 } } }, null, privateKey);
 
         Assert.Single(manifest.Operations);
         Assert.Equal(0, manifest.Operations[0].SequenceNumber);
@@ -28,10 +27,8 @@ public class ManifestManagerSigningTests
         var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
         var manifest = _manager.CreateManifest("user-1");
 
-        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create,
-            "track-1", "Track", "hash123", null, privateKey);
-        _manager.AppendSignedOperation(manifest, ManifestOperationType.Update,
-            "track-1", "Track", "hash456", null, privateKey);
+        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create, "track-1", "Track", new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "hash123", FileSize = 0 } } }, null, privateKey);
+        _manager.AppendSignedOperation(manifest, ManifestOperationType.Update, "track-1", "Track", new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "hash456", FileSize = 0 } } }, null, privateKey);
 
         Assert.True(_manager.VerifyManifest(manifest, publicKey));
     }
@@ -42,11 +39,10 @@ public class ManifestManagerSigningTests
         var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
         var manifest = _manager.CreateManifest("user-1");
 
-        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create,
-            "track-1", "Track", "hash123", null, privateKey);
+        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create, "track-1", "Track", new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "hash123", FileSize = 0 } } }, null, privateKey);
 
         // Tamper with the content hash after signing
-        manifest.Operations[0].ContentHash = "tampered-hash";
+        manifest.Operations[0].AudioVersions = new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "tampered-hash", FileSize = 0 } } };
 
         Assert.False(_manager.VerifyManifest(manifest, publicKey));
     }
@@ -58,8 +54,7 @@ public class ManifestManagerSigningTests
         var (_, otherPublicKey) = CryptoService.GenerateKeyPair();
         var manifest = _manager.CreateManifest("user-1");
 
-        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create,
-            "track-1", "Track", "hash123", null, privateKey);
+        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create, "track-1", "Track", new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "hash123", FileSize = 0 } } }, null, privateKey);
 
         Assert.False(_manager.VerifyManifest(manifest, otherPublicKey));
     }
@@ -70,10 +65,8 @@ public class ManifestManagerSigningTests
         var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
         var manifest = _manager.CreateManifest("user-1");
 
-        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create,
-            "track-1", "Track", "hash123", null, privateKey);
-        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create,
-            "track-2", "Track", "hash456", null, privateKey);
+        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create, "track-1", "Track", new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "hash123", FileSize = 0 } } }, null, privateKey);
+        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create, "track-2", "Track", new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "hash456", FileSize = 0 } } }, null, privateKey);
 
         // Swap sequence numbers to simulate tampering
         manifest.Operations[0].SequenceNumber = 1;
@@ -90,10 +83,8 @@ public class ManifestManagerSigningTests
         var local = _manager.CreateManifest("user-2");
 
         var remote = _manager.CreateManifest("user-2");
-        _manager.AppendSignedOperation(remote, ManifestOperationType.Create,
-            "track-1", "Track", "hash123", null, privateKey);
-        _manager.AppendSignedOperation(remote, ManifestOperationType.Create,
-            "track-2", "Track", "hash456", null, privateKey);
+        _manager.AppendSignedOperation(remote, ManifestOperationType.Create, "track-1", "Track", new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "hash123", FileSize = 0 } } }, null, privateKey);
+        _manager.AppendSignedOperation(remote, ManifestOperationType.Create, "track-2", "Track", new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "hash456", FileSize = 0 } } }, null, privateKey);
 
         var added = _manager.MergeManifest(local, remote, publicKey);
 
@@ -107,8 +98,7 @@ public class ManifestManagerSigningTests
         var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
 
         var manifest = _manager.CreateManifest("user-2");
-        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create,
-            "track-1", "Track", "hash123", null, privateKey);
+        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create, "track-1", "Track", new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "hash123", FileSize = 0 } } }, null, privateKey);
 
         // Merge the same manifest into itself (no new ops)
         var added = _manager.MergeManifest(manifest, manifest, publicKey);
@@ -123,12 +113,9 @@ public class ManifestManagerSigningTests
         var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
         var manifest = _manager.CreateManifest("user-delta");
 
-        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create,
-            "track-0", "Track", "hash0", null, privateKey);
-        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create,
-            "track-1", "Track", "hash1", null, privateKey);
-        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create,
-            "track-2", "Track", "hash2", null, privateKey);
+        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create, "track-0", "Track", new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "hash0", FileSize = 0 } } }, null, privateKey);
+        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create, "track-1", "Track", new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "hash1", FileSize = 0 } } }, null, privateKey);
+        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create, "track-2", "Track", new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "hash2", FileSize = 0 } } }, null, privateKey);
 
         // Create a delta manifest containing only seq 1 and 2
         var delta = new Manifest

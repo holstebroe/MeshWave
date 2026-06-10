@@ -32,8 +32,7 @@ public class PeerManifestStoreTests : IDisposable
     private Manifest BuildSignedManifest(string userId, string privateKeyPem)
     {
         var manifest = _manager.CreateManifest(userId);
-        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create,
-            "track-1", "Track", "hash-abc", null, privateKeyPem);
+        _manager.AppendSignedOperation(manifest, ManifestOperationType.Create, "track-1", "Track", new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "hash-abc", FileSize = 0 } } }, null, privateKeyPem);
         return manifest;
     }
 

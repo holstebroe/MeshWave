@@ -1,4 +1,5 @@
 using MeshWave.Common.Core.Models;
+using MeshWave.Common.Core.Models;
 using MeshWave.Synchronizer;
 using MeshWave.TestUtilities;
 using MeshWave.Wpf.Services;
@@ -84,11 +85,11 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         Assert.DoesNotContain(john.UserId, janeBrowseViewModel.Tracks.Select(t => t.ArtistUserId));
 
         // Action: John releases two tracks
-        john.AnnounceTrack("john-track-1", "hash-1", new Dictionary<string, string> { ["title"] = "John's First" });
-        john.AnnounceTrack("john-track-2", "hash-2", new Dictionary<string, string> { ["title"] = "John's Second" });
+        john.AnnounceTrack("john-track-1", new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = "hash-1", FileSize = 0 } } }, new Dictionary<string, string> { ["title"] = "John's First" });
+        john.AnnounceTrack("john-track-2", new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = "hash-2", FileSize = 0 } } }, new Dictionary<string, string> { ["title"] = "John's Second" });
 
         // Action: Jane releases one track
-        jane.AnnounceTrack("jane-track-1", "hash-jane-1", new Dictionary<string, string> { ["title"] = "Jane's First" });
+        jane.AnnounceTrack("jane-track-1", new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = "hash-jane-1", FileSize = 0 } } }, new Dictionary<string, string> { ["title"] = "Jane's First" });
 
         await _context.ConnectAndSyncAllAsync();
 
@@ -128,8 +129,8 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         }
 
         // Action: Jane releases 2 more tracks
-        jane.AnnounceTrack("jane-track-2", "hash-jane-2", new Dictionary<string, string> { ["title"] = "Jane's Second" });
-        jane.AnnounceTrack("jane-track-3", "hash-jane-3", new Dictionary<string, string> { ["title"] = "Jane's Third" });
+        jane.AnnounceTrack("jane-track-2", new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = "hash-jane-2", FileSize = 0 } } }, new Dictionary<string, string> { ["title"] = "Jane's Second" });
+        jane.AnnounceTrack("jane-track-3", new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = "hash-jane-3", FileSize = 0 } } }, new Dictionary<string, string> { ["title"] = "Jane's Third" });
 
         await _context.ConnectAndSyncAllAsync();
 
@@ -163,8 +164,8 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
 
         var johnBrowseViewModel = new BrowseViewModel(john.Orchestrator, settingsService: new SettingsService(john.AppDataRoot));
 
-        john.AnnounceTrack("track-rock", "hash-rock", new Dictionary<string, string> { ["title"] = "Rock Song", ["album"] = "Rock Album" });
-        jane.AnnounceTrack("track-pop", "hash-pop", new Dictionary<string, string> { ["title"] = "Pop Song", ["album"] = "Pop Album" });
+        john.AnnounceTrack("track-rock", new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = "hash-rock", FileSize = 0 } } }, new Dictionary<string, string> { ["title"] = "Rock Song", ["album"] = "Rock Album" });
+        jane.AnnounceTrack("track-pop", new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = "hash-pop", FileSize = 0 } } }, new Dictionary<string, string> { ["title"] = "Pop Song", ["album"] = "Pop Album" });
 
         await _context.ConnectAndSyncAllAsync();
 
@@ -191,7 +192,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
 
         var janeBrowseViewModel = new BrowseViewModel(jane.Orchestrator, settingsService: new SettingsService(jane.AppDataRoot));
 
-        john.AnnounceTrack(trackId, hash, new Dictionary<string, string> { ["title"] = "Downloadable Track" });
+        john.AnnounceTrack(trackId, new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = hash, FileSize = 0 } } }, new Dictionary<string, string> { ["title"] = "Downloadable Track" });
 
         await _context.ConnectAndSyncAllAsync();
 
@@ -239,7 +240,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
 
         var janeBrowseViewModel = new BrowseViewModel(jane.Orchestrator, settingsService: janeSettings);
 
-        john.AnnounceTrack(trackId, originalHash, new Dictionary<string, string>
+        john.AnnounceTrack(trackId, new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = originalHash, FileSize = 0 } }, { AudioQuality.Compressed, new AudioVersionInfo { FileHash = compressedHash, FileSize = 0 } } }, new Dictionary<string, string>
         {
             ["title"] = "Multi-Quality Track",
             ["compressedHash"] = compressedHash
@@ -306,7 +307,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         // Actually, if John announces Original, Jane thinks John has Original.
         // If we want Jane to think John ONLY has Compressed, John needs to announce ONLY Compressed.
 
-        john.AnnounceTrack(trackId, compressedHash, new Dictionary<string, string>
+        john.AnnounceTrack(trackId, new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Compressed, new AudioVersionInfo { FileHash = compressedHash, FileSize = 0 } } }, new Dictionary<string, string>
         {
             ["title"] = "Fallback Track",
             ["compressedHash"] = compressedHash

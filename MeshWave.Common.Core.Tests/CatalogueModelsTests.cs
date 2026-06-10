@@ -38,7 +38,7 @@ public class CatalogueModelsTests
             ArtistName = "Artist X",
             AlbumName = "Album Y",
             Duration = TimeSpan.FromMinutes(3),
-            ContentHash = "hash123",
+            AudioVersions = new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "hash123", FileSize = 0 } } },
             ReleaseDate = new DateTime(2023, 1, 1),
             Genre = "Rock",
             SequenceNumber = 5,
@@ -52,7 +52,7 @@ public class CatalogueModelsTests
         Assert.Equal("Artist X", entry.ArtistName);
         Assert.Equal("Album Y", entry.AlbumName);
         Assert.Equal(TimeSpan.FromMinutes(3), entry.Duration);
-        Assert.Equal("hash123", entry.ContentHash);
+        Assert.Equal("hash123", entry.AudioVersions.Values.FirstOrDefault()?.FileHash);
         Assert.Equal(2023, entry.ReleaseDate.Value.Year);
         Assert.Equal("Rock", entry.Genre);
         Assert.Equal(5, entry.SequenceNumber);

@@ -52,7 +52,7 @@ public class CommunityViewModel : ViewModelBase
                 RefreshDiscoverResults(SearchQuery);
         });
         RefreshFeedCommand = new RelayCommand(_ => RefreshFeed());
-        AddToLibraryCommand = new RelayCommand<ReleaseFeedItem>(AddToLibrary, r => r != null && !string.IsNullOrWhiteSpace(r.ContentHash));
+        AddToLibraryCommand = new RelayCommand<ReleaseFeedItem>(AddToLibrary, r => r != null && !string.IsNullOrWhiteSpace(r.AudioVersions.Values.FirstOrDefault()?.FileHash));
         ToggleLikeCommand = new RelayCommand<ReleaseFeedItem>(ToggleLike, item => item != null);
         BrowseArtistCommand = new RelayCommand<CommunityUserItem>(u =>
         {
@@ -238,7 +238,7 @@ public class CommunityViewModel : ViewModelBase
                         : $"{op.TargetType} release",
                 TargetType = op.TargetType,
                 TargetId = op.TargetId,
-                ContentHash = op.ContentHash,
+                AudioVersions = op.AudioVersions,
                 ReleasedAt = op.Metadata.TryGetValue("releasedAt", out var releasedAt)
                     && DateTime.TryParse(releasedAt, out var parsedRelease)
                     ? parsedRelease
@@ -399,7 +399,7 @@ public class CommunityViewModel : ViewModelBase
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(item.ContentHash))
+        if (string.IsNullOrWhiteSpace(item.AudioVersions.Values.FirstOrDefault()?.FileHash))
         {
             SearchStatus = $"Cannot add \"{item.Title}\" yet: no content hash is available from the announcing peer.";
             return;
@@ -416,7 +416,7 @@ public class CommunityViewModel : ViewModelBase
 
         try
         {
-            var bytes = await _sync.RequestContentAsync(item.ArtistUserId, item.ContentHash);
+            var bytes = await _sync.RequestContentAsync(item.ArtistUserId, item.AudioVersions.Values.FirstOrDefault()?.FileHash);
             if (bytes == null || bytes.Length == 0)
             {
                 var report = _sync.LastConnectionAttemptReport;
@@ -651,10 +651,10 @@ public class CommunityViewModel : ViewModelBase
 
     private DownloadQueueItem? TryQueueFeedDownload(ReleaseFeedItem item)
     {
-        if (_downloadQueue == null || string.IsNullOrWhiteSpace(item.ContentHash))
+        if (_downloadQueue == null || string.IsNullOrWhiteSpace(item.AudioVersions.Values.FirstOrDefault()?.FileHash))
             return null;
 
-        var existing = _downloadQueue.FirstOrDefault(q => string.Equals(q.ContentHash, item.ContentHash, StringComparison.OrdinalIgnoreCase));
+        var existing = _downloadQueue.FirstOrDefault(q => string.Equals(q.AudioVersions.Values.FirstOrDefault()?.FileHash, item.AudioVersions.Values.FirstOrDefault()?.FileHash, StringComparison.OrdinalIgnoreCase));
         if (existing != null)
         {
             if (existing.State == DownloadState.Failed)
@@ -669,7 +669,7 @@ public class CommunityViewModel : ViewModelBase
         var queueItem = new DownloadQueueItem
         {
             PeerUserId = item.ArtistUserId,
-            ContentHash = item.ContentHash,
+            AudioVersions = item.AudioVersions,
             Title = item.Title,
             Artist = item.ArtistDisplayName,
             Album = item.Metadata.GetValueOrDefault("album") ?? "Community",
@@ -698,7 +698,7 @@ public class CommunityViewModel : ViewModelBase
 
             try
             {
-                var bytes = await _sync.RequestContentAsync(item.PeerUserId, item.ContentHash);
+                var bytes = await _sync.RequestContentAsync(item.PeerUserId, item.AudioVersions.Values.FirstOrDefault()?.FileHash);
                 if (bytes == null || bytes.Length == 0)
                 {
                     var details = _sync.LastConnectionAttemptReport?.BuildUserFacingSummary() ?? "Peer did not return content.";
@@ -1007,7 +1007,7 @@ public class ReleaseFeedItem : ViewModelBase
     public string Title { get; set; } = string.Empty;
     public string TargetType { get; set; } = string.Empty;   // "Track" or "Album"
     public string TargetId { get; set; } = string.Empty;
-    public string? ContentHash { get; set; }
+    public Dictionary<AudioQuality, AudioVersionInfo> AudioVersions { get; set; } = new();
     public Dictionary<string, string> Metadata { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public DateTime ReleasedAt { get; set; }
     public string ReleasedAtDisplay => ReleasedAt.ToLocalTime().ToString("MMM d, yyyy");

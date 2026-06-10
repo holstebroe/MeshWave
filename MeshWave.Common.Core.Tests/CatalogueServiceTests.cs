@@ -20,7 +20,7 @@ public class CatalogueServiceTests
                     OperationType = ManifestOperationType.Create,
                     TargetId = "track1",
                     TargetType = "Track",
-                    ContentHash = "hash1",
+                    AudioVersions = new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "hash1", FileSize = 1024 } } },
                     SequenceNumber = 1,
                     Signature = "sig",
                     Metadata = new Dictionary<string, string> { { "title", "Song A" }, { "artist", "Artist X" }, { "fileSize", "1024" } }
@@ -35,7 +35,7 @@ public class CatalogueServiceTests
         Assert.Equal("Song A", entry.Title);
         Assert.Equal("Artist X", entry.ArtistName);
         Assert.Equal("user1", entry.OwnerUserId);
-        Assert.Equal(1024, entry.FileSize);
+        Assert.Equal(1024, entry.AudioVersions.Values.FirstOrDefault()?.FileSize);
 
         var peers = await service.GetPeersForContentAsync("hash1");
         Assert.Contains("user1", peers);
@@ -150,7 +150,7 @@ public class CatalogueServiceTests
                     {
                         TargetId = "album1",
                         TargetType = "Album",
-                        ContentHash = "ahash",
+                        AudioVersions = new System.Collections.Generic.Dictionary<MeshWave.Common.Core.Models.AudioQuality, MeshWave.Common.Core.Models.AudioVersionInfo> { { MeshWave.Common.Core.Models.AudioQuality.Original, new MeshWave.Common.Core.Models.AudioVersionInfo { FileHash = "ahash", FileSize = 0 } } },
                         Metadata = new Dictionary<string, string> { { "title", "Snapshot Album" } }
                     }
                 }
