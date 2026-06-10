@@ -32,7 +32,7 @@ public partial class LibraryViewModel : ViewModelBase
     public LibraryViewModel(ApplicationViewModel applicationViewModel, bool isMyMusicLibrary = false)
     {
         _applicationViewModel = applicationViewModel;
-        _settingsService = applicationViewModel.ServiceSettings;
+        _settingsService = applicationViewModel.SettingsService;
         IsMyMusicLibrary = isMyMusicLibrary;
         CancelImportCommand = new RelayCommand(_ => CancelImport(), _ => IsImporting);
         SyncAlbumCommand = new RelayCommand(_ => SyncSelectedAlbum(), _ => CanSyncToNetwork);

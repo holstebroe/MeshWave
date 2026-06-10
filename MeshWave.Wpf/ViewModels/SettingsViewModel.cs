@@ -62,11 +62,11 @@ public class SettingsViewModel : ViewModelBase
     private long _freeDriveBytes;
     private long _usedDriveBytes;
 
-    public SettingsViewModel(Action<WaveformStyle>? onWaveformStyleSaved = null, SyncOrchestrator? sync = null)
+    public SettingsViewModel(SettingsService settingsService, Action<WaveformStyle>? onWaveformStyleSaved = null, SyncOrchestrator? sync = null)
     {
         _onWaveformStyleSaved = onWaveformStyleSaved;
         _sync = sync;
-        _settingsService = new SettingsService();
+        _settingsService = settingsService;
         _profileService = new UserProfileService();
         LoadSettings();
 

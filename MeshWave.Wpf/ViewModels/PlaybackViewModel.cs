@@ -49,14 +49,17 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     private readonly MetadataLookupRepository? _metadataLookup;
     private readonly Dictionary<string, HashSet<string>> _importedCommentOperationIdsByPeer = new(StringComparer.OrdinalIgnoreCase);
     private bool _isCurrentTrackLikedByMe;
+    private readonly SettingsService _settingsService;
 
     public PlaybackViewModel(
+        SettingsService settingsService,
         SyncOrchestrator? sync = null,
         UserRepository? userRepository = null,
         MetadataLookupRepository? metadataLookup = null,
         Func<IAudioPlaybackService>? audioServiceFactory = null,
         UserProfileService? profileService = null)
     {
+        _settingsService = settingsService;
         _sync = sync;
         _userRepository = userRepository;
         _metadataLookup = metadataLookup;
@@ -114,7 +117,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             if (string.IsNullOrWhiteSpace(_currentFilePath))
                 return false;
 
-            var settings = new SettingsService().LoadSettings();
+            var settings = _settingsService.LoadSettings();
             if (string.IsNullOrWhiteSpace(settings.BaseFolder))
                 return false;
 

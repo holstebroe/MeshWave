@@ -14,8 +14,6 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        var settingsService = new SettingsService();
-        DataContext = new ApplicationViewModel(settingsService: settingsService);
     }
 
     private ApplicationViewModel ViewModel => (ApplicationViewModel)DataContext;

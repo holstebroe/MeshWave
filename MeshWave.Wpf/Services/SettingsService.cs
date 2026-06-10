@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using MeshWave.Common.Core;
@@ -12,16 +13,12 @@ namespace MeshWave.Wpf.Services;
 /// </summary>
 public class SettingsService
 {
-    private static readonly string DefaultBaseFolder = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.MyMusic),
-        "MeshWave");
-
     private AppSettings? _currentSettings;
     private readonly string _appDataRoot;
 
-    public SettingsService(string? appDataRoot = null)
+    public SettingsService(string appDataRoot)
     {
-        _appDataRoot = appDataRoot ?? MeshWaveEnvironment.GetAppDataRoot();
+        _appDataRoot = appDataRoot;
     }
 
     public virtual AppSettings LoadSettings()
@@ -54,7 +51,7 @@ public class SettingsService
         _currentSettings.Storage ??= new StorageSettings();
         _currentSettings.Logging ??= new LoggingSettings();
 
-        if (string.IsNullOrWhiteSpace(_currentSettings.BaseFolder)) _currentSettings.BaseFolder = DefaultBaseFolder;
+        Debug.Assert(_currentSettings.BaseFolder != null);
 
         ApplyLaunchOverrides(_currentSettings);
         return _currentSettings;
@@ -116,7 +113,7 @@ public class SettingsService
 
         return new AppSettings
         {
-            BaseFolder = string.IsNullOrWhiteSpace(installerBaseFolder) ? DefaultBaseFolder : installerBaseFolder,
+            BaseFolder = string.IsNullOrWhiteSpace(installerBaseFolder) ? MeshWaveEnvironment.GetAppDataRoot() : installerBaseFolder,
             Theme = "Dark",
             AudioDevice = "Default",
             SupportedExtensions = [".mp3", ".flac", ".wav", ".ogg", ".m4a"],

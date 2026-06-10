@@ -30,8 +30,11 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         var john = await _context.CreatePeerAsync("John");
         var jane = await _context.CreatePeerAsync("Jane");
 
-        var johnBrowseViewModel = new BrowseViewModel(john.Orchestrator, settingsService: new SettingsService(john.AppDataRoot));
-        var janeBrowseViewModel = new BrowseViewModel(jane.Orchestrator, settingsService: new SettingsService(jane.AppDataRoot));
+        var johnSettingsService = new SettingsService(john.AppDataRoot);
+        var janeSettingsService = new SettingsService(jane.AppDataRoot);
+
+        var johnBrowseViewModel = new BrowseViewModel(johnSettingsService, john.Orchestrator, new DownloadQueueService());
+        var janeBrowseViewModel = new BrowseViewModel(janeSettingsService, jane.Orchestrator, new DownloadQueueService());
 
         // Verify that john and jane are connected
         await john.WaitForConditionAsync(() => john.Orchestrator.ConnectedPeerCount > 0);
@@ -161,7 +164,8 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         var john = await _context.CreatePeerAsync("John");
         var jane = await _context.CreatePeerAsync("Jane");
 
-        var johnBrowseViewModel = new BrowseViewModel(john.Orchestrator, settingsService: new SettingsService(john.AppDataRoot));
+        var johnBrowseViewModel = new BrowseViewModel(new SettingsService(john.AppDataRoot), john.Orchestrator, new DownloadQueueService());
+        var janeBrowseViewModel = new BrowseViewModel(new SettingsService(jane.AppDataRoot), jane.Orchestrator, new DownloadQueueService());
 
         john.AnnounceTrack("track-rock", "hash-rock", new Dictionary<string, string> { ["title"] = "Rock Song", ["album"] = "Rock Album" });
         jane.AnnounceTrack("track-pop", "hash-pop", new Dictionary<string, string> { ["title"] = "Pop Song", ["album"] = "Pop Album" });
@@ -189,7 +193,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         var john = await _context.CreatePeerAsync("John", testDataName: "John", contentProvider: h => h == hash ? content : null);
         var jane = await _context.CreatePeerAsync("Jane");
 
-        var janeBrowseViewModel = new BrowseViewModel(jane.Orchestrator, settingsService: new SettingsService(jane.AppDataRoot));
+        var janeBrowseViewModel = new BrowseViewModel(new SettingsService(jane.AppDataRoot), jane.Orchestrator, new DownloadQueueService());
 
         john.AnnounceTrack(trackId, hash, new Dictionary<string, string> { ["title"] = "Downloadable Track" });
 
@@ -237,7 +241,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         settings.Playback.PreferredAudioQuality = "Compressed";
         janeSettings.SaveSettings(settings);
 
-        var janeBrowseViewModel = new BrowseViewModel(jane.Orchestrator, settingsService: janeSettings);
+        var janeBrowseViewModel = new BrowseViewModel(janeSettings, jane.Orchestrator, new DownloadQueueService());
 
         john.AnnounceTrack(trackId, originalHash, new Dictionary<string, string>
         {
@@ -289,7 +293,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         settings.Playback.PreferredAudioQuality = "Original";
         janeSettings.SaveSettings(settings);
 
-        var janeBrowseViewModel = new BrowseViewModel(jane.Orchestrator, settingsService: janeSettings);
+        var janeBrowseViewModel = new BrowseViewModel(janeSettings, jane.Orchestrator, new DownloadQueueService());
 
         // John announces track but note that he only provides compressed content.
         // To simulate a network where the original is absent, we announce both.

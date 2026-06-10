@@ -16,8 +16,12 @@ public static class MeshWaveEnvironment
     public const string P2PUploadLimitEnvironmentVariable = "MESHWAVE_P2P_UPLOAD_LIMIT";
     public const string P2PDownloadLimitEnvironmentVariable = "MESHWAVE_P2P_DOWNLOAD_LIMIT";
 
-    public static string DefaultAppDataRoot => Path.Combine(
+    private static string DefaultAppDataRoot => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "MeshWave");
+
+    public static readonly string DefaultMyMusicBaseFolder = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.MyMusic),
         "MeshWave");
 
     public static string GetAppDataRoot()
