@@ -96,8 +96,20 @@ public class LocalLibraryManagerTests : IDisposable
         var artistIdContent = File.ReadAllText(artistIdPath);
         var albumIdContent = File.ReadAllText(albumIdPath);
 
-        Assert.True(Guid.TryParse(artistIdContent, out _));
-        Assert.True(Guid.TryParse(albumIdContent, out _));
+        var artistJsonDoc = System.Text.Json.JsonDocument.Parse(artistIdContent);
+        var albumJsonDoc = System.Text.Json.JsonDocument.Parse(albumIdContent);
+
+        Assert.True(artistJsonDoc.RootElement.TryGetProperty("EntityId", out var artistEntityIdProp));
+        Assert.Equal("local", artistEntityIdProp.GetString());
+
+        Assert.True(artistJsonDoc.RootElement.TryGetProperty("Id", out var artistIdProp));
+        Assert.True(Guid.TryParse(artistIdProp.GetString(), out _));
+
+        Assert.True(albumJsonDoc.RootElement.TryGetProperty("EntityId", out var albumEntityIdProp));
+        Assert.False(string.IsNullOrWhiteSpace(albumEntityIdProp.GetString()));
+
+        Assert.True(albumJsonDoc.RootElement.TryGetProperty("Id", out var albumIdProp));
+        Assert.True(Guid.TryParse(albumIdProp.GetString(), out _));
 
         // File should be hidden
         Assert.True(File.GetAttributes(artistIdPath).HasFlag(FileAttributes.Hidden));
