@@ -339,9 +339,11 @@ public class LocalLibraryManager
         var cacheFolder = Path.Combine(albumFolder, ".cache");
         var commentsFolder = Path.Combine(albumFolder, ".comments");
 
+        var albumId = ComputeStableId($"{metadata.Artist}|{metadata.Album}");
+
         Directory.CreateDirectory(albumFolder);
-        EnsureIdFile(artistFolder);
-        EnsureIdFile(albumFolder);
+        EnsureIdFile(artistFolder, "local");
+        EnsureIdFile(albumFolder, albumId);
         Directory.CreateDirectory(cacheFolder);
         Directory.CreateDirectory(commentsFolder);
 
@@ -378,15 +380,33 @@ public class LocalLibraryManager
             var idFilePath = Path.Combine(folderPath, ".meshwave-id");
             if (File.Exists(idFilePath))
             {
-                var id = File.ReadAllText(idFilePath).Trim();
-                if (!string.IsNullOrWhiteSpace(id)) return id;
+                var content = File.ReadAllText(idFilePath).Trim();
+                if (!string.IsNullOrWhiteSpace(content))
+                {
+                    try
+                    {
+                        using var jsonDoc = JsonDocument.Parse(content);
+                        if (jsonDoc.RootElement.TryGetProperty("Id", out var idElement))
+                        {
+                            return idElement.GetString();
+                        }
+                    }
+                    catch
+                    {
+                        // Fallback for older .meshwave-id string-only files
+                        if (Guid.TryParse(content, out _))
+                        {
+                            return content;
+                        }
+                    }
+                }
             }
         }
         catch { }
         return null;
     }
 
-    private static void EnsureIdFile(string folderPath)
+    private static void EnsureIdFile(string folderPath, string entityId)
     {
         try
         {
@@ -395,7 +415,9 @@ public class LocalLibraryManager
             if (!File.Exists(idFilePath))
             {
                 var id = Guid.NewGuid().ToString();
-                File.WriteAllText(idFilePath, id);
+                var payload = new { EntityId = entityId, Id = id };
+                var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(idFilePath, json);
                 File.SetAttributes(idFilePath, File.GetAttributes(idFilePath) | FileAttributes.Hidden);
             }
         }
