@@ -65,8 +65,6 @@ public class JsonSerializer
 
     public static Manifest? DeserializeManifest(string json)
     {
-        if (json.Length > SecurityLimits.MaxMessageBytes)
-            throw new System.IO.InvalidDataException($"Rejected message: length {json.Length} exceeds limit.");
         return System.Text.Json.JsonSerializer.Deserialize<Manifest>(json, Options);
     }
 

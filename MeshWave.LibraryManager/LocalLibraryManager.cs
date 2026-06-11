@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Microsoft.Data.Sqlite;
 using MeshWave.Common.Core.Models;
 using MeshWave.Common.Core.Storage;
 using TagLib;
@@ -28,14 +27,6 @@ public class LocalLibraryManager
 
     public static IReadOnlyList<string> SupportedExtensions => DefaultExtensionList;
 
-    private SqliteConnection CreateDbConnection()
-    {
-        var dbPath = Path.Combine(_basePath, "library_index.db");
-        var connection = new SqliteConnection($"Data Source={dbPath};Pooling=False;");
-        connection.Open();
-        return connection;
-    }
-
     /// <summary>
     /// Indexes music files in the local library. Reads cached metadata when available.
     /// </summary>
@@ -46,25 +37,7 @@ public class LocalLibraryManager
 
         if (!Directory.Exists(_basePath)) return;
 
-        var indexPath = Path.Combine(_basePath, "library_index.json");
-        var libraryIndex = new LibraryIndex();
-        if (File.Exists(indexPath))
-        {
-            try
-            {
-                var json = File.ReadAllText(indexPath);
-                libraryIndex = JsonSerializer.Deserialize<LibraryIndex>(json) ?? new LibraryIndex();
-            }
-            catch { }
-        }
-
-        var indexUpdated = false;
         var albumDict = new Dictionary<string, Album>(StringComparer.OrdinalIgnoreCase);
-
-        using var connection = CreateDbConnection();
-        InitializeDatabase(connection);
-
-        var activeTrackIds = new HashSet<string>();
         foreach (var file in EnumerateSupportedFiles(_basePath, _supportedExtensions))
             try
             {
@@ -73,48 +46,8 @@ public class LocalLibraryManager
                 EnsureCoverCached(file);
 
                 var fileInfo = new FileInfo(file);
-                var albumFolder = fileInfo.DirectoryName ?? string.Empty;
-                var fileName = fileInfo.Name;
-
-                var meshwaveId = TryReadIdFile(albumFolder);
                 var trackId = ComputeStableId(fileInfo.FullName);
                 var albumId = ComputeStableId($"{metadata.Artist}|{metadata.Album}");
-
-                if (!string.IsNullOrWhiteSpace(meshwaveId))
-                {
-                    if (libraryIndex.Albums.TryGetValue(meshwaveId, out var albumInfo))
-                    {
-                        albumId = albumInfo.AlbumId;
-                        if (albumInfo.Tracks.TryGetValue(fileName, out var oldTrackId))
-                        {
-                            trackId = oldTrackId;
-                        }
-                        else
-                        {
-                            albumInfo.Tracks[fileName] = trackId;
-                            indexUpdated = true;
-                        }
-
-                        if (!string.Equals(albumInfo.KnownPath, albumFolder, StringComparison.OrdinalIgnoreCase))
-                        {
-                            albumInfo.KnownPath = albumFolder;
-                            indexUpdated = true;
-                        }
-                    }
-                    else
-                    {
-                        var newAlbumInfo = new AlbumIndexInfo
-                        {
-                            AlbumId = albumId,
-                            KnownPath = albumFolder
-                        };
-                        newAlbumInfo.Tracks[fileName] = trackId;
-                        libraryIndex.Albums[meshwaveId] = newAlbumInfo;
-                        indexUpdated = true;
-                    }
-                }
-
-
                 var track = new Track
                 {
                     TrackId = trackId,
@@ -151,85 +84,6 @@ public class LocalLibraryManager
             }
 
         _albums.AddRange(albumDict.Values);
-
-        if (indexUpdated)
-        {
-            try
-            {
-                var json = JsonSerializer.Serialize(libraryIndex, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(indexPath, json);
-            }
-            catch { }
-        }
-        using var transaction = connection.BeginTransaction();
-        try
-        {
-            using var clearCmd = connection.CreateCommand();
-            clearCmd.Transaction = transaction;
-            clearCmd.CommandText = "DELETE FROM TrackIndex";
-            clearCmd.ExecuteNonQuery();
-
-            using var insertCmd = connection.CreateCommand();
-            insertCmd.Transaction = transaction;
-            insertCmd.CommandText = @"
-                INSERT INTO TrackIndex (TrackId, Title, Artist, Album, FilePath)
-                VALUES ($TrackId, $Title, $Artist, $Album, $FilePath)";
-
-            var pTrackId = insertCmd.CreateParameter();
-            pTrackId.ParameterName = "$TrackId";
-            insertCmd.Parameters.Add(pTrackId);
-
-            var pTitle = insertCmd.CreateParameter();
-            pTitle.ParameterName = "$Title";
-            insertCmd.Parameters.Add(pTitle);
-
-            var pArtist = insertCmd.CreateParameter();
-            pArtist.ParameterName = "$Artist";
-            insertCmd.Parameters.Add(pArtist);
-
-            var pAlbum = insertCmd.CreateParameter();
-            pAlbum.ParameterName = "$Album";
-            insertCmd.Parameters.Add(pAlbum);
-
-            var pFilePath = insertCmd.CreateParameter();
-            pFilePath.ParameterName = "$FilePath";
-            insertCmd.Parameters.Add(pFilePath);
-
-            foreach (var track in _tracks)
-            {
-                var album = _albums.FirstOrDefault(a => a.AlbumId == track.AlbumId);
-
-                pTrackId.Value = track.TrackId;
-                pTitle.Value = track.Title;
-                pArtist.Value = track.Description ?? "Unknown Artist";
-                pAlbum.Value = album?.Title ?? string.Empty;
-                pFilePath.Value = track.FilePath ?? string.Empty;
-
-                insertCmd.ExecuteNonQuery();
-            }
-
-            transaction.Commit();
-        }
-        catch (Exception ex)
-        {
-            transaction.Rollback();
-            Console.WriteLine($"[LocalLibraryManager] Failed to update library index: {ex.Message}");
-        }
-    }
-
-    private void InitializeDatabase(SqliteConnection connection)
-    {
-        using var cmd = connection.CreateCommand();
-        // Create an FTS5 virtual table for efficient full-text search
-        cmd.CommandText = @"
-            CREATE VIRTUAL TABLE IF NOT EXISTS TrackIndex USING fts5(
-                TrackId UNINDEXED,
-                Title,
-                Artist,
-                Album,
-                FilePath UNINDEXED
-            );";
-        cmd.ExecuteNonQuery();
     }
 
     public static void ImportMusicToOrganizedStructure(
@@ -333,16 +187,11 @@ public class LocalLibraryManager
         if (!normalizedExtensions.Contains(extension)) return false;
 
         var metadata = ExtractMetadata(sourceFile);
-        var artistFolder = Path.Combine(myMusicBaseFolder, metadata.Artist);
-        var albumFolder = Path.Combine(artistFolder, metadata.Album);
+        var albumFolder = Path.Combine(myMusicBaseFolder, metadata.Artist, metadata.Album);
         var cacheFolder = Path.Combine(albumFolder, ".cache");
         var commentsFolder = Path.Combine(albumFolder, ".comments");
 
-        var albumId = ComputeStableId($"{metadata.Artist}|{metadata.Album}");
-
         Directory.CreateDirectory(albumFolder);
-        EnsureIdFile(artistFolder, "local");
-        EnsureIdFile(albumFolder, albumId);
         Directory.CreateDirectory(cacheFolder);
         Directory.CreateDirectory(commentsFolder);
 
@@ -359,73 +208,6 @@ public class LocalLibraryManager
         UpdateMappingFiles(myMusicBaseFolder, destinationFile, metadata);
         return imported;
     }
-
-    public class LibraryIndex
-    {
-        public Dictionary<string, AlbumIndexInfo> Albums { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-    }
-
-    public class AlbumIndexInfo
-    {
-        public string AlbumId { get; set; } = string.Empty;
-        public string KnownPath { get; set; } = string.Empty;
-        public Dictionary<string, string> Tracks { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-    }
-
-    private static string? TryReadIdFile(string folderPath)
-    {
-        try
-        {
-            var idFilePath = Path.Combine(folderPath, ".meshwave-id");
-            if (File.Exists(idFilePath))
-            {
-                var content = File.ReadAllText(idFilePath).Trim();
-                if (!string.IsNullOrWhiteSpace(content))
-                {
-                    try
-                    {
-                        using var jsonDoc = JsonDocument.Parse(content);
-                        if (jsonDoc.RootElement.TryGetProperty("Id", out var idElement))
-                        {
-                            return idElement.GetString();
-                        }
-                    }
-                    catch
-                    {
-                        // Fallback for older .meshwave-id string-only files
-                        if (Guid.TryParse(content, out _))
-                        {
-                            return content;
-                        }
-                    }
-                }
-            }
-        }
-        catch { }
-        return null;
-    }
-
-    private static void EnsureIdFile(string folderPath, string entityId)
-    {
-        try
-        {
-            Directory.CreateDirectory(folderPath);
-            var idFilePath = Path.Combine(folderPath, ".meshwave-id");
-            if (!File.Exists(idFilePath))
-            {
-                var id = Guid.NewGuid().ToString();
-                var payload = new { EntityId = entityId, Id = id };
-                var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(idFilePath, json);
-                File.SetAttributes(idFilePath, File.GetAttributes(idFilePath) | FileAttributes.Hidden);
-            }
-        }
-        catch
-        {
-            // Fail gracefully if directory is read-only or permission is denied
-        }
-    }
-
 
     private static void UpdateMappingFiles(string myMusicBaseFolder, string trackFilePath, CachedTrackMetadata metadata)
     {
@@ -478,66 +260,6 @@ public class LocalLibraryManager
         return _albums;
     }
 
-    public class SearchResultItem
-    {
-        public string TrackId { get; set; } = string.Empty;
-        public string Title { get; set; } = string.Empty;
-        public string Artist { get; set; } = string.Empty;
-        public string Album { get; set; } = string.Empty;
-        public string FilePath { get; set; } = string.Empty;
-    }
-
-    /// <summary>
-    /// Searches the local library database for tracks matching the given query across Title, Artist, and Album fields asynchronously.
-    /// </summary>
-    public async Task<List<SearchResultItem>> SearchTracksAsync(string query)
-    {
-        if (string.IsNullOrWhiteSpace(query))
-            return new List<SearchResultItem>();
-
-        var results = new List<SearchResultItem>();
-
-        try
-        {
-            using var connection = CreateDbConnection();
-            using var cmd = connection.CreateCommand();
-
-            cmd.CommandText = @"
-                SELECT TrackId, Title, Artist, Album, FilePath
-                FROM TrackIndex
-                WHERE TrackIndex MATCH $query
-                ORDER BY rank";
-
-            cmd.Parameters.AddWithValue("$query", EscapeFtsQuery(query));
-
-            using var reader = await cmd.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                results.Add(new SearchResultItem
-                {
-                    TrackId = reader.GetString(0),
-                    Title = reader.GetString(1),
-                    Artist = reader.GetString(2),
-                    Album = reader.GetString(3),
-                    FilePath = reader.GetString(4)
-                });
-            }
-        }
-        catch (SqliteException ex)
-        {
-            Console.WriteLine($"[LocalLibraryManager] FTS syntax error during search: {ex.Message}");
-        }
-
-        return results;
-    }
-
-    private string EscapeFtsQuery(string query)
-    {
-        // Simple tokenization for FTS5: split by whitespace and add wildcard to each term
-        var terms = query.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-        var escapedTerms = terms.Select(t => $"\"{t.Replace("\"", "\"\"")}\"*");
-        return string.Join(" AND ", escapedTerms);
-    }
 
     public string GetTrackCoverPath(string filePath)
     {

@@ -7,7 +7,6 @@ using MeshWave.Common.Core.Models;
 using MeshWave.Synchronizer;
 using MeshWave.Wpf.Mvvm;
 using MeshWave.Wpf.Services;
-using MeshWave.Wpf.Models;
 
 namespace MeshWave.Wpf.ViewModels;
 
@@ -241,7 +240,7 @@ public class BrowseViewModel : ViewModelBase
             if (!string.IsNullOrWhiteSpace(t.Title) && Path.HasExtension(t.Title))
                 extension = Path.GetExtension(t.Title);
 
-            var targetHash = await ResolveBestQualityHashAsync(t, isStreaming: true);
+            var targetHash = await ResolveBestQualityHashAsync(t);
             if (string.IsNullOrWhiteSpace(targetHash)) return;
 
             var tempPath = Path.Combine(tempRoot, targetHash + extension);
@@ -750,7 +749,7 @@ public class BrowseViewModel : ViewModelBase
 
         _ = Task.Run(async () =>
         {
-            var targetHash = await ResolveBestQualityHashAsync(track, isStreaming: false);
+            var targetHash = await ResolveBestQualityHashAsync(track);
 
             if (string.IsNullOrWhiteSpace(targetHash)) return;
 
@@ -824,7 +823,7 @@ public class BrowseViewModel : ViewModelBase
         });
     }
 
-    private async Task<string?> ResolveBestQualityHashAsync(BrowseTrackItem track, bool isStreaming)
+    private async Task<string?> ResolveBestQualityHashAsync(BrowseTrackItem track)
     {
         var originalHash = track.AudioVersions.ContainsKey(MeshWave.Common.Core.Models.AudioQuality.Original) ? track.AudioVersions[MeshWave.Common.Core.Models.AudioQuality.Original].FileHash : null;
         var compressedHash = track.AudioVersions.ContainsKey(MeshWave.Common.Core.Models.AudioQuality.Compressed) ? track.AudioVersions[MeshWave.Common.Core.Models.AudioQuality.Compressed].FileHash : null;
@@ -833,11 +832,9 @@ public class BrowseViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(originalHash)) return compressedHash;
         if (string.IsNullOrWhiteSpace(compressedHash)) return originalHash;
 
-        var settings = _settingsService.LoadSettings();
-        var preferredQuality = isStreaming ? settings.Playback.StreamingAudioQuality : settings.Playback.DownloadAudioQuality;
-
-        var primaryHash = preferredQuality == AudioQuality.Compressed ? compressedHash : originalHash;
-        var fallbackHash = preferredQuality == AudioQuality.Compressed ? originalHash : compressedHash;
+        var preferredQuality = _settingsService.LoadSettings().Playback.PreferredAudioQuality;
+        var primaryHash = preferredQuality == "Compressed" ? compressedHash : originalHash;
+        var fallbackHash = preferredQuality == "Compressed" ? originalHash : compressedHash;
 
         if (_sync != null)
         {

@@ -7,7 +7,6 @@ public class MyMusicMetadata
     public string Album { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public string Genre { get; set; } = string.Empty;
-    public string Tags { get; set; } = string.Empty;
     public int Year { get; set; }
     public int TrackNumber { get; set; }
     public bool IsReleased { get; set; }

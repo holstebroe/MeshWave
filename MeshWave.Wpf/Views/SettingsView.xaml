@@ -254,18 +254,13 @@
                             </Grid>
 
                             <!-- Audio Quality -->
-                            <TextBlock Text="🎵 Streaming Audio Quality" Margin="0,0,0,6"/>
-                            <ComboBox ItemsSource="{Binding AvailableAudioQualities}"
-                                      SelectedItem="{Binding StreamingAudioQuality, Mode=TwoWay}"
-                                      Margin="0,0,0,20" Width="200" HorizontalAlignment="Left"/>
-                            <TextBlock Foreground="{StaticResource TextSecondaryColor}"
-                                       Text="If 'Compressed' is selected but unavailable, the original version will be streamed."
-                                       Margin="0,-16,0,20" FontSize="12"/>
-
-                            <TextBlock Text="🎵 Download Audio Quality" Margin="0,0,0,6"/>
-                            <ComboBox ItemsSource="{Binding AvailableAudioQualities}"
-                                      SelectedItem="{Binding DownloadAudioQuality, Mode=TwoWay}"
-                                      Margin="0,0,0,20" Width="200" HorizontalAlignment="Left"/>
+                            <TextBlock Text="🎵 Preferred Audio Quality" Margin="0,0,0,6"/>
+                            <ComboBox SelectedValue="{Binding PreferredAudioQuality, Mode=TwoWay}"
+                                      SelectedValuePath="Content"
+                                      Margin="0,0,0,20" Width="200" HorizontalAlignment="Left">
+                                <ComboBoxItem Content="Original"/>
+                                <ComboBoxItem Content="Compressed"/>
+                            </ComboBox>
                             <TextBlock Foreground="{StaticResource TextSecondaryColor}"
                                        Text="If 'Compressed' is selected but unavailable, the original version will be downloaded."
                                        Margin="0,-16,0,20" FontSize="12"/>

@@ -1,6 +1,5 @@
 using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
-using MeshWave.Common.Core;
 using Xunit;
 
 namespace MeshWave.Synchronizer.Tests;

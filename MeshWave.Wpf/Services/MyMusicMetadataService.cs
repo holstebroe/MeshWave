@@ -101,7 +101,6 @@ public class MyMusicMetadataService
             Title = !string.IsNullOrWhiteSpace(meta.Album) ? meta.Album : Path.GetFileName(albumFolder) ?? "Unknown Album",
             Artist = meta.Artist,
             Genre = meta.Genre,
-            Tags = meta.Tags,
             Year = meta.Year
         };
     }
@@ -203,7 +202,6 @@ public class MyMusicMetadataService
                 Artist = tagFile.Tag.FirstPerformer ?? string.Empty,
                 Album = tagFile.Tag.Album ?? string.Empty,
                 Genre = tagFile.Tag.FirstGenre ?? string.Empty,
-                Tags = string.Empty,
                 Year = (int)tagFile.Tag.Year,
                 TrackNumber = (int)tagFile.Tag.Track
             };
@@ -226,7 +224,6 @@ public class MyMusicMetadataService
             Album = string.IsNullOrWhiteSpace(cached.Album) ? fallback.Album : cached.Album,
             Description = cached.Description,
             Genre = string.IsNullOrWhiteSpace(cached.Genre) ? fallback.Genre : cached.Genre,
-            Tags = string.IsNullOrWhiteSpace(cached.Tags) ? fallback.Tags : cached.Tags,
             Year = cached.Year > 0 ? cached.Year : fallback.Year,
             TrackNumber = cached.TrackNumber > 0 ? cached.TrackNumber : fallback.TrackNumber,
             IsReleased = cached.IsReleased,

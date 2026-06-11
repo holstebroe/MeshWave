@@ -1,8 +1,6 @@
-using MeshWave.Common.Core;
 using System.Net.Sockets;
 using System.Text;
 using MeshWave.Common.Core.Models;
-using MeshWave.Common.Core;
 using MeshWave.Common.Core.P2P;
 using MeshWave.Common.Core.Serialization;
 using NLog;
@@ -30,7 +28,7 @@ public class ManifestExchangeClient
     public async Task<Manifest?> FetchManifestAsync(
         string address,
         int port,
-        IManifestStore store,
+        PeerManifestStore store,
         string targetUserId,
         ManifestStreamType streamType = ManifestStreamType.Content,
         CancellationToken cancellationToken = default)

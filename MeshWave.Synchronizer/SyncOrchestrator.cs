@@ -1,11 +1,9 @@
-using MeshWave.Common.Core;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text.Json;
 using MeshWave.Common.Core;
 using MeshWave.Common.Core.Models;
-using MeshWave.Common.Core;
 using MeshWave.Common.Core.P2P;
 using MeshWave.Common.Core.Storage;
 using NLog;
@@ -25,8 +23,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     private ManifestExchangeServer? _server;
     private readonly ManifestExchangeClient _client;
     private readonly ManifestManager _manifestManager;
-    private readonly IManifestStore _peerStore;
-    private readonly KnownPeersStore _knownPeersStore;
+    private readonly PeerManifestStore _peerStore;
     private readonly ContentExchange _contentExchange;
     private readonly NatTraversalService _natTraversal;
 
@@ -148,8 +145,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         ManifestExchangeServer? server = null,
         ManifestExchangeClient? client = null,
         ManifestManager? manifestManager = null,
-        IManifestStore? peerManifestStore = null,
-        KnownPeersStore? knownPeersStore = null,
+        PeerManifestStore? peerManifestStore = null,
         ContentExchange? contentExchange = null,
         NatTraversalService? natTraversal = null,
         UserRepository? userRepository = null,
@@ -158,20 +154,17 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     {
         _logger = logger ?? LogManager.GetCurrentClassLogger();
 
+        _router = router ?? new PeerRouter(logger: _logger);
         _server = server;
         _client = client ?? new ManifestExchangeClient(timeoutMs: SecurityLimits.ConnectTimeoutMs, logger: _logger);
         _manifestManager = manifestManager ?? new ManifestManager(_logger);
         UserRepository = userRepository;
         CatalogueService = catalogueService ?? new CatalogueService();
 
-        _peerStore = peerManifestStore ?? new PeerManifestStore();
-
-        if (knownPeersStore == null && UserRepository != null)
-            _knownPeersStore = new KnownPeersStore(UserRepository.BaseDataFolder);
+        if (peerManifestStore == null && UserRepository != null)
+            _peerStore = PeerManifestStore.CreateAtBase(UserRepository.BaseDataFolder);
         else
-            _knownPeersStore = knownPeersStore ?? new KnownPeersStore();
-
-        _router = router ?? new PeerRouter(logger: _logger, knownPeersStore: _knownPeersStore);
+            _peerStore = peerManifestStore ?? new PeerManifestStore();
 
         _contentExchange = contentExchange ?? new ContentExchange();
         _natTraversal = natTraversal ?? new NatTraversalService(logger: _logger);
@@ -225,7 +218,6 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         {
             _server ??= new ManifestExchangeServer(identity.ManifestPort, logger: _logger);
             _server.ManifestReceived += OnManifestReceived;
-            _server.NotificationReceived += OnNotificationReceived;
 
             await _natTraversal.StartAsync(identity.ManifestPort, _cts.Token);
             await _natTraversal.SetupPortMappingAsync(identity.ManifestPort, _cts.Token);
@@ -253,19 +245,13 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         _router.PeerAdded -= OnPeerAdded;
         _router.PeerRemoved -= OnPeerRemoved;
         if (_server != null)
-        {
             _server.ManifestReceived -= OnManifestReceived;
-            _server.NotificationReceived -= OnNotificationReceived;
-        }
 
         await _router.StopAsync();
         if (_server != null)
             await _server.StopAsync();
         await _natTraversal.StopAsync();
-        if (_cts != null && !_cts.IsCancellationRequested)
-        {
-            try { _cts.Cancel(); } catch (ObjectDisposedException) { }
-        }
+        _cts?.Cancel();
     }
 
     /// <summary>
@@ -617,36 +603,6 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     private void OnPeerRemoved(object? sender, string userId)
     {
         PeerCountChanged?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void OnNotificationReceived(object? sender, NotifyNewOperationEventArgs e)
-    {
-        if (e.TargetUserId == Identity?.UserId) return; // Ignore notifications from ourselves
-
-        _logger.Debug("Received NotifyNewOperation for {0} stream {1} seq {2} from {3}", e.TargetUserId, e.StreamType, e.StartSequenceNumber, e.PeerAddress);
-        RecordPeerMessage(e.TargetUserId, "NotifyNewOperation", success: true, $"Received notification for seq {e.StartSequenceNumber} from {e.PeerAddress}.");
-
-        var peer = _router.GetPeers().FirstOrDefault(p => p.UserId == e.TargetUserId);
-        if (peer == null)
-        {
-            if (e.AnnouncingPeer != null)
-            {
-                // We cannot call AddOrRefreshPeer directly as it's private in PeerRouter.
-                // The router learns about peers via PeerExchange or LAN discovery.
-                // For targeted notifications, we just use the AnnouncingPeer directly to fetch.
-                peer = e.AnnouncingPeer;
-                peer.LastSeen = DateTime.UtcNow;
-            }
-            else
-            {
-                return;
-            }
-        }
-
-        if (_cts != null && !_cts.IsCancellationRequested)
-        {
-            _ = Task.Run(async () => await TryFetchAndMergeAsync(peer, _cts.Token));
-        }
     }
 
     private void OnManifestReceived(object? sender, ManifestReceivedEventArgs e)
@@ -1074,29 +1030,6 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     }
 
     /// <summary>
-    /// Updates a released track in the network by appending a signed Update operation to the local manifest.
-    /// </summary>
-    public void UpdateTrack(string trackId, string contentHash, Dictionary<string, string>? metadata = null)
-    {
-        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Update));
-        if (manifest == null || Identity == null) return;
-        var meta = metadata != null ? new Dictionary<string, string>(metadata) : [];
-
-        var title = meta.GetValueOrDefault("title") ?? trackId;
-        _logger.Info("Announcing track update: '{0}' (ID: {1}, Hash: {2})", title, trackId, contentHash);
-
-        _manifestManager.AppendSignedOperation(
-            manifest,
-            ManifestOperationType.Update,
-            trackId,
-            "Track",
-            contentHash,
-            meta,
-            Identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest(manifest.StreamType);
-    }
-
-    /// <summary>
     /// Announces an album release to the network.
     /// Automatically stamps <c>releasedAt</c> (ISO-8601 UTC) into the metadata dictionary if not already set.
     /// </summary>
@@ -1116,29 +1049,6 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             albumId,
             "Album",
             audioVersions,
-            meta,
-            Identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest(manifest.StreamType);
-    }
-
-    /// <summary>
-    /// Updates a released album in the network by appending a signed Update operation to the local manifest.
-    /// </summary>
-    public void UpdateAlbum(string albumId, string? contentHash, Dictionary<string, string>? metadata = null)
-    {
-        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Update));
-        if (manifest == null || Identity == null) return;
-        var meta = metadata != null ? new Dictionary<string, string>(metadata) : [];
-
-        var name = meta.GetValueOrDefault("name") ?? albumId;
-        _logger.Info("Announcing album update: '{0}' (ID: {1})", name, albumId);
-
-        _manifestManager.AppendSignedOperation(
-            manifest,
-            ManifestOperationType.Update,
-            albumId,
-            "Album",
-            contentHash,
             meta,
             Identity.PrivateKeyPem);
         PersistAndFanoutLocalManifest(manifest.StreamType);
