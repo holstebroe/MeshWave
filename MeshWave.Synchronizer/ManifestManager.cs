@@ -1,3 +1,4 @@
+using MeshWave.Common.Core;
 using System.Text;
 using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
@@ -343,7 +344,7 @@ public class ManifestManager(ILogger logger)
 
         if (remote.Operations.Count > SecurityLimits.MaxManifestOperations)
         {
-            logger.Debug("Merge failed: remote manifest from {0} stream {1} has {2} operations, exceeding limit of {3}", remote.UserId, remote.StreamType, remote.Operations.Count, SecurityLimits.MaxManifestOperations);
+            logger.Warn("Merge failed: remote manifest from {0} stream {1} has {2} operations, exceeding limit of {3}", remote.UserId, remote.StreamType, remote.Operations.Count, SecurityLimits.MaxManifestOperations);
             throw new InvalidDataException($"Remote manifest exceeds operation limit ({remote.Operations.Count}).");
         }
 
@@ -494,12 +495,12 @@ public class ManifestManager(ILogger logger)
         {
             if (kv.Key.Length > SecurityLimits.MaxMetadataKeyLength)
             {
-                logger.Debug("Discarding operation {0} in stream {1} for user {2}: Metadata key exceeds max length.", op.SequenceNumber, manifest.StreamType, manifest.UserId);
+                logger.Warn("Discarding operation {0} in stream {1} for user {2}: Metadata key exceeds max length.", op.SequenceNumber, manifest.StreamType, manifest.UserId);
                 return false;
             }
             if (kv.Value.Length > SecurityLimits.MaxMetadataValueLength)
             {
-                logger.Debug("Discarding operation {0} in stream {1} for user {2}: Metadata value exceeds max length.", op.SequenceNumber, manifest.StreamType, manifest.UserId);
+                logger.Warn("Discarding operation {0} in stream {1} for user {2}: Metadata value exceeds max length.", op.SequenceNumber, manifest.StreamType, manifest.UserId);
                 return false;
             }
         }

@@ -1,3 +1,4 @@
+using MeshWave.Common.Core;
 using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
 using Xunit;
@@ -137,5 +138,41 @@ public class ManifestManagerSigningTests
 
         Assert.Throws<ArgumentException>(() =>
             _manager.MergeManifest(localManifest, remoteManifest, "any-key"));
+    }
+
+    [Fact]
+    public void MergeManifest_DropsOperations_WhenStringsExceedLimit()
+    {
+        var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
+
+        var local = _manager.CreateManifest("user-3");
+        var remote = _manager.CreateManifest("user-3");
+
+        // Valid operation
+        _manager.AppendSignedOperation(remote, ManifestOperationType.Create,
+            "track-1", "Track", "hash123", null, privateKey);
+
+        // Invalid operation (exceeds limit)
+        var invalidOp = new ManifestOperation
+        {
+            OperationId = new string('A', SecurityLimits.MaxOperationIdLength + 1),
+            OperationType = ManifestOperationType.Create,
+            TargetId = "track-2",
+            TargetType = "Track",
+            SequenceNumber = 1,
+            Timestamp = System.DateTime.UtcNow,
+            Signature = "" // Set it properly
+        };
+        var signable = ManifestManager.BuildSignablePayload(invalidOp);
+        invalidOp.Signature = CryptoService.SignData(signable, privateKey);
+        remote.Operations.Add(invalidOp);
+
+        // Act
+        var added = _manager.MergeManifest(local, remote, publicKey);
+
+        // Assert
+        Assert.Equal(1, added);
+        Assert.Single(local.Operations);
+        Assert.Equal("track-1", local.Operations[0].TargetId);
     }
 }

@@ -1,3 +1,4 @@
+using MeshWave.Common.Core;
 using MeshWave.Bootstrap.Core;
 using MeshWave.Synchronizer;
 using NLog;

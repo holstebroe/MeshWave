@@ -1,4 +1,4 @@
-namespace MeshWave.Synchronizer;
+namespace MeshWave.Common.Core;
 
 /// <summary>
 /// Central security constants for all P2P protocol limits.

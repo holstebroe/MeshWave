@@ -235,7 +235,8 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
 
         // Jane prefers compressed
         var settings = janeSettings.LoadSettings();
-        settings.Playback.PreferredAudioQuality = "Compressed";
+        settings.Playback.StreamingAudioQuality = MeshWave.Wpf.Models.AudioQuality.Compressed;
+        settings.Playback.DownloadAudioQuality = MeshWave.Wpf.Models.AudioQuality.Compressed;
         janeSettings.SaveSettings(settings);
 
         var janeBrowseViewModel = new BrowseViewModel(jane.Orchestrator, settingsService: janeSettings);
@@ -287,7 +288,8 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
 
         // Jane prefers Original
         var settings = janeSettings.LoadSettings();
-        settings.Playback.PreferredAudioQuality = "Original";
+        settings.Playback.StreamingAudioQuality = MeshWave.Wpf.Models.AudioQuality.Original;
+        settings.Playback.DownloadAudioQuality = MeshWave.Wpf.Models.AudioQuality.Original;
         janeSettings.SaveSettings(settings);
 
         var janeBrowseViewModel = new BrowseViewModel(jane.Orchestrator, settingsService: janeSettings);
