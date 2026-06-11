@@ -86,6 +86,56 @@ public class CryptoServiceTests
     }
 
     [Fact]
+    public void EncryptDecryptData_Roundtrip_Success()
+    {
+        // Arrange
+        var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
+        var data = "CastVote payload data";
+
+        // Act
+        var encryptedData = CryptoService.EncryptData(data, publicKey);
+        var decryptedData = CryptoService.DecryptData(encryptedData, privateKey);
+
+        // Assert
+        Assert.NotNull(encryptedData);
+        Assert.NotEqual(data, encryptedData);
+        Assert.Equal(data, decryptedData);
+    }
+
+    [Fact]
+    public void DecryptData_ReturnsNull_ForInvalidKey()
+    {
+        // Arrange
+        var (_, publicKey) = CryptoService.GenerateKeyPair();
+        var (otherPrivateKey, _) = CryptoService.GenerateKeyPair();
+        var data = "CastVote payload data";
+
+        // Act
+        var encryptedData = CryptoService.EncryptData(data, publicKey);
+        var decryptedData = CryptoService.DecryptData(encryptedData, otherPrivateKey);
+
+        // Assert
+        Assert.Null(decryptedData);
+    }
+
+    [Fact]
+    public void DecryptData_ReturnsNull_ForCorruptedCiphertext()
+    {
+        // Arrange
+        var (privateKey, _) = CryptoService.GenerateKeyPair();
+
+        // Act & Assert 1: Invalid Base64
+        var invalidBase64 = "This is not valid base64!";
+        var result1 = CryptoService.DecryptData(invalidBase64, privateKey);
+        Assert.Null(result1);
+
+        // Act & Assert 2: Valid Base64 but invalid ciphertext
+        var invalidCiphertext = Convert.ToBase64String(Encoding.UTF8.GetBytes("Valid base64 but not a ciphertext"));
+        var result2 = CryptoService.DecryptData(invalidCiphertext, privateKey);
+        Assert.Null(result2);
+    }
+
+    [Fact]
     public void VerifySignature_ReturnsFalse_ForInvalidSignature()
     {
         // Arrange

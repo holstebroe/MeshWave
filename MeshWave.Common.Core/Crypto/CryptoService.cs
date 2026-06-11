@@ -45,6 +45,37 @@ public class CryptoService
     }
 
     /// <summary>
+    /// Encrypts data using RSA public key with OAEP padding.
+    /// </summary>
+    public static string EncryptData(string data, string publicKeyPem)
+    {
+        using var rsa = RSA.Create();
+        rsa.ImportFromPem(publicKeyPem.ToCharArray());
+        var encryptedBytes = rsa.Encrypt(Encoding.UTF8.GetBytes(data), RSAEncryptionPadding.OaepSHA256);
+        return Convert.ToBase64String(encryptedBytes);
+    }
+
+    /// <summary>
+    /// Decrypts data using RSA private key with OAEP padding.
+    /// Returns null if decryption fails (e.g. invalid key or corrupted ciphertext).
+    /// </summary>
+    public static string? DecryptData(string encryptedData, string privateKeyPem)
+    {
+        try
+        {
+            using var rsa = RSA.Create();
+            rsa.ImportFromPem(privateKeyPem.ToCharArray());
+            var encryptedBytes = Convert.FromBase64String(encryptedData);
+            var decryptedBytes = rsa.Decrypt(encryptedBytes, RSAEncryptionPadding.OaepSHA256);
+            return Encoding.UTF8.GetString(decryptedBytes);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Verifies a signature using RSA public key.
     /// </summary>
     public static bool VerifySignature(string data, string signature, string publicKeyPem)
