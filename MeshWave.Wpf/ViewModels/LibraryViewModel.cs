@@ -29,15 +29,16 @@ public partial class LibraryViewModel : ViewModelBase
     private string _syncStatus = string.Empty;
     private readonly LibraryDownloadStateService _downloadStateService = new();
 
-    public LibraryViewModel(ApplicationViewModel? applicationViewModel = null, bool isMyMusicLibrary = false)
+    public LibraryViewModel(ApplicationViewModel applicationViewModel, bool isMyMusicLibrary = false)
     {
         _applicationViewModel = applicationViewModel;
+        _settingsService = applicationViewModel.SettingsService;
         IsMyMusicLibrary = isMyMusicLibrary;
         CancelImportCommand = new RelayCommand(_ => CancelImport(), _ => IsImporting);
         SyncAlbumCommand = new RelayCommand(_ => SyncSelectedAlbum(), _ => CanSyncToNetwork);
         SyncTrackCommand = new RelayCommand<LibraryTrackItem>(SyncTrack, t => CanSyncToNetwork && t != null);
         RemoveTrackFromLibraryCommand = new RelayCommand<LibraryTrackItem>(RemoveTrackFromLibrary, t => t != null && !IsMyMusicLibrary && !t.IsDownloadPlaceholder);
-        ReDownloadTrackCommand = new RelayCommand<LibraryTrackItem>(ReDownloadTrack, t => t != null && !IsMyMusicLibrary && t.IsRemovedFromLibrary && !string.IsNullOrWhiteSpace(t.ContentHash));
+        ReDownloadTrackCommand = new RelayCommand<LibraryTrackItem>(ReDownloadTrack, t => t != null && ((!IsMyMusicLibrary && t.IsRemovedFromLibrary) || (IsMyMusicLibrary && !t.IsDownloaded)) && !string.IsNullOrWhiteSpace(t.ContentHash));
         if (!IsMyMusicLibrary && _applicationViewModel != null) _applicationViewModel.DownloadQueueItems.CollectionChanged += OnDownloadQueueChanged;
 
         LoadFromConfiguredBaseFolder();
@@ -63,37 +64,10 @@ public partial class LibraryViewModel : ViewModelBase
         set => SetProperty(ref _syncStatus, value);
     }
 
-    private CancellationTokenSource? _searchCts;
     public string SearchQuery
     {
         get => _searchQuery;
-        set
-        {
-            if (SetProperty(ref _searchQuery, value))
-            {
-                DebounceSearchAsync();
-            }
-        }
-    }
-
-    private async void DebounceSearchAsync()
-    {
-        _searchCts?.Cancel();
-        _searchCts = new CancellationTokenSource();
-        var token = _searchCts.Token;
-
-        try
-        {
-            await Task.Delay(300, token); // 300ms debounce
-            if (!token.IsCancellationRequested)
-            {
-                await SearchAsync();
-            }
-        }
-        catch (TaskCanceledException)
-        {
-            // Ignore cancellation
-        }
+        set => SetProperty(ref _searchQuery, value);
     }
 
     public List<LibraryTrackItem> Tracks
@@ -122,7 +96,7 @@ public partial class LibraryViewModel : ViewModelBase
             if (SetProperty(ref _selectedArtist, value))
             {
                 SelectedAlbum = null;
-                _ = RefreshAlbumAndTrackSelectionAsync();
+                RefreshAlbumAndTrackSelection();
             }
         }
     }
@@ -134,7 +108,7 @@ public partial class LibraryViewModel : ViewModelBase
         {
             if (SetProperty(ref _selectedAlbum, value))
             {
-                _ = RefreshAlbumAndTrackSelectionAsync();
+                RefreshAlbumAndTrackSelection();
                 OnPropertyChanged(nameof(CanSyncToNetwork));
             }
         }
@@ -251,16 +225,9 @@ public partial class LibraryViewModel : ViewModelBase
         SyncStatus = $"Announced '{track.Title}' to the network.";
     }
 
-    public async Task SearchAsync()
+    public void Search()
     {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher != null && !dispatcher.CheckAccess())
-        {
-            await dispatcher.InvokeAsync(SearchAsync);
-            return;
-        }
-
-        await RefreshAlbumAndTrackSelectionAsync();
+        // TODO: Implement library search
     }
 
     public void RefreshLibrary()
@@ -303,7 +270,7 @@ public partial class LibraryViewModel : ViewModelBase
 
     private void ReDownloadTrack(LibraryTrackItem? track)
     {
-        if (track == null || IsMyMusicLibrary)
+        if (track == null)
             return;
 
         QueueTrackRedownload(track);
@@ -313,9 +280,9 @@ public partial class LibraryViewModel : ViewModelBase
     {
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher != null)
-            dispatcher.Invoke(() => _ = RefreshAlbumAndTrackSelectionAsync());
+            dispatcher.Invoke(RefreshAlbumAndTrackSelection);
         else
-            _ = RefreshAlbumAndTrackSelectionAsync();
+            RefreshAlbumAndTrackSelection();
     }
 }
 
@@ -373,11 +340,12 @@ public sealed class LibraryTrackItem
     public int PlayCount { get; set; }
     public bool IsDownloadPlaceholder { get; set; }
     public bool IsRemovedFromLibrary { get; set; }
+    public bool IsDownloaded { get; set; } = true;
     public string DownloadStateLabel { get; set; } = "Downloaded";
-    public string StatusBadge => IsRemovedFromLibrary ? "Not Downloaded" : IsDownloadPlaceholder ? DownloadStateLabel : string.Empty;
+    public string StatusBadge => IsRemovedFromLibrary || !IsDownloaded ? "Not Downloaded" : IsDownloadPlaceholder ? DownloadStateLabel : string.Empty;
     public string ReleaseBadgeColor => IsReleased ? "#27AE60" : "#E67E22"; // Green for Public, Orange for Private
     public string VersionLabel => Version > 1 ? $"v{Version}" : string.Empty;
-    public bool CanPlay => !IsDownloadPlaceholder && !IsRemovedFromLibrary && !string.IsNullOrWhiteSpace(FilePath);
+    public bool CanPlay => !IsDownloadPlaceholder && !IsRemovedFromLibrary && IsDownloaded && !string.IsNullOrWhiteSpace(FilePath);
     public override string ToString()
     {
         return Title;

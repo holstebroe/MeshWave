@@ -21,4 +21,6 @@ public class Track
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     /// <summary>UTC timestamp when this track was first announced to the network. Null = not yet released.</summary>
     public DateTime? ReleasedAt { get; set; }
+    public bool IsDownloaded { get; set; } = true;
+    public string? ContentHash { get; set; }
 }

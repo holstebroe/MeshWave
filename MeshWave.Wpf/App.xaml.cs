@@ -1,4 +1,5 @@
 ﻿using System.Windows;
+using MeshWave.Common.Core;
 using MeshWave.Wpf.Services;
 using MeshWave.Wpf.ViewModels;
 
@@ -22,11 +23,14 @@ public partial class App : Application
     {
         CommandLineOverrides.Apply(e.Args);
 
-        var settingsService = new SettingsService();
+        var settingsService = new SettingsService(MeshWaveEnvironment.GetAppDataRoot());
         var settings = settingsService.LoadSettings();
         LoggingConfiguration.Configure(settings.Logging);
 
-        var mainWindow = new MainWindow();
+        var mainWindow = new MainWindow
+        {
+            DataContext = new ApplicationViewModel(settingsService: settingsService)
+        };
         MainWindow = mainWindow;
         mainWindow.Show();
 

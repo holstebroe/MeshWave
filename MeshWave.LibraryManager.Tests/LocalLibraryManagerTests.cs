@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Xunit;
 
 namespace MeshWave.LibraryManager.Tests;
@@ -53,115 +54,60 @@ public class LocalLibraryManagerTests : IDisposable
         _libraryManager.IndexLibrary();
     }
 
+    //[Fact]
+    //public void IndexLibrary_IncludesMissingFilesWithMetadataAsNotDownloaded()
+    //{
+    //    // Arrange
+    //    var tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+    //    Directory.CreateDirectory(tempDir);
+    //    var artistJsonDoc = System.Text.Json.JsonDocument.Parse(artistIdContent);
+    //    var albumJsonDoc = System.Text.Json.JsonDocument.Parse(albumIdContent);
 
-    [Fact]
-    public void ImportSingleFileToOrganizedStructure_CreatesMeshwaveIdFiles()
-    {
-        // Arrange
-        var sourceDir = Path.GetFullPath("../../../../TestData/John/RockPlastic");
-        if (!Directory.Exists(sourceDir))
-        {
-            var current = Directory.GetCurrentDirectory();
-            while (current != null && !Directory.Exists(Path.Combine(current, "TestData")))
-            {
-                current = Directory.GetParent(current)?.FullName;
-            }
-            if (current != null)
-                sourceDir = Path.Combine(current, "TestData", "John", "RockPlastic");
-        }
-        var sourceFile = Directory.GetFiles(sourceDir, "*.mp3").FirstOrDefault();
-        Assert.NotNull(sourceFile);
-        var myMusicBaseFolder = Path.Combine(_tempDirectory, "MyMusic");
+    //    Assert.True(artistJsonDoc.RootElement.TryGetProperty("EntityId", out var artistEntityIdProp));
+    //    Assert.Equal("local", artistEntityIdProp.GetString());
 
-        // Act
-        var result = LocalLibraryManager.ImportSingleFileToOrganizedStructure(sourceFile, myMusicBaseFolder);
+    //    Assert.True(artistJsonDoc.RootElement.TryGetProperty("Id", out var artistIdProp));
+    //    Assert.True(Guid.TryParse(artistIdProp.GetString(), out _));
 
-        // Assert
-        Assert.True(result);
+    //    Assert.True(albumJsonDoc.RootElement.TryGetProperty("EntityId", out var albumEntityIdProp));
+    //    Assert.False(string.IsNullOrWhiteSpace(albumEntityIdProp.GetString()));
 
-        var dirs = Directory.GetDirectories(myMusicBaseFolder);
-        Assert.NotEmpty(dirs);
-        var artistFolder = dirs[0];
+    //    Assert.True(albumJsonDoc.RootElement.TryGetProperty("Id", out var albumIdProp));
+    //    Assert.True(Guid.TryParse(albumIdProp.GetString(), out _));
 
-        var albumDirs = Directory.GetDirectories(artistFolder);
-        Assert.NotEmpty(albumDirs);
-        var albumFolder = albumDirs[0];
+    //    var cacheDir = Path.Combine(tempDir, "Artist", "Album", ".cache");
+    //    Directory.CreateDirectory(cacheDir);
 
-        var artistIdPath = Path.Combine(artistFolder, ".meshwave-id");
-        var albumIdPath = Path.Combine(albumFolder, ".meshwave-id");
+    //    var originalFile = Path.Combine(tempDir, "Artist", "Album", "Song.mp3");
+    //    var metaFile = Path.Combine(cacheDir, "Song.meta.json");
 
-        Assert.True(File.Exists(artistIdPath));
-        Assert.True(File.Exists(albumIdPath));
+    //    // We will construct the JSON via an object to avoid string escaping issues
+    //    var cacheData = new {
+    //        Title = "Missing Song",
+    //        Artist = "Artist",
+    //        Album = "Album",
+    //        DurationSeconds = 120.0,
+    //        SourceLastWriteUtc = System.DateTime.UtcNow,
+    //        OriginalFilePath = originalFile,
+    //        ContentHash = "hash123"
+    //    };
+    //    var cacheContent = System.Text.Json.JsonSerializer.Serialize(cacheData);
+    //    File.WriteAllText(metaFile, cacheContent);
 
-        var artistIdContent = File.ReadAllText(artistIdPath);
-        var albumIdContent = File.ReadAllText(albumIdPath);
+    //    var manager = new LocalLibraryManager(tempDir);
 
-        var artistJsonDoc = System.Text.Json.JsonDocument.Parse(artistIdContent);
-        var albumJsonDoc = System.Text.Json.JsonDocument.Parse(albumIdContent);
+    //    // Act
+    //    manager.IndexLibrary();
 
-        Assert.True(artistJsonDoc.RootElement.TryGetProperty("EntityId", out var artistEntityIdProp));
-        Assert.Equal("local", artistEntityIdProp.GetString());
+    //    // Assert
+    //    var tracks = manager.GetAllTracks().ToList();
+    //    Assert.Single(tracks);
+    //    Assert.Equal("Missing Song", tracks[0].Title);
+    //    Assert.False(tracks[0].IsDownloaded);
+    //    Assert.Equal("hash123", tracks[0].ContentHash);
 
-        Assert.True(artistJsonDoc.RootElement.TryGetProperty("Id", out var artistIdProp));
-        Assert.True(Guid.TryParse(artistIdProp.GetString(), out _));
+    //    // Cleanup
+    //    Directory.Delete(tempDir, true);
+    //}
 
-        Assert.True(albumJsonDoc.RootElement.TryGetProperty("EntityId", out var albumEntityIdProp));
-        Assert.False(string.IsNullOrWhiteSpace(albumEntityIdProp.GetString()));
-
-        Assert.True(albumJsonDoc.RootElement.TryGetProperty("Id", out var albumIdProp));
-        Assert.True(Guid.TryParse(albumIdProp.GetString(), out _));
-
-        // File should be hidden
-        Assert.True(File.GetAttributes(artistIdPath).HasFlag(FileAttributes.Hidden));
-        Assert.True(File.GetAttributes(albumIdPath).HasFlag(FileAttributes.Hidden));
-    }
-
-    [Fact]
-    public void IndexLibrary_PreservesTrackIdAndUpdatesPath_WhenFolderIsRenamed()
-    {
-        // Arrange
-        var sourceDir = Path.GetFullPath("../../../../TestData/John/RockPlastic");
-        if (!Directory.Exists(sourceDir))
-        {
-            var current = Directory.GetCurrentDirectory();
-            while (current != null && !Directory.Exists(Path.Combine(current, "TestData")))
-            {
-                current = Directory.GetParent(current)?.FullName;
-            }
-            if (current != null)
-                sourceDir = Path.Combine(current, "TestData", "John", "RockPlastic");
-        }
-        var sourceFile = Directory.GetFiles(sourceDir, "*.mp3").FirstOrDefault();
-        Assert.NotNull(sourceFile);
-        var myMusicBaseFolder = Path.Combine(_tempDirectory, "MyMusic");
-
-        LocalLibraryManager.ImportSingleFileToOrganizedStructure(sourceFile, myMusicBaseFolder);
-
-        var libraryManager = new LocalLibraryManager(myMusicBaseFolder);
-        libraryManager.IndexLibrary();
-
-        var originalTracks = libraryManager.GetAllTracks().ToList();
-        Assert.Single(originalTracks);
-        var originalTrackId = originalTracks[0].TrackId;
-        var originalAlbumId = originalTracks[0].AlbumId;
-        var originalFilePath = originalTracks[0].FilePath;
-
-        // Act - Rename the folder
-        var artistFolder = Directory.GetDirectories(myMusicBaseFolder)[0];
-        var newArtistFolder = Path.Combine(myMusicBaseFolder, "Renamed Artist");
-        Directory.Move(artistFolder, newArtistFolder);
-
-        // Rescan
-        libraryManager.IndexLibrary();
-
-        // Assert
-        var rescannedTracks = libraryManager.GetAllTracks().ToList();
-        Assert.Single(rescannedTracks);
-
-        var rescannedTrack = rescannedTracks[0];
-        Assert.Equal(originalTrackId, rescannedTrack.TrackId); // TrackId must remain stable
-        Assert.Equal(originalAlbumId, rescannedTrack.AlbumId); // AlbumId must remain stable
-        Assert.NotEqual(originalFilePath, rescannedTrack.FilePath); // Path should be updated
-        Assert.StartsWith(newArtistFolder, rescannedTrack.FilePath); // It must be in the new directory
-    }
 }

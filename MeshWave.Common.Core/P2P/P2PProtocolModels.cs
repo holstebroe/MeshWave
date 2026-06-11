@@ -23,8 +23,7 @@ public enum ManifestRequestType
     GetPeers,
     RequestRendezvous,
     RequestContent,
-    RelayManifestPush,
-    NotifyNewOperation
+    RelayManifestPush
 }
 
 public class ManifestRequest

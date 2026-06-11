@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Microsoft.Data.Sqlite;
 using MeshWave.Common.Core.Models;
 using MeshWave.Common.Core.Storage;
 using TagLib;
@@ -28,14 +27,6 @@ public class LocalLibraryManager
 
     public static IReadOnlyList<string> SupportedExtensions => DefaultExtensionList;
 
-    private SqliteConnection CreateDbConnection()
-    {
-        var dbPath = Path.Combine(_basePath, "library_index.db");
-        var connection = new SqliteConnection($"Data Source={dbPath};Pooling=False;");
-        connection.Open();
-        return connection;
-    }
-
     /// <summary>
     /// Indexes music files in the local library. Reads cached metadata when available.
     /// </summary>
@@ -46,75 +37,27 @@ public class LocalLibraryManager
 
         if (!Directory.Exists(_basePath)) return;
 
-        var indexPath = Path.Combine(_basePath, "library_index.json");
-        var libraryIndex = new LibraryIndex();
-        if (File.Exists(indexPath))
-        {
-            try
-            {
-                var json = File.ReadAllText(indexPath);
-                libraryIndex = JsonSerializer.Deserialize<LibraryIndex>(json) ?? new LibraryIndex();
-            }
-            catch { }
-        }
-
-        var indexUpdated = false;
         var albumDict = new Dictionary<string, Album>(StringComparer.OrdinalIgnoreCase);
+        var discoveredPhysicalFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        using var connection = CreateDbConnection();
-        InitializeDatabase(connection);
-
-        var activeTrackIds = new HashSet<string>();
         foreach (var file in EnumerateSupportedFiles(_basePath, _supportedExtensions))
             try
             {
+                discoveredPhysicalFiles.Add(file);
                 var metadata = TryReadCachedMetadata(file) ?? ExtractMetadata(file);
+                // Ensure cached metadata is up to date with paths and hashes if they were missing
+                if (string.IsNullOrWhiteSpace(metadata.OriginalFilePath) || string.IsNullOrWhiteSpace(metadata.ContentHash))
+                {
+                    var fresh = ExtractMetadata(file);
+                    metadata.OriginalFilePath = fresh.OriginalFilePath;
+                    metadata.ContentHash = fresh.ContentHash;
+                }
                 WriteMetadataCache(file, metadata);
                 EnsureCoverCached(file);
 
                 var fileInfo = new FileInfo(file);
-                var albumFolder = fileInfo.DirectoryName ?? string.Empty;
-                var fileName = fileInfo.Name;
-
-                var meshwaveId = TryReadIdFile(albumFolder);
                 var trackId = ComputeStableId(fileInfo.FullName);
                 var albumId = ComputeStableId($"{metadata.Artist}|{metadata.Album}");
-
-                if (!string.IsNullOrWhiteSpace(meshwaveId))
-                {
-                    if (libraryIndex.Albums.TryGetValue(meshwaveId, out var albumInfo))
-                    {
-                        albumId = albumInfo.AlbumId;
-                        if (albumInfo.Tracks.TryGetValue(fileName, out var oldTrackId))
-                        {
-                            trackId = oldTrackId;
-                        }
-                        else
-                        {
-                            albumInfo.Tracks[fileName] = trackId;
-                            indexUpdated = true;
-                        }
-
-                        if (!string.Equals(albumInfo.KnownPath, albumFolder, StringComparison.OrdinalIgnoreCase))
-                        {
-                            albumInfo.KnownPath = albumFolder;
-                            indexUpdated = true;
-                        }
-                    }
-                    else
-                    {
-                        var newAlbumInfo = new AlbumIndexInfo
-                        {
-                            AlbumId = albumId,
-                            KnownPath = albumFolder
-                        };
-                        newAlbumInfo.Tracks[fileName] = trackId;
-                        libraryIndex.Albums[meshwaveId] = newAlbumInfo;
-                        indexUpdated = true;
-                    }
-                }
-
-
                 var track = new Track
                 {
                     TrackId = trackId,
@@ -127,7 +70,9 @@ public class LocalLibraryManager
                     FileSize = fileInfo.Length,
                     CoverImageHash = null,
                     Description = metadata.Artist,
-                    Signature = "local"
+                    Signature = "local",
+                    IsDownloaded = true,
+                    ContentHash = metadata.ContentHash
                 };
                 _tracks.Add(track);
 
@@ -151,86 +96,61 @@ public class LocalLibraryManager
                 // skip unreadable files
             }
 
-        _albums.AddRange(albumDict.Values);
-
-        if (indexUpdated)
+        // Second pass: find missing files via .meta.json cache
+        foreach (var cacheFile in Directory.EnumerateFiles(_basePath, "*.meta.json", SearchOption.AllDirectories))
         {
             try
             {
-                var json = JsonSerializer.Serialize(libraryIndex, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(indexPath, json);
+                var json = File.ReadAllText(cacheFile);
+                var metadata = System.Text.Json.JsonSerializer.Deserialize<CachedTrackMetadata>(json);
+                if (metadata != null && !string.IsNullOrWhiteSpace(metadata.OriginalFilePath) && !discoveredPhysicalFiles.Contains(metadata.OriginalFilePath))
+                {
+                    if (!File.Exists(metadata.OriginalFilePath))
+                    {
+                        var trackId = ComputeStableId(metadata.OriginalFilePath);
+                        var albumId = ComputeStableId($"{metadata.Artist}|{metadata.Album}");
+                        var track = new Track
+                        {
+                            TrackId = trackId,
+                            AlbumId = albumId,
+                            OwnerUserId = "local",
+                            Title = metadata.Title,
+                            Duration = TimeSpan.FromSeconds(metadata.DurationSeconds),
+                            FileHash = ComputeStableId(metadata.OriginalFilePath),
+                            FilePath = metadata.OriginalFilePath,
+                            FileSize = 0,
+                            CoverImageHash = null,
+                            Description = metadata.Artist,
+                            Signature = "local",
+                            IsDownloaded = false,
+                            ContentHash = metadata.ContentHash
+                        };
+                        _tracks.Add(track);
+
+                        if (!albumDict.TryGetValue(albumId, out var album))
+                        {
+                            album = new Album
+                            {
+                                AlbumId = albumId,
+                                OwnerUserId = "local",
+                                Title = metadata.Album,
+                                CoverImageHash = null,
+                                Description = null,
+                                Signature = "local"
+                            };
+                            albumDict[albumId] = album;
+                        }
+                        album.TrackIds.Add(trackId);
+                    }
+                }
             }
-            catch { }
-        }
-        using var transaction = connection.BeginTransaction();
-        try
-        {
-            using var clearCmd = connection.CreateCommand();
-            clearCmd.Transaction = transaction;
-            clearCmd.CommandText = "DELETE FROM TrackIndex";
-            clearCmd.ExecuteNonQuery();
-
-            using var insertCmd = connection.CreateCommand();
-            insertCmd.Transaction = transaction;
-            insertCmd.CommandText = @"
-                INSERT INTO TrackIndex (TrackId, Title, Artist, Album, FilePath)
-                VALUES ($TrackId, $Title, $Artist, $Album, $FilePath)";
-
-            var pTrackId = insertCmd.CreateParameter();
-            pTrackId.ParameterName = "$TrackId";
-            insertCmd.Parameters.Add(pTrackId);
-
-            var pTitle = insertCmd.CreateParameter();
-            pTitle.ParameterName = "$Title";
-            insertCmd.Parameters.Add(pTitle);
-
-            var pArtist = insertCmd.CreateParameter();
-            pArtist.ParameterName = "$Artist";
-            insertCmd.Parameters.Add(pArtist);
-
-            var pAlbum = insertCmd.CreateParameter();
-            pAlbum.ParameterName = "$Album";
-            insertCmd.Parameters.Add(pAlbum);
-
-            var pFilePath = insertCmd.CreateParameter();
-            pFilePath.ParameterName = "$FilePath";
-            insertCmd.Parameters.Add(pFilePath);
-
-            foreach (var track in _tracks)
+            catch
             {
-                var album = _albums.FirstOrDefault(a => a.AlbumId == track.AlbumId);
-
-                pTrackId.Value = track.TrackId;
-                pTitle.Value = track.Title;
-                pArtist.Value = track.Description ?? "Unknown Artist";
-                pAlbum.Value = album?.Title ?? string.Empty;
-                pFilePath.Value = track.FilePath ?? string.Empty;
-
-                insertCmd.ExecuteNonQuery();
+                // skip unreadable cache files
             }
-
-            transaction.Commit();
         }
-        catch (Exception ex)
-        {
-            transaction.Rollback();
-            Console.WriteLine($"[LocalLibraryManager] Failed to update library index: {ex.Message}");
-        }
-    }
 
-    private void InitializeDatabase(SqliteConnection connection)
-    {
-        using var cmd = connection.CreateCommand();
-        // Create an FTS5 virtual table for efficient full-text search
-        cmd.CommandText = @"
-            CREATE VIRTUAL TABLE IF NOT EXISTS TrackIndex USING fts5(
-                TrackId UNINDEXED,
-                Title,
-                Artist,
-                Album,
-                FilePath UNINDEXED
-            );";
-        cmd.ExecuteNonQuery();
+        _albums.AddRange(albumDict.Values);
     }
 
     public static void ImportMusicToOrganizedStructure(
@@ -334,15 +254,14 @@ public class LocalLibraryManager
         if (!normalizedExtensions.Contains(extension)) return false;
 
         var metadata = ExtractMetadata(sourceFile);
-        var artistFolder = Path.Combine(myMusicBaseFolder, metadata.Artist);
-        var albumFolder = Path.Combine(artistFolder, metadata.Album);
+        var albumFolder = Path.Combine(myMusicBaseFolder, metadata.Artist, metadata.Album);
         var cacheFolder = Path.Combine(albumFolder, ".cache");
         var commentsFolder = Path.Combine(albumFolder, ".comments");
 
         var albumId = ComputeStableId($"{metadata.Artist}|{metadata.Album}");
 
         Directory.CreateDirectory(albumFolder);
-        EnsureIdFile(artistFolder, "local");
+        EnsureIdFile(albumFolder, "local");
         EnsureIdFile(albumFolder, albumId);
         Directory.CreateDirectory(cacheFolder);
         Directory.CreateDirectory(commentsFolder);
@@ -361,6 +280,7 @@ public class LocalLibraryManager
         return imported;
     }
 
+    
     public class LibraryIndex
     {
         public Dictionary<string, AlbumIndexInfo> Albums { get; set; } = new(StringComparer.OrdinalIgnoreCase);
@@ -427,7 +347,6 @@ public class LocalLibraryManager
         }
     }
 
-
     private static void UpdateMappingFiles(string myMusicBaseFolder, string trackFilePath, CachedTrackMetadata metadata)
     {
         try
@@ -479,66 +398,6 @@ public class LocalLibraryManager
         return _albums;
     }
 
-    public class SearchResultItem
-    {
-        public string TrackId { get; set; } = string.Empty;
-        public string Title { get; set; } = string.Empty;
-        public string Artist { get; set; } = string.Empty;
-        public string Album { get; set; } = string.Empty;
-        public string FilePath { get; set; } = string.Empty;
-    }
-
-    /// <summary>
-    /// Searches the local library database for tracks matching the given query across Title, Artist, and Album fields asynchronously.
-    /// </summary>
-    public async Task<List<SearchResultItem>> SearchTracksAsync(string query)
-    {
-        if (string.IsNullOrWhiteSpace(query))
-            return new List<SearchResultItem>();
-
-        var results = new List<SearchResultItem>();
-
-        try
-        {
-            using var connection = CreateDbConnection();
-            using var cmd = connection.CreateCommand();
-
-            cmd.CommandText = @"
-                SELECT TrackId, Title, Artist, Album, FilePath
-                FROM TrackIndex
-                WHERE TrackIndex MATCH $query
-                ORDER BY rank";
-
-            cmd.Parameters.AddWithValue("$query", EscapeFtsQuery(query));
-
-            using var reader = await cmd.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                results.Add(new SearchResultItem
-                {
-                    TrackId = reader.GetString(0),
-                    Title = reader.GetString(1),
-                    Artist = reader.GetString(2),
-                    Album = reader.GetString(3),
-                    FilePath = reader.GetString(4)
-                });
-            }
-        }
-        catch (SqliteException ex)
-        {
-            Console.WriteLine($"[LocalLibraryManager] FTS syntax error during search: {ex.Message}");
-        }
-
-        return results;
-    }
-
-    private string EscapeFtsQuery(string query)
-    {
-        // Simple tokenization for FTS5: split by whitespace and add wildcard to each term
-        var terms = query.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-        var escapedTerms = terms.Select(t => $"\"{t.Replace("\"", "\"\"")}\"*");
-        return string.Join(" AND ", escapedTerms);
-    }
 
     public string GetTrackCoverPath(string filePath)
     {
@@ -605,7 +464,9 @@ public class LocalLibraryManager
             Artist = artist,
             Album = album,
             DurationSeconds = duration.TotalSeconds,
-            SourceLastWriteUtc = File.GetLastWriteTimeUtc(filePath)
+            SourceLastWriteUtc = File.GetLastWriteTimeUtc(filePath),
+            OriginalFilePath = filePath,
+            ContentHash = MeshWave.Common.Core.Crypto.CryptoService.ComputeFileHash(filePath)
         };
     }
 
@@ -709,6 +570,8 @@ public class LocalLibraryManager
         public string Album { get; set; } = "_singles_";
         public double DurationSeconds { get; set; }
         public DateTime SourceLastWriteUtc { get; set; }
+        public string OriginalFilePath { get; set; } = string.Empty;
+        public string ContentHash { get; set; } = string.Empty;
     }
 }
 

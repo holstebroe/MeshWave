@@ -1,5 +1,0 @@
-feat: Implement immediate propagation of social interactions and metadata
-
-Added a new P2P protocol message `NotifyNewOperation` to trigger a lightweight "New Operation" announcement for fast propagation without pushing full manifests.
-
-Implemented targeted propagation in `SyncOrchestrator`. When content owners update metadata, or active listeners interact with a track (Play, Like, Comment), they will immediately send a `NotifyNewOperation` to relevant active peers, along with a random gossip spread. The receiving peer adds the sender to its local routing and immediately requests a delta-sync, pulling in the new operations in near real-time.

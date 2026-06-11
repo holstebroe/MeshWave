@@ -205,15 +205,15 @@ public class BrowseViewModel : ViewModelBase
     private ObservableCollection<BrowsePlaylistItem> _playlists = [];
 
     public BrowseViewModel(
+        SettingsService? settingsService,
         ISyncBrowseClient? sync = null,
         DownloadQueueService? downloadQueue = null,
         Action<string, string, TimeSpan, string, long>? onPlayRemote = null,
-        SettingsService? settingsService = null,
         LibraryDownloadStateService? downloadState = null)
     {
         _sync = sync;
         _downloadQueue = downloadQueue ?? new DownloadQueueService();
-        _settingsService = settingsService ?? new SettingsService();
+        _settingsService = settingsService;
         _downloadState = downloadState ?? new LibraryDownloadStateService();
 
         SetTabCommand = new RelayCommand<string>(tab =>

@@ -1,4 +1,3 @@
-using AsyncAwaitBestPractices.MVVM;
 using MeshWave.Common.Core;
 using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
@@ -14,7 +13,6 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Sockets;
-using System.Windows;
 using System.Windows.Input;
 
 namespace MeshWave.Wpf.ViewModels;
@@ -28,7 +26,7 @@ public class ApplicationViewModel : ViewModelBase
     private string _applicationTitle = "MeshWave";
     private ViewModelBase _currentViewModel;
 
-    private readonly SettingsService _settingsService;
+    public SettingsService SettingsService { get; }
     private readonly UserProfileService _profileService;
     private readonly P2PIdentityService _identityService = new();
     private readonly ManifestManager _manifestManager = new();
@@ -50,12 +48,12 @@ public class ApplicationViewModel : ViewModelBase
         UserProfileService? profileService = null,
         Func<IAudioPlaybackService>? audioServiceFactory = null)
     {
-        _settingsService = settingsService;
+        SettingsService = settingsService;
         _profileService = profileService ?? new UserProfileService();
 
-        var settings = _settingsService.LoadSettings();
+        var settings = SettingsService.LoadSettings();
         _userRepository = new UserRepository(settings.BaseFolder);
-        _metadataLookup = new MetadataLookupRepository(_settingsService.GetLocalMusicFolder());
+        _metadataLookup = new MetadataLookupRepository(SettingsService.GetLocalMusicFolder());
         var catalogueService = new CatalogueService();
 
         // DI wire-up of the default file-based PeerManifestStore
@@ -66,7 +64,7 @@ public class ApplicationViewModel : ViewModelBase
             catalogueService: catalogueService,
             peerManifestStore: manifestStore);
 
-        Playback = new PlaybackViewModel(SyncOrchestrator, _userRepository, _metadataLookup, audioServiceFactory);
+        Playback = new PlaybackViewModel(settingsService, SyncOrchestrator, _userRepository, _metadataLookup, audioServiceFactory);
         _currentViewModel = new HomeViewModel();
 
 
@@ -298,19 +296,19 @@ public class ApplicationViewModel : ViewModelBase
 
     public void NavigateToSettings()
     {
-        CurrentViewModel = new SettingsViewModel(style => Playback.WaveformStyle = style, SyncOrchestrator);
+        CurrentViewModel = new SettingsViewModel(SettingsService, style => Playback.WaveformStyle = style, SyncOrchestrator);
     }
 
     public void NavigateToBrowse(string? artistUserId = null)
     {
-        var vm = new BrowseViewModel(SyncOrchestrator, _downloadQueue,
+        var vm = new BrowseViewModel(SettingsService, SyncOrchestrator, _downloadQueue,
             (title, artist, duration, filePath, length) =>
             {
                 Playback.Stop();
                 Playback.LoadTrack(title, artist, duration, filePath, remoteContentLength: length);
                 CurrentViewModel = Playback;
-            },
-            settingsService: _settingsService);
+            }
+        );
         if (!string.IsNullOrWhiteSpace(artistUserId))
             vm.NavigateToArtist(artistUserId);
         CurrentViewModel = vm;
@@ -333,7 +331,7 @@ public class ApplicationViewModel : ViewModelBase
 
     public void NavigateToCommunity()
     {
-        var vm = new CommunityViewModel(SyncOrchestrator, NavigateToBrowse, settingsService: _settingsService);
+        var vm = new CommunityViewModel( SyncOrchestrator, SettingsService, NavigateToBrowse);
         vm.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(CommunityViewModel.HasNewReleases))
@@ -427,7 +425,7 @@ public class ApplicationViewModel : ViewModelBase
         try
         {
             P2PStatusText = "Connecting…";
-            var settings = _settingsService.LoadSettings();
+            var settings = SettingsService.LoadSettings();
             _p2pActAsListener = settings.P2P.ActAsListener;
             var profile = _profileService.LoadProfile();
             var identity = _identityService.LoadOrCreate(profile.DisplayName);
@@ -498,7 +496,7 @@ public class ApplicationViewModel : ViewModelBase
         {
             try
             {
-                var settings = _settingsService.LoadSettings();
+                var settings = SettingsService.LoadSettings();
                 if (!settings.P2P.Enabled) return;
 
                 await ConnectP2PAsync();
@@ -606,15 +604,15 @@ public class ApplicationViewModel : ViewModelBase
 
         try
         {
-            var settings = _settingsService.LoadSettings();
+            var settings = SettingsService.LoadSettings();
             var supportedExtensions = settings.SupportedExtensions
                 .Select(static ext => ext.StartsWith('.') ? ext : "." + ext)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             var roots = new[]
             {
-                _settingsService.GetLocalMusicFolder(),
-                _settingsService.GetPeerMusicFolder(),
+                SettingsService.GetLocalMusicFolder(),
+                SettingsService.GetPeerMusicFolder(),
                 Path.Combine(settings.BaseFolder, "UserCache", "Images")
             }
             .Where(static p => !string.IsNullOrWhiteSpace(p))
@@ -700,8 +698,8 @@ public class ApplicationViewModel : ViewModelBase
         try
         {
             var metadataService = new MyMusicMetadataService();
-            var settings = _settingsService.LoadSettings();
-            var myMusicFolder = _settingsService.GetLocalMusicFolder();
+            var settings = SettingsService.LoadSettings();
+            var myMusicFolder = SettingsService.GetLocalMusicFolder();
             if (!Directory.Exists(myMusicFolder))
                 return;
 
@@ -812,14 +810,14 @@ public class ApplicationViewModel : ViewModelBase
         if (!force && !_resumeStateDirty)
             return;
 
-        var settings = _settingsService.LoadSettings();
+        var settings = SettingsService.LoadSettings();
 
         if (Playback.HasTrackLoaded)
             settings.Playback.ResumeState = Playback.BuildResumeState();
         else
             settings.Playback.ResumeState = new PlaybackResumeState();
 
-        _settingsService.SaveSettings(settings);
+        SettingsService.SaveSettings(settings);
         _resumeStateDirty = false;
     }
 }

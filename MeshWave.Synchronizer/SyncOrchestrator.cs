@@ -26,7 +26,6 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     private readonly ManifestExchangeClient _client;
     private readonly ManifestManager _manifestManager;
     private readonly IManifestStore _peerStore;
-    private readonly KnownPeersStore _knownPeersStore;
     private readonly ContentExchange _contentExchange;
     private readonly NatTraversalService _natTraversal;
 
@@ -149,7 +148,6 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         ManifestExchangeClient? client = null,
         ManifestManager? manifestManager = null,
         IManifestStore? peerManifestStore = null,
-        KnownPeersStore? knownPeersStore = null,
         ContentExchange? contentExchange = null,
         NatTraversalService? natTraversal = null,
         UserRepository? userRepository = null,
@@ -158,6 +156,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     {
         _logger = logger ?? LogManager.GetCurrentClassLogger();
 
+        _router = router ?? new PeerRouter(logger: _logger);
         _server = server;
         _client = client ?? new ManifestExchangeClient(timeoutMs: SecurityLimits.ConnectTimeoutMs, logger: _logger);
         _manifestManager = manifestManager ?? new ManifestManager(_logger);
@@ -165,13 +164,6 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         CatalogueService = catalogueService ?? new CatalogueService();
 
         _peerStore = peerManifestStore ?? new PeerManifestStore();
-
-        if (knownPeersStore == null && UserRepository != null)
-            _knownPeersStore = new KnownPeersStore(UserRepository.BaseDataFolder);
-        else
-            _knownPeersStore = knownPeersStore ?? new KnownPeersStore();
-
-        _router = router ?? new PeerRouter(logger: _logger, knownPeersStore: _knownPeersStore);
 
         _contentExchange = contentExchange ?? new ContentExchange();
         _natTraversal = natTraversal ?? new NatTraversalService(logger: _logger);
@@ -225,7 +217,6 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         {
             _server ??= new ManifestExchangeServer(identity.ManifestPort, logger: _logger);
             _server.ManifestReceived += OnManifestReceived;
-            _server.NotificationReceived += OnNotificationReceived;
 
             await _natTraversal.StartAsync(identity.ManifestPort, _cts.Token);
             await _natTraversal.SetupPortMappingAsync(identity.ManifestPort, _cts.Token);
@@ -253,19 +244,13 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         _router.PeerAdded -= OnPeerAdded;
         _router.PeerRemoved -= OnPeerRemoved;
         if (_server != null)
-        {
             _server.ManifestReceived -= OnManifestReceived;
-            _server.NotificationReceived -= OnNotificationReceived;
-        }
 
         await _router.StopAsync();
         if (_server != null)
             await _server.StopAsync();
         await _natTraversal.StopAsync();
-        if (_cts != null && !_cts.IsCancellationRequested)
-        {
-            try { _cts.Cancel(); } catch (ObjectDisposedException) { }
-        }
+        _cts?.Cancel();
     }
 
     /// <summary>
@@ -617,36 +602,6 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     private void OnPeerRemoved(object? sender, string userId)
     {
         PeerCountChanged?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void OnNotificationReceived(object? sender, NotifyNewOperationEventArgs e)
-    {
-        if (e.TargetUserId == Identity?.UserId) return; // Ignore notifications from ourselves
-
-        _logger.Debug("Received NotifyNewOperation for {0} stream {1} seq {2} from {3}", e.TargetUserId, e.StreamType, e.StartSequenceNumber, e.PeerAddress);
-        RecordPeerMessage(e.TargetUserId, "NotifyNewOperation", success: true, $"Received notification for seq {e.StartSequenceNumber} from {e.PeerAddress}.");
-
-        var peer = _router.GetPeers().FirstOrDefault(p => p.UserId == e.TargetUserId);
-        if (peer == null)
-        {
-            if (e.AnnouncingPeer != null)
-            {
-                // We cannot call AddOrRefreshPeer directly as it's private in PeerRouter.
-                // The router learns about peers via PeerExchange or LAN discovery.
-                // For targeted notifications, we just use the AnnouncingPeer directly to fetch.
-                peer = e.AnnouncingPeer;
-                peer.LastSeen = DateTime.UtcNow;
-            }
-            else
-            {
-                return;
-            }
-        }
-
-        if (_cts != null && !_cts.IsCancellationRequested)
-        {
-            _ = Task.Run(async () => await TryFetchAndMergeAsync(peer, _cts.Token));
-        }
     }
 
     private void OnManifestReceived(object? sender, ManifestReceivedEventArgs e)
