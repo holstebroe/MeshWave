@@ -1,15 +1,18 @@
 using System.IO;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using System.Collections;
+using System.ComponentModel;
 using MeshWave.LibraryManager;
 using MeshWave.Wpf.Models;
 using MeshWave.Wpf.Mvvm;
 using MeshWave.Wpf.Services;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
+using System.Windows;
 
 namespace MeshWave.Wpf.ViewModels;
 
-public class MyMusicMetadataEditorViewModel : ViewModelBase
+public class MyMusicMetadataEditorViewModel : ViewModelBase, INotifyDataErrorInfo
 {
     private readonly MyMusicMetadataService _metadataService = new();
     private string _trackFilePath = string.Empty;
@@ -20,15 +23,60 @@ public class MyMusicMetadataEditorViewModel : ViewModelBase
     private string _album = string.Empty;
     private string _description = string.Empty;
     private string _genre = string.Empty;
+    private string _tags = string.Empty;
     private int _year;
     private int _trackNumber;
     private bool _isReleased;
     private int _version = 1;
     private object? _coverArtSource;
 
+    private readonly Dictionary<string, List<string>> _errors = new();
+    public bool HasErrors => _errors.Any();
+    public event EventHandler<DataErrorsChangedEventArgs>? ErrorsChanged;
+
+    public IEnumerable GetErrors(string? propertyName)
+    {
+        if (string.IsNullOrEmpty(propertyName) || !_errors.ContainsKey(propertyName))
+            return Enumerable.Empty<string>();
+        return _errors[propertyName];
+    }
+
+    private void AddError(string propertyName, string error)
+    {
+        if (!_errors.ContainsKey(propertyName))
+            _errors[propertyName] = new List<string>();
+        if (!_errors[propertyName].Contains(error))
+        {
+            _errors[propertyName].Add(error);
+            ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(propertyName));
+            OnPropertyChanged(nameof(HasErrors));
+        }
+    }
+
+    private void ClearErrors(string propertyName)
+    {
+        if (_errors.ContainsKey(propertyName))
+        {
+            _errors.Remove(propertyName);
+            ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(propertyName));
+            OnPropertyChanged(nameof(HasErrors));
+        }
+    }
+
+    private void ValidateProperties()
+    {
+        ClearErrors(nameof(Title));
+        if (string.IsNullOrWhiteSpace(Title))
+            AddError(nameof(Title), "Title cannot be empty.");
+
+        ClearErrors(nameof(Year));
+        if (Year < 1000 || Year > 9999)
+            AddError(nameof(Year), "Year must be a valid 4-digit number.");
+    }
+
     public MyMusicMetadataEditorViewModel()
     {
-        SaveCommand = new RelayCommand(_ => Save(), _ => IsAlbumEditor ? !string.IsNullOrWhiteSpace(AlbumFolderPath) : !string.IsNullOrWhiteSpace(TrackFilePath));
+        SaveCommand = new RelayCommand(_ => Save(), _ => !HasErrors && (IsAlbumEditor ? !string.IsNullOrWhiteSpace(AlbumFolderPath) : !string.IsNullOrWhiteSpace(TrackFilePath)));
         ToggleReleaseCommand = new RelayCommand(_ => ToggleRelease());
         ReplaceImageCommand = new RelayCommand(_ => ReplaceImage());
     }
@@ -62,7 +110,13 @@ public class MyMusicMetadataEditorViewModel : ViewModelBase
     public string Title
     {
         get => _title;
-        set => SetProperty(ref _title, value);
+        set
+        {
+            if (SetProperty(ref _title, value))
+            {
+                ValidateProperties();
+            }
+        }
     }
 
     public string Artist
@@ -89,10 +143,22 @@ public class MyMusicMetadataEditorViewModel : ViewModelBase
         set => SetProperty(ref _genre, value);
     }
 
+    public string Tags
+    {
+        get => _tags;
+        set => SetProperty(ref _tags, value);
+    }
+
     public int Year
     {
         get => _year;
-        set => SetProperty(ref _year, value);
+        set
+        {
+            if (SetProperty(ref _year, value))
+            {
+                ValidateProperties();
+            }
+        }
     }
 
     public int TrackNumber
@@ -137,10 +203,12 @@ public class MyMusicMetadataEditorViewModel : ViewModelBase
         Album = metadata.Album;
         Description = metadata.Description;
         Genre = metadata.Genre;
+        Tags = metadata.Tags;
         Year = metadata.Year;
         TrackNumber = metadata.TrackNumber;
         IsReleased = metadata.IsReleased;
         Version = metadata.Version <= 0 ? 1 : metadata.Version;
+        ValidateProperties();
         UpdateCoverArtSource(_metadataService.GetCoverArtPath(trackFilePath));
     }
 
@@ -157,15 +225,21 @@ public class MyMusicMetadataEditorViewModel : ViewModelBase
         Album = metadata.Album;
         Description = metadata.Description;
         Genre = metadata.Genre;
+        Tags = metadata.Tags;
         Year = metadata.Year;
         TrackNumber = metadata.TrackNumber;
         IsReleased = metadata.IsReleased;
         Version = metadata.Version <= 0 ? 1 : metadata.Version;
+        ValidateProperties();
         UpdateCoverArtSource(_metadataService.GetAlbumCoverArtPath(albumFolderPath));
     }
 
     private void Save()
     {
+        ValidateProperties();
+        if (HasErrors)
+            return;
+
         var metadata = new MyMusicMetadata
         {
             Title = Title,
@@ -173,20 +247,65 @@ public class MyMusicMetadataEditorViewModel : ViewModelBase
             Album = Album,
             Description = Description,
             Genre = Genre,
+            Tags = Tags,
             Year = Year,
             TrackNumber = TrackNumber,
             IsReleased = IsReleased,
             Version = Version
         };
 
+        var appVm = Application.Current?.MainWindow?.DataContext as ApplicationViewModel;
+        string? contentHash = null;
+        if (!IsAlbumEditor && !string.IsNullOrWhiteSpace(TrackFilePath) && File.Exists(TrackFilePath))
+            contentHash = MeshWave.Common.Core.Crypto.CryptoService.ComputeFileHash(TrackFilePath);
+
         if (IsAlbumEditor)
         {
             _metadataService.SaveForAlbum(AlbumFolderPath, metadata);
             PropagateReleaseStatusToTracks(AlbumFolderPath, IsReleased);
+
+            if (IsReleased && appVm != null && appVm.P2PIsConnected)
+            {
+                var tempLibrary = new LibraryViewModel(appVm, isMyMusicLibrary: true);
+                string? albumId = null;
+
+                var firstTrackInAlbum = tempLibrary.Tracks.FirstOrDefault(t =>
+                    !string.IsNullOrWhiteSpace(t.FilePath) &&
+                    string.Equals(Path.GetDirectoryName(t.FilePath), AlbumFolderPath, StringComparison.OrdinalIgnoreCase));
+
+                if (firstTrackInAlbum != null)
+                {
+                    albumId = firstTrackInAlbum.AlbumId;
+                }
+
+                if (!string.IsNullOrWhiteSpace(albumId))
+                {
+                    appVm.UpdateAlbumInNetwork(albumId, metadata.Title, metadata.Artist);
+                }
+            }
         }
         else
         {
             _metadataService.SaveForTrack(TrackFilePath, metadata);
+
+            if (IsReleased && appVm != null && appVm.P2PIsConnected && !string.IsNullOrWhiteSpace(contentHash))
+            {
+                var tempLibrary = new LibraryViewModel(appVm, isMyMusicLibrary: true);
+                string? trackId = null;
+
+                var matchedTrack = tempLibrary.Tracks.FirstOrDefault(t =>
+                    string.Equals(t.FilePath, TrackFilePath, StringComparison.OrdinalIgnoreCase));
+
+                if (matchedTrack != null)
+                {
+                    trackId = matchedTrack.TrackId;
+                }
+
+                if (!string.IsNullOrWhiteSpace(trackId))
+                {
+                    appVm.UpdateTrackInNetwork(trackId, contentHash, metadata.Title, metadata.Artist, metadata.Album);
+                }
+            }
         }
 
         RequestClose?.Invoke(this, EventArgs.Empty);
@@ -270,6 +389,21 @@ public class MyMusicMetadataEditorViewModel : ViewModelBase
         {
             CoverArtSource = null;
         }
+    }
+
+    private static string? TryReadIdFile(string folderPath)
+    {
+        try
+        {
+            var idFilePath = Path.Combine(folderPath, ".meshwave-id");
+            if (File.Exists(idFilePath))
+            {
+                var id = File.ReadAllText(idFilePath).Trim();
+                if (!string.IsNullOrWhiteSpace(id)) return id;
+            }
+        }
+        catch { }
+        return null;
     }
 
     private string GetFirstTrackPath(string folderPath)

@@ -37,8 +37,10 @@ public class ApplicationViewModel : ViewModelBase
 
     private bool _p2pIsConnected;
     private string _p2pStatusText = "Disconnected";
+    private string _p2pStatusTooltip = "Disconnected from the mesh network.";
     private int _p2pPeerCount;
     private bool _p2pActAsListener = true;
+    private NetworkStatus _networkStatus = NetworkStatus.Offline;
     private readonly Dictionary<string, int> _lastKnownReleaseSequenceByPeer = new(StringComparer.OrdinalIgnoreCase);
 
     public ApplicationViewModel(
@@ -200,13 +202,29 @@ public class ApplicationViewModel : ViewModelBase
         private set => SetProperty(ref _p2pStatusText, value);
     }
 
+    public string P2PStatusTooltip
+    {
+        get => _p2pStatusTooltip;
+        private set => SetProperty(ref _p2pStatusTooltip, value);
+    }
+
+    public NetworkStatus NetworkStatus
+    {
+        get => _networkStatus;
+        private set => SetProperty(ref _networkStatus, value);
+    }
+
     public string P2PStatusColor
     {
         get
         {
-            if (!P2PIsConnected) return "#555555"; // Gray
-            if (SyncOrchestrator.MeshPeerCount == 0) return "#F1C40F"; // Yellow
-            return "#1DB954"; // Green
+            return NetworkStatus switch
+            {
+                NetworkStatus.Connected => "#27AE60",
+                NetworkStatus.Restricted => "#F1C40F",
+                NetworkStatus.Connecting => "#F1C40F",
+                _ => "#E74C3C"
+            };
         }
     }
 
@@ -354,12 +372,39 @@ public class ApplicationViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// Updates a released track in the P2P network.
+    /// </summary>
+    public void UpdateTrackInNetwork(string trackId, string contentHash, string title, string artist, string album)
+    {
+        if (!P2PIsConnected) return;
+        SyncOrchestrator.UpdateTrack(trackId, contentHash, new Dictionary<string, string>
+        {
+            ["title"] = SecurityLimits.Truncate(title, SecurityLimits.MaxTrackTitleLength),
+            ["artist"] = SecurityLimits.Truncate(artist, SecurityLimits.MaxArtistNameLength),
+            ["album"] = SecurityLimits.Truncate(album, SecurityLimits.MaxAlbumNameLength)
+        });
+    }
+
+    /// <summary>
     /// Announces a released album to the P2P network.
     /// </summary>
     public void AnnounceAlbumToNetwork(string albumId, string name, string artist)
     {
         if (!P2PIsConnected) return;
         SyncOrchestrator.AnnounceAlbum(albumId, null, new Dictionary<string, string>
+        {
+            ["name"] = SecurityLimits.Truncate(name, SecurityLimits.MaxAlbumNameLength),
+            ["artist"] = SecurityLimits.Truncate(artist, SecurityLimits.MaxArtistNameLength)
+        });
+    }
+
+    /// <summary>
+    /// Updates a released album in the P2P network.
+    /// </summary>
+    public void UpdateAlbumInNetwork(string albumId, string name, string artist)
+    {
+        if (!P2PIsConnected) return;
+        SyncOrchestrator.UpdateAlbum(albumId, null, new Dictionary<string, string>
         {
             ["name"] = SecurityLimits.Truncate(name, SecurityLimits.MaxAlbumNameLength),
             ["artist"] = SecurityLimits.Truncate(artist, SecurityLimits.MaxArtistNameLength)
@@ -507,18 +552,49 @@ public class ApplicationViewModel : ViewModelBase
     {
         if (!P2PIsConnected)
         {
-            P2PStatusText = "Disconnected";
+            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                NetworkStatus = NetworkStatus.Offline;
+                P2PStatusText = "Disconnected";
+                P2PStatusTooltip = "Disconnected from the mesh network.";
+                OnPropertyChanged(nameof(P2PStatusColor));
+            });
         }
         else if (SyncOrchestrator.MeshPeerCount == 0)
         {
-            P2PStatusText = "Connecting…";
+            var bootstrapPeers = SyncOrchestrator.BootstrapPeerCount;
+            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                NetworkStatus = NetworkStatus.Connecting;
+                P2PStatusText = "Connecting…";
+                P2PStatusTooltip = $"Connecting to {bootstrapPeers} bootstrap nodes...";
+                OnPropertyChanged(nameof(P2PStatusColor));
+            });
         }
         else
         {
             var meshPeers = SyncOrchestrator.MeshPeerCount;
-            P2PStatusText = $"Connected · {meshPeers} mesh peer{(meshPeers == 1 ? "" : "s")}";
+            var bootstrapPeers = SyncOrchestrator.BootstrapPeerCount;
+            var isRestricted = SyncOrchestrator.NatStatus?.Contains("No NAT device discovered", StringComparison.OrdinalIgnoreCase) == true ||
+                               SyncOrchestrator.NatStatus?.Contains("error", StringComparison.OrdinalIgnoreCase) == true;
+
+            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                if (isRestricted && SyncOrchestrator.ExternalIPAddress == null)
+                {
+                    NetworkStatus = NetworkStatus.Restricted;
+                    P2PStatusText = "Restricted";
+                    P2PStatusTooltip = $"Connected to {meshPeers} mesh peers and {bootstrapPeers} bootstrap nodes.\nStrict NAT detected; inbound connections may fail.";
+                }
+                else
+                {
+                    NetworkStatus = NetworkStatus.Connected;
+                    P2PStatusText = $"Connected · {meshPeers} mesh peer{(meshPeers == 1 ? "" : "s")}";
+                    P2PStatusTooltip = $"Connected to {meshPeers} mesh peers and {bootstrapPeers} bootstrap nodes.";
+                }
+                OnPropertyChanged(nameof(P2PStatusColor));
+            });
         }
-        OnPropertyChanged(nameof(P2PStatusColor));
     }
 
     private byte[]? TryGetLocalContentByHash(string contentHash)
@@ -744,4 +820,12 @@ public class ApplicationViewModel : ViewModelBase
         SettingsService.SaveSettings(settings);
         _resumeStateDirty = false;
     }
+}
+
+public enum NetworkStatus
+{
+    Offline,
+    Connecting,
+    Connected,
+    Restricted
 }

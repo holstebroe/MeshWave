@@ -76,7 +76,7 @@
                 <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
                     <StackPanel>
                         <TextBlock Text="Title" Style="{StaticResource EditorFieldLabel}"/>
-                        <TextBox Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}"/>
+                        <TextBox Text="{Binding Title, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}"/>
 
                         <TextBlock Text="Artist" Style="{StaticResource EditorFieldLabel}"/>
                         <TextBox Text="{Binding Artist, UpdateSourceTrigger=PropertyChanged}"/>
@@ -110,9 +110,12 @@
 
                             <StackPanel Grid.Column="2">
                                 <TextBlock Text="Year" Style="{StaticResource EditorFieldLabel}"/>
-                                <TextBox Text="{Binding Year, UpdateSourceTrigger=PropertyChanged}"/>
+                                <TextBox Text="{Binding Year, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}"/>
                             </StackPanel>
                         </Grid>
+
+                        <TextBlock Text="Tags (comma-separated)" Style="{StaticResource EditorFieldLabel}"/>
+                        <TextBox Text="{Binding Tags, UpdateSourceTrigger=PropertyChanged}"/>
 
                         <StackPanel>
                             <StackPanel.Style>

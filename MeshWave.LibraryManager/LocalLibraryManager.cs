@@ -258,7 +258,11 @@ public class LocalLibraryManager
         var cacheFolder = Path.Combine(albumFolder, ".cache");
         var commentsFolder = Path.Combine(albumFolder, ".comments");
 
+        var albumId = ComputeStableId($"{metadata.Artist}|{metadata.Album}");
+
         Directory.CreateDirectory(albumFolder);
+        EnsureIdFile(albumFolder, "local");
+        EnsureIdFile(albumFolder, albumId);
         Directory.CreateDirectory(cacheFolder);
         Directory.CreateDirectory(commentsFolder);
 
@@ -274,6 +278,73 @@ public class LocalLibraryManager
         EnsureCoverCached(destinationFile);
         UpdateMappingFiles(myMusicBaseFolder, destinationFile, metadata);
         return imported;
+    }
+
+    
+    public class LibraryIndex
+    {
+        public Dictionary<string, AlbumIndexInfo> Albums { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    }
+
+    public class AlbumIndexInfo
+    {
+        public string AlbumId { get; set; } = string.Empty;
+        public string KnownPath { get; set; } = string.Empty;
+        public Dictionary<string, string> Tracks { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string? TryReadIdFile(string folderPath)
+    {
+        try
+        {
+            var idFilePath = Path.Combine(folderPath, ".meshwave-id");
+            if (File.Exists(idFilePath))
+            {
+                var content = File.ReadAllText(idFilePath).Trim();
+                if (!string.IsNullOrWhiteSpace(content))
+                {
+                    try
+                    {
+                        using var jsonDoc = JsonDocument.Parse(content);
+                        if (jsonDoc.RootElement.TryGetProperty("Id", out var idElement))
+                        {
+                            return idElement.GetString();
+                        }
+                    }
+                    catch
+                    {
+                        // Fallback for older .meshwave-id string-only files
+                        if (Guid.TryParse(content, out _))
+                        {
+                            return content;
+                        }
+                    }
+                }
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    private static void EnsureIdFile(string folderPath, string entityId)
+    {
+        try
+        {
+            Directory.CreateDirectory(folderPath);
+            var idFilePath = Path.Combine(folderPath, ".meshwave-id");
+            if (!File.Exists(idFilePath))
+            {
+                var id = Guid.NewGuid().ToString();
+                var payload = new { EntityId = entityId, Id = id };
+                var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(idFilePath, json);
+                File.SetAttributes(idFilePath, File.GetAttributes(idFilePath) | FileAttributes.Hidden);
+            }
+        }
+        catch
+        {
+            // Fail gracefully if directory is read-only or permission is denied
+        }
     }
 
     private static void UpdateMappingFiles(string myMusicBaseFolder, string trackFilePath, CachedTrackMetadata metadata)
