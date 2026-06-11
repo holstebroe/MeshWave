@@ -113,7 +113,7 @@ public class SettingsService
 
         return new AppSettings
         {
-            BaseFolder = string.IsNullOrWhiteSpace(installerBaseFolder) ? MeshWaveEnvironment.GetAppDataRoot() : installerBaseFolder,
+            BaseFolder = string.IsNullOrWhiteSpace(installerBaseFolder) ? _appDataRoot : installerBaseFolder,
             Theme = "Dark",
             AudioDevice = "Default",
             SupportedExtensions = [".mp3", ".flac", ".wav", ".ogg", ".m4a"],

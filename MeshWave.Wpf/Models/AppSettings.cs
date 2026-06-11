@@ -1,3 +1,4 @@
+using MeshWave.Common.Core;
 using MeshWave.Common.Core.Models;
 
 namespace MeshWave.Wpf.Models;
@@ -16,6 +17,11 @@ public class AppSettings
     public PlaybackSettings Playback { get; set; } = new();
     public StorageSettings Storage { get; set; } = new();
     public LoggingSettings Logging { get; set; } = new();
+
+    public FolderLookup GetFolderLookup()
+    {
+        return new FolderLookup(BaseFolder);
+    }
 }
 
 public class P2PSettings

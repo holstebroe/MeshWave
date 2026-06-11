@@ -1,4 +1,5 @@
 using System.IO;
+using MeshWave.Common.Core;
 using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
 using MeshWave.LibraryManager;
@@ -23,9 +24,10 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
     {
         _settingsService.EnsureFoldersExist();
         var settings = _settingsService.LoadSettings();
+        var folderLookup = settings.GetFolderLookup();
         var libraryFolder = IsMyMusicLibrary
-            ? _settingsService.GetLocalMusicFolder()
-            : _settingsService.GetPeerMusicFolder();
+            ? folderLookup.GetLocalMusicFolder()
+            : folderLookup.GetPeerMusicFolder();
         LoadLibrary(libraryFolder, settings.SupportedExtensions);
     }
 

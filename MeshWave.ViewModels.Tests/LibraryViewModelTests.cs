@@ -1,6 +1,7 @@
+using MeshWave.Common.Core;
+using MeshWave.Wpf.ViewModels;
 using Moq;
 using Xunit;
-using MeshWave.Wpf.ViewModels;
 
 namespace MeshWave.ViewModels.Tests;
 
@@ -10,13 +11,18 @@ public class LibraryViewModelTests
     public void LoadLibrary_SetsIsDownloadedFalse_AndAllowsReDownload_ForMissingFiles()
     {
         // Arrange
+
         var tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         Directory.CreateDirectory(tempDir);
 
-        var cacheDir = Path.Combine(tempDir, "Artist", "Album", ".cache");
+        var folderLookup = new FolderLookup(tempDir);
+
+        var albumBaseDir = Path.Combine(folderLookup.GetLocalMusicFolder(), "Artist", "Album");
+
+        var cacheDir = Path.Combine(albumBaseDir, ".cache");
         Directory.CreateDirectory(cacheDir);
 
-        var originalFile = Path.Combine(tempDir, "Artist", "Album", "Song.mp3");
+        var originalFile = Path.Combine(albumBaseDir, "Song.mp3");
         var metaFile = Path.Combine(cacheDir, "Song.meta.json");
 
         var json = "{\n" +
@@ -32,11 +38,14 @@ public class LibraryViewModelTests
         File.WriteAllText(metaFile, json);
 
         // Use a mock ApplicationViewModel to allow testing ReDownloadTrackCommand
-        var mockAppVm = new Mock<ApplicationViewModel>(new MeshWave.Wpf.Services.SettingsService(tempDir), null, null);
+        var mockAppVm = new Mock<ApplicationViewModel>(new Wpf.Services.SettingsService(tempDir), null, null);
         var vm = new LibraryViewModel(mockAppVm.Object, isMyMusicLibrary: true);
 
         // Act
         vm.LoadLibrary(tempDir);
+
+        // Select the album to filter the tracks
+        vm.SelectedAlbum = vm.Albums.First();
 
         // Assert
         Assert.Single(vm.Tracks);
