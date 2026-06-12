@@ -668,7 +668,7 @@ public class SettingsViewModel : ViewModelBase
                     }
 
                     // 2. Generate network-snapshot.json
-                    object snapshotObj = null;
+                    object? snapshotObj = null;
                     if (_sync != null)
                     {
                         var peers = _sync.GetPeerDiagnosticsSnapshots();
