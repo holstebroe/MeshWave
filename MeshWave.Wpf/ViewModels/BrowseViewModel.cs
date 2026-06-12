@@ -213,7 +213,7 @@ public class BrowseViewModel : ViewModelBase
     {
         _sync = sync;
         _downloadQueue = downloadQueue ?? new DownloadQueueService();
-        _settingsService = settingsService ?? new SettingsService();
+        _settingsService = settingsService;
         _downloadState = downloadState ?? new LibraryDownloadStateService();
 
         SetTabCommand = new RelayCommand<string>(tab =>

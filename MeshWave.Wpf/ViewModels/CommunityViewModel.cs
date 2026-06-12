@@ -33,7 +33,7 @@ public class CommunityViewModel : ViewModelBase
     {
         _sync = sync;
         _onBrowseArtist = onBrowseArtist;
-        _settingsService = settingsService ?? new SettingsService();
+        _settingsService = settingsService;
         _downloadQueue = (Application.Current?.MainWindow?.DataContext as ApplicationViewModel)?.DownloadQueueItems;
 
         SearchCommand = new RelayCommand(_ => Search(), _ => !IsSearching && !string.IsNullOrWhiteSpace(SearchQuery));
