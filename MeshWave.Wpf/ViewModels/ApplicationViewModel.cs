@@ -71,6 +71,7 @@ public class ApplicationViewModel : ViewModelBase
 
 
         HomeMenuNavCommand = new RelayCommand(HomeMenuNav);
+        OpenVisualizerCommand = new RelayCommand(_ => OpenVisualizer());
 
 
         // Apply persisted waveform style immediately
@@ -325,6 +326,7 @@ public class ApplicationViewModel : ViewModelBase
     }
 
     public ICommand HomeMenuNavCommand { get; }
+    public ICommand OpenVisualizerCommand { get; }
     private void HomeMenuNav()
     {
         PersistPlaybackState();
@@ -827,6 +829,53 @@ public class ApplicationViewModel : ViewModelBase
 
         SettingsService.SaveSettings(settings);
         _resumeStateDirty = false;
+    }
+
+    private void OpenVisualizer()
+    {
+        var audioService = new AudioAnalysisService();
+        var vm = new VisualizerViewModel();
+        var window = new MeshWave.Wpf.Views.VisualizerWindow
+        {
+            DataContext = vm,
+            Playback = Playback,
+            AudioAnalysis = audioService
+        };
+
+        if (Playback.IsPlaying && !string.IsNullOrEmpty(Playback.SelectedAlbumTrack?.FilePath))
+        {
+            audioService.StartAnalysis(Playback.SelectedAlbumTrack.FilePath);
+        }
+
+        System.ComponentModel.PropertyChangedEventHandler handler = (s, e) =>
+        {
+            if (e.PropertyName == nameof(PlaybackViewModel.IsPlaying))
+            {
+                if (Playback.IsPlaying && !string.IsNullOrEmpty(Playback.SelectedAlbumTrack?.FilePath))
+                {
+                    audioService.StartAnalysis(Playback.SelectedAlbumTrack.FilePath);
+                }
+                else
+                {
+                    audioService.StopAnalysis();
+                }
+            }
+            else if (e.PropertyName == nameof(PlaybackViewModel.SelectedAlbumTrack))
+            {
+                if (Playback.IsPlaying && !string.IsNullOrEmpty(Playback.SelectedAlbumTrack?.FilePath))
+                {
+                    audioService.StartAnalysis(Playback.SelectedAlbumTrack.FilePath);
+                }
+            }
+        };
+
+        Playback.PropertyChanged += handler;
+        window.Closed += (s, e) =>
+        {
+            Playback.PropertyChanged -= handler;
+            audioService.Dispose();
+        };
+        window.Show();
     }
 }
 
