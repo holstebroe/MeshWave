@@ -341,6 +341,12 @@ public class ApplicationViewModel : ViewModelBase
         CurrentViewModel = vm;
     }
 
+    public void NavigateToDownloads()
+    {
+        var vm = new DownloadManagerViewModel(this);
+        CurrentViewModel = vm;
+    }
+
     public void NavigateToPlayback()
     {
         CurrentViewModel = Playback;

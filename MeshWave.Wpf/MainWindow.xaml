@@ -93,6 +93,9 @@
                         <Button Content="👥  Community"
                                 Style="{StaticResource SidebarNavButton}"
                                 Click="CommunityMenu_Click"/>
+                        <Button Content="⬇️  Downloads"
+                                Style="{StaticResource SidebarNavButton}"
+                                Click="DownloadsMenu_Click"/>
                         <Ellipse Width="8" Height="8"
                                  Fill="#E74C3C"
                                  HorizontalAlignment="Right" VerticalAlignment="Top"
