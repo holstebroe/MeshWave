@@ -1,4 +1,5 @@
 using System.IO;
+using MeshWave.Common.Core;
 using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
 using MeshWave.LibraryManager;
@@ -190,7 +191,6 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
         else
             SelectedArtist = artistItems.FirstOrDefault();
 
-        _allArtistItems = artistItems;
         _allAlbumItems = albumItems;
         _allTrackItems = trackItems;
 
@@ -210,9 +210,9 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
             });
     }
 
-    private List<LibraryArtistItem> _allArtistItems = [];
     private List<LibraryAlbumItem> _allAlbumItems = [];
     private List<LibraryTrackItem> _allTrackItems = [];
+    private List<LibraryArtistItem> _allArtistItems = [];
 
     private void EnsureQueueAlbumShells(List<LibraryAlbumItem> targetAlbums, IEnumerable<DownloadQueueItem> queueItems)
     {
@@ -256,6 +256,7 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
             .OrderBy(a => a.Artist, StringComparer.OrdinalIgnoreCase)
             .ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
+        _allArtistItems = refreshedArtists;
         Artists = refreshedArtists;
 
         if (SelectedArtist != null)

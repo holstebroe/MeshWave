@@ -267,6 +267,7 @@ public partial class LibraryViewModel : ViewModelBase
                 Tracks = _allTrackItems;
                 Albums = _allAlbumItems;
                 Artists = _allArtistItems;
+                RefreshAlbumAndTrackSelection();
                 return;
             }
 
