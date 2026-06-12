@@ -104,6 +104,12 @@ public partial class MainWindow : Window
         ViewModel.NavigateToCommunity();
     }
 
+    private void DownloadsMenu_Click(object sender, RoutedEventArgs e)
+    {
+        ViewModel.PersistPlaybackState();
+        ViewModel.NavigateToDownloads();
+    }
+
     private void BrandMenu_MinimizeToTray_Click(object sender, RoutedEventArgs e)
     {
         ViewModel.PersistPlaybackState(force: true);

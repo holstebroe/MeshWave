@@ -45,6 +45,12 @@ public class ViewModelToViewConverter : IValueConverter
             view.DataContext = vm6;
             return view;
         }
+        if (value is DownloadManagerViewModel vm7)
+        {
+            var view = new DownloadManagerView();
+            view.DataContext = vm7;
+            return view;
+        }
         return null!;
     }
 

@@ -4,7 +4,7 @@ using MeshWave.Wpf.Mvvm;
 
 namespace MeshWave.Wpf.Services;
 
-public enum DownloadState { Pending, Downloading, Done, Failed }
+public enum DownloadState { Pending, Downloading, Done, Failed, Paused }
 
 /// <summary>
 /// Represents a single queued download request from a peer.
@@ -32,10 +32,12 @@ public class DownloadQueueItem : ViewModelBase
         {
             SetProperty(ref _state, value);
             OnPropertyChanged(nameof(StateLabel));
+            OnPropertyChanged(nameof(StateColor));
             OnPropertyChanged(nameof(IsActive));
             OnPropertyChanged(nameof(IsDone));
             OnPropertyChanged(nameof(IsFailed));
             OnPropertyChanged(nameof(IsPending));
+            OnPropertyChanged(nameof(IsPaused));
         }
     }
 
@@ -57,6 +59,7 @@ public class DownloadQueueItem : ViewModelBase
         DownloadState.Downloading => "Downloading…",
         DownloadState.Done => "Done",
         DownloadState.Failed => "Failed",
+        DownloadState.Paused => "Paused",
         _ => "Unknown"
     };
 
@@ -66,6 +69,7 @@ public class DownloadQueueItem : ViewModelBase
         DownloadState.Downloading => "#1DB954",
         DownloadState.Done => "#4CAF50",
         DownloadState.Failed => "#E53935",
+        DownloadState.Paused => "#FFA000",
         _ => "#888888"
     };
 
@@ -73,6 +77,7 @@ public class DownloadQueueItem : ViewModelBase
     public bool IsDone => State == DownloadState.Done;
     public bool IsFailed => State == DownloadState.Failed;
     public bool IsPending => State == DownloadState.Pending;
+    public bool IsPaused => State == DownloadState.Paused;
 }
 
 /// <summary>
