@@ -9,6 +9,7 @@ namespace MeshWave.Wpf.Services;
 /// </summary>
 public class AudioPlaybackService : IAudioPlaybackService
 {
+    private readonly IAudioAnalysisService? _analysisService;
     private IWavePlayer? _waveOut;
     private WaveStream? _audioFile;
     private GrowingFileStream? _growingStream;
@@ -16,6 +17,11 @@ public class AudioPlaybackService : IAudioPlaybackService
     private string? _currentFilePath;
     private bool _isDisposed;
     private bool _isBuffering;
+
+    public AudioPlaybackService(IAudioAnalysisService? analysisService = null)
+    {
+        _analysisService = analysisService;
+    }
 
     public event EventHandler<TimeSpan>? PositionChanged;
     public event EventHandler? PlaybackStopped;
@@ -42,8 +48,18 @@ public class AudioPlaybackService : IAudioPlaybackService
         Stop();
         _currentFilePath = filePath;
         _audioFile = new AudioFileReader(filePath);
+
         _waveOut = new WaveOutEvent();
-        _waveOut.Init(_audioFile);
+
+        if (_analysisService != null)
+        {
+            var interceptor = _analysisService.CreateInterceptor(_audioFile.ToSampleProvider());
+            _waveOut.Init(interceptor);
+        }
+        else
+        {
+            _waveOut.Init(_audioFile);
+        }
         _waveOut.PlaybackStopped += OnPlaybackStopped;
 
         _positionTimer = new DispatcherTimer
@@ -76,7 +92,16 @@ public class AudioPlaybackService : IAudioPlaybackService
             _audioFile = new AudioFileReader(tempPath);
 
         _waveOut = new WaveOutEvent();
-        _waveOut.Init(_audioFile);
+
+        if (_analysisService != null)
+        {
+            var interceptor = _analysisService.CreateInterceptor(_audioFile.ToSampleProvider());
+            _waveOut.Init(interceptor);
+        }
+        else
+        {
+            _waveOut.Init(_audioFile);
+        }
         _waveOut.PlaybackStopped += OnPlaybackStopped;
 
         _positionTimer = new DispatcherTimer
