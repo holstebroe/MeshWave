@@ -14,6 +14,62 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        DataContextChanged += OnDataContextChanged;
+    }
+
+    private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (e.OldValue is ApplicationViewModel oldVm)
+        {
+            oldVm.Playback.PropertyChanged -= Playback_PropertyChanged;
+        }
+
+        if (e.NewValue is ApplicationViewModel newVm)
+        {
+            newVm.Playback.PropertyChanged += Playback_PropertyChanged;
+        }
+    }
+
+    private void Playback_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(PlaybackViewModel.DynamicAccentColor) && sender is PlaybackViewModel vm)
+        {
+            Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                if (Application.Current == null) return;
+
+                if (Application.Current.Resources["AccentColor"] is System.Windows.Media.SolidColorBrush accentBrush &&
+                    Application.Current.Resources["PrimaryColor"] is System.Windows.Media.SolidColorBrush primaryBrush)
+                {
+                    if (accentBrush.IsFrozen || primaryBrush.IsFrozen)
+                    {
+                        var newAccentBrush = new System.Windows.Media.SolidColorBrush(vm.DynamicAccentColor);
+                        Application.Current.Resources["AccentColor"] = newAccentBrush;
+
+                        var newPrimaryBrush = new System.Windows.Media.SolidColorBrush(vm.DynamicAccentColor);
+                        Application.Current.Resources["PrimaryColor"] = newPrimaryBrush;
+                    }
+                    else
+                    {
+                        var animation = new System.Windows.Media.Animation.ColorAnimation
+                        {
+                            To = vm.DynamicAccentColor,
+                            Duration = TimeSpan.FromSeconds(0.5)
+                        };
+                        accentBrush.BeginAnimation(System.Windows.Media.SolidColorBrush.ColorProperty, animation);
+                        primaryBrush.BeginAnimation(System.Windows.Media.SolidColorBrush.ColorProperty, animation);
+                    }
+                }
+                else
+                {
+                    var newBrush = new System.Windows.Media.SolidColorBrush(vm.DynamicAccentColor);
+                    if (Application.Current.Resources.Contains("AccentColor"))
+                        Application.Current.Resources["AccentColor"] = newBrush;
+                    if (Application.Current.Resources.Contains("PrimaryColor"))
+                        Application.Current.Resources["PrimaryColor"] = newBrush;
+                }
+            });
+        }
     }
 
     private ApplicationViewModel ViewModel => (ApplicationViewModel)DataContext;
