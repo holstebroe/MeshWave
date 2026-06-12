@@ -1,6 +1,9 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Text.Json;
+using System.IO.Compression;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using MeshWave.Common.Core;
 using MeshWave.LibraryManager;
@@ -55,6 +58,7 @@ public class SettingsViewModel : ViewModelBase
     private WaveformStyle _waveformStyle = WaveformStyle.Filled;
     private readonly SyncOrchestrator? _sync;
 
+    private bool _isExportingDiagnostics;
     private readonly ObservableCollection<StorageCategoryUsage> _storageCategories = [];
     private string _storageStatusMessage = string.Empty;
     private string _networkDiagnosticsText = "No connection attempts recorded yet.";
@@ -79,6 +83,7 @@ public class SettingsViewModel : ViewModelBase
         RefreshStorageCommand = new RelayCommand(_ => RefreshStorageStats());
         RefreshNetworkDiagnosticsCommand = new RelayCommand(_ => RefreshNetworkDiagnostics());
         OpenDetailedDiagnosticsWindowCommand = new RelayCommand(_ => OpenDetailedDiagnosticsWindow(), _ => _sync != null);
+        ExportDiagnosticPackageCommand = new RelayCommand(_ => ExportDiagnosticPackageAsync(), _ => !IsExportingDiagnostics);
         ClearPeerManifestCacheCommand = new RelayCommand(_ => ClearPeerManifestCache());
         ClearWaveformCacheCommand = new RelayCommand(_ => ClearWaveformCache());
         OpenLogFolderCommand = new RelayCommand(_ => OpenLogFolder());
@@ -93,6 +98,7 @@ public class SettingsViewModel : ViewModelBase
     public ICommand RefreshStorageCommand { get; }
     public ICommand RefreshNetworkDiagnosticsCommand { get; }
     public ICommand OpenDetailedDiagnosticsWindowCommand { get; }
+    public ICommand ExportDiagnosticPackageCommand { get; }
     public ICommand ClearPeerManifestCacheCommand { get; }
     public ICommand ClearWaveformCacheCommand { get; }
     public ICommand OpenLogFolderCommand { get; }
@@ -102,6 +108,12 @@ public class SettingsViewModel : ViewModelBase
     {
         get => _baseFolder;
         set => SetProperty(ref _baseFolder, value);
+    }
+
+    public bool IsExportingDiagnostics
+    {
+        get => _isExportingDiagnostics;
+        set => SetProperty(ref _isExportingDiagnostics, value);
     }
 
     public string Username
@@ -594,6 +606,132 @@ public class SettingsViewModel : ViewModelBase
         }
 
         NetworkDiagnosticsText = string.Join(Environment.NewLine, lines);
+    }
+
+
+    private async void ExportDiagnosticPackageAsync()
+    {
+        var saveFileDialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "ZIP Archive (*.zip)|*.zip",
+            DefaultExt = ".zip",
+            FileName = "meshwave-diagnostics.zip",
+            Title = "Export Diagnostic Package"
+        };
+
+        if (saveFileDialog.ShowDialog() != true)
+            return;
+
+        IsExportingDiagnostics = true;
+        StorageStatusMessage = "Exporting diagnostic package... Please wait.";
+
+        // CommandManager needs this to update CanExecute
+        System.Windows.Application.Current.Dispatcher.Invoke(CommandManager.InvalidateRequerySuggested);
+
+        try
+        {
+            await Task.Run(() =>
+            {
+                var tempDir = Path.Combine(Path.GetTempPath(), "MeshWaveDiagnostics_" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(tempDir);
+
+                try
+                {
+                    // 1. Gather logs
+                    var logsDir = LoggingConfiguration.GetLogsFolder();
+                    if (Directory.Exists(logsDir))
+                    {
+                        var logFiles = Directory.GetFiles(logsDir, "*.log");
+                        foreach (var logFile in logFiles)
+                        {
+                            var destPath = Path.Combine(tempDir, Path.GetFileName(logFile));
+                            try
+                            {
+                                using var sourceStream = new FileStream(logFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                                using var destStream = new FileStream(destPath, FileMode.Create, FileAccess.Write);
+                                sourceStream.CopyTo(destStream);
+                            }
+                            catch
+                            {
+                                // Ignore files we can't read
+                            }
+                        }
+                    }
+
+                    // 2. Generate network-snapshot.json
+                    object snapshotObj = null;
+                    if (_sync != null)
+                    {
+                        var peers = _sync.GetPeerDiagnosticsSnapshots();
+                        var peerLogs = peers.ToDictionary(
+                            p => p.UserId,
+                            p => p.RecentMessages.TakeLast(50).ToList()
+                        );
+
+                        var localManifest = _sync.GetPeerManifest(_sync.Identity?.UserId ?? string.Empty);
+                        // The Manifest object contains no private keys, so we can serialize it.
+
+                        snapshotObj = new
+                        {
+                            NetworkStats = new
+                            {
+                                ConnectedPeers = _sync.ConnectedPeerCount,
+                                MeshPeers = _sync.MeshPeerCount,
+                                BootstrapPeers = _sync.BootstrapPeerCount,
+                                InboundManifestPushes = _sync.InboundManifestPushCount,
+                                OutboundManifestFetches = _sync.OutboundManifestFetchCount,
+                                NatStatus = _sync.NatStatus,
+                                ExternalIP = _sync.ExternalIPAddress
+                            },
+                            PeerMessageLogs = peerLogs,
+                            LocalManifest = localManifest
+                        };
+                    }
+                    else
+                    {
+                        snapshotObj = new { Status = "SyncOrchestrator not initialized." };
+                    }
+
+                    var snapshotJson = JsonSerializer.Serialize(snapshotObj, new JsonSerializerOptions { WriteIndented = true });
+                    File.WriteAllText(Path.Combine(tempDir, "network-snapshot.json"), snapshotJson);
+
+                    // 3. Zip it
+                    if (File.Exists(saveFileDialog.FileName))
+                    {
+                        File.Delete(saveFileDialog.FileName);
+                    }
+                    ZipFile.CreateFromDirectory(tempDir, saveFileDialog.FileName);
+                }
+                finally
+                {
+                    // Clean up temp directory
+                    if (Directory.Exists(tempDir))
+                    {
+                        try
+                        {
+                            Directory.Delete(tempDir, true);
+                        }
+                        catch
+                        {
+                            // ignore cleanup errors
+                        }
+                    }
+                }
+            });
+
+            StorageStatusMessage = "Diagnostic package exported successfully.";
+            System.Windows.MessageBox.Show("Diagnostic package exported successfully.", "Export Complete", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            StorageStatusMessage = $"Failed to export diagnostic package: {ex.Message}";
+            System.Windows.MessageBox.Show($"Failed to export diagnostic package: {ex.Message}", "Export Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
+        finally
+        {
+            IsExportingDiagnostics = false;
+            System.Windows.Application.Current.Dispatcher.Invoke(CommandManager.InvalidateRequerySuggested);
+        }
     }
 
     private void OpenDetailedDiagnosticsWindow()

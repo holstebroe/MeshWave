@@ -403,7 +403,23 @@
                                         Command="{Binding OpenDetailedDiagnosticsWindowCommand}"
                                         Style="{StaticResource PrimaryButton}"
                                         HorizontalAlignment="Left"
-                                        Padding="12,6"/>
+                                        Padding="12,6"
+                                        Margin="0,0,8,0"/>
+                                <Button Command="{Binding ExportDiagnosticPackageCommand}"
+                                        HorizontalAlignment="Left"
+                                        Padding="12,6">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                            <Setter Property="Content" Value="Export Diagnostic Package" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsExportingDiagnostics}" Value="True">
+                                                    <Setter Property="Content" Value="Processing..." />
+                                                    <Setter Property="IsEnabled" Value="False" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
                             </StackPanel>
                             <TextBox Text="{Binding NetworkDiagnosticsText}"
                                      IsReadOnly="True"
