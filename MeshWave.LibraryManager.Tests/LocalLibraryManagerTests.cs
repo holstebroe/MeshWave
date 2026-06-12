@@ -54,6 +54,59 @@ public class LocalLibraryManagerTests : IDisposable
         _libraryManager.IndexLibrary();
     }
 
+    [Fact]
+    public void SearchLocalLibrary_ReturnsMatchesUsingFts()
+    {
+        // Arrange
+        var tempDir = Path.Combine(Path.GetTempPath(), $"meshwave_lib_test_{Guid.NewGuid()}");
+        Directory.CreateDirectory(tempDir);
+
+        var cacheDir = Path.Combine(tempDir, "The Beatles", "Abbey Road", ".cache");
+        Directory.CreateDirectory(cacheDir);
+
+        var originalFile = Path.Combine(tempDir, "The Beatles", "Abbey Road", "Come Together.mp3");
+        var metaFile = Path.Combine(cacheDir, "Come Together.meta.json");
+
+        var cacheData = new {
+            Title = "Come Together",
+            Artist = "The Beatles",
+            Album = "Abbey Road",
+            DurationSeconds = 259.0,
+            SourceLastWriteUtc = System.DateTime.UtcNow,
+            OriginalFilePath = originalFile,
+            ContentHash = "hash123"
+        };
+        var cacheContent = JsonSerializer.Serialize(cacheData);
+        File.WriteAllText(metaFile, cacheContent);
+
+        var manager = new LocalLibraryManager(tempDir);
+        manager.IndexLibrary();
+
+        // Act
+        var allResults = manager.SearchLocalLibrary("").ToList();
+        var titleMatch = manager.SearchLocalLibrary("Come").ToList();
+        var artistMatch = manager.SearchLocalLibrary("Beatles").ToList();
+        var multiMatch = manager.SearchLocalLibrary("Beatles Come").ToList();
+        var noMatch = manager.SearchLocalLibrary("Yellow").ToList();
+
+        // Assert
+        Assert.Single(allResults);
+
+        Assert.Single(titleMatch);
+        Assert.Equal(allResults[0], titleMatch[0]);
+
+        Assert.Single(artistMatch);
+        Assert.Equal(allResults[0], artistMatch[0]);
+
+        Assert.Single(multiMatch);
+        Assert.Equal(allResults[0], multiMatch[0]);
+
+        Assert.Empty(noMatch);
+
+        // Cleanup
+        Directory.Delete(tempDir, true);
+    }
+
     //[Fact]
     //public void IndexLibrary_IncludesMissingFilesWithMetadataAsNotDownloaded()
     //{

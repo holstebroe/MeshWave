@@ -50,6 +50,7 @@ public class ApplicationViewModel : ViewModelBase
     {
         SettingsService = settingsService;
         _profileService = profileService ?? new UserProfileService();
+        var audioAnalysisService = new AudioAnalysisService();
 
         var settings = SettingsService.LoadSettings();
         _userRepository = new UserRepository(settings.BaseFolder);
@@ -64,6 +65,7 @@ public class ApplicationViewModel : ViewModelBase
             catalogueService: catalogueService,
             peerManifestStore: manifestStore);
 
+        audioServiceFactory ??= () => new AudioPlaybackService(audioAnalysisService);
         Playback = new PlaybackViewModel(settingsService, SyncOrchestrator, _userRepository, _metadataLookup, audioServiceFactory);
         _currentViewModel = new HomeViewModel();
 

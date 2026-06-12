@@ -212,6 +212,7 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
 
     private List<LibraryAlbumItem> _allAlbumItems = [];
     private List<LibraryTrackItem> _allTrackItems = [];
+    private List<LibraryArtistItem> _allArtistItems = [];
 
     private void EnsureQueueAlbumShells(List<LibraryAlbumItem> targetAlbums, IEnumerable<DownloadQueueItem> queueItems)
     {
@@ -255,6 +256,7 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
             .OrderBy(a => a.Artist, StringComparer.OrdinalIgnoreCase)
             .ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
+        _allArtistItems = refreshedArtists;
         Artists = refreshedArtists;
 
         if (SelectedArtist != null)

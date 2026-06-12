@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using MeshWave.Common.Core.Models;
 using MeshWave.Common.Core.Storage;
+using Microsoft.Data.Sqlite;
 using TagLib;
 using File = System.IO.File;
 
@@ -18,11 +19,25 @@ public class LocalLibraryManager
     private readonly HashSet<string> _supportedExtensions;
     private readonly List<Track> _tracks = new();
     private readonly List<Album> _albums = new();
+    private readonly string _dbConnectionString;
 
     public LocalLibraryManager(string basePath, IEnumerable<string>? supportedExtensions = null)
     {
         _basePath = basePath;
         _supportedExtensions = NormalizeExtensions(supportedExtensions);
+        Directory.CreateDirectory(_basePath);
+        _dbConnectionString = $"Data Source={Path.Combine(_basePath, "library_index.db")};Pooling=False;";
+        InitializeDatabase();
+    }
+
+    private void InitializeDatabase()
+    {
+        using var connection = new SqliteConnection(_dbConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = "CREATE VIRTUAL TABLE IF NOT EXISTS FtsTracks USING fts5(TrackId UNINDEXED, Title, Artist, Album)";
+        command.ExecuteNonQuery();
     }
 
     public static IReadOnlyList<string> SupportedExtensions => DefaultExtensionList;
@@ -39,6 +54,7 @@ public class LocalLibraryManager
 
         var albumDict = new Dictionary<string, Album>(StringComparer.OrdinalIgnoreCase);
         var discoveredPhysicalFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var ftsEntries = new List<(string TrackId, string Title, string Artist, string Album)>();
 
         foreach (var file in EnumerateSupportedFiles(_basePath, _supportedExtensions))
             try
@@ -90,6 +106,7 @@ public class LocalLibraryManager
                     albumDict[albumId] = album;
                 }
                 album.TrackIds.Add(trackId);
+                ftsEntries.Add((trackId, metadata.Title, metadata.Artist, metadata.Album));
             }
             catch
             {
@@ -141,6 +158,7 @@ public class LocalLibraryManager
                             albumDict[albumId] = album;
                         }
                         album.TrackIds.Add(trackId);
+                        ftsEntries.Add((trackId, metadata.Title, metadata.Artist, metadata.Album));
                     }
                 }
             }
@@ -151,6 +169,53 @@ public class LocalLibraryManager
         }
 
         _albums.AddRange(albumDict.Values);
+
+        UpdateFtsIndex(ftsEntries);
+    }
+
+    private void UpdateFtsIndex(List<(string TrackId, string Title, string Artist, string Album)> entries)
+    {
+        try
+        {
+            using var connection = new SqliteConnection(_dbConnectionString);
+            connection.Open();
+
+            using var transaction = connection.BeginTransaction();
+
+            // FTS5 does not support UPSERT (ON CONFLICT), so we clear and insert.
+            using (var clearCmd = connection.CreateCommand())
+            {
+                clearCmd.Transaction = transaction;
+                clearCmd.CommandText = "DELETE FROM FtsTracks";
+                clearCmd.ExecuteNonQuery();
+            }
+
+            using (var insertCmd = connection.CreateCommand())
+            {
+                insertCmd.Transaction = transaction;
+                insertCmd.CommandText = "INSERT INTO FtsTracks (TrackId, Title, Artist, Album) VALUES (@TrackId, @Title, @Artist, @Album)";
+
+                var pTrackId = insertCmd.Parameters.Add("@TrackId", SqliteType.Text);
+                var pTitle = insertCmd.Parameters.Add("@Title", SqliteType.Text);
+                var pArtist = insertCmd.Parameters.Add("@Artist", SqliteType.Text);
+                var pAlbum = insertCmd.Parameters.Add("@Album", SqliteType.Text);
+
+                foreach (var entry in entries)
+                {
+                    pTrackId.Value = entry.TrackId;
+                    pTitle.Value = entry.Title;
+                    pArtist.Value = entry.Artist;
+                    pAlbum.Value = entry.Album;
+                    insertCmd.ExecuteNonQuery();
+                }
+            }
+
+            transaction.Commit();
+        }
+        catch
+        {
+            // Ignore indexing errors to not break main functionality
+        }
     }
 
     public static void ImportMusicToOrganizedStructure(
@@ -386,6 +451,57 @@ public class LocalLibraryManager
     {
         var json = JsonSerializer.Serialize(map, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(path, json);
+    }
+
+    public IEnumerable<string> SearchLocalLibrary(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return _tracks.Select(t => t.TrackId);
+        }
+
+        var results = new List<string>();
+        try
+        {
+            using var connection = new SqliteConnection(_dbConnectionString);
+            connection.Open();
+
+            using var command = connection.CreateCommand();
+            // Prefix search by adding '*'
+            command.CommandText = "SELECT TrackId FROM FtsTracks WHERE FtsTracks MATCH @Query";
+
+            // Basic sanitization: strip special characters and append wildcard to each term
+            var sanitizedTerms = query.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                                      .Select(t => new string(t.Where(c => char.IsLetterOrDigit(c)).ToArray()))
+                                      .Where(t => !string.IsNullOrEmpty(t))
+                                      .Select(t => $"{t}*");
+
+            var ftsQuery = string.Join(" AND ", sanitizedTerms);
+
+            if (string.IsNullOrWhiteSpace(ftsQuery))
+            {
+                return [];
+            }
+
+            command.Parameters.AddWithValue("@Query", ftsQuery);
+
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                results.Add(reader.GetString(0));
+            }
+        }
+        catch
+        {
+            // fallback if FTS fails
+            var q = query.ToLowerInvariant();
+            return _tracks.Where(t =>
+                (t.Title?.ToLowerInvariant().Contains(q) ?? false) ||
+                (t.Description?.ToLowerInvariant().Contains(q) ?? false)
+            ).Select(t => t.TrackId);
+        }
+
+        return results;
     }
 
     public IEnumerable<Track> GetAllTracks()

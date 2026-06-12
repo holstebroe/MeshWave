@@ -60,6 +60,7 @@ public class PlaybackSettings
     public string WaveformStyle { get; set; } = "Filled";
     public AudioQuality StreamingAudioQuality { get; set; } = AudioQuality.Compressed;
     public AudioQuality DownloadAudioQuality { get; set; } = AudioQuality.Original;
+    public bool UseDynamicAccentColor { get; set; } = false;
     public PlaybackResumeState ResumeState { get; set; } = new();
 }
 

@@ -2,7 +2,6 @@ using MeshWave.Common.Core;
 using System.Net.Sockets;
 using System.Text;
 using MeshWave.Common.Core.Models;
-using MeshWave.Common.Core;
 using MeshWave.Common.Core.P2P;
 using MeshWave.Common.Core.Serialization;
 using NLog;
