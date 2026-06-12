@@ -64,10 +64,38 @@ public partial class LibraryViewModel : ViewModelBase
         set => SetProperty(ref _syncStatus, value);
     }
 
+    private CancellationTokenSource? _searchDebounceToken;
+
     public string SearchQuery
     {
         get => _searchQuery;
-        set => SetProperty(ref _searchQuery, value);
+        set
+        {
+            if (SetProperty(ref _searchQuery, value))
+            {
+                TriggerSearchDebounced();
+            }
+        }
+    }
+
+    private async void TriggerSearchDebounced()
+    {
+        _searchDebounceToken?.Cancel();
+        _searchDebounceToken = new CancellationTokenSource();
+        var token = _searchDebounceToken.Token;
+
+        try
+        {
+            await Task.Delay(300, token);
+            if (!token.IsCancellationRequested)
+            {
+                Search();
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            // Ignore cancellation
+        }
     }
 
     public List<LibraryTrackItem> Tracks
@@ -227,7 +255,35 @@ public partial class LibraryViewModel : ViewModelBase
 
     public void Search()
     {
-        // TODO: Implement library search
+        if (_libraryManager == null) return;
+
+        var query = SearchQuery?.Trim() ?? string.Empty;
+
+        Application.Current?.Dispatcher.InvokeAsync(() =>
+        {
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                // Reset to all
+                Tracks = _allTrackItems;
+                Albums = _allAlbumItems;
+                Artists = _allArtistItems;
+                return;
+            }
+
+            var matchedTrackIds = _libraryManager.SearchLocalLibrary(query).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var matchedTracks = _allTrackItems.Where(t => matchedTrackIds.Contains(t.TrackId)).ToList();
+
+            var matchedAlbumIds = matchedTracks.Select(t => t.AlbumId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var matchedAlbums = _allAlbumItems.Where(a => matchedAlbumIds.Contains(a.AlbumId)).ToList();
+
+            var matchedArtistNames = matchedAlbums.Select(a => a.Artist).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var matchedArtists = _allArtistItems.Where(a => matchedArtistNames.Contains(a.Name)).ToList();
+
+            Tracks = matchedTracks;
+            Albums = matchedAlbums;
+            Artists = matchedArtists;
+        });
     }
 
     public void RefreshLibrary()
