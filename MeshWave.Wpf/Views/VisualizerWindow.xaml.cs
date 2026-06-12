@@ -32,6 +32,13 @@ public partial class VisualizerWindow : Window
 
         InitializeGL();
         _stopwatch.Start();
+
+        DataContextChanged += OnDataContextChanged;
+    }
+
+    private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        CompileShader();
     }
 
     private void InitializeGL()
@@ -55,9 +62,9 @@ public partial class VisualizerWindow : Window
 
         GL.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, 5 * sizeof(float), 3 * sizeof(float));
         GL.EnableVertexAttribArray(1);
-
-        CompileShader();
     }
+
+
 
     private void CompileShader()
     {
@@ -79,7 +86,8 @@ public partial class VisualizerWindow : Window
         GL.CompileShader(vertexShader);
 
         int fragmentShader = GL.CreateShader(ShaderType.FragmentShader);
-        GL.ShaderSource(fragmentShader, vm.ShaderScript);
+        var vmShaderScript = vm.ShaderScript;
+        GL.ShaderSource(fragmentShader, vmShaderScript);
         GL.CompileShader(fragmentShader);
 
         GL.GetShader(fragmentShader, ShaderParameter.CompileStatus, out int success);
