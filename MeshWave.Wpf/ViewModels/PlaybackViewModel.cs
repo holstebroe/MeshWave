@@ -7,6 +7,7 @@ using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
 using MeshWave.Common.Core.Storage;
 using MeshWave.LibraryManager;
+using System.Windows.Media;
 using MeshWave.Synchronizer;
 using MeshWave.Wpf.Mvvm;
 using MeshWave.Wpf.Services;
@@ -50,6 +51,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     private readonly Dictionary<string, HashSet<string>> _importedCommentOperationIdsByPeer = new(StringComparer.OrdinalIgnoreCase);
     private bool _isCurrentTrackLikedByMe;
     private readonly SettingsService _settingsService;
+    private Color _dynamicAccentColor = Color.FromRgb(0x1D, 0xB9, 0x54);
 
     public PlaybackViewModel(
         SettingsService settingsService,
@@ -139,6 +141,12 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     {
         get => _currentArtist;
         set => SetProperty(ref _currentArtist, value);
+    }
+
+    public Color DynamicAccentColor
+    {
+        get => _dynamicAccentColor;
+        set => SetProperty(ref _dynamicAccentColor, value);
     }
 
     public bool IsCurrentTrackLikedByMe
@@ -397,6 +405,8 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         var coverResolver = new LocalLibraryManager(Path.GetDirectoryName(_currentFilePath) ?? string.Empty);
         CoverImagePath = coverResolver.GetTrackCoverPath(_currentFilePath);
 
+        UpdateAccentColor();
+
         // Also refresh the album track list if the current track is in it
         if (SelectedAlbumTrack != null && string.Equals(SelectedAlbumTrack.FilePath, _currentFilePath, StringComparison.OrdinalIgnoreCase))
         {
@@ -422,6 +432,8 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             var coverResolver = new LocalLibraryManager(Path.GetDirectoryName(filePath) ?? string.Empty);
             CoverImagePath = coverResolver.GetTrackCoverPath(filePath);
             WaveformSamples = coverResolver.GetTrackWaveform(filePath);
+
+            UpdateAccentColor();
 
             var myMusicMeta = _myMusicMetadataService.LoadForTrack(filePath);
             TrackDescription = string.IsNullOrWhiteSpace(myMusicMeta.Description)
@@ -505,11 +517,25 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         {
             CoverImagePath = string.Empty;
             WaveformSamples = [];
+            UpdateAccentColor();
             TimelineMarkers.Clear();
             TrackDescription = string.Empty;
             CurrentTrackVersion = 1;
             IsCurrentTrackLikedByMe = false;
             OnPropertyChanged(nameof(IsOwnedTrack));
+        }
+    }
+
+    private async void UpdateAccentColor()
+    {
+        var settings = _settingsService.LoadSettings();
+        if (settings.Playback.UseDynamicAccentColor)
+        {
+            DynamicAccentColor = await ColorExtractionService.GetDominantColorAsync(CoverImagePath);
+        }
+        else
+        {
+            DynamicAccentColor = Color.FromRgb(0x1D, 0xB9, 0x54); // Default Green
         }
     }
 

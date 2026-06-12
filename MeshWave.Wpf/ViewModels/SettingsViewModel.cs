@@ -36,6 +36,7 @@ public class SettingsViewModel : ViewModelBase
     private string _supportedExtensionsText = string.Empty;
     private AudioQuality _streamingAudioQuality = AudioQuality.Compressed;
     private AudioQuality _downloadAudioQuality = AudioQuality.Original;
+    private bool _useDynamicAccentColor;
     private string _avatarImagePath = string.Empty;
     private string _avatarIconPath = string.Empty;
 
@@ -185,6 +186,12 @@ public class SettingsViewModel : ViewModelBase
         set => SetProperty(ref _downloadAudioQuality, value);
     }
 
+    public bool UseDynamicAccentColor
+    {
+        get => _useDynamicAccentColor;
+        set => SetProperty(ref _useDynamicAccentColor, value);
+    }
+
     public IEnumerable<AudioQuality> AvailableAudioQualities => Enum.GetValues<AudioQuality>();
 
     public double Volume
@@ -319,6 +326,7 @@ public class SettingsViewModel : ViewModelBase
         Volume = settings.Playback.Volume;
         StreamingAudioQuality = settings.Playback.StreamingAudioQuality;
         DownloadAudioQuality = settings.Playback.DownloadAudioQuality;
+        UseDynamicAccentColor = settings.Playback.UseDynamicAccentColor;
 
         var extensions = settings.SupportedExtensions.Count > 0
             ? settings.SupportedExtensions
@@ -438,7 +446,8 @@ public class SettingsViewModel : ViewModelBase
                 RegisterPlayAt = 0.5,
                 WaveformStyle = WaveformStyle.ToString(),
                 StreamingAudioQuality = StreamingAudioQuality,
-                DownloadAudioQuality = DownloadAudioQuality
+                DownloadAudioQuality = DownloadAudioQuality,
+                UseDynamicAccentColor = UseDynamicAccentColor
             },
             P2P = new P2PSettings
             {
