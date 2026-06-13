@@ -13,9 +13,9 @@ public sealed class LibraryDownloadStateService
     private List<DownloadedTrackEntry>? _downloadedCache;
     private readonly string _appDataRoot;
 
-    public LibraryDownloadStateService(string? appDataRoot = null)
+    public LibraryDownloadStateService(IMeshWaveEnvironment environment, string? appDataRoot = null)
     {
-        _appDataRoot = appDataRoot ?? MeshWaveEnvironment.GetAppDataRoot();
+        _appDataRoot = appDataRoot ?? environment.GetAppDataRoot();
     }
 
     public IReadOnlyList<RemovedLibraryTrackEntry> GetRemovedEntries()

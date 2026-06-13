@@ -33,8 +33,8 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         var johnSettingsService = new SettingsService(john.AppDataRoot);
         var janeSettingsService = new SettingsService(jane.AppDataRoot);
 
-        var johnBrowseViewModel = new BrowseViewModel(johnSettingsService, john.Orchestrator, new DownloadQueueService());
-        var janeBrowseViewModel = new BrowseViewModel(janeSettingsService, jane.Orchestrator, new DownloadQueueService());
+        var johnBrowseViewModel = CreateBrowseViewModel(john, johnSettingsService);
+        var janeBrowseViewModel = CreateBrowseViewModel(jane, janeSettingsService);
 
         // Verify that john and jane are connected
         await john.WaitForConditionAsync(() => john.Orchestrator.ConnectedPeerCount > 0);
@@ -43,7 +43,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         // Use the built-in ConnectAndSyncAll which properly propagates manifests
         await _context.ConnectAndSyncAllAsync();
 
-        // Trigger refresh of browse viewmodels to load the manifests that were just synced
+        // Trigger refresh of browse view-models to load the manifests that were just synced
         // (FilterText change causes Refresh to be called)
         johnBrowseViewModel.FilterText = " ";
         johnBrowseViewModel.FilterText = string.Empty;
@@ -57,17 +57,16 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         // Are we sure that Jane is actually reporting herself as artist?
         try
         {
-            await TestWaiter.WaitForItemPollingAsync(() => johnBrowseViewModel.Artists, a => a.UserId == jane.UserId, timeoutMs: 15000);
+            await TestWaiter.WaitForItemPollingAsync(() => johnBrowseViewModel.Artists, a => a.UserId == jane.UserId, timeoutMs: 15000, cancellationToken: TestContext.Current.CancellationToken);
         }
         catch (Exception ex)
         {
             // Log detailed info about what manifests John has
             var johnManifests = john.Orchestrator.PeerManifests.ToList();
             var johnLocalManifest = john.Orchestrator.GetLocalManifest(ManifestStreamType.Social);
-            var janeManifestContent = johnManifests.FirstOrDefault(m => m.StreamType == ManifestStreamType.Content && m.UserId == jane.UserId);
             var janeManifestSocial = johnManifests.FirstOrDefault(m => m.StreamType == ManifestStreamType.Social && m.UserId == jane.UserId);
 
-            var manifesDebugInfo = $"\nJohn's Local Social Manifest: {(johnLocalManifest != null ? "YES" : "NO")}\n" +
+            var manifestDebugInfo = $"\nJohn's Local Social Manifest: {(johnLocalManifest != null ? "YES" : "NO")}\n" +
                 $"John's Peer Manifests: {johnManifests.Count}\n" +
                 $"  Social: {johnManifests.Count(m => m.StreamType == ManifestStreamType.Social)}\n" +
                 $"  Content: {johnManifests.Count(m => m.StreamType == ManifestStreamType.Content)}\n" +
@@ -79,7 +78,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
                 $"  Snapshot: {(janeManifestSocial?.Snapshot != null ? $"LastSeqNum={janeManifestSocial.Snapshot.LastSequenceNumber}" : "NONE")}\n";
 
             OutputPeerLogs(john, jane);
-            throw new Exception($"{ex.Message}{manifesDebugInfo}\n\n=== JOHN'S LOGS ===\n{john.GetLogsAsString()}\n\n=== JANE'S LOGS ===\n{jane.GetLogsAsString()}", ex);
+            throw new Exception($"{ex.Message}{manifestDebugInfo}\n\n=== JOHN'S LOGS ===\n{john.GetLogsAsString()}\n\n=== JANE'S LOGS ===\n{jane.GetLogsAsString()}", ex);
         }
 
         // Verify that john cannot see any released tracks from jane and vice versa
@@ -102,7 +101,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         // Verify that john can see jane's track and vice versa
         try
         {
-            await TestWaiter.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "jane-track-1", timeoutMs: 30000);
+            await TestWaiter.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "jane-track-1", timeoutMs: 30000, cancellationToken: TestContext.Current.CancellationToken);
         }
         catch (Exception ex)
         {
@@ -112,7 +111,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
 
         try
         {
-            await TestWaiter.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == "john-track-1", timeoutMs: 30000);
+            await TestWaiter.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == "john-track-1", timeoutMs: 30000, cancellationToken: TestContext.Current.CancellationToken);
         }
         catch (Exception ex)
         {
@@ -122,7 +121,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
 
         try
         {
-            await TestWaiter.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == "john-track-2", timeoutMs: 30000);
+            await TestWaiter.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == "john-track-2", timeoutMs: 30000, cancellationToken: TestContext.Current.CancellationToken);
         }
         catch (Exception ex)
         {
@@ -137,8 +136,8 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         await _context.ConnectAndSyncAllAsync();
 
         // Verify that john can see all of jane's released tracks
-        await TestWaiter.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "jane-track-2", timeoutMs: 30000);
-        await TestWaiter.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "jane-track-3", timeoutMs: 30000);
+        await TestWaiter.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "jane-track-2", timeoutMs: 30000, cancellationToken: TestContext.Current.CancellationToken);
+        await TestWaiter.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "jane-track-3", timeoutMs: 30000, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(3, johnBrowseViewModel.Tracks.Count(t => t.ArtistUserId == jane.UserId));
 
         // Action: John un-releases one of his tracks (deletes it from manifest)
@@ -155,7 +154,18 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         await _context.ConnectAndSyncAllAsync();
 
         // Verify that jane can no longer see the un-released track
-        await jane.WaitForConditionAsync(() => !janeBrowseViewModel.Tracks.Any(t => t.TrackId == "john-track-2"));
+        await jane.WaitForConditionAsync(() => janeBrowseViewModel.Tracks.All(t => t.TrackId != "john-track-2"));
+    }
+
+    private static BrowseViewModel CreateBrowseViewModel(TestPeer john, SettingsService johnSettingsService)
+    {
+        var johnEnvironment = john.GetEnvironment();
+        var downloadQueueService = new DownloadQueueService();
+        var libraryDownloadStateService = new LibraryDownloadStateService(johnEnvironment);
+        var syncBrowseClient = john.Orchestrator;
+
+        var johnBrowseViewModel = new BrowseViewModel(johnSettingsService, downloadQueueService, libraryDownloadStateService, syncBrowseClient);
+        return johnBrowseViewModel;
     }
 
     [Fact(Skip = "Failing in CI")]
@@ -164,15 +174,14 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         var john = await _context.CreatePeerAsync("John");
         var jane = await _context.CreatePeerAsync("Jane");
 
-        var johnBrowseViewModel = new BrowseViewModel(new SettingsService(john.AppDataRoot), john.Orchestrator, new DownloadQueueService());
-        var janeBrowseViewModel = new BrowseViewModel(new SettingsService(jane.AppDataRoot), jane.Orchestrator, new DownloadQueueService());
+        var johnBrowseViewModel = CreateBrowseViewModel(john, new SettingsService(john.AppDataRoot));
 
         john.AnnounceTrack("track-rock", "hash-rock", new Dictionary<string, string> { ["title"] = "Rock Song", ["album"] = "Rock Album" });
         jane.AnnounceTrack("track-pop", "hash-pop", new Dictionary<string, string> { ["title"] = "Pop Song", ["album"] = "Pop Album" });
 
         await _context.ConnectAndSyncAllAsync();
 
-        await TestWaiter.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "track-pop", timeoutMs: 30000);
+        await TestWaiter.WaitForItemPollingAsync(() => johnBrowseViewModel.Tracks, t => t.TrackId == "track-pop", timeoutMs: 30000, cancellationToken: TestContext.Current.CancellationToken);
 
         johnBrowseViewModel.FilterText = "Rock";
         Assert.Contains(johnBrowseViewModel.Tracks, t => t.Title.Contains("Rock"));
@@ -193,13 +202,13 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         var john = await _context.CreatePeerAsync("John", testDataName: "John", contentProvider: h => h == hash ? content : null);
         var jane = await _context.CreatePeerAsync("Jane");
 
-        var janeBrowseViewModel = new BrowseViewModel(new SettingsService(jane.AppDataRoot), jane.Orchestrator, new DownloadQueueService());
+        var janeBrowseViewModel = CreateBrowseViewModel(jane, new SettingsService(jane.AppDataRoot));
 
         john.AnnounceTrack(trackId, hash, new Dictionary<string, string> { ["title"] = "Downloadable Track" });
 
         await _context.ConnectAndSyncAllAsync();
 
-        await TestWaiter.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == trackId, timeoutMs: 30000);
+        await TestWaiter.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == trackId, timeoutMs: 30000, cancellationToken: TestContext.Current.CancellationToken);
         var trackItem = janeBrowseViewModel.Tracks.First(t => t.TrackId == trackId);
 
         Assert.True(trackItem.CanDownload);
@@ -238,11 +247,11 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
 
         // Jane prefers compressed
         var settings = janeSettings.LoadSettings();
-        settings.Playback.StreamingAudioQuality = MeshWave.Wpf.Models.AudioQuality.Compressed;
-        settings.Playback.DownloadAudioQuality = MeshWave.Wpf.Models.AudioQuality.Compressed;
+        settings.Playback.StreamingAudioQuality = Wpf.Models.AudioQuality.Compressed;
+        settings.Playback.DownloadAudioQuality = Wpf.Models.AudioQuality.Compressed;
         janeSettings.SaveSettings(settings);
 
-        var janeBrowseViewModel = new BrowseViewModel(janeSettings, jane.Orchestrator, new DownloadQueueService());
+        var janeBrowseViewModel = CreateBrowseViewModel(jane, janeSettings);
 
         john.AnnounceTrack(trackId, originalHash, new Dictionary<string, string>
         {
@@ -252,7 +261,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
 
         await _context.ConnectAndSyncAllAsync();
 
-        await TestWaiter.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == trackId, timeoutMs: 30000);
+        await TestWaiter.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == trackId, timeoutMs: 30000, cancellationToken: TestContext.Current.CancellationToken);
         var trackItem = janeBrowseViewModel.Tracks.First(t => t.TrackId == trackId);
 
         Assert.True(trackItem.CanDownload);
@@ -291,11 +300,11 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
 
         // Jane prefers Original
         var settings = janeSettings.LoadSettings();
-        settings.Playback.StreamingAudioQuality = MeshWave.Wpf.Models.AudioQuality.Original;
-        settings.Playback.DownloadAudioQuality = MeshWave.Wpf.Models.AudioQuality.Original;
+        settings.Playback.StreamingAudioQuality = Wpf.Models.AudioQuality.Original;
+        settings.Playback.DownloadAudioQuality = Wpf.Models.AudioQuality.Original;
         janeSettings.SaveSettings(settings);
 
-        var janeBrowseViewModel = new BrowseViewModel(janeSettings, jane.Orchestrator, new DownloadQueueService());
+        var janeBrowseViewModel = CreateBrowseViewModel(jane, janeSettings);
 
         // John announces track but note that he only provides compressed content.
         // To simulate a network where the original is absent, we announce both.
@@ -320,7 +329,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
 
         await _context.ConnectAndSyncAllAsync();
 
-        await TestWaiter.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == trackId, timeoutMs: 30000);
+        await TestWaiter.WaitForItemPollingAsync(() => janeBrowseViewModel.Tracks, t => t.TrackId == trackId, timeoutMs: 30000, cancellationToken: TestContext.Current.CancellationToken);
         var trackItem = janeBrowseViewModel.Tracks.First(t => t.TrackId == trackId);
 
         Assert.True(trackItem.CanDownload);

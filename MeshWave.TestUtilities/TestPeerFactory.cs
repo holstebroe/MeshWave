@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using MeshWave.Common.Core.Crypto;
+using MeshWave.Common.Core;
 using MeshWave.Common.Core.Storage;
 using MeshWave.Synchronizer;
 using NLog;
@@ -43,14 +44,30 @@ public static class TestPeerFactory
         LogManager.Configuration = config;
 
         var discovery = new NullPeerDiscovery(); // Typically want to avoid UDP broadcast in tests
-        var peerRouter = new PeerRouter(lanDiscovery: discovery, logger:logger);
-        var server = new ManifestExchangeServer(port, logger: logger);
+        var env = new DummyEnvironment(tempDir);
+
         var client = new ManifestExchangeClient(timeoutMs: 2000, logger: logger);
+        var peerRouter = new PeerRouter(discovery, client, logger:logger);
+        var server = new ManifestExchangeServer(port, logger: logger);
         var mgr = new ManifestManager(logger);
         var userRepo = new UserRepository(tempDir);
-        var store = PeerManifestStore.CreateAtBase(tempDir);
+        var store = PeerManifestStore.CreateAtBase(env, tempDir);
+        var contentExchange = new ContentExchange();
+        var natTraversal = new NatTraversalService(logger: logger);
+        var catalogueService = new CatalogueService();
 
-        var orchestrator = new SyncOrchestrator(peerRouter, server, client, mgr, store, userRepository: userRepo, logger: logger);
+        var orchestrator = new SyncOrchestrator(
+            peerRouter,
+            client,
+            mgr,
+            store,
+            contentExchange,
+            natTraversal,
+            catalogueService,
+            env,
+            server,
+            userRepo,
+            logger);
 
         var (privKey, pubKey) = CryptoService.GenerateKeyPair();
         var userId = CryptoService.DeriveUserIdFromPublicKey(pubKey);

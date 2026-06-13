@@ -13,9 +13,9 @@ public class P2PIdentityService
 {
     private readonly string _identityFilePath;
 
-    public P2PIdentityService(string? identityFilePath = null)
+    public P2PIdentityService(IMeshWaveEnvironment environment, string? identityFilePath = null)
     {
-        _identityFilePath = identityFilePath ?? MeshWaveEnvironment.CombineInAppData("p2p_identity.json");
+        _identityFilePath = identityFilePath ?? environment.CombineInAppData("p2p_identity.json");
     }
 
     /// <summary>

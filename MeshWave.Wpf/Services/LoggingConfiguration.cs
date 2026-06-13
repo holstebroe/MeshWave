@@ -8,7 +8,7 @@ namespace MeshWave.Wpf.Services;
 
 public static class LoggingConfiguration
 {
-    public static void Configure(LoggingSettings settings)
+    public static void Configure(IMeshWaveEnvironment environment, LoggingSettings settings)
     {
         if (!settings.Enabled)
         {
@@ -18,7 +18,7 @@ public static class LoggingConfiguration
 
         var config = new NLog.Config.LoggingConfiguration();
 
-        var logFolder = MeshWaveEnvironment.CombineInAppData("logs");
+        var logFolder = environment.CombineInAppData("logs");
         if (!Directory.Exists(logFolder)) Directory.CreateDirectory(logFolder);
 
         var fileTarget = new FileTarget("logfile")
@@ -40,14 +40,14 @@ public static class LoggingConfiguration
         LogManager.Configuration = config;
     }
 
-    public static string GetLogsFolder()
+    public static string GetLogsFolder(IMeshWaveEnvironment environment)
     {
-        return MeshWaveEnvironment.CombineInAppData("logs");
+        return environment.CombineInAppData("logs");
     }
 
-    public static string GetRecentLogs()
+    public static string GetRecentLogs(IMeshWaveEnvironment environment)
     {
-        var logFolder = GetLogsFolder();
+        var logFolder = GetLogsFolder(environment);
         var logFile = Path.Combine(logFolder, "meshwave.log");
 
         if (!File.Exists(logFile))

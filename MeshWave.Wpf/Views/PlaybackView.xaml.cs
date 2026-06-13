@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using MeshWave.Common.Core.Models;
+using MeshWave.Common.Core;
 using MeshWave.Wpf.Converters;
 using MeshWave.Wpf.Services;
 using MeshWave.Wpf.ViewModels;
@@ -328,7 +329,7 @@ public partial class PlaybackView : UserControl
         if (item == null || string.IsNullOrWhiteSpace(item.FilePath))
             return;
 
-        var editorVm = new MyMusicMetadataEditorViewModel();
+        var editorVm = new MyMusicMetadataEditorViewModel(new MeshWaveEnvironment());
         editorVm.LoadTrack(item.FilePath);
 
         var view = new MyMusicMetadataEditorView

@@ -38,8 +38,9 @@ public class LibraryViewModelTests
         File.WriteAllText(metaFile, json);
 
         // Use a mock ApplicationViewModel to allow testing ReDownloadTrackCommand
-        var mockAppVm = new Mock<ApplicationViewModel>(new Wpf.Services.SettingsService(tempDir), null, null);
-        var vm = new LibraryViewModel(mockAppVm.Object, isMyMusicLibrary: true);
+        var env = new TestUtilities.DummyEnvironment(tempDir);
+        var mockAppVm = new Mock<ApplicationViewModel>(env, new Wpf.Services.SettingsService(tempDir), new Wpf.Services.UserProfileService(tempDir));
+        var vm = new LibraryViewModel(mockAppVm.Object, env, isMyMusicLibrary: true);
 
         // Act
         vm.LoadLibrary(tempDir);
@@ -59,7 +60,7 @@ public class LibraryViewModelTests
 
         // Ensure download command is executable
         // We evaluate CanExecute logic without actually resolving it through Moq to avoid errors
-        var canRedownload = track != null && ((!vm.IsMyMusicLibrary && track.IsRemovedFromLibrary) || (vm.IsMyMusicLibrary && !track.IsDownloaded)) && !string.IsNullOrWhiteSpace(track.ContentHash);
+        var canRedownload = ((!vm.IsMyMusicLibrary && track.IsRemovedFromLibrary) || (vm.IsMyMusicLibrary && !track.IsDownloaded)) && !string.IsNullOrWhiteSpace(track.ContentHash);
         Assert.True(canRedownload);
 
         // Cleanup

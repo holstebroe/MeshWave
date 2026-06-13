@@ -1,9 +1,16 @@
 namespace MeshWave.Common.Core;
 
+public interface IMeshWaveEnvironment
+{
+    string GetAppDataRoot();
+    void SetAppDataRootOverride(string? appDataRoot);
+    string CombineInAppData(params string[] relativeSegments);
+}
+
 /// <summary>
 /// Provides process-level runtime path and launch-override configuration for MeshWave.
 /// </summary>
-public static class MeshWaveEnvironment
+public class MeshWaveEnvironment : IMeshWaveEnvironment
 {
     public const string AppDataRootEnvironmentVariable = "MESHWAVE_APPDATA_ROOT";
     public const string BaseFolderEnvironmentVariable = "MESHWAVE_BASE_FOLDER";
@@ -16,15 +23,15 @@ public static class MeshWaveEnvironment
     public const string P2PUploadLimitEnvironmentVariable = "MESHWAVE_P2P_UPLOAD_LIMIT";
     public const string P2PDownloadLimitEnvironmentVariable = "MESHWAVE_P2P_DOWNLOAD_LIMIT";
 
-    private static string DefaultAppDataRoot => Path.Combine(
+    private string DefaultAppDataRoot => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "MeshWave");
 
-    public static readonly string DefaultMyMusicBaseFolder = Path.Combine(
+    public string DefaultMyMusicBaseFolder { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.MyMusic),
         "MeshWave");
 
-    public static string GetAppDataRoot()
+    public string GetAppDataRoot()
     {
         var overrideRoot = Environment.GetEnvironmentVariable(AppDataRootEnvironmentVariable);
         if (string.IsNullOrWhiteSpace(overrideRoot))
@@ -33,7 +40,7 @@ public static class MeshWaveEnvironment
         return Path.GetFullPath(overrideRoot);
     }
 
-    public static void SetAppDataRootOverride(string? appDataRoot)
+    public void SetAppDataRootOverride(string? appDataRoot)
     {
         if (string.IsNullOrWhiteSpace(appDataRoot))
         {
@@ -44,7 +51,7 @@ public static class MeshWaveEnvironment
         Environment.SetEnvironmentVariable(AppDataRootEnvironmentVariable, Path.GetFullPath(appDataRoot));
     }
 
-    public static string CombineInAppData(params string[] relativeSegments)
+    public string CombineInAppData(params string[] relativeSegments)
     {
         var root = GetAppDataRoot();
         return relativeSegments.Length == 0

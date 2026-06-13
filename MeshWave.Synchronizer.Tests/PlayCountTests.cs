@@ -1,7 +1,10 @@
 using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
 using MeshWave.Common.Core;
+using MeshWave.TestUtilities;
 using Xunit;
+using System.IO;
+using MeshWave.LibraryManager;
 
 namespace MeshWave.Synchronizer.Tests;
 
@@ -54,7 +57,7 @@ public class PlayCountTests
     [Fact]
     public void RecordPlay_ReturnsFalse_WhenNotStarted()
     {
-        var orchestrator = new SyncOrchestrator();
+        var orchestrator = CreateDummyOrchestrator();
         var result = orchestrator.RecordPlay("track-1", "Title", "Artist");
         Assert.False(result);
     }
@@ -62,9 +65,24 @@ public class PlayCountTests
     [Fact]
     public void RecordPlay_ReturnsFalse_ForBlankTrackId()
     {
-        var orchestrator = new SyncOrchestrator();
+        var orchestrator = CreateDummyOrchestrator();
         var result = orchestrator.RecordPlay("   ", "Title", "Artist");
         Assert.False(result);
+    }
+
+    private SyncOrchestrator CreateDummyOrchestrator()
+    {
+        var env = new DummyEnvironment(Path.GetTempPath());
+        return new SyncOrchestrator(
+            new PeerRouter(new PeerDiscovery(), new ManifestExchangeClient(timeoutMs: 100)),
+            new ManifestExchangeClient(timeoutMs: 100),
+            new ManifestManager(),
+            new PeerManifestStore(env, Path.GetTempPath()),
+            new ContentExchange(),
+            new NatTraversalService(logger: null),
+            new CatalogueService(),
+            env
+        );
     }
 
     // ─── MergeManifest daily play cap ────────────────────────────────────────

@@ -26,6 +26,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     private readonly IManifestStore _peerStore;
     private readonly ContentExchange _contentExchange;
     private readonly NatTraversalService _natTraversal;
+    private readonly IMeshWaveEnvironment _environment;
 
     private readonly Dictionary<ManifestStreamType, Manifest> _localManifests = [];
     private bool _actAsListener;
@@ -141,30 +142,32 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     }
 
     public SyncOrchestrator(
-        PeerRouter? router = null,
+        PeerRouter router,
+        ManifestExchangeClient client,
+        ManifestManager manifestManager,
+        IManifestStore peerManifestStore,
+        ContentExchange contentExchange,
+        NatTraversalService natTraversal,
+        ICatalogueService catalogueService,
+        IMeshWaveEnvironment environment,
         ManifestExchangeServer? server = null,
-        ManifestExchangeClient? client = null,
-        ManifestManager? manifestManager = null,
-        IManifestStore? peerManifestStore = null,
-        ContentExchange? contentExchange = null,
-        NatTraversalService? natTraversal = null,
         UserRepository? userRepository = null,
-        ICatalogueService? catalogueService = null,
         Logger? logger = null)
     {
         _logger = logger ?? LogManager.GetCurrentClassLogger();
+        _environment = environment;
 
-        _router = router ?? new PeerRouter(logger: _logger);
+        _router = router;
         _server = server;
-        _client = client ?? new ManifestExchangeClient(timeoutMs: SecurityLimits.ConnectTimeoutMs, logger: _logger);
-        _manifestManager = manifestManager ?? new ManifestManager(_logger);
+        _client = client;
+        _manifestManager = manifestManager;
         UserRepository = userRepository;
-        CatalogueService = catalogueService ?? new CatalogueService();
+        CatalogueService = catalogueService;
 
-        _peerStore = peerManifestStore ?? new PeerManifestStore();
+        _peerStore = peerManifestStore;
 
-        _contentExchange = contentExchange ?? new ContentExchange();
-        _natTraversal = natTraversal ?? new NatTraversalService(logger: _logger);
+        _contentExchange = contentExchange;
+        _natTraversal = natTraversal;
         _peerStore.LoadAll();
     }
 
@@ -318,7 +321,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     {
         var safeName = string.Concat(userId.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
         var suffix = streamType.ToString().ToLowerInvariant();
-        var baseFolder = UserRepository?.BaseDataFolder ?? MeshWaveEnvironment.GetAppDataRoot();
+        var baseFolder = UserRepository?.BaseDataFolder ?? _environment.GetAppDataRoot();
         var dir = Path.Combine(baseFolder, "LocalManifests");
         Directory.CreateDirectory(dir);
         return Path.Combine(dir, $"{safeName}.{suffix}.json");

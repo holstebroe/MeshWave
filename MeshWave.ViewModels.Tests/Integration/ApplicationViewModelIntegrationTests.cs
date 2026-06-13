@@ -34,8 +34,11 @@ public class ApplicationViewModelIntegrationTests : IAsyncLifetime
 
         var mockAudio = new Mock<IAudioPlaybackService>();
 
+        var env = new DummyEnvironment(peer.AppDataRoot);
         var appVm = new ApplicationViewModel(
+            env,
             settingsService,
+            new UserProfileService(peer.AppDataRoot),
             audioServiceFactory: () => mockAudio.Object);
         var orchestrator = appVm.SyncOrchestrator;
 
@@ -54,8 +57,11 @@ public class ApplicationViewModelIntegrationTests : IAsyncLifetime
 
         var mockAudio = new Mock<IAudioPlaybackService>();
 
+        var env = new DummyEnvironment(peer.AppDataRoot);
         var appVm = new ApplicationViewModel(
+            env,
             settingsService,
+            new UserProfileService(peer.AppDataRoot),
             audioServiceFactory: () => mockAudio.Object);
 
         appVm.NavigateToHome();

@@ -1,3 +1,4 @@
+using MeshWave.Common.Core;
 using MeshWave.Common.Core.Models;
 using MeshWave.Synchronizer;
 using NLog;
@@ -93,5 +94,31 @@ public class TestPeer : IAsyncDisposable
     public string GetLogsAsString()
     {
         return string.Join(Environment.NewLine, _memoryTarget.Logs);
+    }
+
+    public IMeshWaveEnvironment GetEnvironment()
+    {
+        return new TestMeshWaveEnvironment(this.AppDataRoot, this.BaseFolder);
+    }
+}
+
+public class TestMeshWaveEnvironment(string appDataRoot, string baseFolder) : IMeshWaveEnvironment
+{
+    public string GetAppDataRoot()
+    {
+        return appDataRoot;
+    }
+
+    public void SetAppDataRootOverride(string? appDataRoot)
+    {
+        throw new NotSupportedException();
+    }
+
+    public string CombineInAppData(params string[] relativeSegments)
+    {
+        var root = GetAppDataRoot();
+        return relativeSegments.Length == 0
+            ? root
+            : Path.Combine([root, .. relativeSegments]);
     }
 }

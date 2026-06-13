@@ -28,12 +28,13 @@ public class ApplicationViewModel : ViewModelBase
 
     public SettingsService SettingsService { get; }
     private readonly UserProfileService _profileService;
-    private readonly P2PIdentityService _identityService = new();
+    private readonly P2PIdentityService _identityService;
     private readonly ManifestManager _manifestManager = new();
     private readonly DownloadQueueService _downloadQueue = new();
     private readonly UserRepository _userRepository;
     private readonly MetadataLookupRepository _metadataLookup;
     private bool _resumeStateDirty;
+    private readonly IMeshWaveEnvironment _environment;
 
     private bool _p2pIsConnected;
     private string _p2pStatusText = "Disconnected";
@@ -44,12 +45,15 @@ public class ApplicationViewModel : ViewModelBase
     private readonly Dictionary<string, int> _lastKnownReleaseSequenceByPeer = new(StringComparer.OrdinalIgnoreCase);
 
     public ApplicationViewModel(
+        IMeshWaveEnvironment environment,
         SettingsService settingsService,
-        UserProfileService? profileService = null,
+        UserProfileService profileService,
         Func<IAudioPlaybackService>? audioServiceFactory = null)
     {
+        _environment = environment;
+        _identityService = new P2PIdentityService(environment);
         SettingsService = settingsService;
-        _profileService = profileService ?? new UserProfileService();
+        _profileService = profileService;
         var audioAnalysisService = new AudioAnalysisService();
 
         var settings = SettingsService.LoadSettings();
@@ -58,15 +62,28 @@ public class ApplicationViewModel : ViewModelBase
         var catalogueService = new CatalogueService();
 
         // DI wire-up of the default file-based PeerManifestStore
-        var manifestStore = PeerManifestStore.CreateAtBase(_userRepository.BaseDataFolder);
+        var manifestStore = PeerManifestStore.CreateAtBase(environment, _userRepository.BaseDataFolder);
+
+        var lanDiscovery = new PeerDiscovery();
+        var manifestExchangeClient = new ManifestExchangeClient(timeoutMs: SecurityLimits.ConnectTimeoutMs);
+        var peerRouter = new PeerRouter(lanDiscovery, manifestExchangeClient);
+        var manifestManager = new ManifestManager();
+        var contentExchange = new ContentExchange();
+        var natTraversal = new NatTraversalService(logger: null);
 
         SyncOrchestrator = new SyncOrchestrator(
-            userRepository: _userRepository,
+            router: peerRouter,
+            client: manifestExchangeClient,
+            manifestManager: manifestManager,
+            peerManifestStore: manifestStore,
+            contentExchange: contentExchange,
+            natTraversal: natTraversal,
             catalogueService: catalogueService,
-            peerManifestStore: manifestStore);
+            environment: environment,
+            userRepository: _userRepository);
 
         audioServiceFactory ??= () => new AudioPlaybackService(audioAnalysisService);
-        Playback = new PlaybackViewModel(settingsService, SyncOrchestrator, _userRepository, _metadataLookup, audioServiceFactory);
+        Playback = new PlaybackViewModel(settingsService, SyncOrchestrator, _userRepository, _metadataLookup, audioServiceFactory, _profileService);
         _currentViewModel = new HomeViewModel();
 
 
@@ -289,22 +306,22 @@ public class ApplicationViewModel : ViewModelBase
 
     public void NavigateToLibrary()
     {
-        CurrentViewModel = new LibraryViewModel(this, isMyMusicLibrary: false);
+        CurrentViewModel = new LibraryViewModel(this, _environment, isMyMusicLibrary: false);
     }
 
     public void NavigateToMyMusic()
     {
-        CurrentViewModel = new LibraryViewModel(this, isMyMusicLibrary: true);
+        CurrentViewModel = new LibraryViewModel(this, _environment, isMyMusicLibrary: true);
     }
 
     public void NavigateToSettings()
     {
-        CurrentViewModel = new SettingsViewModel(SettingsService, style => Playback.WaveformStyle = style, SyncOrchestrator);
+        CurrentViewModel = new SettingsViewModel(_environment, SettingsService, style => Playback.WaveformStyle = style, SyncOrchestrator);
     }
 
     public void NavigateToBrowse(string? artistUserId = null)
     {
-        var vm = new BrowseViewModel(SettingsService, SyncOrchestrator, _downloadQueue,
+        var vm = new BrowseViewModel(SettingsService, _downloadQueue, new LibraryDownloadStateService(_environment), SyncOrchestrator,
             (title, artist, duration, filePath, length) =>
             {
                 Playback.Stop();
