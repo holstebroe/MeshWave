@@ -13,9 +13,9 @@ public class UserProfileService
 {
     private readonly string _appDataRoot;
 
-    public UserProfileService(string? appDataRoot = null)
+    public UserProfileService(string appDataRoot)
     {
-        _appDataRoot = appDataRoot ?? MeshWaveEnvironment.GetAppDataRoot();
+        _appDataRoot = appDataRoot;
     }
 
     public UserProfile LoadProfile()

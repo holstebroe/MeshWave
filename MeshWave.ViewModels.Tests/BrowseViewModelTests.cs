@@ -12,7 +12,7 @@ namespace MeshWave.ViewModels.Tests;
 
 public class BrowseViewModelTests
 {
-    private readonly SettingsService _settingsService = new(MeshWaveEnvironment.GetAppDataRoot());
+    private readonly SettingsService _settingsService = new(new MeshWaveEnvironment().GetAppDataRoot());
 
     [Fact]
     public void Refresh_CountsPublicTracks_FromLatestTrackState()

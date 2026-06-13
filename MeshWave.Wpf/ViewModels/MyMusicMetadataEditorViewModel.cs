@@ -4,6 +4,7 @@ using System.Windows.Media.Imaging;
 using System.Collections;
 using System.ComponentModel;
 using MeshWave.LibraryManager;
+using MeshWave.Common.Core;
 using MeshWave.Wpf.Models;
 using MeshWave.Wpf.Mvvm;
 using MeshWave.Wpf.Services;
@@ -266,7 +267,7 @@ public class MyMusicMetadataEditorViewModel : ViewModelBase, INotifyDataErrorInf
 
             if (IsReleased && appVm != null && appVm.P2PIsConnected)
             {
-                var tempLibrary = new LibraryViewModel(appVm, isMyMusicLibrary: true);
+                var tempLibrary = new LibraryViewModel(appVm, new MeshWaveEnvironment(), isMyMusicLibrary: true);
                 string? albumId = null;
 
                 var firstTrackInAlbum = tempLibrary.Tracks.FirstOrDefault(t =>
@@ -290,7 +291,7 @@ public class MyMusicMetadataEditorViewModel : ViewModelBase, INotifyDataErrorInf
 
             if (IsReleased && appVm != null && appVm.P2PIsConnected && !string.IsNullOrWhiteSpace(contentHash))
             {
-                var tempLibrary = new LibraryViewModel(appVm, isMyMusicLibrary: true);
+                var tempLibrary = new LibraryViewModel(appVm, new MeshWaveEnvironment(), isMyMusicLibrary: true);
                 string? trackId = null;
 
                 var matchedTrack = tempLibrary.Tracks.FirstOrDefault(t =>

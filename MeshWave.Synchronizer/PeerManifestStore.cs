@@ -20,15 +20,15 @@ public class PeerManifestStore : IManifestStore
     private readonly string _storeDirectory;
     private readonly ConcurrentDictionary<(string UserId, ManifestStreamType StreamType), Manifest> _manifests = new();
 
-    public PeerManifestStore(string? storeDirectory = null)
+    public PeerManifestStore(IMeshWaveEnvironment environment, string? storeDirectory = null)
     {
-        _storeDirectory = storeDirectory ?? Path.Combine(MeshWaveEnvironment.GetAppDataRoot(), PeerManifestsFolderName);
+        _storeDirectory = storeDirectory ?? Path.Combine(environment.GetAppDataRoot(), PeerManifestsFolderName);
         Directory.CreateDirectory(_storeDirectory);
     }
 
-    public static PeerManifestStore CreateAtBase(string baseFolder)
+    public static PeerManifestStore CreateAtBase(IMeshWaveEnvironment environment, string baseFolder)
     {
-        return new PeerManifestStore(Path.Combine(baseFolder, PeerManifestsFolderName));
+        return new PeerManifestStore(environment, Path.Combine(baseFolder, PeerManifestsFolderName));
     }
 
     /// <summary>

@@ -55,18 +55,18 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
 
     public PlaybackViewModel(
         SettingsService settingsService,
-        SyncOrchestrator? sync = null,
-        UserRepository? userRepository = null,
-        MetadataLookupRepository? metadataLookup = null,
-        Func<IAudioPlaybackService>? audioServiceFactory = null,
-        UserProfileService? profileService = null)
+        SyncOrchestrator? sync,
+        UserRepository? userRepository,
+        MetadataLookupRepository? metadataLookup,
+        Func<IAudioPlaybackService> audioServiceFactory,
+        UserProfileService profileService)
     {
         _settingsService = settingsService;
         _sync = sync;
         _userRepository = userRepository;
         _metadataLookup = metadataLookup;
         _audioServiceFactory = audioServiceFactory;
-        _profileService = profileService ?? new UserProfileService();
+        _profileService = profileService;
 
         PlayCommand = new RelayCommand(_ => Play());
         PauseCommand = new RelayCommand(_ => Pause());
@@ -449,7 +449,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             SyncCommentsFromPeerManifests();
 
             _audioService?.Dispose();
-            var audioService = _audioServiceFactory?.Invoke() ?? new AudioPlaybackService();
+            var audioService = _audioServiceFactory!.Invoke();
             _audioService = audioService;
             audioService.PositionChanged += (s, pos) =>
             {

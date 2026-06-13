@@ -4,6 +4,8 @@ using System.Windows.Input;
 using MeshWave.Common.Core.Crypto;
 using MeshWave.Wpf.Mvvm;
 using MeshWave.Wpf.Services;
+using MeshWave.Common.Core;
+using MeshWave.Wpf.ViewModels.Items;
 
 namespace MeshWave.Wpf.ViewModels;
 
@@ -27,10 +29,11 @@ public partial class LibraryViewModel : ViewModelBase
     private int _importImportedFiles;
     private string _importSingleFileStatus = string.Empty;
     private string _syncStatus = string.Empty;
-    private readonly LibraryDownloadStateService _downloadStateService = new();
+    private readonly LibraryDownloadStateService _downloadStateService;
 
-    public LibraryViewModel(ApplicationViewModel applicationViewModel, bool isMyMusicLibrary = false)
+    public LibraryViewModel(ApplicationViewModel applicationViewModel, IMeshWaveEnvironment environment, bool isMyMusicLibrary = false)
     {
+        _downloadStateService = new LibraryDownloadStateService(environment);
         _applicationViewModel = applicationViewModel;
         _settingsService = applicationViewModel.SettingsService;
         IsMyMusicLibrary = isMyMusicLibrary;

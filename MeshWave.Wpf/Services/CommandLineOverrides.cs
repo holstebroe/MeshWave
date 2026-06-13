@@ -8,7 +8,7 @@ namespace MeshWave.Wpf.Services;
 /// </summary>
 public static class CommandLineOverrides
 {
-    public static void Apply(string[] args)
+    public static void Apply(string[] args, IMeshWaveEnvironment environment)
     {
         if (args == null || args.Length == 0)
             return;
@@ -30,7 +30,7 @@ public static class CommandLineOverrides
             {
                 case "--settings-root":
                 case "--appdata-root":
-                    MeshWaveEnvironment.SetAppDataRootOverride(value);
+                    environment.SetAppDataRootOverride(value);
                     break;
 
                 case "--user":

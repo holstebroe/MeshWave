@@ -26,7 +26,7 @@ public class SettingsViewModel : ViewModelBase
 {
     private readonly SettingsService _settingsService;
     private readonly UserProfileService _profileService;
-    private readonly P2PIdentityService _identityService = new();
+    private readonly P2PIdentityService _identityService;
     private readonly Action<WaveformStyle>? _onWaveformStyleSaved;
     private string _baseFolder = string.Empty;
     private string _username = string.Empty;
@@ -67,13 +67,16 @@ public class SettingsViewModel : ViewModelBase
     private long _totalDriveBytes;
     private long _freeDriveBytes;
     private long _usedDriveBytes;
+    private readonly IMeshWaveEnvironment _environment;
 
-    public SettingsViewModel(SettingsService settingsService, Action<WaveformStyle>? onWaveformStyleSaved = null, SyncOrchestrator? sync = null)
+    public SettingsViewModel(IMeshWaveEnvironment environment, SettingsService settingsService, Action<WaveformStyle>? onWaveformStyleSaved = null, SyncOrchestrator? sync = null)
     {
+        _environment = environment;
+        _identityService = new P2PIdentityService(environment);
         _onWaveformStyleSaved = onWaveformStyleSaved;
         _sync = sync;
         _settingsService = settingsService;
-        _profileService = new UserProfileService();
+        _profileService = new UserProfileService(_environment.GetAppDataRoot());
         LoadSettings();
 
         SaveCommand = new RelayCommand(_ => SaveSettings());
@@ -470,7 +473,7 @@ public class SettingsViewModel : ViewModelBase
 
         _settingsService.SaveSettings(settings);
         _settingsService.EnsureFoldersExist();
-        LoggingConfiguration.Configure(settings.Logging);
+        LoggingConfiguration.Configure(_environment, settings.Logging);
 
         _profileService.SaveProfile(new UserProfile
         {
@@ -506,7 +509,7 @@ public class SettingsViewModel : ViewModelBase
         {
             var myMusic = _settingsService.GetLocalMusicFolder();
             var otherMusic = _settingsService.GetPeerMusicFolder();
-            var appDataRoot = MeshWaveEnvironment.GetAppDataRoot();
+            var appDataRoot = _environment.GetAppDataRoot();
             var peerManifestFolder = Path.Combine(appDataRoot, "PeerManifests");
 
             var myMusicBytes = GetDirectorySizeSafe(myMusic);
@@ -561,7 +564,7 @@ public class SettingsViewModel : ViewModelBase
         {
             _sync?.ClearPeerManifestCache();
 
-            var appDataRoot = MeshWaveEnvironment.GetAppDataRoot();
+            var appDataRoot = _environment.GetAppDataRoot();
             var peerManifestFolder = Path.Combine(appDataRoot, "PeerManifests");
             if (Directory.Exists(peerManifestFolder))
                 foreach (var file in Directory.EnumerateFiles(peerManifestFolder, "*", SearchOption.TopDirectoryOnly))
@@ -647,7 +650,7 @@ public class SettingsViewModel : ViewModelBase
                 try
                 {
                     // 1. Gather logs
-                    var logsDir = LoggingConfiguration.GetLogsFolder();
+                    var logsDir = LoggingConfiguration.GetLogsFolder(_environment);
                     if (Directory.Exists(logsDir))
                     {
                         var logFiles = Directory.GetFiles(logsDir, "*.log");
@@ -765,7 +768,7 @@ public class SettingsViewModel : ViewModelBase
     {
         try
         {
-            var folder = LoggingConfiguration.GetLogsFolder();
+            var folder = LoggingConfiguration.GetLogsFolder(_environment);
             if (!Directory.Exists(folder))
                 Directory.CreateDirectory(folder);
 
@@ -781,7 +784,7 @@ public class SettingsViewModel : ViewModelBase
     {
         try
         {
-            var logs = LoggingConfiguration.GetRecentLogs();
+            var logs = LoggingConfiguration.GetRecentLogs(_environment);
             Clipboard.SetText(logs);
             StorageStatusMessage = "Recent logs copied to clipboard.";
         }

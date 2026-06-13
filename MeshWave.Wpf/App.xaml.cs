@@ -21,15 +21,16 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
-        CommandLineOverrides.Apply(e.Args);
+        var environment = new MeshWaveEnvironment();
+        CommandLineOverrides.Apply(e.Args, environment);
 
-        var settingsService = new SettingsService(MeshWaveEnvironment.GetAppDataRoot());
+        var settingsService = new SettingsService(environment.GetAppDataRoot());
         var settings = settingsService.LoadSettings();
-        LoggingConfiguration.Configure(settings.Logging);
+        LoggingConfiguration.Configure(environment, settings.Logging);
 
         var mainWindow = new MainWindow
         {
-            DataContext = new ApplicationViewModel(settingsService: settingsService)
+            DataContext = new ApplicationViewModel(environment, settingsService, new UserProfileService(environment.GetAppDataRoot()))
         };
         MainWindow = mainWindow;
         mainWindow.Show();

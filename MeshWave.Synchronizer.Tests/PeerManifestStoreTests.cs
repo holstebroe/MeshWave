@@ -9,10 +9,12 @@ public class PeerManifestStoreTests : IDisposable
     private readonly string _tempDir = Path.Combine(Path.GetTempPath(), $"PeerManifestStoreTests_{Guid.NewGuid():N}");
     private readonly ManifestManager _manager = new();
     private readonly PeerManifestStore _store;
+    private readonly DummyEnvironment _environment;
 
     public PeerManifestStoreTests()
     {
-        _store = new PeerManifestStore(_tempDir);
+        _environment = new DummyEnvironment(_tempDir);
+        _store = new PeerManifestStore(_environment, _tempDir);
     }
 
     public void Dispose()
@@ -82,7 +84,7 @@ public class PeerManifestStoreTests : IDisposable
         _store.MergeAndSave(incoming, pub, _manager);
 
         // Create a fresh store pointing at the same directory
-        var store2 = new PeerManifestStore(_tempDir);
+        var store2 = new PeerManifestStore(_environment, _tempDir);
         store2.LoadAll();
 
         var loaded = store2.Get(userId);
