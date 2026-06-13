@@ -5,7 +5,6 @@ public interface IMeshWaveEnvironment
     string GetAppDataRoot();
     void SetAppDataRootOverride(string? appDataRoot);
     string CombineInAppData(params string[] relativeSegments);
-    string DefaultMyMusicBaseFolder { get; }
 }
 
 /// <summary>

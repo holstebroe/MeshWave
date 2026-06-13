@@ -71,12 +71,21 @@ public class BrowseViewModelTests
         sync.SetupGet(s => s.LocalManifest).Returns((Manifest?)null);
         sync.Setup(s => s.GetPeers()).Returns(Array.Empty<PeerInfo>());
 
-        var vm = new BrowseViewModel(_settingsService, sync.Object, new DownloadQueueService());
+        var vm = CreateForSyncBrowseClient(sync);
 
         Assert.Single(vm.Artists);
         Assert.Equal(1, vm.Artists[0].TrackCount);
         Assert.Single(vm.Tracks);
         Assert.Equal("track-a", vm.Tracks[0].TrackId);
+    }
+
+    private BrowseViewModel CreateForSyncBrowseClient(Mock<ISyncBrowseClient> sync)
+    {
+        var downloadQueueService = new DownloadQueueService();
+        IMeshWaveEnvironment environment = new MeshWaveEnvironment();
+        var libraryDownloadStateService = new LibraryDownloadStateService(environment);
+        var vm = new BrowseViewModel(_settingsService, downloadQueueService, libraryDownloadStateService,  sync.Object);
+        return vm;
     }
 
     [Fact]
@@ -91,7 +100,7 @@ public class BrowseViewModelTests
         sync.SetupGet(s => s.LocalManifest).Returns((Manifest?)null);
         sync.Setup(s => s.GetPeers()).Returns(Array.Empty<PeerInfo>());
 
-        var vm = new BrowseViewModel(_settingsService, sync.Object, new DownloadQueueService());
+        var vm = CreateForSyncBrowseClient(sync);
 
         Assert.Equal(2, vm.Tracks.Count);
 
@@ -133,7 +142,7 @@ public class BrowseViewModelTests
         sync.SetupGet(s => s.PeerManifests).Returns(new List<Manifest> { manifest });
         sync.Setup(s => s.GetPeers()).Returns(Array.Empty<PeerInfo>());
 
-        var vm = new BrowseViewModel(_settingsService, sync.Object, new DownloadQueueService());
+        var vm = CreateForSyncBrowseClient(sync);
 
         Assert.Single(vm.Playlists);
         var pl = vm.Playlists[0];
@@ -180,7 +189,7 @@ public class BrowseViewModelTests
         sync.Setup(s => s.GetPeers()).Returns(Array.Empty<PeerInfo>());
 
         var downloadQueue = new DownloadQueueService();
-        var vm = new BrowseViewModel(_settingsService, sync.Object, downloadQueue);
+        var vm = CreateForSyncBrowseClient(sync);
 
         Assert.Empty(downloadQueue.AllItems);
 
@@ -219,7 +228,7 @@ public class BrowseViewModelTests
         sync.SetupGet(s => s.PeerManifests).Returns(new List<Manifest> { manifest });
         sync.Setup(s => s.GetPeers()).Returns(Array.Empty<PeerInfo>());
 
-        var vm = new BrowseViewModel(_settingsService, sync.Object, new DownloadQueueService());
+        var vm = CreateForSyncBrowseClient(sync);
 
         Assert.Single(vm.Albums);
         Assert.Equal("Updated Album", vm.Albums[0].Name);
@@ -254,7 +263,7 @@ public class BrowseViewModelTests
         sync.SetupGet(s => s.PeerManifests).Returns(new List<Manifest> { manifest });
         sync.Setup(s => s.GetPeers()).Returns(Array.Empty<PeerInfo>());
 
-        var vm = new BrowseViewModel(_settingsService, sync.Object, new DownloadQueueService());
+        var vm = CreateForSyncBrowseClient(sync);
 
         Assert.Single(vm.Playlists);
         Assert.Equal("Playlist V2", vm.Playlists[0].Name);
@@ -296,7 +305,7 @@ public class BrowseViewModelTests
         sync.SetupGet(s => s.PeerManifests).Returns(new List<Manifest> { manifest });
         sync.Setup(s => s.GetPeers()).Returns(Array.Empty<PeerInfo>());
 
-        var vm = new BrowseViewModel(_settingsService, sync.Object, new DownloadQueueService());
+        var vm = CreateForSyncBrowseClient(sync);
 
         Assert.Single(vm.Albums);
         Assert.Equal("Snapshot Album Updated", vm.Albums[0].Name);
