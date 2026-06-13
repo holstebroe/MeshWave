@@ -39,7 +39,7 @@ public class LibraryViewModelTests
 
         // Use a mock ApplicationViewModel to allow testing ReDownloadTrackCommand
         var env = new TestUtilities.DummyEnvironment(tempDir);
-        var mockAppVm = new Mock<ApplicationViewModel>(env, new Wpf.Services.SettingsService(tempDir), new Wpf.Services.UserProfileService(tempDir));
+        var mockAppVm = new Mock<ApplicationViewModel>(env, new Wpf.Services.SettingsService(tempDir), new Wpf.Services.UserProfileService(tempDir), (System.Func<MeshWave.Wpf.Services.IAudioPlaybackService>)(() => null!));
         var vm = new LibraryViewModel(mockAppVm.Object, env, isMyMusicLibrary: true);
 
         // Act

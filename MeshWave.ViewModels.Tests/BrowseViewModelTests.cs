@@ -79,9 +79,9 @@ public class BrowseViewModelTests
         Assert.Equal("track-a", vm.Tracks[0].TrackId);
     }
 
-    private BrowseViewModel CreateForSyncBrowseClient(Mock<ISyncBrowseClient> sync)
+    private BrowseViewModel CreateForSyncBrowseClient(Mock<ISyncBrowseClient> sync, DownloadQueueService? downloadQueueService = null)
     {
-        var downloadQueueService = new DownloadQueueService();
+        downloadQueueService ??= new DownloadQueueService();
         IMeshWaveEnvironment environment = new MeshWaveEnvironment();
         var libraryDownloadStateService = new LibraryDownloadStateService(environment);
         var vm = new BrowseViewModel(_settingsService, downloadQueueService, libraryDownloadStateService,  sync.Object);
@@ -189,7 +189,7 @@ public class BrowseViewModelTests
         sync.Setup(s => s.GetPeers()).Returns(Array.Empty<PeerInfo>());
 
         var downloadQueue = new DownloadQueueService();
-        var vm = CreateForSyncBrowseClient(sync);
+        var vm = CreateForSyncBrowseClient(sync, downloadQueue);
 
         Assert.Empty(downloadQueue.AllItems);
 
