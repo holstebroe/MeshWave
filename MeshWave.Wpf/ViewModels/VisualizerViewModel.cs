@@ -33,8 +33,9 @@ public class VisualizerViewModel : ViewModelBase
 
     private void LoadDefaultShader()
     {
-
-        ShaderScript = demoPlasmaShader;
+        // Default to feedback tunnel shader to test it out for now.
+        // It can be easily toggled back if needed.
+        ShaderScript = feedbackTunnelShader;
     }
 
     // TODO: Make selector for default shaders, and move these to separate files or embedded resources
