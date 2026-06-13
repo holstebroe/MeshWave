@@ -429,9 +429,9 @@ public class CommunityViewModel : ViewModelBase
                 return;
             }
 
-            _settingsService.EnsureFoldersExist();
-            var settings = _settingsService.LoadSettings();
-            var otherMusicFolder = _settingsService.GetPeerMusicFolder();
+            _settingsService?.EnsureFoldersExist();
+            var settings = _settingsService?.LoadSettings() ?? new MeshWave.Wpf.Models.AppSettings();
+            var otherMusicFolder = _settingsService?.GetPeerMusicFolder() ?? string.Empty;
             Directory.CreateDirectory(otherMusicFolder);
 
             var safeArtist = SanitizeForPath(item.ArtistDisplayName, "Unknown Artist");
@@ -715,9 +715,9 @@ public class CommunityViewModel : ViewModelBase
                     return;
                 }
 
-                _settingsService.EnsureFoldersExist();
-                var settings = _settingsService.LoadSettings();
-                var otherMusicFolder = _settingsService.GetPeerMusicFolder();
+                _settingsService?.EnsureFoldersExist();
+                var settings = _settingsService?.LoadSettings() ?? new MeshWave.Wpf.Models.AppSettings();
+                var otherMusicFolder = _settingsService?.GetPeerMusicFolder() ?? string.Empty;
                 Directory.CreateDirectory(otherMusicFolder);
 
                 var extension = ResolveFileExtension(bytes, item.Title);

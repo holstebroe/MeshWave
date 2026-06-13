@@ -65,7 +65,7 @@ public class BrowseViewModel : ViewModelBase
             if (_sync == null) return;
 
             // Trigger download + stream playback
-            _settingsService.EnsureFoldersExist();
+            _settingsService?.EnsureFoldersExist();
             var tempRoot = Path.Combine(Path.GetTempPath(), "MeshWave", "Streaming");
             Directory.CreateDirectory(tempRoot);
 
@@ -615,8 +615,8 @@ public class BrowseViewModel : ViewModelBase
                     return;
                 }
 
-                _settingsService.EnsureFoldersExist();
-                var otherMusicFolder = _settingsService.GetPeerMusicFolder();
+                _settingsService?.EnsureFoldersExist();
+                var otherMusicFolder = _settingsService?.GetPeerMusicFolder() ?? string.Empty;
                 Directory.CreateDirectory(otherMusicFolder);
 
                 var safeArtist = SanitizeForPath(item.Artist, "Unknown Artist");
@@ -668,7 +668,7 @@ public class BrowseViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(originalHash)) return compressedHash;
         if (string.IsNullOrWhiteSpace(compressedHash)) return originalHash;
 
-        var settings = _settingsService.LoadSettings();
+        var settings = _settingsService?.LoadSettings() ?? new MeshWave.Wpf.Models.AppSettings();
         var preferredQuality = isStreaming ? settings.Playback.StreamingAudioQuality : settings.Playback.DownloadAudioQuality;
 
         var primaryHash = preferredQuality == AudioQuality.Compressed ? compressedHash : originalHash;
@@ -719,8 +719,8 @@ public class BrowseViewModel : ViewModelBase
     {
         try
         {
-            _settingsService.EnsureFoldersExist();
-            var otherMusicFolder = _settingsService.GetPeerMusicFolder();
+            _settingsService?.EnsureFoldersExist();
+            var otherMusicFolder = _settingsService?.GetPeerMusicFolder() ?? string.Empty;
             var safeArtist = SanitizeForPath(artist, "Unknown Artist");
             var safeAlbum = SanitizeForPath(string.IsNullOrWhiteSpace(album) ? "Downloads" : album, "Downloads");
             var destFolder = Path.Combine(otherMusicFolder, safeArtist, safeAlbum);
