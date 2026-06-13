@@ -35,7 +35,7 @@ public class CommunityViewModelIntegrationTests : IAsyncLifetime
 
         // Alice finds Bob in Discover
         aliceCommunityVm.ActiveTab = CommunityTab.Discover;
-        await TestWaiter.WaitForItemPollingAsync(() => aliceCommunityVm.SearchResults, u => u.UserId == bob.UserId);
+        await TestWaiter.WaitForItemPollingAsync(() => aliceCommunityVm.SearchResults, u => u.UserId == bob.UserId, cancellationToken: TestContext.Current.CancellationToken);
         var bobItem = aliceCommunityVm.SearchResults.First(u => u.UserId == bob.UserId);
 
         // Alice follows Bob
@@ -45,7 +45,7 @@ public class CommunityViewModelIntegrationTests : IAsyncLifetime
 
         // Alice sees Bob's track in her Feed
         aliceCommunityVm.ActiveTab = CommunityTab.Feed;
-        await TestWaiter.WaitForItemPollingAsync(() => aliceCommunityVm.ReleaseFeed, r => r.TargetId == "bob-track-1");
+        await TestWaiter.WaitForItemPollingAsync(() => aliceCommunityVm.ReleaseFeed, r => r.TargetId == "bob-track-1", cancellationToken: TestContext.Current.CancellationToken);
     }
 
     [Fact(Skip = "Failing in CI on remote runners")]
@@ -64,7 +64,7 @@ public class CommunityViewModelIntegrationTests : IAsyncLifetime
 
         // Bob follows Alice and sees the track
         bobCommunityVm.FollowUserCommand.Execute(new CommunityUserItem { UserId = alice.UserId, DisplayName = "Alice" });
-        await TestWaiter.WaitForItemPollingAsync(() => bobCommunityVm.ReleaseFeed, r => r.TargetId == "alice-track-1");
+        await TestWaiter.WaitForItemPollingAsync(() => bobCommunityVm.ReleaseFeed, r => r.TargetId == "alice-track-1", cancellationToken: TestContext.Current.CancellationToken);
         var bobFeedItem = bobCommunityVm.ReleaseFeed.First(r => r.TargetId == "alice-track-1");
 
         // Bob likes Alice's track
@@ -81,7 +81,8 @@ public class CommunityViewModelIntegrationTests : IAsyncLifetime
         await TestWaiter.WaitForItemPollingAsync(
             () => charlieCommunityVm.ReleaseFeed,
             r => r.TargetId == "alice-track-1" && r.LikeCount == 1,
-            timeoutMs: 30000);
+            timeoutMs: 30000,
+            cancellationToken: TestContext.Current.CancellationToken);
     }
 
     [Fact(Skip = "Failing in CI on remote runners")]
@@ -98,7 +99,7 @@ public class CommunityViewModelIntegrationTests : IAsyncLifetime
         await _context.ConnectAndSyncAllAsync();
 
         // Alice should eventually discover Bob
-        await TestWaiter.WaitForItemPollingAsync(() => aliceCommunityVm.SearchResults, u => u.UserId == bob.UserId);
+        await TestWaiter.WaitForItemPollingAsync(() => aliceCommunityVm.SearchResults, u => u.UserId == bob.UserId, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Contains(aliceCommunityVm.SearchResults, u => u.UserId == bob.UserId);
     }
 }

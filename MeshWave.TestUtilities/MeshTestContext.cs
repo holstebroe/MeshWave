@@ -52,7 +52,7 @@ public class MeshTestContext : IAsyncDisposable
         foreach (var peer in _peers) await peer.SyncAsync();
 
         // Wait until they see each other in routing table
-        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs / 2);
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs / 2.0);
         while (DateTime.UtcNow < deadline)
         {
             var allConnected = true;
@@ -103,7 +103,9 @@ public class MeshTestContext : IAsyncDisposable
             await peer.DisposeAsync();
             try {
                 if (Directory.Exists(peer.BaseFolder)) Directory.Delete(peer.BaseFolder, true);
-            } catch { }
+            } catch { 
+                // Ignore all
+            }
         }
 
         if (_bootstrap != null)
