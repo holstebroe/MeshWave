@@ -157,7 +157,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         var hash = CryptoService.ComputeFileHash(firstMp3);
         var trackId = "test-track-deskplastic";
 
-        john.AnnounceTrack(trackId, new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = hash, FileSize = 0 } } }, new Dictionary<string, string> { ["title"] = "DeskPlastic Track" });
+        john.AnnounceTrack(trackId, new Dictionary<AudioQuality, AudioVersionInfo> { { AudioQuality.Original, new AudioVersionInfo { FileHash = hash, FileSize = new System.IO.FileInfo(firstMp3).Length } } }, new Dictionary<string, string> { ["title"] = "DeskPlastic Track" });
 
         var johnContentIndex = new Dictionary<string, byte[]>();
         johnContentIndex[hash] = File.ReadAllBytes(firstMp3);
