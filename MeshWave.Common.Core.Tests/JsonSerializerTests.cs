@@ -12,9 +12,10 @@ public class JsonSerializerTests
         // Arrange
         var user = new User
         {
-            UserId = "test-user-1",
+            UserId = "user-1",
             DisplayName = "Test User",
-            PublicKeyPem = "-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----"
+            IsArtist = true,
+            PublicKeyPem = "KEY_PEM"
         };
 
         // Act
@@ -22,7 +23,7 @@ public class JsonSerializerTests
 
         // Assert
         Assert.NotNull(json);
-        Assert.Contains("test-user-1", json);
+        Assert.Contains("user-1", json);
         Assert.Contains("Test User", json);
     }
 
@@ -32,10 +33,11 @@ public class JsonSerializerTests
         // Arrange
         var user = new User
         {
-            UserId = "test-user-1",
+            UserId = "user-1",
             DisplayName = "Test User",
-            PublicKeyPem = "-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----",
-            Description = "Test description"
+            IsArtist = false,
+            Bio = "Hello world",
+            PublicKeyPem = "KEY_PEM"
         };
         var json = JsonSerializer.SerializeUser(user);
 
@@ -46,7 +48,7 @@ public class JsonSerializerTests
         Assert.NotNull(deserialized);
         Assert.Equal(user.UserId, deserialized.UserId);
         Assert.Equal(user.DisplayName, deserialized.DisplayName);
-        Assert.Equal(user.Description, deserialized.Description);
+        Assert.Equal(user.Bio, deserialized.Bio);
     }
 
     [Fact]
@@ -60,8 +62,8 @@ public class JsonSerializerTests
             Title = "Test Song",
             Duration = TimeSpan.FromSeconds(180),
             FileHash = "abc123",
-            FilePath = @"C:\\Music\\Test Song.mp3",
-            FileSize = 1024000,
+            FilePath = "test.mp3",
+            FileSize = 1000,
             Signature = "sig123"
         };
 
@@ -290,23 +292,113 @@ public class JsonSerializerTests
     }
 
     [Fact]
-    public void SerializeChannel_ProducesValidJson()
+    public void SerializeGroupChannel_ProducesValidJson()
     {
         // Arrange
-        var channel = new Channel
+        var channel = new GroupChannel
         {
             ChannelId = "channel-1",
+            GroupId = "group-1",
             Name = "General",
-            CreatedBy = "user-1"
+            Description = "General discussion",
+            CreatorUserId = "user-1"
         };
 
         // Act
-        var json = JsonSerializer.SerializeChannel(channel);
+        var json = JsonSerializer.SerializeGroupChannel(channel);
 
         // Assert
         Assert.NotNull(json);
         Assert.Contains("channel-1", json);
+        Assert.Contains("group-1", json);
         Assert.Contains("General", json);
+        Assert.Contains("General discussion", json);
+        Assert.Contains("user-1", json);
+    }
+
+    [Fact]
+    public void DeserializeGroupChannel_ReconstructsObject()
+    {
+        // Arrange
+        var channel = new GroupChannel
+        {
+            ChannelId = "channel-1",
+            GroupId = "group-1",
+            Name = "General",
+            Description = "General discussion",
+            CreatorUserId = "user-1"
+        };
+        var json = JsonSerializer.SerializeGroupChannel(channel);
+
+        // Act
+        var deserialized = JsonSerializer.DeserializeGroupChannel(json);
+
+        // Assert
+        Assert.NotNull(deserialized);
+        Assert.Equal(channel.ChannelId, deserialized.ChannelId);
+        Assert.Equal(channel.GroupId, deserialized.GroupId);
+        Assert.Equal(channel.Name, deserialized.Name);
+        Assert.Equal(channel.Description, deserialized.Description);
+        Assert.Equal(channel.CreatorUserId, deserialized.CreatorUserId);
+    }
+
+    [Fact]
+    public void SerializePostMessage_ProducesValidJson()
+    {
+        // Arrange
+        var message = new PostMessage
+        {
+            PostId = "post-1",
+            ChannelId = "channel-1",
+            AuthorUserId = "user-1",
+            Content = "Hello world!",
+            ParentPostId = "post-0",
+            AttachmentHash = "hash123",
+            Signature = "sig123"
+        };
+
+        // Act
+        var json = JsonSerializer.SerializePostMessage(message);
+
+        // Assert
+        Assert.NotNull(json);
+        Assert.Contains("post-1", json);
+        Assert.Contains("channel-1", json);
+        Assert.Contains("user-1", json);
+        Assert.Contains("Hello world!", json);
+        Assert.Contains("post-0", json);
+        Assert.Contains("hash123", json);
+        Assert.Contains("sig123", json);
+    }
+
+    [Fact]
+    public void DeserializePostMessage_ReconstructsObject()
+    {
+        // Arrange
+        var message = new PostMessage
+        {
+            PostId = "post-1",
+            ChannelId = "channel-1",
+            AuthorUserId = "user-1",
+            Content = "Hello world!",
+            ParentPostId = "post-0",
+            AttachmentHash = "hash123",
+            Signature = "sig123"
+        };
+        var json = JsonSerializer.SerializePostMessage(message);
+
+        // Act
+        var deserialized = JsonSerializer.DeserializePostMessage(json);
+
+        // Assert
+        Assert.NotNull(deserialized);
+        Assert.Equal(message.PostId, deserialized.PostId);
+        Assert.Equal(message.ChannelId, deserialized.ChannelId);
+        Assert.Equal(message.AuthorUserId, deserialized.AuthorUserId);
+        Assert.Equal(message.Content, deserialized.Content);
+        Assert.Equal(message.ParentPostId, deserialized.ParentPostId);
+        Assert.Equal(message.AttachmentHash, deserialized.AttachmentHash);
+        Assert.Equal(message.Signature, deserialized.Signature);
     }
 
     [Fact]

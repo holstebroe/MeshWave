@@ -50,7 +50,9 @@ public static class ManifestStreamMapper
             ManifestOperationType.CreateCompetition or
             ManifestOperationType.CompetitionSubmit or
             ManifestOperationType.CompetitionCastVote or
-            ManifestOperationType.CompetitionRevealResults => ManifestStreamType.Social,
+            ManifestOperationType.CompetitionRevealResults or
+            ManifestOperationType.CreateChannel or
+            ManifestOperationType.PostMessage => ManifestStreamType.Social,
 
             _ => ManifestStreamType.Content
         };
@@ -93,7 +95,11 @@ public enum ManifestOperationType
     /// <summary>Signed member operation to cast a sealed vote in a competition.</summary>
     CompetitionCastVote,
     /// <summary>Signed administrative operation to reveal and certify competition results.</summary>
-    CompetitionRevealResults
+    CompetitionRevealResults,
+    /// <summary>Signed administrative operation to create a new group channel.</summary>
+    CreateChannel,
+    /// <summary>Signed user operation to post a message to a group channel.</summary>
+    PostMessage
 }
 
 /// <summary>

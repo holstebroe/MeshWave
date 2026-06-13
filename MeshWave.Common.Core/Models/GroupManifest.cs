@@ -18,13 +18,29 @@ public enum GroupOperationType
 /// <summary>
 /// Represents a chat or content channel within a group.
 /// </summary>
-public class Channel
+public class GroupChannel
 {
     public required string ChannelId { get; set; }
+    public required string GroupId { get; set; }
     public required string Name { get; set; }
-    public string? Topic { get; set; }
-    public required string CreatedBy { get; set; }
+    public string? Description { get; set; }
+    public required string CreatorUserId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Represents a message posted in a group channel.
+/// </summary>
+public class PostMessage
+{
+    public required string PostId { get; set; }
+    public required string ChannelId { get; set; }
+    public required string AuthorUserId { get; set; }
+    public required string Content { get; set; }
+    public string? ParentPostId { get; set; }
+    public string? AttachmentHash { get; set; }
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    public required string Signature { get; set; }
 }
 
 /// <summary>

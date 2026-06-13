@@ -90,14 +90,24 @@ public class JsonSerializer
         return System.Text.Json.JsonSerializer.Deserialize<GroupManifest>(json, Options);
     }
 
-    public static string SerializeChannel(Channel channel)
+    public static string SerializeGroupChannel(GroupChannel channel)
     {
         return System.Text.Json.JsonSerializer.Serialize(channel, Options);
     }
 
-    public static Channel? DeserializeChannel(string json)
+    public static GroupChannel? DeserializeGroupChannel(string json)
     {
-        return System.Text.Json.JsonSerializer.Deserialize<Channel>(json, Options);
+        return System.Text.Json.JsonSerializer.Deserialize<GroupChannel>(json, Options);
+    }
+
+    public static string SerializePostMessage(PostMessage message)
+    {
+        return System.Text.Json.JsonSerializer.Serialize(message, Options);
+    }
+
+    public static PostMessage? DeserializePostMessage(string json)
+    {
+        return System.Text.Json.JsonSerializer.Deserialize<PostMessage>(json, Options);
     }
 
     public static string SerializeCompetition(Competition competition)
