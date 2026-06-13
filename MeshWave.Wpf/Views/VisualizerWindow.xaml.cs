@@ -15,6 +15,11 @@ public partial class VisualizerWindow : Window
     private int _vbo;
     private readonly Stopwatch _stopwatch = new Stopwatch();
 
+    private int _fboA, _fboB;
+    private int _texA, _texB;
+    private int _width = -1, _height = -1;
+    private bool _pingpong = false;
+
     public PlaybackViewModel? Playback { get; set; }
     public AudioAnalysisService? AudioAnalysis { get; set; }
 
@@ -117,12 +122,67 @@ public partial class VisualizerWindow : Window
         CompileShader();
     }
 
+    private void EnsureFramebuffers(int width, int height)
+    {
+        if (_width == width && _height == height) return;
+
+        if (_fboA != 0) GL.DeleteFramebuffer(_fboA);
+        if (_fboB != 0) GL.DeleteFramebuffer(_fboB);
+        if (_texA != 0) GL.DeleteTexture(_texA);
+        if (_texB != 0) GL.DeleteTexture(_texB);
+
+        _width = width;
+        _height = height;
+
+        _fboA = GL.GenFramebuffer();
+        _fboB = GL.GenFramebuffer();
+
+        _texA = GL.GenTexture();
+        GL.BindTexture(TextureTarget.Texture2D, _texA);
+        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, width, height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, IntPtr.Zero);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+        GL.BindFramebuffer(FramebufferTarget.Framebuffer, _fboA);
+        GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, _texA, 0);
+
+        _texB = GL.GenTexture();
+        GL.BindTexture(TextureTarget.Texture2D, _texB);
+        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, width, height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, IntPtr.Zero);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+        GL.BindFramebuffer(FramebufferTarget.Framebuffer, _fboB);
+        GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, _texB, 0);
+
+        GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+    }
+
     private void OpenGlControl_OnRender(TimeSpan delta)
     {
+        int currentFbo = GL.GetInteger(GetPName.DrawFramebufferBinding);
+        int width = (int)OpenGlControl.ActualWidth;
+        int height = (int)OpenGlControl.ActualHeight;
+        if (width <= 0 || height <= 0) return;
+
+        EnsureFramebuffers(width, height);
+
+        int targetFbo = _pingpong ? _fboB : _fboA;
+        int prevTex = _pingpong ? _texA : _texB;
+
+        GL.BindFramebuffer(FramebufferTarget.Framebuffer, targetFbo);
+        GL.Viewport(0, 0, width, height);
+
         GL.ClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
-        if (_shaderProgram == 0 || DataContext is not VisualizerViewModel vm) return;
+        if (_shaderProgram == 0 || DataContext is not VisualizerViewModel vm)
+        {
+            GL.BindFramebuffer(FramebufferTarget.Framebuffer, currentFbo);
+            return;
+        }
 
         GL.UseProgram(_shaderProgram);
 
@@ -131,6 +191,14 @@ public partial class VisualizerWindow : Window
 
         int resLoc = GL.GetUniformLocation(_shaderProgram, "u_resolution");
         if (resLoc != -1) GL.Uniform2(resLoc, (float)OpenGlControl.ActualWidth, (float)OpenGlControl.ActualHeight);
+
+        int prevFrameLoc = GL.GetUniformLocation(_shaderProgram, "u_prevFrame");
+        if (prevFrameLoc != -1)
+        {
+            GL.ActiveTexture(TextureUnit.Texture0);
+            GL.BindTexture(TextureTarget.Texture2D, prevTex);
+            GL.Uniform1(prevFrameLoc, 0);
+        }
 
         // Fetch audio data right before render if we are playing
         if (Playback != null && AudioAnalysis != null && Playback.IsPlaying && !string.IsNullOrEmpty(Playback.SelectedAlbumTrack?.FilePath))
@@ -153,5 +221,15 @@ public partial class VisualizerWindow : Window
 
         GL.BindVertexArray(_vao);
         GL.DrawArrays(PrimitiveType.TriangleStrip, 0, 4);
+
+        // Blit to screen
+        GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, targetFbo);
+        GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, currentFbo);
+        GL.BlitFramebuffer(0, 0, width, height, 0, 0, width, height, ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Nearest);
+
+        // Restore drawing to the original FBO
+        GL.BindFramebuffer(FramebufferTarget.Framebuffer, currentFbo);
+
+        _pingpong = !_pingpong;
     }
 }
