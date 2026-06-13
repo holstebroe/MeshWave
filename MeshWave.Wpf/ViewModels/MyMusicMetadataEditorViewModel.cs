@@ -75,8 +75,11 @@ public class MyMusicMetadataEditorViewModel : ViewModelBase, INotifyDataErrorInf
             AddError(nameof(Year), "Year must be a valid 4-digit number.");
     }
 
-    public MyMusicMetadataEditorViewModel()
+    private readonly IMeshWaveEnvironment _environment;
+
+    public MyMusicMetadataEditorViewModel(IMeshWaveEnvironment environment)
     {
+        _environment = environment;
         SaveCommand = new RelayCommand(_ => Save(), _ => !HasErrors && (IsAlbumEditor ? !string.IsNullOrWhiteSpace(AlbumFolderPath) : !string.IsNullOrWhiteSpace(TrackFilePath)));
         ToggleReleaseCommand = new RelayCommand(_ => ToggleRelease());
         ReplaceImageCommand = new RelayCommand(_ => ReplaceImage());
@@ -267,7 +270,7 @@ public class MyMusicMetadataEditorViewModel : ViewModelBase, INotifyDataErrorInf
 
             if (IsReleased && appVm != null && appVm.P2PIsConnected)
             {
-                var tempLibrary = new LibraryViewModel(appVm, new MeshWaveEnvironment(), isMyMusicLibrary: true);
+                var tempLibrary = new LibraryViewModel(appVm, _environment, isMyMusicLibrary: true);
                 string? albumId = null;
 
                 var firstTrackInAlbum = tempLibrary.Tracks.FirstOrDefault(t =>
@@ -291,7 +294,7 @@ public class MyMusicMetadataEditorViewModel : ViewModelBase, INotifyDataErrorInf
 
             if (IsReleased && appVm != null && appVm.P2PIsConnected && !string.IsNullOrWhiteSpace(contentHash))
             {
-                var tempLibrary = new LibraryViewModel(appVm, new MeshWaveEnvironment(), isMyMusicLibrary: true);
+                var tempLibrary = new LibraryViewModel(appVm, _environment, isMyMusicLibrary: true);
                 string? trackId = null;
 
                 var matchedTrack = tempLibrary.Tracks.FirstOrDefault(t =>

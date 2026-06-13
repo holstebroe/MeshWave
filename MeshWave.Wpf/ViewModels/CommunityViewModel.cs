@@ -18,7 +18,7 @@ namespace MeshWave.Wpf.ViewModels;
 public class CommunityViewModel : ViewModelBase
 {
     private readonly SyncOrchestrator? _sync;
-    private readonly SettingsService _settingsService;
+    private readonly SettingsService? _settingsService;
 
     private int _newReleaseCount;
     private readonly Dictionary<string, int> _lastFeedReleaseSequenceByPeer = new(StringComparer.OrdinalIgnoreCase);

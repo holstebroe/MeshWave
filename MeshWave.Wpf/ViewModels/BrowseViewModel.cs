@@ -38,7 +38,7 @@ public class BrowseViewModel : ViewModelBase
 {
     private readonly ISyncBrowseClient? _sync;
     private readonly DownloadQueueService _downloadQueue;
-    private readonly SettingsService _settingsService;
+    private readonly SettingsService? _settingsService;
     private readonly LibraryDownloadStateService _downloadState;
 
     private BrowseTab _activeTab = BrowseTab.Artists;

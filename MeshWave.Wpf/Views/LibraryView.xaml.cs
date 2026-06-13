@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
+using MeshWave.Common.Core;
 using MeshWave.Wpf.ViewModels;
 using Binding = System.Windows.Data.Binding;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
@@ -27,7 +28,7 @@ public partial class LibraryView : UserControl
 
     private void Vm_OpenMetadataEditorRequested(object? sender, string trackFilePath)
     {
-        var editorVm = new MyMusicMetadataEditorViewModel();
+        var editorVm = new MyMusicMetadataEditorViewModel(new MeshWaveEnvironment());
         editorVm.LoadTrack(trackFilePath);
 
         var view = new MyMusicMetadataEditorView
@@ -167,7 +168,7 @@ public partial class LibraryView : UserControl
         if (trackInAlbum == null || string.IsNullOrWhiteSpace(trackInAlbum.FilePath)) return;
 
         var albumFolder = Path.GetDirectoryName(trackInAlbum.FilePath) ?? string.Empty;
-        var editorVm = new MyMusicMetadataEditorViewModel();
+        var editorVm = new MyMusicMetadataEditorViewModel(new MeshWaveEnvironment());
         editorVm.LoadAlbum(albumFolder);
 
         var view = new MyMusicMetadataEditorView

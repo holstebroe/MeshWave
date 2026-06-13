@@ -1,6 +1,7 @@
 using MeshWave.TestUtilities;
 using MeshWave.Wpf.Services;
 using MeshWave.Wpf.ViewModels;
+using MeshWave.Wpf.ViewModels.Items;
 using Xunit;
 
 namespace MeshWave.ViewModels.Tests.Integration;
