@@ -12,24 +12,6 @@ using MeshWave.Wpf.ViewModels.Items;
 
 namespace MeshWave.Wpf.ViewModels;
 
-
-
-// ─────────────────────────────────────────────────────────────────────────
-// Data items
-// ─────────────────────────────────────────────────────────────────────────
-
-
-
-
-
-
-
-
-
-// ─────────────────────────────────────────────────────────────────────────
-// BrowseViewModel
-// ─────────────────────────────────────────────────────────────────────────
-
 /// <summary>
 /// View model for browsing community music from the P2P network.
 /// Provides Artists / Albums / Tracks / Downloads sub-tabs.
@@ -52,7 +34,7 @@ public class BrowseViewModel : ViewModelBase
     private ObservableCollection<BrowsePlaylistItem> _playlists = [];
 
     public BrowseViewModel(
-        SettingsService? settingsService,
+        SettingsService settingsService,
         DownloadQueueService downloadQueue,
         LibraryDownloadStateService downloadState,
         ISyncBrowseClient? sync = null,

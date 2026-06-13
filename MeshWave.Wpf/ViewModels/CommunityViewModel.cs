@@ -28,7 +28,7 @@ public class CommunityViewModel : ViewModelBase
 
     public CommunityViewModel(
         SyncOrchestrator sync,
-        SettingsService? settingsService,
+        SettingsService settingsService,
         Action<string>? onBrowseArtist = null
         )
     {

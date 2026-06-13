@@ -1,4 +1,3 @@
-using System;
 using MeshWave.Wpf.Mvvm;
 
 namespace MeshWave.Wpf.ViewModels;
@@ -40,7 +39,7 @@ public class VisualizerViewModel : ViewModelBase
 
     // TODO: Make selector for default shaders, and move these to separate files or embedded resources
 
-    private string defaultAudioShader = @"
+    private string _defaultAudioShader = @"
 #version 330 core
 out vec4 FragColor;
 in vec2 TexCoords;
