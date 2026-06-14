@@ -52,7 +52,9 @@ public static class ManifestStreamMapper
             ManifestOperationType.CompetitionCastVote or
             ManifestOperationType.CompetitionRevealResults or
             ManifestOperationType.CreateChannel or
-            ManifestOperationType.PostMessage => ManifestStreamType.Social,
+            ManifestOperationType.PostMessage or
+            ManifestOperationType.FoundGroup or
+            ManifestOperationType.ModerateGroup => ManifestStreamType.Social,
 
             _ => ManifestStreamType.Content
         };
@@ -99,7 +101,11 @@ public enum ManifestOperationType
     /// <summary>Signed administrative operation to create a new group channel.</summary>
     CreateChannel,
     /// <summary>Signed user operation to post a message to a group channel.</summary>
-    PostMessage
+    PostMessage,
+    /// <summary>Signed operation founding a new group.</summary>
+    FoundGroup,
+    /// <summary>Signed operation moderating a group.</summary>
+    ModerateGroup
 }
 
 /// <summary>

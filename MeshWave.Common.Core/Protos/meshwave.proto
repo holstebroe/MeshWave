@@ -32,6 +32,8 @@ enum ProtoManifestOperationType {
     COMPETITION_REVEAL_RESULTS = 18;
     CREATE_CHANNEL = 19;
     POST_MESSAGE = 20;
+    FOUND_GROUP = 21;
+    MODERATE_GROUP = 22;
 }
 
 message ProtoManifestOperation {
