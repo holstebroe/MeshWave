@@ -6,7 +6,7 @@ namespace MeshWave.Common.Core.Processors;
 
 public abstract class BaseCatalogueEntryProcessor : ICatalogueEntryProcessor
 {
-    public abstract string TargetType { get; }
+    public abstract CatalogueEntryType TargetType { get; }
 
     public virtual bool ValidateUpdate(CatalogueEntry? existingEntry, string? contentHash, Dictionary<string, string> metadata)
     {

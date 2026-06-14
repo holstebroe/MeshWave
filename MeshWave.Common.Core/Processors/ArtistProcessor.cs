@@ -4,5 +4,5 @@ namespace MeshWave.Common.Core.Processors;
 
 public class ArtistProcessor : BaseCatalogueEntryProcessor
 {
-    public override string TargetType => CatalogueEntryType.Artist;
+    public override CatalogueEntryType TargetType => CatalogueEntryType.Artist;
 }

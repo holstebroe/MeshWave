@@ -1,11 +1,12 @@
 using MeshWave.Common.Core.Models;
+using System;
 using System.Collections.Generic;
 
 namespace MeshWave.Common.Core.Processors;
 
 public interface ICatalogueEntryProcessor
 {
-    string TargetType { get; }
+    CatalogueEntryType TargetType { get; }
 
     bool ValidateUpdate(CatalogueEntry? existingEntry, string? contentHash, Dictionary<string, string> metadata);
 

@@ -6,7 +6,7 @@ namespace MeshWave.Common.Core.Processors;
 
 public class TrackProcessor : BaseCatalogueEntryProcessor
 {
-    public override string TargetType => CatalogueEntryType.Track;
+    public override CatalogueEntryType TargetType => CatalogueEntryType.Track;
 
     public override bool ValidateUpdate(CatalogueEntry? existingEntry, string? contentHash, Dictionary<string, string> metadata)
     {

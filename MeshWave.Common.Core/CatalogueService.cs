@@ -19,7 +19,7 @@ public class CatalogueService : ICatalogueService
     {
         foreach (var processor in processors)
         {
-            _processors[processor.TargetType] = processor;
+            _processors[processor.TargetType.ToString()] = processor;
         }
     }
 

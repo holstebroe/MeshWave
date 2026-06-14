@@ -6,7 +6,7 @@ namespace MeshWave.Common.Core.Models;
 public class CatalogueEntry
 {
     public required string EntryId { get; set; }
-    public required string Type { get; set; }
+    public required CatalogueEntryType Type { get; set; }
     public required string OwnerUserId { get; set; }
     public required string Title { get; set; }
     public string? ArtistName { get; set; }
