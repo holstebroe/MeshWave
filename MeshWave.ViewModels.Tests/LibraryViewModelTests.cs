@@ -67,4 +67,63 @@ public class LibraryViewModelTests
         vm.Dispose();
         Directory.Delete(tempDir, true);
     }
+
+    [Fact]
+    public async Task SearchQuery_DebouncesAndTriggersSearch_Once()
+    {
+        // Arrange
+        var tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(tempDir);
+
+        var env = new TestUtilities.DummyEnvironment(tempDir);
+        var mockAppVm = new Mock<ApplicationViewModel>(env, new Wpf.Services.SettingsService(tempDir), new Wpf.Services.UserProfileService(tempDir), (System.Func<MeshWave.Wpf.Services.IAudioPlaybackService>)(() => null!));
+        var vm = new LibraryViewModel(mockAppVm.Object, env, isMyMusicLibrary: true);
+
+        int isSearchingTrueCount = 0;
+        int isSearchingFalseCount = 0;
+
+        vm.PropertyChanged += (sender, args) =>
+        {
+            if (args.PropertyName == nameof(LibraryViewModel.IsSearching))
+            {
+                if (vm.IsSearching)
+                {
+                    isSearchingTrueCount++;
+                }
+                else
+                {
+                    isSearchingFalseCount++;
+                }
+            }
+        };
+
+        // Act - Simulate rapid typing
+        vm.SearchQuery = "t";
+        await Task.Delay(50);
+        vm.SearchQuery = "te";
+        await Task.Delay(50);
+        vm.SearchQuery = "tes";
+        await Task.Delay(50);
+        vm.SearchQuery = "test";
+
+        // Assert while typing
+        Assert.True(vm.IsSearching);
+        Assert.Equal(1, isSearchingTrueCount); // SetProperty deduplicates
+        Assert.Equal(0, isSearchingFalseCount); // Should not have resolved to false yet
+
+        // Act - Wait for debounce timer to expire
+        await Task.Delay(400);
+
+        // Assert after delay
+        Assert.False(vm.IsSearching);
+        Assert.Equal(1, isSearchingTrueCount);
+
+        // Assert that the search operation itself (represented by the timer expiring and reaching the final IsSearching = false)
+        // was only executed once. The task cancellations effectively debounce the subsequent actions.
+        Assert.Equal(1, isSearchingFalseCount);
+
+        // Cleanup
+        vm.Dispose();
+        Directory.Delete(tempDir, true);
+    }
 }

@@ -29,6 +29,7 @@ public partial class LibraryViewModel : ViewModelBase
     private int _importImportedFiles;
     private string _importSingleFileStatus = string.Empty;
     private string _syncStatus = string.Empty;
+    private bool _isSearching;
     private readonly LibraryDownloadStateService _downloadStateService;
 
     public LibraryViewModel(ApplicationViewModel applicationViewModel, IMeshWaveEnvironment environment, bool isMyMusicLibrary = false)
@@ -67,6 +68,12 @@ public partial class LibraryViewModel : ViewModelBase
         set => SetProperty(ref _syncStatus, value);
     }
 
+    public bool IsSearching
+    {
+        get => _isSearching;
+        set => SetProperty(ref _isSearching, value);
+    }
+
     private CancellationTokenSource? _searchDebounceToken;
 
     public string SearchQuery
@@ -87,6 +94,8 @@ public partial class LibraryViewModel : ViewModelBase
         _searchDebounceToken = new CancellationTokenSource();
         var token = _searchDebounceToken.Token;
 
+        IsSearching = true;
+
         try
         {
             await Task.Delay(300, token);
@@ -98,6 +107,13 @@ public partial class LibraryViewModel : ViewModelBase
         catch (TaskCanceledException)
         {
             // Ignore cancellation
+        }
+        finally
+        {
+            if (_searchDebounceToken.Token == token)
+            {
+                IsSearching = false;
+            }
         }
     }
 
