@@ -183,10 +183,14 @@ public static class ManifestSerializer
 
     private static ManifestOperation MapFromProto(ProtoManifestOperation proto)
     {
+        var parsedType = System.Enum.IsDefined(typeof(ManifestOperationType), (ManifestOperationType)proto.OperationType)
+            ? (ManifestOperationType)proto.OperationType
+            : ManifestOperationType.Unknown;
+
         var op = new ManifestOperation
         {
             OperationId = proto.OperationId,
-            OperationType = (ManifestOperationType)proto.OperationType,
+            OperationType = parsedType,
             TargetId = proto.TargetId,
             TargetType = proto.TargetType,
             ContentHash = proto.HasContentHash ? proto.ContentHash : null,

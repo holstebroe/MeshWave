@@ -54,6 +54,8 @@ public static class ManifestStreamMapper
             ManifestOperationType.CreateChannel or
             ManifestOperationType.PostMessage => ManifestStreamType.Social,
 
+            ManifestOperationType.Unknown => ManifestStreamType.Content,
+
             _ => ManifestStreamType.Content
         };
     }
@@ -99,7 +101,10 @@ public enum ManifestOperationType
     /// <summary>Signed administrative operation to create a new group channel.</summary>
     CreateChannel,
     /// <summary>Signed user operation to post a message to a group channel.</summary>
-    PostMessage
+    PostMessage,
+
+    /// <summary>A fallback type for unknown or newer operations parsed from older clients.</summary>
+    Unknown = 999
 }
 
 /// <summary>
