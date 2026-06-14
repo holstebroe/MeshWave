@@ -201,7 +201,7 @@ public static class ManifestSerializer
         var proto = new ProtoManifestOperation
         {
             OperationId = op.OperationId,
-            OperationType = op.OperationType,
+            OperationType = (ProtoManifestOperationType)op.OperationType,
             TargetId = op.TargetId,
             TargetType = op.TargetType,
             SequenceNumber = op.SequenceNumber,
@@ -218,10 +218,14 @@ public static class ManifestSerializer
 
     private static ManifestOperation MapFromProto(ProtoManifestOperation proto)
     {
+        var parsedType = System.Enum.IsDefined(typeof(ManifestOperationType), (ManifestOperationType)proto.OperationType)
+            ? (ManifestOperationType)proto.OperationType
+            : ManifestOperationType.Unknown;
+
         var op = new ManifestOperation
         {
             OperationId = proto.OperationId,
-            OperationType = proto.OperationType,
+            OperationType = parsedType,
             TargetId = proto.TargetId,
             TargetType = proto.TargetType,
             ContentHash = proto.HasContentHash ? proto.ContentHash : null,

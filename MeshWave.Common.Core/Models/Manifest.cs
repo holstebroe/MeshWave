@@ -7,7 +7,7 @@ namespace MeshWave.Common.Core.Models;
 public class ManifestOperation
 {
     public required string OperationId { get; set; }
-    public required string OperationType { get; set; }
+    public required ManifestOperationType OperationType { get; set; }
     public required string TargetId { get; set; }
     public required string TargetType { get; set; }
     public string? ContentHash { get; set; }
@@ -26,96 +26,85 @@ public enum ManifestStreamType
 
 public static class ManifestStreamMapper
 {
-    private static readonly Dictionary<string, ManifestStreamType> _registry = new(StringComparer.OrdinalIgnoreCase);
-
-    static ManifestStreamMapper()
+    public static ManifestStreamType GetStreamType(ManifestOperationType operationType)
     {
-        // Register Content stream types
-        Register(ManifestOperationType.Create, ManifestStreamType.Content);
-        Register(ManifestOperationType.Update, ManifestStreamType.Content);
-        Register(ManifestOperationType.Delete, ManifestStreamType.Content);
-
-        // Register Interaction stream types
-        Register(ManifestOperationType.Play, ManifestStreamType.Interaction);
-        Register(ManifestOperationType.Like, ManifestStreamType.Interaction);
-        Register(ManifestOperationType.Unlike, ManifestStreamType.Interaction);
-        Register(ManifestOperationType.Comment, ManifestStreamType.Interaction);
-        Register(ManifestOperationType.CommentDelete, ManifestStreamType.Interaction);
-
-        // Register Social stream types
-        Register(ManifestOperationType.Follow, ManifestStreamType.Social);
-        Register(ManifestOperationType.Unfollow, ManifestStreamType.Social);
-        Register(ManifestOperationType.Profile, ManifestStreamType.Social);
-        Register(ManifestOperationType.FriendAdd, ManifestStreamType.Social);
-        Register(ManifestOperationType.FriendRemove, ManifestStreamType.Social);
-        Register(ManifestOperationType.GroupJoin, ManifestStreamType.Social);
-        Register(ManifestOperationType.GroupLeave, ManifestStreamType.Social);
-        Register(ManifestOperationType.CreateCompetition, ManifestStreamType.Social);
-        Register(ManifestOperationType.CompetitionSubmit, ManifestStreamType.Social);
-        Register(ManifestOperationType.CompetitionCastVote, ManifestStreamType.Social);
-        Register(ManifestOperationType.CompetitionRevealResults, ManifestStreamType.Social);
-        Register(ManifestOperationType.CreateChannel, ManifestStreamType.Social);
-        Register(ManifestOperationType.PostMessage, ManifestStreamType.Social);
-    }
-
-    public static void Register(string operationType, ManifestStreamType streamType)
-    {
-        _registry[operationType] = streamType;
-    }
-
-    public static ManifestStreamType GetStreamType(string operationType)
-    {
-        if (_registry.TryGetValue(operationType, out var streamType))
+        return operationType switch
         {
-            return streamType;
-        }
+            ManifestOperationType.Create or
+            ManifestOperationType.Update or
+            ManifestOperationType.Delete => ManifestStreamType.Content,
 
-        // Fallback to Content stream type for unknown operations
-        return ManifestStreamType.Content;
+            ManifestOperationType.Play or
+            ManifestOperationType.Like or
+            ManifestOperationType.Unlike or
+            ManifestOperationType.Comment or
+            ManifestOperationType.CommentDelete => ManifestStreamType.Interaction,
+
+            ManifestOperationType.Follow or
+            ManifestOperationType.Unfollow or
+            ManifestOperationType.Profile or
+            ManifestOperationType.FriendAdd or
+            ManifestOperationType.FriendRemove or
+            ManifestOperationType.GroupJoin or
+            ManifestOperationType.GroupLeave or
+            ManifestOperationType.CreateCompetition or
+            ManifestOperationType.CompetitionSubmit or
+            ManifestOperationType.CompetitionCastVote or
+            ManifestOperationType.CompetitionRevealResults or
+            ManifestOperationType.CreateChannel or
+            ManifestOperationType.PostMessage => ManifestStreamType.Social,
+
+            ManifestOperationType.Unknown => ManifestStreamType.Content,
+
+            _ => ManifestStreamType.Content
+        };
     }
 }
 
-public static class ManifestOperationType
+public enum ManifestOperationType
 {
-    public const string Create = "Create";
-    public const string Update = "Update";
-    public const string Delete = "Delete";
+    Create,
+    Update,
+    Delete,
     /// <summary>Records that the user played a track. Rate-capped during manifest merge.</summary>
-    public const string Play = "Play";
+    Play,
     /// <summary>Records that the local user follows a peer (TargetId = peer UserId).</summary>
-    public const string Follow = "Follow";
+    Follow,
     /// <summary>Records that the local user unfollowed a peer (TargetId = peer UserId).</summary>
-    public const string Unfollow = "Unfollow";
+    Unfollow,
     /// <summary>Broadcasts the user's profile fields (IsArtist, Bio, BannerImageHash, Website, DisplayName).</summary>
-    public const string Profile = "Profile";
+    Profile,
     /// <summary>Signed user-authored comment operation on a track (supports ReplyToId threading).</summary>
-    public const string Comment = "Comment";
+    Comment,
     /// <summary>Signed soft-delete for a previously authored comment operation.</summary>
-    public const string CommentDelete = "CommentDelete";
+    CommentDelete,
     /// <summary>Signed social graph operation: add friend relation to another user.</summary>
-    public const string FriendAdd = "FriendAdd";
+    FriendAdd,
     /// <summary>Signed social graph operation: remove friend relation from another user.</summary>
-    public const string FriendRemove = "FriendRemove";
+    FriendRemove,
     /// <summary>Signed social graph operation: join a group.</summary>
-    public const string GroupJoin = "GroupJoin";
+    GroupJoin,
     /// <summary>Signed social graph operation: leave a group.</summary>
-    public const string GroupLeave = "GroupLeave";
+    GroupLeave,
     /// <summary>Signed user reaction operation: like a track.</summary>
-    public const string Like = "Like";
+    Like,
     /// <summary>Signed user reaction operation: remove like from a track.</summary>
-    public const string Unlike = "Unlike";
+    Unlike,
     /// <summary>Signed administrative operation to start a new competition.</summary>
-    public const string CreateCompetition = "CreateCompetition";
+    CreateCompetition,
     /// <summary>Signed member operation to submit a track to a competition.</summary>
-    public const string CompetitionSubmit = "CompetitionSubmit";
+    CompetitionSubmit,
     /// <summary>Signed member operation to cast a sealed vote in a competition.</summary>
-    public const string CompetitionCastVote = "CompetitionCastVote";
+    CompetitionCastVote,
     /// <summary>Signed administrative operation to reveal and certify competition results.</summary>
-    public const string CompetitionRevealResults = "CompetitionRevealResults";
+    CompetitionRevealResults,
     /// <summary>Signed administrative operation to create a new group channel.</summary>
-    public const string CreateChannel = "CreateChannel";
+    CreateChannel,
     /// <summary>Signed user operation to post a message to a group channel.</summary>
-    public const string PostMessage = "PostMessage";
+    PostMessage,
+
+    /// <summary>A fallback type for unknown or newer operations parsed from older clients.</summary>
+    Unknown = 999
 }
 
 /// <summary>
