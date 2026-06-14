@@ -59,7 +59,7 @@ public class ApplicationViewModel : ViewModelBase
         var settings = SettingsService.LoadSettings();
         _userRepository = new UserRepository(settings.BaseFolder);
         _metadataLookup = new MetadataLookupRepository(SettingsService.GetLocalMusicFolder());
-        var catalogueService = new CatalogueService();
+        var catalogueService = new CatalogueService(MeshWave.Common.Core.Processors.CatalogueProcessorDefaults.GetDefaultProcessors());
 
         // DI wire-up of the default file-based PeerManifestStore
         var manifestStore = PeerManifestStore.CreateAtBase(environment, _userRepository.BaseDataFolder);

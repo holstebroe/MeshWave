@@ -8,7 +8,7 @@ public class CatalogueServiceTests
     [Fact]
     public async Task IngestAsync_AddsNewEntries()
     {
-        var service = new CatalogueService();
+        var service = new CatalogueService(MeshWave.Common.Core.Processors.CatalogueProcessorDefaults.GetDefaultProcessors());
         var manifest = new Manifest
         {
             UserId = "user1",
@@ -44,7 +44,7 @@ public class CatalogueServiceTests
     [Fact]
     public async Task IngestAsync_AppliesStalenessRule()
     {
-        var service = new CatalogueService();
+        var service = new CatalogueService(MeshWave.Common.Core.Processors.CatalogueProcessorDefaults.GetDefaultProcessors());
         var manifest1 = new Manifest
         {
             UserId = "user1",
@@ -94,7 +94,7 @@ public class CatalogueServiceTests
     [Fact]
     public async Task SearchAsync_ReturnsMatchingEntries()
     {
-        var service = new CatalogueService();
+        var service = new CatalogueService(MeshWave.Common.Core.Processors.CatalogueProcessorDefaults.GetDefaultProcessors());
         var manifest = new Manifest
         {
             UserId = "user1",
@@ -136,7 +136,7 @@ public class CatalogueServiceTests
     [Fact]
     public async Task IngestAsync_HandlesSnapshots()
     {
-        var service = new CatalogueService();
+        var service = new CatalogueService(MeshWave.Common.Core.Processors.CatalogueProcessorDefaults.GetDefaultProcessors());
         var manifest = new Manifest
         {
             UserId = "user1",
