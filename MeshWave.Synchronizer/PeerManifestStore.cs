@@ -19,6 +19,7 @@ public class PeerManifestStore : IManifestStore
     private const string PeerManifestsFolderName = "PeerManifests";
     private readonly string _storeDirectory;
     private readonly ConcurrentDictionary<(string UserId, ManifestStreamType StreamType), Manifest> _manifests = new();
+    private readonly ConcurrentDictionary<string, ManifestOperation> _competitionIndex = new();
 
     public PeerManifestStore(IMeshWaveEnvironment environment, string? storeDirectory = null)
     {
@@ -45,7 +46,14 @@ public class PeerManifestStore : IManifestStore
                 var json = File.ReadAllText(file);
                 var manifest = JsonSerializer.Deserialize<Manifest>(json);
                 if (manifest != null && !string.IsNullOrWhiteSpace(manifest.UserId))
+                {
                     _manifests[(manifest.UserId, manifest.StreamType)] = manifest;
+                    foreach (var op in manifest.Operations)
+                    {
+                        if (op.OperationType == ManifestOperationType.CreateCompetition)
+                            _competitionIndex[op.TargetId] = op;
+                    }
+                }
             }
             catch {
                 /* skip corrupted files */
@@ -87,7 +95,18 @@ public class PeerManifestStore : IManifestStore
         int added;
         try
         {
-            added = manager.MergeManifest(local, incoming, peerPublicKeyPem);
+            added = manager.MergeManifest(local, incoming, peerPublicKeyPem, id => _competitionIndex.TryGetValue(id, out var op) ? op : null);
+
+            if (added > 0)
+            {
+                foreach (var op in incoming.Operations)
+                {
+                    if (op.OperationType == ManifestOperationType.CreateCompetition)
+                    {
+                        _competitionIndex[op.TargetId] = op;
+                    }
+                }
+            }
         }
         catch (Exception ex)
         {

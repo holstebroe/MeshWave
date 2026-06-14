@@ -341,7 +341,7 @@ public class ManifestManager(ILogger logger)
     /// Play operations are capped at <see cref="SecurityLimits.MaxPlaysPerUserPerTrackPerDay"/> per track per UTC day.
     /// Returns the number of new operations added.
     /// </summary>
-    public int MergeManifest(Manifest local, Manifest remote, string remoteUserPublicKey)
+    public int MergeManifest(Manifest local, Manifest remote, string remoteUserPublicKey, Func<string, ManifestOperation?>? getCreateCompetitionOp = null)
     {
         if (local.UserId != remote.UserId)
             throw new ArgumentException("Cannot merge manifests from different users.");
@@ -415,7 +415,7 @@ public class ManifestManager(ILogger logger)
                 }
 
                 if (IsCompetitionOperation(op.OperationType))
-                    if (!ValidateCompetitionOperation(op))
+                    if (!ValidateCompetitionOperation(remote, op, getCreateCompetitionOp))
                     {
                         logger.Debug("Discarding operation {0} in stream {1} for user {2}: Invalid competition operation.", op.SequenceNumber, remote.StreamType, remote.UserId);
                         continue;
@@ -464,9 +464,50 @@ public class ManifestManager(ILogger logger)
     /// Validates a competition-related operation.
     /// Logic to be fully implemented in #76.
     /// </summary>
-    private static bool ValidateCompetitionOperation(ManifestOperation op)
+    private static bool ValidateCompetitionOperation(Manifest manifest, ManifestOperation op, Func<string, ManifestOperation?>? getCreateCompetitionOp = null)
     {
-        // TODO: Implement full validation (deadline checks, signature verification for reveal, etc.)
+        var skewMargin = TimeSpan.FromHours(1);
+
+        if (op.OperationType == ManifestOperationType.CreateCompetition)
+            return true; // The user appending it is the creator natively.
+
+        var createOp = getCreateCompetitionOp?.Invoke(op.TargetId);
+        if (createOp == null) return false; // Reject if we can't verify deadlines
+
+        if (op.OperationType == ManifestOperationType.CompetitionSubmit)
+        {
+            if (createOp.Metadata.TryGetValue("SubmissionDeadline", out var deadlineStr) &&
+                DateTime.TryParse(deadlineStr, out var submissionDeadline))
+            {
+                if (op.Timestamp > submissionDeadline + skewMargin)
+                    return false;
+            }
+        }
+        else if (op.OperationType == ManifestOperationType.CompetitionCastVote)
+        {
+            if (createOp.Metadata.TryGetValue("SubmissionDeadline", out var subDeadlineStr) &&
+                DateTime.TryParse(subDeadlineStr, out var submissionDeadline))
+            {
+                if (op.Timestamp < submissionDeadline - skewMargin)
+                    return false;
+            }
+
+            if (createOp.Metadata.TryGetValue("VotingDeadline", out var voteDeadlineStr) &&
+                DateTime.TryParse(voteDeadlineStr, out var votingDeadline))
+            {
+                if (op.Timestamp > votingDeadline + skewMargin)
+                    return false;
+            }
+        }
+        else if (op.OperationType == ManifestOperationType.CompetitionRevealResults)
+        {
+            if (createOp.Metadata.TryGetValue("AdministratorUserId", out var adminId))
+            {
+                if (manifest.UserId != adminId)
+                    return false;
+            }
+        }
+
         return true;
     }
 
