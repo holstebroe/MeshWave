@@ -35,7 +35,7 @@ public class ManifestManager(ILogger logger)
     /// </summary>
     public ManifestOperation AppendSignedOperation(
         Manifest manifest,
-        ManifestOperationType type,
+        string type,
         string targetId,
         string targetType,
         string? contentHash,
@@ -452,7 +452,7 @@ public class ManifestManager(ILogger logger)
         return counts;
     }
 
-    private static bool IsCompetitionOperation(ManifestOperationType type)
+    private static bool IsCompetitionOperation(string type)
     {
         return type is ManifestOperationType.CreateCompetition
                     or ManifestOperationType.CompetitionSubmit

@@ -116,7 +116,7 @@ public class AuthorityTests
         // For now, we've verified the code structure.
     }
 
-    private Manifest CreateManifestWithOp(string userId, string targetId, string targetType, ManifestOperationType opType, string contentHash, Dictionary<string, string> meta, int seq)
+    private Manifest CreateManifestWithOp(string userId, string targetId, string targetType, string opType, string contentHash, Dictionary<string, string> meta, int seq)
     {
         return new Manifest
         {

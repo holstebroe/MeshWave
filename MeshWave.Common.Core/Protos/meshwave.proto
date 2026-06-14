@@ -10,33 +10,9 @@ enum ProtoManifestStreamType {
     SOCIAL = 2;
 }
 
-enum ProtoManifestOperationType {
-    CREATE = 0;
-    UPDATE = 1;
-    DELETE = 2;
-    PLAY = 3;
-    FOLLOW = 4;
-    UNFOLLOW = 5;
-    PROFILE = 6;
-    COMMENT = 7;
-    COMMENT_DELETE = 8;
-    FRIEND_ADD = 9;
-    FRIEND_REMOVE = 10;
-    GROUP_JOIN = 11;
-    GROUP_LEAVE = 12;
-    LIKE = 13;
-    UNLIKE = 14;
-    CREATE_COMPETITION = 15;
-    COMPETITION_SUBMIT = 16;
-    COMPETITION_CAST_VOTE = 17;
-    COMPETITION_REVEAL_RESULTS = 18;
-    CREATE_CHANNEL = 19;
-    POST_MESSAGE = 20;
-}
-
 message ProtoManifestOperation {
     string operation_id = 1;
-    ProtoManifestOperationType operation_type = 2;
+    string operation_type = 2;
     string target_id = 3;
     string target_type = 4;
     optional string content_hash = 5;

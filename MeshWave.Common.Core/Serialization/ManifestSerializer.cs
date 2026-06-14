@@ -201,7 +201,7 @@ public static class ManifestSerializer
         var proto = new ProtoManifestOperation
         {
             OperationId = op.OperationId,
-            OperationType = (ProtoManifestOperationType)op.OperationType,
+            OperationType = op.OperationType,
             TargetId = op.TargetId,
             TargetType = op.TargetType,
             SequenceNumber = op.SequenceNumber,
@@ -221,7 +221,7 @@ public static class ManifestSerializer
         var op = new ManifestOperation
         {
             OperationId = proto.OperationId,
-            OperationType = (ManifestOperationType)proto.OperationType,
+            OperationType = proto.OperationType,
             TargetId = proto.TargetId,
             TargetType = proto.TargetType,
             ContentHash = proto.HasContentHash ? proto.ContentHash : null,
