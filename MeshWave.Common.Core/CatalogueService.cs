@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using MeshWave.Common.Core.Models;
+using MeshWave.Common.Core.Processors;
 
 namespace MeshWave.Common.Core;
 
@@ -11,7 +12,16 @@ public class CatalogueService : ICatalogueService
     private readonly ConcurrentDictionary<string, CatalogueEntry> _entries = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, int> _lastSequenceNumbers = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, bool>> _peerAvailability = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ICatalogueEntryProcessor> _processors = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _lock = new();
+
+    public CatalogueService(IEnumerable<ICatalogueEntryProcessor> processors)
+    {
+        foreach (var processor in processors)
+        {
+            _processors[processor.TargetType] = processor;
+        }
+    }
 
     public Task IngestAsync(Manifest manifest)
     {
@@ -82,7 +92,9 @@ public class CatalogueService : ICatalogueService
     private void UpdateEntry(string userId, string targetId, string targetType, string? contentHash, Dictionary<string, string> metadata, int sequenceNumber, DateTime timestamp, bool isDelete)
     {
         if (string.IsNullOrWhiteSpace(targetId)) return;
-        if (targetType != "Artist" && targetType != "Album" && targetType != "Track" && targetType != "Playlist") return;
+
+        if (!_processors.TryGetValue(targetType, out var processor))
+            return;
 
         lock (_lock)
         {
@@ -92,19 +104,9 @@ public class CatalogueService : ICatalogueService
             if (existingEntry != null && !string.Equals(existingEntry.OwnerUserId, userId, StringComparison.OrdinalIgnoreCase))
                 return;
 
-            // 2. Versioning and Hash Immutability (for Tracks)
-            if (targetType == "Track")
-            {
-                var incomingVersion = int.TryParse(metadata.GetValueOrDefault("version") ?? metadata.GetValueOrDefault("trackVersion"), out var v) ? v : 1;
-                if (existingEntry != null)
-                {
-                    if (incomingVersion < existingEntry.Version)
-                        return; // Reject older versions
-
-                    if (incomingVersion == existingEntry.Version && !string.Equals(existingEntry.ContentHash, contentHash, StringComparison.OrdinalIgnoreCase))
-                        return; // Hash immutability: same version must have same hash
-                }
-            }
+            // 2. Validate update via processor (e.g., Versioning and Hash Immutability)
+            if (!processor.ValidateUpdate(existingEntry, contentHash, metadata))
+                return;
 
             // 3. Staleness Rule: Only apply if incoming SequenceNumber is greater than existing for this TargetId
             if (_lastSequenceNumbers.TryGetValue(targetId, out var existingSeq) && sequenceNumber <= existingSeq)
@@ -118,23 +120,7 @@ public class CatalogueService : ICatalogueService
             }
             else
             {
-                var entry = new CatalogueEntry
-                {
-                    EntryId = targetId,
-                    Type = MapType(targetType),
-                    OwnerUserId = userId,
-                    Title = GetTitle(targetId, metadata),
-                    ArtistName = metadata.GetValueOrDefault("artist") ?? metadata.GetValueOrDefault("artistName"),
-                    AlbumName = metadata.GetValueOrDefault("album") ?? metadata.GetValueOrDefault("albumName"),
-                    Duration = ParseDuration(metadata.GetValueOrDefault("duration")),
-                    ContentHash = contentHash,
-                    ReleaseDate = ParseDate(metadata.GetValueOrDefault("releasedAt") ?? metadata.GetValueOrDefault("releaseDate")),
-                    Genre = metadata.GetValueOrDefault("genre"),
-                    FileSize = long.TryParse(metadata.GetValueOrDefault("fileSize"), out var fs) ? fs : 0,
-                    Version = int.TryParse(metadata.GetValueOrDefault("version") ?? metadata.GetValueOrDefault("trackVersion"), out var v) ? v : 1,
-                    SequenceNumber = sequenceNumber,
-                    Timestamp = timestamp
-                };
+                var entry = processor.MapMetadata(targetId, userId, contentHash, metadata, sequenceNumber, timestamp);
                 _entries[targetId] = entry;
             }
 
@@ -158,39 +144,5 @@ public class CatalogueService : ICatalogueService
                     peers.TryAdd(userId, true);
             }
         }
-    }
-
-    private static CatalogueEntryType MapType(string targetType)
-    {
-        return targetType switch
-        {
-            "Artist" => CatalogueEntryType.Artist,
-            "Album" => CatalogueEntryType.Album,
-            "Playlist" => CatalogueEntryType.Playlist,
-            _ => CatalogueEntryType.Track
-        };
-    }
-
-    private static string GetTitle(string targetId, Dictionary<string, string> metadata)
-    {
-        if (metadata.TryGetValue("title", out var title) && !string.IsNullOrWhiteSpace(title)) return title;
-        if (metadata.TryGetValue("displayName", out var dn) && !string.IsNullOrWhiteSpace(dn)) return dn;
-        if (metadata.TryGetValue("name", out var name) && !string.IsNullOrWhiteSpace(name)) return name;
-        return targetId;
-    }
-
-    private static TimeSpan? ParseDuration(string? value)
-    {
-        if (string.IsNullOrEmpty(value)) return null;
-        if (TimeSpan.TryParse(value, out var ts)) return ts;
-        if (double.TryParse(value, out var seconds)) return TimeSpan.FromSeconds(seconds);
-        return null;
-    }
-
-    private static DateTime? ParseDate(string? value)
-    {
-        if (string.IsNullOrEmpty(value)) return null;
-        if (DateTime.TryParse(value, out var dt)) return dt;
-        return null;
     }
 }

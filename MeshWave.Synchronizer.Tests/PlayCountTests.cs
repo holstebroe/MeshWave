@@ -81,7 +81,7 @@ public class PlayCountTests
             new PeerManifestStore(env, Path.GetTempPath()),
             new ContentExchange(),
             new NatTraversalService(logger: null),
-            new CatalogueService(),
+            new CatalogueService(MeshWave.Common.Core.Processors.CatalogueProcessorDefaults.GetDefaultProcessors()),
             env
         );
     }
