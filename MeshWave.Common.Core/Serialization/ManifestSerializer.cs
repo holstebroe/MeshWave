@@ -4,6 +4,7 @@ using MeshWave.Common.Core.Models;
 using NLog;
 using MeshWave.Common.Core.P2P;
 using MeshWave.Common.Core.Serialization.Protobuf;
+using MeshWave.Common.Core.Validation;
 
 namespace MeshWave.Common.Core.Serialization;
 
@@ -12,6 +13,8 @@ namespace MeshWave.Common.Core.Serialization;
 /// </summary>
 public static class ManifestSerializer
 {
+    public static IManifestOperationValidator Validator { get; set; } = new DefaultManifestOperationValidator();
+
     public static byte[] SerializeRequest(ManifestRequest request)
     {
         var proto = MapToProto(request);
@@ -146,49 +149,11 @@ public static class ManifestSerializer
 
             var op = MapFromProto(protoOp);
 
-            if (op.OperationId.Length > SecurityLimits.MaxOperationIdLength)
+            if (!Validator.IsValid(op, proto.UserId, out var rejectionReason))
             {
-                logger.Warn($"Rejected operation from {proto.UserId}: OperationId length {op.OperationId.Length} exceeds limit {SecurityLimits.MaxOperationIdLength}");
+                logger.Warn($"Rejected operation from {proto.UserId}: {rejectionReason}");
                 continue;
             }
-            if (op.TargetId.Length > SecurityLimits.MaxTargetIdLength)
-            {
-                logger.Warn($"Rejected operation from {proto.UserId}: TargetId length {op.TargetId.Length} exceeds limit {SecurityLimits.MaxTargetIdLength}");
-                continue;
-            }
-            if (op.TargetType.Length > SecurityLimits.MaxTargetTypeLength)
-            {
-                logger.Warn($"Rejected operation from {proto.UserId}: TargetType length {op.TargetType.Length} exceeds limit {SecurityLimits.MaxTargetTypeLength}");
-                continue;
-            }
-            if (op.ContentHash?.Length > SecurityLimits.MaxContentHashLength)
-            {
-                logger.Warn($"Rejected operation from {proto.UserId}: ContentHash length {op.ContentHash.Length} exceeds limit {SecurityLimits.MaxContentHashLength}");
-                continue;
-            }
-            if (op.Metadata.Count > SecurityLimits.MaxMetadataEntries)
-            {
-                logger.Warn($"Rejected operation from {proto.UserId}: Metadata count {op.Metadata.Count} exceeds limit {SecurityLimits.MaxMetadataEntries}");
-                continue;
-            }
-
-            var metadataValid = true;
-            foreach (var kv in op.Metadata)
-            {
-                if (kv.Key.Length > SecurityLimits.MaxMetadataKeyLength)
-                {
-                    logger.Warn($"Rejected operation from {proto.UserId}: Metadata Key length {kv.Key.Length} exceeds limit {SecurityLimits.MaxMetadataKeyLength}");
-                    metadataValid = false;
-                    break;
-                }
-                if (kv.Value.Length > SecurityLimits.MaxMetadataValueLength)
-                {
-                    logger.Warn($"Rejected operation from {proto.UserId}: Metadata Value length {kv.Value.Length} exceeds limit {SecurityLimits.MaxMetadataValueLength}");
-                    metadataValid = false;
-                    break;
-                }
-            }
-            if (!metadataValid) continue;
 
             manifest.Operations.Add(op);
         }
