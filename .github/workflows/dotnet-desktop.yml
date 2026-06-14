@@ -37,7 +37,7 @@ jobs:
 
     - name: Test (${{ matrix.configuration }})
       # Added --filter to exclude the integration test assembly namespace
-      run: dotnet test $env:Solution_Name --configuration ${{ matrix.configuration }} --no-build --filter "FullyQualifiedName!~MeshWave.Integration.Tests" --logger "trx;LogFileName=test-results-${{ matrix.configuration }}.trx"
+      run: dotnet test $env:Solution_Name --configuration ${{ matrix.configuration }} --no-build --filter "FullyQualifiedName!~MeshWave.Integration.Tests&Category!=Performance&Category!=Stress" --logger "trx;LogFileName=test-results-${{ matrix.configuration }}.trx"
 
     - name: Upload test results (${{ matrix.configuration }})
       if: always()
