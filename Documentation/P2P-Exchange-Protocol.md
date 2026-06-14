@@ -18,10 +18,11 @@ MeshWave uses a decentralized, manifest-based synchronization model. Each user m
 ## Request Types (`ManifestRequestType`)
 
 1.  **`GetManifest`**: Requests a manifest from a peer.
+    - `StreamType`: Identifies whether to fetch the Content, Interaction, or Social stream.
+    - `TargetUserId` or `TargetGroupId`: Identifies the user or community group being requested.
     - `StartSequenceNumber`: Used for delta synchronization.
     - `EndSequenceNumber`: Optional upper bound.
-    - `TargetUserId`: Optional. Used when requesting a manifest from a relay/bootstrap node.
-2.  **`PushManifest`**: Proactively sends the local manifest to a peer. Used when the local state changes.
+2.  **`PushManifest`**: Proactively sends the local manifest (or a specific stream/group manifest) to a peer. Used when the local state changes.
 3.  **`RelayManifestPush`**: Sends a manifest to a bootstrap node to be relayed to followers who cannot be reached directly (e.g., behind NAT).
 4.  **`GetPeers`**: Peer Exchange (PEX). Requests a list of known peers from a node.
 5.  **`RequestRendezvous`**: Requests a coordinated NAT traversal session via a bootstrap node.
@@ -41,8 +42,12 @@ The `SyncOrchestrator` periodically performs maintenance, which includes:
 -   Performing PEX to discover new peers.
 -   Re-contacting bootstrap nodes.
 
-## Delta Synchronization
-To minimize bandwidth, MeshWave supports delta sync. When requesting a manifest, a peer specifies a `StartSequenceNumber` based on the last operation it has already received and verified for that user. The server then only returns operations with a sequence number greater than or equal to the requested start.
+## Delta Synchronization and Compaction
+To minimize bandwidth, MeshWave supports delta sync across its multiple streams.
+
+When requesting a manifest stream, a peer specifies a `StartSequenceNumber` based on the last operation it has already received and verified for that user/group. The server then only returns operations with a sequence number greater than or equal to the requested start.
+
+If the requested `StartSequenceNumber` is significantly behind the server's current state, and the server has generated a `ManifestSnapshot` that covers the missing history, the server will return the `ManifestSnapshot` as the baseline. The requesting peer validates the snapshot's signature to securely update its base state (e.g., squashing thousands of historic `Play` operations into the updated totals in the snapshot), and then applies the remaining linear operations on top of it.
 
 ## Social Actions and Metadata
 Social actions like `Play`, `Like`, `Comment`, and `Follow` are represented as standard `ManifestOperation` entries.

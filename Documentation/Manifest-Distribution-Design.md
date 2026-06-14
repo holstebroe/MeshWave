@@ -4,12 +4,12 @@
 As MeshWave grows, the single-manifest strategy faces scalability challenges. This document proposes a multi-stream manifest architecture that segregates data by its nature (static vs. dynamic), size, and interaction frequency.
 
 ## 1. Manifest Segmentation
-We divide user data into three distinct streams, allowing peers to prioritize synchronization based on their interests and resources.
+We divide user data into three distinct streams (`ManifestStreamType`), allowing peers to prioritize synchronization based on their interests and resources.
 
 ### A. Content Manifest (Authority: Owner)
 Contains the "Canonical" record of the user's creative output.
 - **Entities**: Tracks (files and hashes), Track Metadata, Album Metadata, Cover Art (hashes), Playlists.
-- **Operations**: `Create`, `Update`, `Delete` (Tombstone), `AnnounceVersion`.
+- **Operations**: `Create`, `Update`, `Delete` (Tombstone).
 - **Characteristics**:
     - **Low Frequency**: Updated only when the artist releases or edits content.
     - **High Stability**: Content hashes are immutable for a given version.
@@ -18,27 +18,34 @@ Contains the "Canonical" record of the user's creative output.
 
 ### B. Content Interaction Manifest (Mixed Authority)
 Contains engagement data related to content.
-- **Operations**: `Play`, `Comment`, `CommentEdit`, `CommentDelete`, `Like`, `Unlike`.
+- **Operations**: `Play`, `Like`, `Unlike`, `Comment`, `CommentDelete`.
 - **Characteristics**:
     - **High Frequency**: Play counts and comments grow rapidly.
     - **High Volume**: Can reach thousands of entries per user.
     - **Latency Requirement**: Comments should be distributed to peers within 1 minute (instantly queued).
     - **Authority**:
         - `Play`/`Like`/`Comment`: The actor (user performing the action).
-        - **Comment Editing**: Users can edit their own comments. Peers see a `CommentEdit` operation that updates the text but preserves the original `CommentId`.
         - **Comment Deletion**: Users can delete their own comments via `CommentDelete`.
         - **Moderation**: Content owners (e.g., the artist who released the track) can remove (tombstone) comments from other peers on their own content. They cannot edit them.
 
 ### C. Social Interaction Manifest (Authority: User/Group)
 Contains the user's social graph, profile, and community participation.
-- **Operations**: `ProfileUpdate`, `Follow`, `Unfollow`, `FriendAdd`, `FriendRemove`, `GroupJoin`, `GroupLeave`, `GroupOperation`, `CompetitionOperation`.
+- **Operations**: `Profile`, `Follow`, `Unfollow`, `FriendAdd`, `FriendRemove`, `GroupJoin`, `GroupLeave`, `CreateCompetition`, `CompetitionSubmit`, `CompetitionCastVote`, `CompetitionRevealResults`, `CreateChannel`, `PostMessage`.
 - **Social Entities**:
     - **Groups**: Management (description, properties), Membership.
     - **Group Forums**: Channel management, threaded chats/posts.
     - **Competitions**: Creation, submissions, voting, results.
 - **Characteristics**:
     - **Moderate Frequency**: Profile updates are rare; social graph changes occur during discovery.
-    - **Snapshot-Friendly**: Most operations can be squashed into a "Current State" snapshot (e.g., current friend list).
+    - **Snapshot-Friendly**: Most operations can be squashed into a "Current State" snapshot (e.g., current friend list, latest profile).
+
+### D. Group Manifests (Community Authority)
+Parallel to user manifests, `GroupManifest` entities represent decentralized, community-owned groups without a central server.
+- **Entities**: Group details, Channels, Member policies.
+- **Operations (`GroupOperationType`)**: `Found`, `Join`, `Post`, `Moderate`.
+- **Characteristics**:
+    - **Global Uniqueness**: `GroupId` is deterministic, usually derived from the founding operation hash.
+    - **Decentralized Exchange**: Group manifests are exchanged on demand via the same P2P infrastructure as user manifests.
 
 ## 2. Scalability and Compaction
 
@@ -95,20 +102,36 @@ Assuming a peer follows 100 artists and interacts with 500 total peers. Daily up
 - **Edit/Delete**: Comments include a `Version` or `LastEdited` timestamp.
 - **Moderation**: Content owners can issue a `ContentModerationOp` that references a `CommentId` to signal to their followers that a comment should be hidden.
 
-## 5. Implementation Roadmap
+## 5. Guidelines for Expanding Data Structures
 
-### Phase 1: Structural Split (Issue #128)
+When expanding MeshWave's feature set, data structures should be augmented carefully to maintain backward compatibility and network consensus.
+
+1. **Adding New Operations**:
+    - Add the new enum value to `ManifestOperationType` or `GroupOperationType`.
+    - Update `ManifestStreamMapper.GetStreamType()` to map the new user operation to the appropriate stream (`Content`, `Interaction`, or `Social`).
+    - Handlers in `ManifestManager` and `SyncOrchestrator` must be updated to process the new operation type during manifest merges.
+
+2. **Modifying Models**:
+    - Add new properties to the `Metadata` dictionary of `ManifestOperation` or `GroupOperation` rather than altering the schema of the core classes if possible. This prevents breaking RSA signature validation on older clients.
+    - If core domain classes (`Track`, `Album`, `User`) are updated, ensure that mapping logic (`CachedTrackMetadata`, `LocalLibraryManager`) is updated accordingly.
+
+3. **Snapshots and Compaction**:
+    - If a new operation type produces persistent state (e.g., a total counter, a boolean flag, or an entity metadata update), the logic in `ManifestSnapshot` creation must be updated to aggregate or squash the new operation correctly.
+
+## 6. Implementation Roadmap
+
+### Phase 1: Structural Split (Issue #128) - **IMPLEMENTED**
 - Define `ManifestStreamType` enum.
 - Update `ManifestManager` to support multiple local files per user (`{UserId}.content.json`, `{UserId}.interaction.json`, etc.).
 - Update `ManifestExchangeProtocol` to allow requesting specific streams.
 
-### Phase 2: Checkpointing and Consensus (Issue #129)
-- Implement `InteractionCheckpoint` logic.
+### Phase 2: Checkpointing and Consensus (Issue #129) - **IMPLEMENTED**
+- Implement `InteractionCheckpoint` logic (`ManifestSnapshot`).
 - Add support for squashing Play counts and Likes into signed snapshots.
 - Implement playcount versioning (tracking plays per specific track content hash).
 - Implement percentage-played verification in the playback engine.
 
-### Phase 3: Content Authority and Moderation (Issue #130)
+### Phase 3: Content Authority and Moderation (Issue #130) - **IN PROGRESS**
 - Implement owner-based comment moderation (removing comments from other peers on own content).
 - Add verification logic for track versioning and hash immutability.
 - Implement "Set Verification" — ensuring the current state of a user's library is authentic without requiring the full history of changes.

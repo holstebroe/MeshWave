@@ -37,13 +37,18 @@ Inside each album folder:
 
 ## P2P Manifest Architecture
 
-MeshWave uses an **append-only signed log** model for all user-authored metadata and social interactions. Every peer maintains a local manifest that serves as their public record of state changes.
+MeshWave uses an **append-only signed log** model for all user-authored metadata and social interactions. Every peer maintains local manifests that serve as their public record of state changes.
 
 ### Manifest Structure
 
-A `Manifest` is a collection of `ManifestOperation` entries associated with a `UserId`.
+A `Manifest` is a collection of `ManifestOperation` entries associated with a `UserId`. To improve scalability and synchronization efficiency, user manifests are segmented into three distinct streams (`ManifestStreamType`):
+- **Content**: Tracks, Albums, Playlists (`Create`, `Update`, `Delete`).
+- **Interaction**: Engagement metrics like `Play`, `Like`, `Comment`.
+- **Social**: User profile updates and social graph connections (`Follow`, `FriendAdd`, `GroupJoin`).
 
-- **Manifest**: Contains `UserId`, a `List<ManifestOperation>`, a `Version` counter, and a `LastUpdated` timestamp.
+Additionally, MeshWave supports **GroupManifests** for community-owned groups (e.g., chat channels, forums). These function similarly to user manifests but are associated with a `GroupId` and use `GroupOperationType` (e.g., `Found`, `Join`, `Post`, `Moderate`).
+
+- **Manifest**: Contains `UserId` (or `GroupId`), a `StreamType`, a `List<ManifestOperation>`, a `Version` counter, a `LastUpdated` timestamp, and optionally a `ManifestSnapshot`.
 - **ManifestOperation**: A single atomic change.
     - `OperationId`: Unique GUID.
     - `OperationType`: Enum (Create, Update, Delete, Play, Follow, Profile, Comment, Like, etc.).
@@ -52,6 +57,7 @@ A `Manifest` is a collection of `ManifestOperation` entries associated with a `U
     - `Timestamp`: UTC time of the operation.
     - `Signature`: RSA signature of the operation fields, signed by the user's private key.
     - `Metadata`: Key-value pairs for operation-specific data (e.g., track title, comment text).
+- **ManifestSnapshot**: A compressed, verified state of a manifest up to a specific `LastSequenceNumber`, enabling delta synchronization.
 
 ### Lifecycle and Management
 
@@ -64,23 +70,19 @@ A `Manifest` is a collection of `ManifestOperation` entries associated with a `U
 
 ### Performance and Scalability Analysis
 
-The current design relies on full-manifest exchange and an ever-accumulating list of operations. This presents several long-term performance risks:
+The architecture addresses long-term performance risks (bandwidth exhaustion, memory pressure, operation accumulation) through several key mechanisms:
 
--   **Bandwidth Exhaustion**: As a user's history grows (thousands of plays, comments, follows), the manifest size increases linearly. Exchanging full manifests with dozens of peers will eventually consume significant bandwidth, potentially dwarfing the actual audio file transfers.
--   **Memory and Disk Pressure**: Each peer must store and index the manifests of all followed or encountered peers. Large manifests increase the startup time (loading from disk) and memory footprint.
--   **Processing Overhead**: Verifying thousands of RSA signatures during a merge is CPU-intensive.
--   **Operation Accumulation**: Frequent operations like `Play` (recorded once per session per track) are the primary drivers of manifest growth. While capped by `SecurityLimits.MaxPlaysPerUserPerTrackPerDay`, they still accumulate indefinitely.
+- **Stream Segmentation**: By separating Content, Interaction, and Social streams, peers can prioritize syncing only what they care about (e.g., only fetching the Content stream for search results).
+- **Delta Synchronization**: Peers can request only operations after a specific sequence number, minimizing payload sizes.
+- **ManifestSnapshots (Compaction)**: Older operations (e.g., thousands of `Play` events) are periodically squashed into a single, consensus-authenticated `ManifestSnapshot`. This "checkpoint" includes aggregated states like total play counts, preserving the current state without needing the full linear history.
 
-#### Current Safeguards
+#### Safeguards
 -   `SecurityLimits.MaxManifestOperations` (currently 10,000): Rejects manifests exceeding this limit to prevent runaway growth or DoS attacks.
 -   `SecurityLimits.MaxMessageBytes` (512 KB): Limits the raw TCP payload size.
 -   `ManifestPushCooldownMs` (30s): Prevents rapid-fire updates to the same peer.
 
-#### Necessary Evolutions
-To support large mesh networks with many users and files, the architecture must move toward:
-1.  **Delta Synchronization**: Requesting only operations after a specific sequence number (e.g., "Give me everything after Seq 450").
-2.  **Compaction/Snapshotting**: "Squashing" old operations (e.g., multiple `Update` or `Profile` ops) into a single state snapshot, potentially signed as a "checkpoint." It is not important to preserve the full history of every play or comment indefinitely, but it is important to preserve the current state (e.g., "I have played Track X 5 times, and my profile name is Y").
-3.  **Binary Wire Formats**: Moving away from JSON to a more compact format (e.g., Protobuf) to reduce transmission size.
+#### Future Evolutions
+1.  **Binary Wire Formats**: Moving away from JSON to a more compact format (e.g., Protobuf) to reduce transmission size.
 
 ## Current UI Architecture
 
