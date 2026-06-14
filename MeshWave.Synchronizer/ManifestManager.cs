@@ -126,7 +126,14 @@ public class ManifestManager(ILogger logger)
                 switch (op.OperationType)
                 {
                     case ManifestOperationType.Play:
+                        // Total plays
                         playCounts[op.TargetId] = playCounts.GetValueOrDefault(op.TargetId) + 1;
+                        // Versioned plays
+                        if (!string.IsNullOrEmpty(op.ContentHash))
+                        {
+                            var versionKey = $"{op.TargetId}:{op.ContentHash}";
+                            playCounts[versionKey] = playCounts.GetValueOrDefault(versionKey) + 1;
+                        }
                         break;
                     case ManifestOperationType.Follow:
                         followed.Add(op.TargetId);

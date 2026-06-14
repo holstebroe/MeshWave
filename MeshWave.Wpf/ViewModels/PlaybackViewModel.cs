@@ -32,6 +32,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
     private readonly Func<IAudioPlaybackService>? _audioServiceFactory;
     private string? _currentFilePath;
     private bool _isUpdatingPosition;
+    private bool _playRecordedForCurrentTrack;
     private readonly UserProfileService _profileService;
     private readonly MyMusicMetadataService _myMusicMetadataService = new();
     private string _coverImagePath = string.Empty;
@@ -426,6 +427,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         _currentFilePath = filePath;
         CurrentTrackId = Path.GetFileNameWithoutExtension(filePath ?? string.Empty) ?? string.Empty;
         RefreshCurrentTrackLikeState();
+        _playRecordedForCurrentTrack = false;
 
         if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
         {
@@ -457,6 +459,46 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
                 _isUpdatingPosition = true;
                 SetProperty(ref _currentPosition, pos, nameof(CurrentPosition));
                 _isUpdatingPosition = false;
+
+                // Interaction Checkpoint: Record play if we pass 80% (or minimum 30 seconds for long tracks)
+                if (!_playRecordedForCurrentTrack && _sync != null && !string.IsNullOrWhiteSpace(CurrentTrackId))
+                {
+                    if (Duration.TotalSeconds > 0)
+                    {
+                        var percentage = pos.TotalSeconds / Duration.TotalSeconds;
+                        var isPlayedLongEnough = percentage >= 0.8 || (Duration.TotalSeconds > 60 && pos.TotalSeconds >= 30);
+
+                        if (isPlayedLongEnough)
+                        {
+                            _playRecordedForCurrentTrack = true;
+
+                            // Capture locals to prevent race condition if track changes before async completes
+                            var trackId = CurrentTrackId;
+                            var trackTitle = TrackTitle;
+                            var trackArtist = Artist;
+                            var sync = _sync;
+
+                            // Fire-and-forget to avoid sync-over-async blocking
+                            _ = Task.Run(async () =>
+                            {
+                                string? currentContentHash = null;
+                                if (sync.CatalogueService != null)
+                                {
+                                    try
+                                    {
+                                        var trackEntry = await sync.CatalogueService.GetEntryAsync(trackId);
+                                        if (trackEntry != null)
+                                        {
+                                            currentContentHash = trackEntry.ContentHash;
+                                        }
+                                    }
+                                    catch { /* best-effort */ }
+                                }
+                                sync.RecordPlay(trackId, trackTitle, trackArtist, currentContentHash);
+                            });
+                        }
+                    }
+                }
             };
             audioService.BufferingChanged += (s, buffering) =>
             {

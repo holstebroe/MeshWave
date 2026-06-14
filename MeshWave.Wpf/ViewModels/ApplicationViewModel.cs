@@ -138,15 +138,7 @@ public class ApplicationViewModel : ViewModelBase
             }
         };
 
-        // Record a signed Play operation the first time each track starts playing.
-        Playback.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(PlaybackViewModel.IsPlaying) && Playback.IsPlaying)
-                SyncOrchestrator.RecordPlay(
-                    Playback.CurrentTrackId,
-                    Playback.TrackTitle,
-                    Playback.Artist);
-        };
+
 
         DownloadQueueItems.CollectionChanged += (_, e) =>
         {

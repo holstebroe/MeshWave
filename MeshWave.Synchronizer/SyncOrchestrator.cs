@@ -979,7 +979,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// <param name="title">Track title stored as metadata.</param>
     /// <param name="artist">Artist name stored as metadata.</param>
     /// <returns><c>true</c> if a new Play operation was appended; <c>false</c> if rate-capped or not ready.</returns>
-    public bool RecordPlay(string trackId, string title, string artist)
+    public bool RecordPlay(string trackId, string title, string artist, string? contentHash = null)
     {
         var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Play));
         if (manifest == null || Identity == null) return false;
@@ -992,7 +992,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             ManifestOperationType.Play,
             SecurityLimits.Truncate(trackId, SecurityLimits.MaxTargetIdLength),
             "Track",
-            contentHash: null,
+            contentHash: contentHash,
             new Dictionary<string, string>
             {
                 ["title"]  = SecurityLimits.Truncate(title,  SecurityLimits.MaxTrackTitleLength),

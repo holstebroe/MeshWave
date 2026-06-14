@@ -30,7 +30,7 @@ public class PlayCountTests
     /// SequenceNumber is set BEFORE signing so verification matches.
     /// </summary>
     private static void AppendPlayAt(
-        Manifest manifest, string trackId, DateTime utcTimestamp, string privateKeyPem)
+        Manifest manifest, string trackId, DateTime utcTimestamp, string privateKeyPem, string? contentHash = null)
     {
         var seq = manifest.Operations.Count;
         var op = new ManifestOperation
@@ -39,6 +39,7 @@ public class PlayCountTests
             OperationType = ManifestOperationType.Play,
             TargetId     = trackId,
             TargetType   = "Track",
+            ContentHash  = contentHash,
             Signature    = string.Empty,
             Timestamp    = utcTimestamp,
             SequenceNumber = seq,
@@ -202,5 +203,26 @@ public class PlayCountTests
 
         // Capped plays + the 1 Create op
         Assert.Equal(SecurityLimits.MaxPlaysPerUserPerTrackPerDay + 1, added);
+    }
+
+    [Fact]
+    public void CreateSnapshot_PlayCount_TracksVersionedHashes()
+    {
+        // Arrange
+        var manager = new ManifestManager();
+        var (pub, priv) = GenerateKeyPair();
+        var manifest = manager.CreateManifest("user1");
+
+        AppendPlayAt(manifest, "track-1", DateTime.UtcNow.AddMinutes(-5), priv, "hash1");
+        AppendPlayAt(manifest, "track-1", DateTime.UtcNow.AddMinutes(-4), priv, "hash2");
+        AppendPlayAt(manifest, "track-1", DateTime.UtcNow.AddMinutes(-3), priv, "hash2");
+
+        // Act
+        var snapshot = manager.CreateSnapshot(manifest, manifest.Operations.Count - 1, priv);
+
+        // Assert
+        Assert.Equal(3, snapshot.PlayCounts["track-1"]);
+        Assert.Equal(1, snapshot.PlayCounts["track-1:hash1"]);
+        Assert.Equal(2, snapshot.PlayCounts["track-1:hash2"]);
     }
 }
