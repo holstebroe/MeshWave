@@ -89,10 +89,10 @@
                         </Border>
                     </Grid>
                     <!-- Community button with new-release badge -->
-                    <Grid>
                         <Button Content="👥  Community"
                                 Style="{StaticResource SidebarNavButton}"
                                 Click="CommunityMenu_Click"/>
+                    <Grid>
                         <Button Content="⬇️  Downloads"
                                 Style="{StaticResource SidebarNavButton}"
                                 Click="DownloadsMenu_Click"/>

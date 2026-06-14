@@ -15,9 +15,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Assets\mesh_background.jpg" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\MeshBackground.jpg" />
     <Resource Include="MeshWaveIcon128.ico" />
     <Resource Include="Assets\MeshWaveIcon128.png" />
-    <Resource Include="Assets\LargeSplashLogo.png" />
+    <Resource Include="Assets\LargeSplashLogo.jpg" />
   </ItemGroup>
 
   <ItemGroup>

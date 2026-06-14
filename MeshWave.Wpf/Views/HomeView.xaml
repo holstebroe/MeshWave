@@ -15,7 +15,7 @@
         <Border Background="{StaticResource SurfaceColor}" CornerRadius="16" Padding="0" Margin="0,0,0,16" ClipToBounds="True">
             <Grid>
                 <!-- Splash logo as background, scales to fill width -->
-                <Image Source="/Assets/LargeSplashLogo.png"
+                <Image Source="/Assets/LargeSplashLogo.jpg"
                        Stretch="UniformToFill"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"

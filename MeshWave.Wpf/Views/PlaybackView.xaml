@@ -138,7 +138,6 @@
             <Grid>
                 <Canvas x:Name="WaveformCanvas"
                         Height="120"
-                        Background="#FF0F0F0F"
                         MouseLeftButtonDown="WaveformCanvas_MouseLeftButtonDown"
                         MouseMove="WaveformCanvas_MouseMove"
                         MouseLeave="WaveformCanvas_MouseLeave">

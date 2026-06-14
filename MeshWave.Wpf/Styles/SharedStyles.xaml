@@ -4,6 +4,18 @@
 
     <converters:SliderFillWidthConverter x:Key="SliderFillWidthConverter"/>
 
+    <SolidColorBrush x:Key="BackgroundColor"     Color="#FF121212"/>
+    <SolidColorBrush x:Key="SurfaceColor"        Color="#FF181818"/>
+    <SolidColorBrush x:Key="SurfaceLightColor"   Color="#FF282828"/>
+    <SolidColorBrush x:Key="SidebarBgColor"      Color="#FF000000"/>
+    <SolidColorBrush x:Key="PlayerBarBgColor"    Color="#FF181818"/>
+    <SolidColorBrush x:Key="PlayerBarBorderColor" Color="#FF282828"/>
+    <SolidColorBrush x:Key="TextPrimaryColor"    Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="TextSecondaryColor"  Color="#FFB3B3B3"/>
+    <SolidColorBrush x:Key="TextDimColor"        Color="#FF6B6B6B"/>
+    <SolidColorBrush x:Key="AccentColor"         Color="#FF1DB954"/>
+    <SolidColorBrush x:Key="PrimaryColor"        Color="#FF1DB954"/>
+
     <!-- ===== Download Item Sidebar Template ===== -->
     <DataTemplate x:Key="SidebarDownloadItemTemplate">
         <Grid Margin="0,0,0,10">
@@ -755,11 +767,11 @@
         <Setter Property="CornerRadius" Value="8" />
         <Setter Property="Background">
             <Setter.Value>
-                <VisualBrush Stretch="None" TileMode="Tile" Viewport="0,0,128,128" ViewportUnits="Absolute">
+                <VisualBrush Stretch="None" TileMode="Tile" Viewport="0,0,2028,2028" ViewportUnits="Absolute">
                     <VisualBrush.Visual>
-                        <Grid Width="128" Height="128">
+                        <Grid Width="2048" Height="2048">
                             <Rectangle Fill="{DynamicResource SurfaceColor}" />
-                            <Image Source="pack://application:,,,/Assets/MeshWaveIcon128.png" Opacity="0.05" Stretch="None"/>
+                            <Image Source="pack://application:,,,/Assets/MeshBackground.jpg" Opacity="0.15" Stretch="None"/>
                         </Grid>
                     </VisualBrush.Visual>
                 </VisualBrush>

@@ -1,7 +1,7 @@
 # MeshWave
 
 <p align="center">
-  <img src="MeshWave/Assets/LargeSplashLogo.png" alt="MeshWave splash" width="900" />
+  <img src="Assets/LargeSplashLogo.jpg" alt="MeshWave splash" width="900" />
 </p>
 
 <p align="center">
