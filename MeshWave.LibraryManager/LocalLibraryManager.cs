@@ -470,11 +470,11 @@ public class LocalLibraryManager
             // Prefix search by adding '*'
             command.CommandText = "SELECT TrackId FROM FtsTracks WHERE FtsTracks MATCH @Query";
 
-            // Basic sanitization: strip special characters and append wildcard to each term
+            // Basic sanitization: strip special characters, wrap in quotes to prevent FTS syntax injection, and append wildcard to each term
             var sanitizedTerms = query.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
                                       .Select(t => new string(t.Where(c => char.IsLetterOrDigit(c)).ToArray()))
                                       .Where(t => !string.IsNullOrEmpty(t))
-                                      .Select(t => $"{t}*");
+                                      .Select(t => $"\"{t}\"*");
 
             var ftsQuery = string.Join(" AND ", sanitizedTerms);
 

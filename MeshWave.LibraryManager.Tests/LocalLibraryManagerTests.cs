@@ -107,6 +107,44 @@ public class LocalLibraryManagerTests : IDisposable
         Directory.Delete(tempDir, true);
     }
 
+    [Fact]
+    public void SearchLocalLibrary_WithFtsKeywords_DoesNotThrow()
+    {
+        // Arrange
+        var tempDir = Path.Combine(Path.GetTempPath(), $"meshwave_lib_test_{Guid.NewGuid()}");
+        Directory.CreateDirectory(tempDir);
+
+        var cacheDir = Path.Combine(tempDir, "The Beatles", "Abbey Road", ".cache");
+        Directory.CreateDirectory(cacheDir);
+
+        var originalFile = Path.Combine(tempDir, "The Beatles", "Abbey Road", "AND OR NOT MATCH.mp3");
+        var metaFile = Path.Combine(cacheDir, "AND OR NOT MATCH.meta.json");
+
+        var cacheData = new {
+            Title = "AND OR NOT MATCH",
+            Artist = "The Beatles",
+            Album = "Abbey Road",
+            DurationSeconds = 259.0,
+            SourceLastWriteUtc = System.DateTime.UtcNow,
+            OriginalFilePath = originalFile,
+            ContentHash = "hash123"
+        };
+        var cacheContent = JsonSerializer.Serialize(cacheData);
+        File.WriteAllText(metaFile, cacheContent);
+
+        var manager = new LocalLibraryManager(tempDir);
+        manager.IndexLibrary();
+
+        // Act
+        var result = manager.SearchLocalLibrary("AND OR NOT MATCH").ToList();
+
+        // Assert
+        Assert.Single(result);
+
+        // Cleanup
+        Directory.Delete(tempDir, true);
+    }
+
     //[Fact]
     //public void IndexLibrary_IncludesMissingFilesWithMetadataAsNotDownloaded()
     //{
