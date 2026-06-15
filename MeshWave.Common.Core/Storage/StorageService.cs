@@ -153,7 +153,7 @@ public class StorageService
         if (!Directory.Exists(_blobsPath))
             return 0;
 
-        return Directory.EnumerateFiles(_blobsPath)
-            .Sum(f => new FileInfo(f).Length);
+        return new DirectoryInfo(_blobsPath).EnumerateFiles()
+            .Sum(f => f.Length);
     }
 }
