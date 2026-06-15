@@ -347,6 +347,72 @@ public class ManifestExchangeClient
         }
     }
 
+    /// <summary>
+    /// Requests a specific chunk of content bytes from a peer by content hash.
+    /// Returns the chunk bytes, the total content length, and a human-readable failure reason.
+    /// </summary>
+    public async Task<(byte[]? Bytes, long TotalLength, string FailureReason)> RequestContentChunkAsync(string address, int port, string contentHash, long offset, long length, CancellationToken cancellationToken = default)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(_timeoutMs);
+
+        try
+        {
+            using var client = new TcpClient();
+            _logger.Debug("Connecting to {0}:{1} for chunk...", address, port);
+            await client.ConnectAsync(address, port, cts.Token);
+
+            _logger.Debug("Requesting chunk for content {0} from {1}:{2} (offset: {3}, length: {4})", contentHash, address, port, offset, length);
+            var stream = client.GetStream();
+            var request = new ManifestRequest
+            {
+                Type = ManifestRequestType.RequestContent,
+                ContentHash = contentHash,
+                ChunkOffset = offset,
+                ChunkLength = length
+            };
+            await ManifestExchangeServer.WriteMessageAsync(stream, request, cts.Token);
+
+            var (bytes, isJson) = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
+            ManifestResponse? response;
+            if (isJson)
+            {
+                var json = Encoding.UTF8.GetString(bytes);
+                response = JsonSerializer.Deserialize<ManifestResponse>(json);
+            }
+            else
+            {
+                response = ManifestSerializer.DeserializeResponse(bytes);
+            }
+
+            if (response?.Acknowledged != true)
+            {
+                var reason = response?.Acknowledged == false
+                    ? "Peer acknowledged the chunk request but reported the content is not available."
+                    : "Peer returned an empty response (content may not be hosted here).";
+                return (null, 0, reason);
+            }
+
+            // A zero-length chunk might just mean we requested past the end, or a 0-byte request to get length
+            var chunkBytes = new byte[response.ContentLength];
+            if (response.ContentLength > 0)
+            {
+                await stream.ReadExactlyAsync(chunkBytes, cts.Token);
+            }
+
+            long totalLength = response.TotalContentLength ?? response.ContentLength;
+            return (chunkBytes, totalLength, string.Empty);
+        }
+        catch (OperationCanceledException)
+        {
+            return (null, 0, "Connection timed out.");
+        }
+        catch (Exception ex)
+        {
+            return (null, 0, ex.Message);
+        }
+    }
+
     private class TcpClientStreamWrapper : Stream
     {
         private readonly TcpClient _client;

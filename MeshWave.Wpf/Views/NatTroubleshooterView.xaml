@@ -1,0 +1,123 @@
+<UserControl x:Class="MeshWave.Wpf.Views.NatTroubleshooterView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:viewModels="clr-namespace:MeshWave.Wpf.ViewModels"
+             mc:Ignorable="d"
+             d:DesignHeight="600" d:DesignWidth="800"
+             Background="{StaticResource BackgroundColor}">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    </UserControl.Resources>
+
+    <Grid>
+        <!-- Background Graphic -->
+        <Image Source="pack://application:,,,/Assets/MeshBackground.jpg"
+               Stretch="UniformToFill"
+               Opacity="0.1"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Center"/>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="40" MaxWidth="700">
+
+                <TextBlock Text="NAT Troubleshooting &amp; Configuration"
+                           FontSize="28"
+                           FontWeight="Bold"
+                           Foreground="{StaticResource TextPrimaryColor}"
+                           Margin="0,0,0,10"/>
+
+                <TextBlock Text="MeshWave relies on a stable peer-to-peer connection to stream and synchronize music. If you're seeing this, your network might be restricting incoming connections."
+                           FontSize="14"
+                           Foreground="{StaticResource TextSecondaryColor}"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,30"/>
+
+                <!-- Step 1: UPnP Status -->
+                <Border Background="{StaticResource SurfaceColor}" CornerRadius="8" Padding="20" Margin="0,0,0,20">
+                    <StackPanel>
+                        <TextBlock Text="Step 1: Router UPnP Support" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryColor}" Margin="0,0,0,10"/>
+                        <TextBlock Text="We attempt to automatically open ports using UPnP or NAT-PMP." Foreground="{StaticResource TextSecondaryColor}" TextWrapping="Wrap" Margin="0,0,0,15"/>
+
+                        <Grid Margin="0,0,0,15">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Status:" Foreground="{StaticResource TextDimColor}" FontWeight="SemiBold" Margin="0,0,10,5"/>
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding NatStatus}" Foreground="{StaticResource TextPrimaryColor}" FontWeight="Bold" Margin="0,0,0,5"/>
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Diagnostics:" Foreground="{StaticResource TextDimColor}" FontWeight="SemiBold" Margin="0,0,10,5"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Diagnostics}" Foreground="{StaticResource TextSecondaryColor}" TextWrapping="Wrap" Margin="0,0,0,5"/>
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="External IP:" Foreground="{StaticResource TextDimColor}" FontWeight="SemiBold" Margin="0,0,10,0"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding ExternalIPAddress, TargetNullValue='Unknown'}" Foreground="{StaticResource TextPrimaryColor}" Margin="0,0,0,0"/>
+                        </Grid>
+
+                        <Button Content="Retry UPnP Discovery"
+                                Command="{Binding RetryUPnPCommand}"
+                                Style="{StaticResource PrimaryButton}"
+                                HorizontalAlignment="Left"
+                                Padding="20,10"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Step 2: Manual Port Forwarding -->
+                <Border Background="{StaticResource SurfaceColor}" CornerRadius="8" Padding="20" Margin="0,0,0,20">
+                    <StackPanel>
+                        <TextBlock Text="Step 2: Manual Port Forwarding" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryColor}" Margin="0,0,0,10"/>
+                        <TextBlock Text="If UPnP fails or is disabled on your router, you will need to manually forward your ports. Log into your router's admin panel and create a new Port Forwarding rule."
+                                   Foreground="{StaticResource TextSecondaryColor}" TextWrapping="Wrap" Margin="0,0,0,15"/>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
+                            <TextBlock Text="Protocol: " Foreground="{StaticResource TextDimColor}" FontWeight="SemiBold"/>
+                            <TextBlock Text="TCP &amp; UDP" Foreground="{StaticResource TextPrimaryColor}" FontWeight="Bold"/>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
+                            <TextBlock Text="Port Range: " Foreground="{StaticResource TextDimColor}" FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding ConfiguredPort}" Foreground="{StaticResource TextPrimaryColor}" FontWeight="Bold"/>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Local IP: " Foreground="{StaticResource TextDimColor}" FontWeight="SemiBold"/>
+                            <TextBlock Text="Your computer's local IP address (e.g., 192.168.1.x)" Foreground="{StaticResource TextPrimaryColor}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Step 3: Test Connection -->
+                <Border Background="{StaticResource SurfaceColor}" CornerRadius="8" Padding="20" Margin="0,0,0,20">
+                    <StackPanel>
+                        <TextBlock Text="Step 3: Test External Connectivity" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryColor}" Margin="0,0,0,10"/>
+                        <TextBlock Text="Once port forwarding is configured or UPnP is successful, you can test if your port is reachable from the outside."
+                                   Foreground="{StaticResource TextSecondaryColor}" TextWrapping="Wrap" Margin="0,0,0,15"/>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,15">
+                            <Button Content="Test Connection"
+                                    Command="{Binding TestConnectionCommand}"
+                                    Style="{StaticResource PrimaryButton}"
+                                    Padding="20,10"
+                                    Margin="0,0,15,0"/>
+
+                            <TextBlock Text="{Binding TestStatus}"
+                                       Foreground="{StaticResource TextSecondaryColor}"
+                                       VerticalAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       MaxWidth="400"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

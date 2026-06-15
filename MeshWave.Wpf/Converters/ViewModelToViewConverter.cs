@@ -51,6 +51,12 @@ public class ViewModelToViewConverter : IValueConverter
             view.DataContext = vm7;
             return view;
         }
+        if (value is NatTroubleshooterViewModel vm8)
+        {
+            var view = new NatTroubleshooterView();
+            view.DataContext = vm8;
+            return view;
+        }
         return null!;
     }
 

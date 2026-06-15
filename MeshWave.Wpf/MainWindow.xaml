@@ -197,6 +197,21 @@
                                     </Style>
                                 </Button.Style>
                             </Button>
+                            <!-- Fix Connectivity Button -->
+                            <Button Content="🔧 Fix Connectivity"
+                                    Command="{Binding OpenNatTroubleshooterCommand}"
+                                    Margin="0,5,0,0" Padding="0,5" FontSize="12" FontWeight="SemiBold">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding NetworkStatus}" Value="Restricted">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
                         </StackPanel>
                     </Border>
                     <Button Content="⚙️  Settings"

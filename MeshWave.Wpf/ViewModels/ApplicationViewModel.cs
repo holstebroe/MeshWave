@@ -89,6 +89,7 @@ public class ApplicationViewModel : ViewModelBase
 
 
         HomeMenuNavCommand = new RelayCommand(HomeMenuNav);
+        OpenNatTroubleshooterCommand = new RelayCommand(_ => CurrentViewModel = new NatTroubleshooterViewModel(SyncOrchestrator, settings.P2P.Port));
         OpenVisualizerCommand = new RelayCommand(_ => OpenVisualizer());
 
 
@@ -345,6 +346,7 @@ public class ApplicationViewModel : ViewModelBase
     }
 
     public ICommand HomeMenuNavCommand { get; }
+    public ICommand OpenNatTroubleshooterCommand { get; }
     public ICommand OpenVisualizerCommand { get; }
     private void HomeMenuNav()
     {

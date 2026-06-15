@@ -35,6 +35,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     private int _inboundManifestPushCount;
     private int _outboundManifestFetchCount;
     private Func<string, byte[]?>? _contentProvider;
+    private Competitions.CompetitionTallyService? _tallyService;
 
     private readonly Lock _diagnosticsLock = new();
     private readonly Dictionary<string, Queue<PeerMessageLogEntry>> _peerMessageLogs = new(StringComparer.OrdinalIgnoreCase);
@@ -45,6 +46,8 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
     public event EventHandler<ManifestMergedEventArgs>? ManifestMerged;
     public event EventHandler? PeerCountChanged;
+    public event EventHandler<GroupMessageEventArgs>? GroupMessageReceived;
+    public event EventHandler<GroupStateChangedEventArgs>? GroupStateChanged;
 
     /// <summary>Whether the orchestrator is currently running.</summary>
     public bool IsRunning => _cts != null && !_cts.IsCancellationRequested;
@@ -86,6 +89,8 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     public string NatStatus => _natTraversal.NatStatus;
     public string? ExternalIPAddress => _natTraversal.ExternalIPAddress;
     public string? MappingProtocol => _natTraversal.MappingProtocol;
+
+    public NatTraversalService NatTraversal => _natTraversal;
 
     /// <summary>Returns the persisted manifest for a specific peer and stream, or null if not yet received.</summary>
     public Manifest? GetPeerManifest(string userId, ManifestStreamType streamType = ManifestStreamType.Content)
@@ -233,6 +238,9 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
         await _router.StartAsync(identity, _bootstrapNodes, _cts.Token);
 
+        _tallyService = new Competitions.CompetitionTallyService(this, _peerStore, _logger);
+        _tallyService.Start();
+
         foreach (var manifest in _localManifests.Values) await CatalogueService.IngestAsync(manifest);
     }
 
@@ -251,6 +259,8 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         if (_server != null)
             await _server.StopAsync();
         await _natTraversal.StopAsync();
+        if (_tallyService != null)
+            await _tallyService.StopAsync();
         _cts?.Cancel();
     }
 
@@ -345,64 +355,95 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         return peers.Any(uid => string.Equals(uid, Identity?.UserId, StringComparison.OrdinalIgnoreCase));
     }
 
+    public async Task<byte[]?> RequestContentAsync(string peerUserId, string contentHash)
+    {
+        if (string.IsNullOrWhiteSpace(contentHash)) return null;
+
+        var (stream, length) = await RequestContentStreamAsync(peerUserId, contentHash);
+        if (stream == null || length <= 0) return null;
+
+        using (stream)
+        {
+            var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            return ms.ToArray();
+        }
+    }
+
     public async Task<(Stream? Stream, long ContentLength)> RequestContentStreamAsync(string peerUserId, string contentHash)
     {
-        _logger.Debug("RequestContentStreamAsync: peer={0}, hash={1}", peerUserId, contentHash);
-        if (string.IsNullOrWhiteSpace(peerUserId) || string.IsNullOrWhiteSpace(contentHash))
-            return (null, 0);
+        _logger.Debug("RequestContentStreamAsync: hash={0}", contentHash);
+        if (string.IsNullOrWhiteSpace(contentHash)) return (null, 0);
 
-        var (peer, report) = await PrepareConnectionAsync(peerUserId, contentHash);
-        if (peer == null) return (null, 0);
-
-        var (stream, length, failureReason) = await _client.RequestContentStreamAsync(peer.Address, peer.Port, contentHash);
-        var succeeded = stream != null;
-
-        if (!succeeded)
+        var report = new PeerConnectionAttemptReport
         {
-            report.Attempts.Add(new PeerConnectionAttemptResult(
-                "content-stream-request-initial",
-                false,
-                $"Initial stream request failed: {failureReason}"));
+            PeerUserId = peerUserId,
+            RequestedContentHash = contentHash,
+            LocalManifestPort = Identity?.ManifestPort ?? 0,
+            SuggestedLocalIp = GetPrimaryLocalIpv4()
+        };
+        LastConnectionAttemptReport = report;
 
-            await RefreshBootstrapAsync(report);
-            var refreshedPeer = _router.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, peerUserId, StringComparison.OrdinalIgnoreCase));
-            if (refreshedPeer != null && (!string.Equals(refreshedPeer.Address, peer.Address, StringComparison.OrdinalIgnoreCase) || refreshedPeer.Port != peer.Port))
-            {
-                report.Attempts.Add(new PeerConnectionAttemptResult(
-                    "content-stream-request-endpoint-refresh",
-                    true,
-                    "Routing endpoint changed; retrying stream request."));
+        // Fetch multiple peers for load balancing
+        var peersWithContent = (await CatalogueService.GetPeersForContentAsync(contentHash)).ToList();
 
-                peer = refreshedPeer;
-                report.TargetAddress = peer.Address;
-                report.TargetPort = peer.Port;
-
-                (stream, length, failureReason) = await _client.RequestContentStreamAsync(peer.Address, peer.Port, contentHash);
-                succeeded = stream != null;
-            }
+        // Ensure the explicit peer is included and prioritized
+        if (!string.IsNullOrWhiteSpace(peerUserId))
+        {
+            if (peersWithContent.Contains(peerUserId, StringComparer.OrdinalIgnoreCase))
+                peersWithContent.RemoveAll(x => string.Equals(x, peerUserId, StringComparison.OrdinalIgnoreCase));
+            peersWithContent.Insert(0, peerUserId);
         }
 
-        if (!succeeded) _logger.Warn("Content stream request failed for peer {0}: {1}", peerUserId, failureReason);
+        var availableEndpoints = new List<PeerInfo>();
+        foreach (var uid in peersWithContent)
+        {
+            var peer = _router.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, uid, StringComparison.OrdinalIgnoreCase));
+            if (peer != null)
+                availableEndpoints.Add(peer);
+        }
 
-        report.Attempts.Add(new PeerConnectionAttemptResult(
-            "content-stream-request",
-            succeeded,
-            succeeded
-                ? $"Stream opened successfully ({length} bytes expected)."
-                : $"Peer did not open content stream: {failureReason}"));
+        if (availableEndpoints.Count == 0)
+        {
+            // Fallback attempt to connect directly to the explicit peer
+            if (!string.IsNullOrWhiteSpace(peerUserId))
+            {
+                var (peer, connectionReport) = await PrepareConnectionAsync(peerUserId, contentHash);
 
-        RecordPeerMessage(peer.UserId, "RequestContentStream", succeeded,
-            succeeded
-                ? $"Content stream started from {peer.Address}:{peer.Port}."
-                : $"Content stream failed from {peer.Address}:{peer.Port}. Reason: {failureReason}");
+                // Copy attempts from fallback preparation
+                foreach(var a in connectionReport.Attempts) report.Attempts.Add(a);
 
-        if (!succeeded)
-            report.Attempts.Add(new PeerConnectionAttemptResult(
-                "nat-guidance",
-                false,
-                BuildNatGuidance(peer.Address, peer.Port, Identity?.ManifestPort ?? 0, report.SuggestedLocalIp ?? "127.0.0.1")));
+                if (peer != null) availableEndpoints.Add(peer);
+            }
 
-        return (stream, length);
+            if (availableEndpoints.Count == 0) return (null, 0);
+        }
+
+        _logger.Info("Starting ParallelChunkStream for content {0} from {1} peers", contentHash, availableEndpoints.Count);
+
+        var stream = new ParallelChunkStream(contentHash, availableEndpoints, _client, _logger);
+        await stream.InitializeAsync();
+
+        if (stream.Length <= 0)
+        {
+            stream.Dispose();
+            report.Attempts.Add(new PeerConnectionAttemptResult("parallel-chunk-init", false, "Failed to initialize parallel chunk stream."));
+
+            // Add a nat guidance failure to satisfy tests and provide actual guidance if chunk init fails
+            if (availableEndpoints.Any())
+            {
+                var peer = availableEndpoints.First();
+                report.Attempts.Add(new PeerConnectionAttemptResult(
+                    "nat-guidance",
+                    false,
+                    BuildNatGuidance(peer.Address, peer.Port, Identity?.ManifestPort ?? 0, report.SuggestedLocalIp ?? "127.0.0.1")));
+            }
+
+            return (null, 0);
+        }
+
+        report.Attempts.Add(new PeerConnectionAttemptResult("parallel-chunk-init", true, $"Initialized parallel stream with {availableEndpoints.Count} peers."));
+        return (stream, stream.Length);
     }
 
     private async Task<(PeerInfo? Peer, PeerConnectionAttemptReport Report)> PrepareConnectionAsync(string peerUserId, string contentHash)
@@ -493,63 +534,6 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         return (peer, report);
     }
 
-    public async Task<byte[]?> RequestContentAsync(string peerUserId, string contentHash)
-    {
-        if (string.IsNullOrWhiteSpace(peerUserId) || string.IsNullOrWhiteSpace(contentHash))
-            return null;
-
-        var (peer, report) = await PrepareConnectionAsync(peerUserId, contentHash);
-        if (peer == null) return null;
-
-        var (bytes, failureReason) = await _client.RequestContentAsync(peer.Address, peer.Port, contentHash);
-        var succeeded = bytes != null && bytes.Length > 0;
-
-        if (!succeeded)
-        {
-            report.Attempts.Add(new PeerConnectionAttemptResult(
-                "content-request-initial",
-                false,
-                $"Initial content request failed: {failureReason}"));
-
-            await RefreshBootstrapAsync(report);
-            var refreshedPeer = _router.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, peerUserId, StringComparison.OrdinalIgnoreCase));
-            if (refreshedPeer != null && (!string.Equals(refreshedPeer.Address, peer.Address, StringComparison.OrdinalIgnoreCase) || refreshedPeer.Port != peer.Port))
-            {
-                report.Attempts.Add(new PeerConnectionAttemptResult(
-                    "content-request-endpoint-refresh",
-                    true,
-                    $"Routing endpoint changed from {peer.Address}:{peer.Port} to {refreshedPeer.Address}:{refreshedPeer.Port}; retrying content request."));
-
-                peer = refreshedPeer;
-                report.TargetAddress = peer.Address;
-                report.TargetPort = peer.Port;
-
-                (bytes, failureReason) = await _client.RequestContentAsync(peer.Address, peer.Port, contentHash);
-                succeeded = bytes != null && bytes.Length > 0;
-            }
-        }
-
-        if (!succeeded) _logger.Warn("Content request failed for peer {0}: {1}", peerUserId, failureReason);
-
-        report.Attempts.Add(new PeerConnectionAttemptResult(
-            "content-request",
-            succeeded,
-            succeeded
-                ? $"Received {bytes!.Length} bytes from peer."
-                : $"Peer did not return content bytes: {failureReason}"));
-        RecordPeerMessage(peer.UserId, "RequestContent", succeeded,
-            succeeded
-                ? $"Content request succeeded ({bytes!.Length} bytes) from {peer.Address}:{peer.Port}."
-                : $"Content request failed from {peer.Address}:{peer.Port} for hash {contentHash}. Reason: {failureReason}");
-
-        if (!succeeded)
-            report.Attempts.Add(new PeerConnectionAttemptResult(
-                "nat-guidance",
-                false,
-                BuildNatGuidance(peer.Address, peer.Port, Identity?.ManifestPort ?? 0, report.SuggestedLocalIp ?? "127.0.0.1")));
-
-        return bytes;
-    }
 
     private void OnPeerAdded(object? sender, PeerInfo peer)
     {
@@ -1165,6 +1149,106 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     }
 
     /// <summary>
+    /// Appends a signed FoundGroup op for <paramref name="groupId"/>.
+    /// </summary>
+    public void RecordFoundGroup(string groupId)
+    {
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.FoundGroup));
+        if (manifest == null || Identity == null) return;
+        if (string.IsNullOrWhiteSpace(groupId)) return;
+
+        _logger.Info("Recording group found for group {0}", groupId);
+        _manifestManager.AppendSignedOperation(
+            manifest,
+            ManifestOperationType.FoundGroup,
+            SecurityLimits.Truncate(groupId, SecurityLimits.MaxTargetIdLength),
+            "Group",
+            contentHash: null,
+            metadata: null,
+            Identity.PrivateKeyPem);
+        PersistAndFanoutLocalManifest(manifest.StreamType);
+    }
+
+    /// <summary>
+    /// Appends a signed ModerateGroup op for <paramref name="groupId"/>.
+    /// </summary>
+    public void RecordModerateGroup(string groupId)
+    {
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.ModerateGroup));
+        if (manifest == null || Identity == null) return;
+        if (string.IsNullOrWhiteSpace(groupId)) return;
+
+        _logger.Info("Recording group moderate for group {0}", groupId);
+        _manifestManager.AppendSignedOperation(
+            manifest,
+            ManifestOperationType.ModerateGroup,
+            SecurityLimits.Truncate(groupId, SecurityLimits.MaxTargetIdLength),
+            "Group",
+            contentHash: null,
+            metadata: null,
+            Identity.PrivateKeyPem);
+        PersistAndFanoutLocalManifest(manifest.StreamType);
+    }
+
+    /// <summary>
+    /// Appends a signed CreateChannel op.
+    /// </summary>
+    public void RecordCreateChannel(string channelId, string groupId, string name)
+    {
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.CreateChannel));
+        if (manifest == null || Identity == null) return;
+        if (string.IsNullOrWhiteSpace(channelId) || string.IsNullOrWhiteSpace(groupId)) return;
+
+        _logger.Info("Recording create channel {0} in group {1}", channelId, groupId);
+        _manifestManager.AppendSignedOperation(
+            manifest,
+            ManifestOperationType.CreateChannel,
+            SecurityLimits.Truncate(channelId, SecurityLimits.MaxTargetIdLength),
+            "GroupChannel",
+            contentHash: null,
+            metadata: new Dictionary<string, string>
+            {
+                ["groupId"] = SecurityLimits.Truncate(groupId, SecurityLimits.MaxTargetIdLength),
+                ["name"] = SecurityLimits.Truncate(name, 100)
+            },
+            Identity.PrivateKeyPem);
+        PersistAndFanoutLocalManifest(manifest.StreamType);
+    }
+
+    /// <summary>
+    /// Appends a signed PostMessage op.
+    /// </summary>
+    public void RecordPostMessage(string postId, string channelId, string content, string? parentPostId = null)
+    {
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.PostMessage));
+        if (manifest == null || Identity == null) return;
+        if (string.IsNullOrWhiteSpace(postId) || string.IsNullOrWhiteSpace(channelId)) return;
+
+        _logger.Info("Recording post message {0} in channel {1}", postId, channelId);
+
+        var meta = new Dictionary<string, string>
+        {
+            ["channelId"] = SecurityLimits.Truncate(channelId, SecurityLimits.MaxTargetIdLength),
+            ["content"] = SecurityLimits.Truncate(content, SecurityLimits.MaxCommentTextLength)
+        };
+
+        if (!string.IsNullOrWhiteSpace(parentPostId))
+        {
+            meta["parentPostId"] = SecurityLimits.Truncate(parentPostId, SecurityLimits.MaxTargetIdLength);
+        }
+
+        _manifestManager.AppendSignedOperation(
+            manifest,
+            ManifestOperationType.PostMessage,
+            SecurityLimits.Truncate(postId, SecurityLimits.MaxTargetIdLength),
+            "GroupChannel",
+            contentHash: null,
+            metadata: meta,
+            Identity.PrivateKeyPem);
+        PersistAndFanoutLocalManifest(manifest.StreamType);
+    }
+
+    /// <summary>
     /// Appends a signed GroupJoin op for <paramref name="groupId"/>.
     /// </summary>
     public void RecordGroupJoin(string groupId)
@@ -1358,6 +1442,9 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         if (remote.UserId == Identity?.UserId) return;
 
         _logger.Debug("Attempting merge of manifest from peer {0} ({1} ops, stream={2})", remote.UserId, remote.Operations.Count, remote.StreamType);
+        var existingManifest = _peerStore.Get(remote.UserId, remote.StreamType);
+        var existingCount = existingManifest?.Operations.Count ?? 0;
+
         var added = _peerStore.MergeAndSave(remote, publicKeyPem, _manifestManager);
         if (added > 0)
         {
@@ -1415,6 +1502,24 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                             catch { }
                         });
                 }
+
+            foreach (var op in remote.Operations)
+            {
+                if (op.SequenceNumber >= existingCount && op.OperationType == ManifestOperationType.PostMessage)
+                {
+                    GroupMessageReceived?.Invoke(this, new GroupMessageEventArgs(
+                        remote.UserId,
+                        op.Metadata?.GetValueOrDefault("channelId") ?? string.Empty,
+                        op.TargetId,
+                        op.Metadata?.GetValueOrDefault("content") ?? string.Empty,
+                        op.Metadata?.GetValueOrDefault("parentPostId")
+                    ));
+                }
+                else if (op.SequenceNumber >= existingCount && (op.OperationType == ManifestOperationType.CreateChannel || op.OperationType == ManifestOperationType.FoundGroup || op.OperationType == ManifestOperationType.ModerateGroup || op.OperationType == ManifestOperationType.GroupJoin || op.OperationType == ManifestOperationType.GroupLeave))
+                {
+                    GroupStateChanged?.Invoke(this, new GroupStateChangedEventArgs(remote.UserId, op.OperationType, op.TargetId, op.Metadata ?? new Dictionary<string, string>()));
+                }
+            }
 
             ManifestMerged?.Invoke(this, new ManifestMergedEventArgs(remote.UserId, added));
         }
@@ -1508,6 +1613,27 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         };
     }
 
+    /// <summary>
+    /// Appends a signed CompetitionRevealResults op for <paramref name="compId"/>.
+    /// </summary>
+    public void RecordCompetitionRevealResults(string compId, string resultJson)
+    {
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.CompetitionRevealResults));
+        if (manifest == null || Identity == null) return;
+        if (string.IsNullOrWhiteSpace(compId)) return;
+
+        _logger.Info("Recording competition reveal results for competition {0}", compId);
+        _manifestManager.AppendSignedOperation(
+            manifest,
+            ManifestOperationType.CompetitionRevealResults,
+            SecurityLimits.Truncate(compId, SecurityLimits.MaxTargetIdLength),
+            "Competition",
+            contentHash: null,
+            metadata: new Dictionary<string, string> { { "ResultPayload", resultJson } },
+            Identity.PrivateKeyPem);
+        PersistAndFanoutLocalManifest(manifest.StreamType);
+    }
+
     public void Dispose()
     {
         _router.Dispose();
@@ -1521,6 +1647,23 @@ public class ManifestMergedEventArgs(string userId, int operationsAdded) : Event
 {
     public string UserId { get; } = userId;
     public int OperationsAdded { get; } = operationsAdded;
+}
+
+public class GroupMessageEventArgs(string userId, string channelId, string postId, string content, string? parentPostId = null) : EventArgs
+{
+    public string UserId { get; } = userId;
+    public string ChannelId { get; } = channelId;
+    public string PostId { get; } = postId;
+    public string Content { get; } = content;
+    public string? ParentPostId { get; } = parentPostId;
+}
+
+public class GroupStateChangedEventArgs(string userId, ManifestOperationType operationType, string targetId, Dictionary<string, string> metadata) : EventArgs
+{
+    public string UserId { get; } = userId;
+    public ManifestOperationType OperationType { get; } = operationType;
+    public string TargetId { get; } = targetId;
+    public Dictionary<string, string> Metadata { get; } = metadata;
 }
 
 public sealed class PeerConnectionAttemptReport
