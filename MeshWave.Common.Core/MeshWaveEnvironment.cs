@@ -22,6 +22,7 @@ public class MeshWaveEnvironment : IMeshWaveEnvironment
     public const string P2PMaxPeersEnvironmentVariable = "MESHWAVE_P2P_MAX_PEERS";
     public const string P2PUploadLimitEnvironmentVariable = "MESHWAVE_P2P_UPLOAD_LIMIT";
     public const string P2PDownloadLimitEnvironmentVariable = "MESHWAVE_P2P_DOWNLOAD_LIMIT";
+    public const string MockScenarioEnvironmentVariable = "MESHWAVE_MOCK_SCENARIO";
 
     private string DefaultAppDataRoot => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),

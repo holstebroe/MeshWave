@@ -63,6 +63,7 @@ public class ApplicationViewModel : ViewModelBase
 
         // DI wire-up of the default file-based PeerManifestStore
         var manifestStore = PeerManifestStore.CreateAtBase(environment, _userRepository.BaseDataFolder);
+        ManifestStore = manifestStore;
 
         var lanDiscovery = new PeerDiscovery();
         var manifestExchangeClient = new ManifestExchangeClient(timeoutMs: SecurityLimits.ConnectTimeoutMs);
@@ -196,6 +197,13 @@ public class ApplicationViewModel : ViewModelBase
         set => SetProperty(ref _applicationTitle, value);
     }
 
+    private bool _isMockMode;
+    public bool IsMockMode
+    {
+        get => _isMockMode;
+        set => SetProperty(ref _isMockMode, value);
+    }
+
     public ViewModelBase CurrentViewModel
     {
         get => _currentViewModel;
@@ -250,6 +258,8 @@ public class ApplicationViewModel : ViewModelBase
     public ICommand DisconnectP2PCommand { get; }
 
     public SyncOrchestrator SyncOrchestrator { get; }
+
+    public IManifestStore ManifestStore { get; }
 
     public PlaybackViewModel Playback { get; }
 
@@ -439,8 +449,36 @@ public class ApplicationViewModel : ViewModelBase
         await SyncOrchestrator.StopAsync();
     }
 
+    public void MockPeerCount(int peerCount)
+    {
+        if (IsMockMode)
+        {
+            P2PPeerCount = peerCount;
+            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                NetworkStatus = NetworkStatus.Connected;
+                P2PStatusText = $"Connected · {peerCount} mock peer{(peerCount == 1 ? "" : "s")}";
+                OnPropertyChanged(nameof(P2PStatusColor));
+            });
+
+            // To ensure UI updates, specifically triggers like LibraryViewModel and CommunityViewModel that listen to SyncOrchestrator
+            // we should navigate back home or trigger a refresh since they might have already loaded empty.
+            if (CurrentViewModel is HomeViewModel)
+            {
+                // re-initialize HomeViewModel to pick up the new peer store state
+                CurrentViewModel = new HomeViewModel();
+            }
+        }
+    }
+
     private async Task ConnectP2PAsync()
     {
+        if (IsMockMode)
+        {
+            P2PIsConnected = true;
+            return;
+        }
+
         try
         {
             P2PStatusText = "Connecting…";
