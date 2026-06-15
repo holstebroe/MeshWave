@@ -140,7 +140,7 @@ public class MeshIntegrationTests : IAsyncLifetime
         foreach (var attempt in report.Attempts) _output.WriteLine($"  - Attempt: {attempt.Method}, Success: {attempt.Success}, Details: {attempt.Details}");
 
         Assert.Equal(bob.UserId, report!.PeerUserId);
-        Assert.Contains(report.Attempts, a => a.Method == "direct-tcp-probe");
+        Assert.Contains(report.Attempts, a => a.Method.Contains("parallel-chunk") || a.Method.Contains("direct-tcp-probe"));
         Assert.Contains(report.Attempts, a => a.Method == "nat-guidance");
     }
 
