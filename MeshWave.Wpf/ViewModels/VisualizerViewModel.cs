@@ -1,15 +1,63 @@
+using System.Collections.ObjectModel;
 using MeshWave.Wpf.Mvvm;
 
 namespace MeshWave.Wpf.ViewModels;
 
 public class VisualizerViewModel : ViewModelBase
 {
+    public class ShaderOption
+    {
+        public string Name { get; set; } = "";
+        public string Script { get; set; } = "";
+        public bool IsCustom { get; set; }
+    }
+
     private string _shaderScript = "";
     public string ShaderScript
     {
         get => _shaderScript;
-        set => SetProperty(ref _shaderScript, value);
+        set
+        {
+            if (SetProperty(ref _shaderScript, value) && IsCustomShaderSelected)
+            {
+                // Update the custom shader option script if modified
+                if (SelectedShader != null && SelectedShader.IsCustom)
+                {
+                    SelectedShader.Script = value;
+                }
+            }
+        }
     }
+
+    public ObservableCollection<ShaderOption> Shaders { get; } = new();
+
+    private ShaderOption? _selectedShader;
+    public ShaderOption? SelectedShader
+    {
+        get => _selectedShader;
+        set
+        {
+            if (SetProperty(ref _selectedShader, value))
+            {
+                OnPropertyChanged(nameof(IsCustomShaderSelected));
+                if (value != null)
+                {
+                    if (!value.IsCustom)
+                    {
+                        ShaderScript = value.Script;
+                    }
+                    else
+                    {
+                        // For custom shader, we set ShaderScript to its script value,
+                        // so the editor and renderer shows the custom script
+                        ShaderScript = value.Script;
+                    }
+                }
+            }
+        }
+    }
+
+    public bool IsCustomShaderSelected => SelectedShader?.IsCustom == true;
 
     private float[] _pcmData = new float[1024];
     public float[] PcmData
@@ -27,6 +75,18 @@ public class VisualizerViewModel : ViewModelBase
 
     public VisualizerViewModel()
     {
+        Shaders.Add(new ShaderOption { Name = "Feedback Tunnel", Script = feedbackTunnelShader });
+        Shaders.Add(new ShaderOption { Name = "Demo Plasma", Script = demoPlasmaShader });
+        Shaders.Add(new ShaderOption { Name = "Default Audio", Script = _defaultAudioShader });
+
+        var customShader = new ShaderOption
+        {
+            Name = "Custom",
+            Script = feedbackTunnelShader, // start custom with something valid
+            IsCustom = true
+        };
+        Shaders.Add(customShader);
+
         LoadDefaultShader();
     }
 
@@ -34,10 +94,8 @@ public class VisualizerViewModel : ViewModelBase
     {
         // Default to feedback tunnel shader to test it out for now.
         // It can be easily toggled back if needed.
-        ShaderScript = feedbackTunnelShader;
+        SelectedShader = Shaders[0];
     }
-
-    // TODO: Make selector for default shaders, and move these to separate files or embedded resources
 
     #pragma warning disable CS0414, IDE0051
     private readonly string _defaultAudioShader = @"

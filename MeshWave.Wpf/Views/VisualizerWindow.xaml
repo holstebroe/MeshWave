@@ -4,6 +4,11 @@
         xmlns:glWpfControl="clr-namespace:OpenTK.Wpf;assembly=GLWpfControl"
         Title="MeshWave Visualizer" Height="450" Width="800"
         Background="#121212">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    </Window.Resources>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -11,22 +16,35 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Orientation="Horizontal" Background="#1E1E1E" Margin="10">
-            <Button Content="Reload Shader" Padding="10,5" Margin="0,0,10,0" Click="ReloadShader_Click"
-                    Background="#3A3A3A" Foreground="White" BorderThickness="0"/>
+            <ComboBox ItemsSource="{Binding Shaders}"
+                      DisplayMemberPath="Name"
+                      SelectedItem="{Binding SelectedShader, UpdateSourceTrigger=PropertyChanged}"
+                      Width="200" Margin="0,0,10,0"/>
         </StackPanel>
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="2*"/>
-                <ColumnDefinition Width="1*"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
             <glWpfControl:GLWpfControl x:Name="OpenGlControl" Grid.Column="0" Render="OpenGlControl_OnRender" />
 
-            <TextBox Grid.Column="1" Background="#1E1E1E" Foreground="#CCCCCC" FontFamily="Consolas"
-                     AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
-                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
-                     Text="{Binding ShaderScript, UpdateSourceTrigger=PropertyChanged}" />
+            <Grid Grid.Column="1" Visibility="{Binding IsCustomShaderSelected, Converter={StaticResource BoolToVis}}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <Button Grid.Row="0" Content="Reload Shader" Padding="10,5" Margin="5" Click="ReloadShader_Click"
+                        Background="#3A3A3A" Foreground="White" BorderThickness="0"/>
+
+                <TextBox Grid.Row="1" Background="#1E1E1E" Foreground="#CCCCCC" FontFamily="Consolas"
+                         AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
+                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                         Text="{Binding ShaderScript, UpdateSourceTrigger=PropertyChanged}"
+                         Width="300" Margin="5"/>
+            </Grid>
         </Grid>
     </Grid>
 </Window>
