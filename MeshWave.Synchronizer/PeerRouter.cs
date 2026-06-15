@@ -29,7 +29,7 @@ public class PeerRouter : IDisposable
     public PeerRouter(PeerDiscovery? lanDiscovery = null, ManifestExchangeClient? exchangeClient = null, Logger? logger = null)
     {
         _lanDiscovery = lanDiscovery ?? new PeerDiscovery();
-        _exchangeClient = exchangeClient ?? new ManifestExchangeClient(timeoutMs: SecurityLimits.ConnectTimeoutMs, logger:logger);
+        _exchangeClient = exchangeClient ?? new ManifestExchangeClient(timeoutMs: SecurityLimits.ConnectTimeoutMs, logger: logger);
     }
 
     public event EventHandler<PeerInfo>? PeerAdded;

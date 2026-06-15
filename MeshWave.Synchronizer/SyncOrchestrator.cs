@@ -16,7 +16,7 @@ namespace MeshWave.Synchronizer;
 /// It uses PeerRouter (LAN + bootstrap + PEX) to find peers,
 /// exchanges manifests over TCP, and merges verified operations.
 /// </summary>
-public class SyncOrchestrator : ISyncBrowseClient, IDisposable
+public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
 {
     private readonly Logger _logger;
     private readonly PeerRouter _router;
@@ -275,616 +275,66 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// <summary>
     /// Clears all persisted peer manifests and in-memory cache.
     /// </summary>
-    public void ClearPeerManifestCache()
-    {
-        _peerStore.ClearAll();
-    }
+
 
     /// <summary>
     /// Saves all local manifests to disk.
     /// </summary>
-    public void SaveLocalManifests()
-    {
-        if (Identity == null) return;
-        foreach (var kvp in _localManifests) SaveLocalManifest(kvp.Value);
-    }
 
-    private void SaveLocalManifest(Manifest manifest)
-    {
-        var path = BuildLocalManifestPath(manifest.UserId, manifest.StreamType);
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            lock (manifest)
-            {
-                File.WriteAllText(path, JsonSerializer.Serialize(manifest));
-            }
-        }
-        catch { /* best-effort disk write */ }
-    }
+
+
 
     /// <summary>
     /// Compatibility method for saving local manifest.
     /// </summary>
-    public void SaveLocalManifest()
-    {
-        SaveLocalManifests();
-    }
+
 
     /// <summary>
     /// Loads a previously persisted local manifest for the given userId and stream.
     /// Returns null if no persisted manifest exists.
     /// </summary>
-    public Manifest? LoadLocalManifest(string userId, ManifestStreamType streamType)
-    {
-        var path = BuildLocalManifestPath(userId, streamType);
-        if (!File.Exists(path)) return null;
-        try
-        {
-            var json = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<Manifest>(json);
-        }
-        catch { return null; }
-    }
 
-    private string BuildLocalManifestPath(string userId, ManifestStreamType streamType)
-    {
-        var safeName = string.Concat(userId.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
-        var suffix = streamType.ToString().ToLowerInvariant();
-        var baseFolder = UserRepository?.BaseDataFolder ?? _environment.GetAppDataRoot();
-        var dir = Path.Combine(baseFolder, "LocalManifests");
-        Directory.CreateDirectory(dir);
-        return Path.Combine(dir, $"{safeName}.{suffix}.json");
-    }
+
+
 
     /// <summary>
     /// Manually triggers a manifest fetch from all known peers.
     /// </summary>
-    public async Task SyncAllPeersAsync(CancellationToken cancellationToken = default)
-    {
-        foreach (var peer in _router.GetPeers()) await TryFetchAndMergeAsync(peer, cancellationToken);
-    }
+
 
     /// <summary>
     /// Requests content bytes from a currently known peer by content hash.
     /// </summary>
-    public async Task<bool> IsContentAvailableLocallyAsync(string contentHash)
-    {
-        if (string.IsNullOrWhiteSpace(contentHash)) return false;
-        var peers = await CatalogueService.GetPeersForContentAsync(contentHash);
-        return peers.Any(uid => string.Equals(uid, Identity?.UserId, StringComparison.OrdinalIgnoreCase));
-    }
 
-    public async Task<byte[]?> RequestContentAsync(string peerUserId, string contentHash)
-    {
-        if (string.IsNullOrWhiteSpace(contentHash)) return null;
 
-        var (stream, length) = await RequestContentStreamAsync(peerUserId, contentHash);
-        if (stream == null || length <= 0) return null;
 
-        using (stream)
-        {
-            var ms = new MemoryStream();
-            await stream.CopyToAsync(ms);
-            return ms.ToArray();
-        }
-    }
 
-    public async Task<(Stream? Stream, long ContentLength)> RequestContentStreamAsync(string peerUserId, string contentHash)
-    {
-        _logger.Debug("RequestContentStreamAsync: hash={0}", contentHash);
-        if (string.IsNullOrWhiteSpace(contentHash)) return (null, 0);
 
-        var report = new PeerConnectionAttemptReport
-        {
-            PeerUserId = peerUserId,
-            RequestedContentHash = contentHash,
-            LocalManifestPort = Identity?.ManifestPort ?? 0,
-            SuggestedLocalIp = GetPrimaryLocalIpv4()
-        };
-        LastConnectionAttemptReport = report;
 
-        // Fetch multiple peers for load balancing
-        var peersWithContent = (await CatalogueService.GetPeersForContentAsync(contentHash)).ToList();
 
-        // Ensure the explicit peer is included and prioritized
-        if (!string.IsNullOrWhiteSpace(peerUserId))
-        {
-            if (peersWithContent.Contains(peerUserId, StringComparer.OrdinalIgnoreCase))
-                peersWithContent.RemoveAll(x => string.Equals(x, peerUserId, StringComparison.OrdinalIgnoreCase));
-            peersWithContent.Insert(0, peerUserId);
-        }
 
-        var availableEndpoints = new List<PeerInfo>();
-        foreach (var uid in peersWithContent)
-        {
-            var peer = _router.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, uid, StringComparison.OrdinalIgnoreCase));
-            if (peer != null)
-                availableEndpoints.Add(peer);
-        }
 
-        if (availableEndpoints.Count == 0)
-        {
-            // Fallback attempt to connect directly to the explicit peer
-            if (!string.IsNullOrWhiteSpace(peerUserId))
-            {
-                var (peer, connectionReport) = await PrepareConnectionAsync(peerUserId, contentHash);
 
-                // Copy attempts from fallback preparation
-                foreach(var a in connectionReport.Attempts) report.Attempts.Add(a);
 
-                if (peer != null) availableEndpoints.Add(peer);
-            }
 
-            if (availableEndpoints.Count == 0) return (null, 0);
-        }
 
-        _logger.Info("Starting ParallelChunkStream for content {0} from {1} peers", contentHash, availableEndpoints.Count);
 
-        var stream = new ParallelChunkStream(contentHash, availableEndpoints, _client, _logger);
-        await stream.InitializeAsync();
 
-        if (stream.Length <= 0)
-        {
-            stream.Dispose();
-            report.Attempts.Add(new PeerConnectionAttemptResult("parallel-chunk-init", false, "Failed to initialize parallel chunk stream."));
 
-            // Add a nat guidance failure to satisfy tests and provide actual guidance if chunk init fails
-            if (availableEndpoints.Any())
-            {
-                var peer = availableEndpoints.First();
-                report.Attempts.Add(new PeerConnectionAttemptResult(
-                    "nat-guidance",
-                    false,
-                    BuildNatGuidance(peer.Address, peer.Port, Identity?.ManifestPort ?? 0, report.SuggestedLocalIp ?? "127.0.0.1")));
-            }
 
-            return (null, 0);
-        }
 
-        report.Attempts.Add(new PeerConnectionAttemptResult("parallel-chunk-init", true, $"Initialized parallel stream with {availableEndpoints.Count} peers."));
-        return (stream, stream.Length);
-    }
 
-    private async Task<(PeerInfo? Peer, PeerConnectionAttemptReport Report)> PrepareConnectionAsync(string peerUserId, string contentHash)
-    {
-        _logger.Info("Preparing connection to peer {0} for content {1}", peerUserId, contentHash);
-        var report = new PeerConnectionAttemptReport
-        {
-            PeerUserId = peerUserId,
-            RequestedContentHash = contentHash,
-            LocalManifestPort = Identity?.ManifestPort ?? 0,
-            SuggestedLocalIp = GetPrimaryLocalIpv4()
-        };
-        LastConnectionAttemptReport = report;
 
-        var peer = _router.GetPeers().FirstOrDefault(p =>
-            string.Equals(p.UserId, peerUserId, StringComparison.OrdinalIgnoreCase));
 
-        if (peer == null)
-        {
-            report.Attempts.Add(new PeerConnectionAttemptResult(
-                "routing-table-lookup",
-                false,
-                "Peer not present in routing table. Triggered bootstrap refresh before giving up."));
 
-            await RefreshBootstrapAsync(report);
 
-            peer = _router.GetPeers().FirstOrDefault(p =>
-                string.Equals(p.UserId, peerUserId, StringComparison.OrdinalIgnoreCase));
 
-            if (peer == null)
-            {
-                report.Attempts.Add(new PeerConnectionAttemptResult(
-                    "routing-table-retry",
-                    false,
-                    "Peer still not discoverable after bootstrap refresh."));
-                return (null, report);
-            }
-        }
 
-        report.TargetAddress = peer.Address;
-        report.TargetPort = peer.Port;
 
-        var directTcpReachable = await CanConnectTcpAsync(peer.Address, peer.Port, timeoutMs: 1_500);
-        report.Attempts.Add(new PeerConnectionAttemptResult(
-            "direct-tcp-probe",
-            directTcpReachable,
-            directTcpReachable
-                ? "TCP reachability confirmed on peer manifest port."
-                : "TCP probe timed out or was refused."));
 
-        if (directTcpReachable) _logger.Info("Established direct TCP connection to {0}:{1}", peer.Address, peer.Port);
 
-        var punched = await _natTraversal.TryPunchAsync(peer.Address, peer.Port);
-        report.Attempts.Add(new PeerConnectionAttemptResult(
-            "udp-hole-punch",
-            punched,
-            punched
-                ? "UDP punch ACK received from peer."
-                : "No UDP punch ACK observed; continuing with direct TCP attempt."));
 
-        if (punched) _logger.Info("Established UDP hole-punched connection to {0}:{1}", peer.Address, peer.Port);
 
-        if (!punched && !directTcpReachable)
-        {
-            var rendezvous = await RequestBootstrapRendezvousAsync(peerUserId, report);
-            report.Attempts.Add(new PeerConnectionAttemptResult(
-                "bootstrap-rendezvous",
-                rendezvous?.Success == true,
-                rendezvous?.Success == true
-                    ? $"Session {rendezvous.SessionId} issued (probe-start={rendezvous.ProbeStartUtc:O}, window={rendezvous.ProbeWindowMs}ms, expires={rendezvous.ExpiresAtUtc:O}). {rendezvous.Message}"
-                    : "Bootstrap rendezvous unavailable or failed."));
-
-            if (rendezvous?.Success == true)
-            {
-                await WaitForProbeWindowAsync(rendezvous, report);
-                var synchronizedPunch = await _natTraversal.TryPunchAsync(peer.Address, peer.Port);
-                report.Attempts.Add(new PeerConnectionAttemptResult(
-                    "udp-hole-punch-rendezvous-window",
-                    synchronizedPunch,
-                    synchronizedPunch
-                        ? "UDP punch ACK received during coordinated rendezvous window."
-                        : "No ACK during coordinated rendezvous window."));
-
-                if (synchronizedPunch) _logger.Info("Established synchronized UDP hole-punched connection to {0}:{1} via rendezvous", peer.Address, peer.Port);
-            }
-        }
-
-        return (peer, report);
-    }
-
-
-    private void OnPeerAdded(object? sender, PeerInfo peer)
-    {
-        PeerCountChanged?.Invoke(this, EventArgs.Empty);
-        _ = Task.Run(() => TryFetchAndMergeAsync(peer, _cts?.Token ?? CancellationToken.None));
-
-        if (peer.UserId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase))
-            return;
-
-        _ = Task.Run(async () =>
-        {
-            foreach (var streamType in Enum.GetValues<ManifestStreamType>())
-            {
-                var manifest = GetLocalManifest(streamType);
-                if (manifest == null)
-                {
-                    _logger.Debug($"OnPeerAdded: No {streamType} manifest available for {peer.UserId}");
-                    continue;
-                }
-                _logger.Debug($"OnPeerAdded: Pushing {streamType} manifest ({manifest.Operations.Count} ops) to {peer.UserId}");
-
-                Manifest manifestToPush;
-                lock (manifest)
-                {
-                    manifestToPush = new Manifest
-                    {
-                        UserId = manifest.UserId,
-                        StreamType = manifest.StreamType,
-                        Snapshot = manifest.Snapshot,
-                        Operations = manifest.Operations.ToList(),
-                        Version = manifest.Version,
-                        LastUpdated = manifest.LastUpdated
-                    };
-                }
-
-                try
-                {
-                    await _client.PushManifestAsync(peer.Address, peer.Port, manifestToPush, BuildAnnouncingPeerInfo(manifestToPush.StreamType));
-                    RecordPeerMessage(peer.UserId, "PushManifest", success: true,
-                        $"Pushed local {manifestToPush.StreamType} manifest ({manifestToPush.Operations.Count} op) to {peer.Address}:{peer.Port}.");
-                }
-                catch (Exception ex)
-                {
-                    RecordPeerMessage(peer.UserId, "PushManifest", success: false,
-                        $"Push failed for {manifestToPush.StreamType} to {peer.Address}:{peer.Port}: {ex.Message}");
-                }
-            }
-        });
-    }
-
-    private void OnPeerRemoved(object? sender, string userId)
-    {
-        PeerCountChanged?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void OnManifestReceived(object? sender, ManifestReceivedEventArgs e)
-    {
-        // Ignore pushes from ourselves
-        if (e.Manifest.UserId == Identity?.UserId)
-        {
-            _logger.Debug("Ignored manifest push from self ({0})", e.Manifest.UserId);
-            return;
-        }
-
-        Interlocked.Increment(ref _inboundManifestPushCount);
-        RecordPeerMessage(e.Manifest.UserId, "PushManifest", success: true,
-            $"Received manifest with {e.Manifest.Operations.Count} operation(s) from {e.PeerAddress}.");
-
-        var peer = _router.GetPeers().FirstOrDefault(p => p.UserId == e.Manifest.UserId);
-
-        if (peer == null)
-        {
-            var profile = e.Manifest.Operations
-                .Where(op => op.OperationType == ManifestOperationType.Profile)
-                .OrderByDescending(op => op.SequenceNumber)
-                .FirstOrDefault();
-
-            var discovered = new PeerInfo
-            {
-                UserId = e.Manifest.UserId,
-                DisplayName = SecurityLimits.Truncate(
-                    profile?.Metadata.GetValueOrDefault("displayName")
-                    ?? e.AnnouncingPeer?.DisplayName
-                    ?? e.Manifest.UserId,
-                    SecurityLimits.MaxDisplayNameLength),
-                Address = e.PeerAddress,
-                Port = e.AnnouncingPeer?.Port > 0 ? e.AnnouncingPeer.Port : ManifestExchangeServer.DefaultPort,
-                LastSeen = DateTime.UtcNow,
-                PublicKeyPem = e.AnnouncingPeer?.PublicKeyPem
-                    ?? profile?.Metadata.GetValueOrDefault("publicKeyPem")
-                    ?? string.Empty
-            };
-
-            _router.LearnPeers([discovered]);
-            peer = _router.GetPeers().FirstOrDefault(p => p.UserId == e.Manifest.UserId);
-        }
-
-        var publicKeyPem = peer?.PublicKeyPem;
-        if (string.IsNullOrWhiteSpace(publicKeyPem))
-            publicKeyPem = e.AnnouncingPeer?.PublicKeyPem;
-
-        if (string.IsNullOrWhiteSpace(publicKeyPem))
-            publicKeyPem = e.Manifest.Operations
-                .Where(op => op.OperationType == ManifestOperationType.Profile)
-                .OrderByDescending(op => op.SequenceNumber)
-                .Select(op => op.Metadata.GetValueOrDefault("publicKeyPem"))
-                .FirstOrDefault(pk => !string.IsNullOrWhiteSpace(pk));
-
-        if (string.IsNullOrWhiteSpace(publicKeyPem))
-            return;
-
-        TryMerge(e.Manifest, publicKeyPem);
-    }
-
-    private async Task TryFetchAndMergeAsync(PeerInfo peer, CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(peer.PublicKeyPem)) return;
-        if (peer.UserId == Identity?.UserId) return;
-
-        foreach (ManifestStreamType streamType in Enum.GetValues(typeof(ManifestStreamType)))
-            try
-            {
-                var existing = _peerStore.Get(peer.UserId, streamType);
-                var startSeq = (existing?.Snapshot?.LastSequenceNumber ?? -1) + 1 + (existing?.Operations.Count ?? 0);
-
-                Manifest? remoteManifest = null;
-                var fetchedFromPeer = false;
-
-                try
-                {
-                    if (peer.Port > 0)
-                    {
-                        remoteManifest = await _client.FetchManifestAsync(peer.Address, peer.Port, _peerStore, peer.UserId, streamType, ct);
-                        fetchedFromPeer = remoteManifest != null;
-                    }
-                }
-                catch {
-                    /* fallback to relay if peer is unreachable */
-                }
-
-                if (remoteManifest == null && peer.Capabilities.Contains("relay"))
-                    foreach (var bootstrap in _bootstrapNodes.Take(SecurityLimits.MaxBootstrapNodes))
-                        if (TryParseEndpoint(bootstrap, out var host, out var port))
-                            try
-                            {
-                                remoteManifest = await _client.FetchManifestAsync(host, port, _peerStore, peer.UserId, streamType, ct);
-                                if (remoteManifest != null)
-                                {
-                                    RecordPeerMessage(peer.UserId, "FetchManifestRelay", success: true,
-                                        $"Fetched {streamType} manifest from bootstrap relay {host}:{port}.");
-                                    break;
-                                }
-                            }
-                            catch { }
-
-                if (remoteManifest == null)
-                {
-                    RecordPeerMessage(peer.UserId, "FetchManifest", success: false,
-                        $"Peer {peer.Address}:{peer.Port} returned no {streamType} manifest and relay fallback failed.");
-                    continue;
-                }
-
-                Interlocked.Increment(ref _outboundManifestFetchCount);
-                var details = $"Fetched {streamType} manifest with {remoteManifest.Operations.Count} operation(s) (delta sync from seq {startSeq}). FromPeer={fetchedFromPeer}";
-                _logger.Debug(details);
-                RecordPeerMessage(peer.UserId, "FetchManifest", success: true,
-                    details);
-                TryMerge(remoteManifest, peer.PublicKeyPem);
-            }
-            catch (Exception ex)
-            {
-                RecordPeerMessage(peer.UserId, "FetchManifest", success: false,
-                    $"Fetch failed for {streamType}: {ex.Message}");
-            }
-    }
-
-    private async Task RefreshBootstrapAsync(PeerConnectionAttemptReport report)
-    {
-        if (_bootstrapNodes.Count == 0)
-        {
-            report.Attempts.Add(new PeerConnectionAttemptResult(
-                "bootstrap-refresh",
-                false,
-                "No bootstrap nodes configured."));
-            return;
-        }
-
-        var refreshed = false;
-        foreach (var endpoint in _bootstrapNodes.Take(SecurityLimits.MaxBootstrapNodes))
-        {
-            if (!TryParseEndpoint(endpoint, out var host, out var port))
-            {
-                report.Attempts.Add(new PeerConnectionAttemptResult(
-                    "bootstrap-refresh",
-                    false,
-                    $"Skipped invalid bootstrap endpoint '{endpoint}'."));
-                continue;
-            }
-
-            try
-            {
-                var peers = await _client.FetchPeersAsync(host, port, customLabel: "bootstrap");
-                if (peers != null)
-                {
-                    _router.LearnPeers(peers);
-                    refreshed = true;
-                    report.Attempts.Add(new PeerConnectionAttemptResult(
-                        "bootstrap-refresh",
-                        true,
-                        $"Fetched {peers.Count} peers from bootstrap {host}:{port}."));
-                }
-                else
-                {
-                    report.Attempts.Add(new PeerConnectionAttemptResult(
-                        "bootstrap-refresh",
-                        false,
-                        $"Failed to reach bootstrap {host}:{port}."));
-                }
-            }
-            catch (Exception ex)
-            {
-                report.Attempts.Add(new PeerConnectionAttemptResult(
-                    "bootstrap-refresh",
-                    false,
-                    $"Bootstrap {host}:{port} failed: {ex.Message}"));
-            }
-        }
-
-        if (!refreshed)
-            report.Attempts.Add(new PeerConnectionAttemptResult(
-                "bootstrap-refresh",
-                false,
-                "Bootstrap refresh completed without usable peer data."));
-    }
-
-    private async Task<RendezvousResponse?> RequestBootstrapRendezvousAsync(string targetUserId, PeerConnectionAttemptReport report)
-    {
-        if (_bootstrapNodes.Count == 0 || Identity == null)
-            return null;
-
-        foreach (var endpoint in _bootstrapNodes.Take(SecurityLimits.MaxBootstrapNodes))
-        {
-            if (!TryParseEndpoint(endpoint, out var host, out var port))
-                continue;
-
-            try
-            {
-                var response = await _client.RequestRendezvousAsync(host, port, new RendezvousRequest
-                {
-                    InitiatorUserId = Identity.UserId,
-                    TargetUserId = targetUserId,
-                    InitiatorPort = Identity.ManifestPort,
-                    RequestedProbeWindowMs = 4_000
-                });
-
-                if (response != null)
-                    return response;
-            }
-            catch (Exception ex)
-            {
-                report.Attempts.Add(new PeerConnectionAttemptResult(
-                    "bootstrap-rendezvous",
-                    false,
-                    $"Rendezvous request to {host}:{port} failed: {ex.Message}"));
-            }
-        }
-
-        return null;
-    }
-
-    private static async Task WaitForProbeWindowAsync(RendezvousResponse rendezvous, PeerConnectionAttemptReport report)
-    {
-        var now = DateTime.UtcNow;
-        if (rendezvous.ProbeStartUtc <= now)
-            return;
-
-        var delay = rendezvous.ProbeStartUtc - now;
-        if (delay > TimeSpan.FromSeconds(8))
-        {
-            report.Attempts.Add(new PeerConnectionAttemptResult(
-                "bootstrap-rendezvous-timing",
-                false,
-                "Probe start is too far in the future; skipping wait."));
-            return;
-        }
-
-        await Task.Delay(delay);
-    }
-
-    private static bool TryParseEndpoint(string endpoint, out string host, out int port)
-    {
-        host = string.Empty;
-        port = 0;
-
-        var lastColon = endpoint.LastIndexOf(':');
-        if (lastColon <= 0)
-            return false;
-
-        host = endpoint[..lastColon];
-        return int.TryParse(endpoint[(lastColon + 1)..], out port) && port > 0 && port < 65536;
-    }
-
-    private static async Task<bool> CanConnectTcpAsync(string address, int port, int timeoutMs)
-    {
-        if (string.IsNullOrWhiteSpace(address) || port <= 0)
-            return false;
-
-        try
-        {
-            using var client = new TcpClient();
-            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
-            await client.ConnectAsync(address, port, cts.Token);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private static string BuildNatGuidance(string peerAddress, int peerPort, int localPort, string localIp)
-    {
-        var local = localPort > 0 ? localPort : ManifestExchangeServer.DefaultPort;
-        return $"Could not establish a direct peer content connection after all automatic attempts. Suggested router/NAT mapping: forward TCP+UDP {local} to {localIp}:{local}. Ask remote peer owner to forward TCP+UDP {peerPort} to {peerAddress}:{peerPort}. If both peers are behind symmetric NAT, run one peer with a public IP or use a relay-capable bootstrap in future.";
-    }
-
-    private static string? GetPrimaryLocalIpv4()
-    {
-        try
-        {
-            var interfaces = NetworkInterface.GetAllNetworkInterfaces()
-                .Where(n => n.OperationalStatus == OperationalStatus.Up && n.NetworkInterfaceType != NetworkInterfaceType.Loopback)
-                .OrderByDescending(n => n.Speed);
-
-            foreach (var nic in interfaces)
-            {
-                var ip = nic.GetIPProperties().UnicastAddresses
-                    .Select(a => a.Address)
-                    .FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(a));
-
-                if (ip != null)
-                    return ip.ToString();
-            }
-        }
-        catch
-        {
-            // best-effort diagnostics only
-        }
-
-        return null;
-    }
 
     private void RecordPeerMessage(string userId, string messageType, bool success, string details)
     {
@@ -912,46 +362,9 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         }
     }
 
-    private static int CountPublishedItems(Manifest? manifest, string targetType)
-    {
-        if (manifest == null)
-            return 0;
 
-        return manifest.Operations
-            .Where(op => string.Equals(op.TargetType, targetType, StringComparison.OrdinalIgnoreCase)
-                      && (op.OperationType == ManifestOperationType.Create
-                       || op.OperationType == ManifestOperationType.Update
-                       || op.OperationType == ManifestOperationType.Delete))
-            .GroupBy(op => op.TargetId, StringComparer.OrdinalIgnoreCase)
-            .Select(g => g.OrderByDescending(op => op.SequenceNumber).First())
-            .Count(op => op.OperationType != ManifestOperationType.Delete);
-    }
 
-    private static string ResolveDisplayName(Manifest? manifest, PeerInfo? peer)
-    {
-        var profileOp = manifest?.Operations
-            .Where(op => op.OperationType == ManifestOperationType.Profile)
-            .OrderByDescending(op => op.SequenceNumber)
-            .FirstOrDefault();
 
-        var profileName = profileOp?.Metadata.GetValueOrDefault("displayName");
-        if (!string.IsNullOrWhiteSpace(profileName))
-            return profileName;
-
-        if (!string.IsNullOrWhiteSpace(peer?.DisplayName) && !peer.DisplayName.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase))
-            return peer.DisplayName;
-
-        if (!string.IsNullOrWhiteSpace(manifest?.UserId))
-            return manifest.UserId;
-
-        if (!string.IsNullOrWhiteSpace(peer?.UserId))
-            return peer.UserId;
-
-        if (!string.IsNullOrWhiteSpace(peer?.Address))
-            return $"{peer.Address}:{peer.Port}";
-
-        return "Unknown Peer";
-    }
 
     /// <summary>
     /// Records a signed Play operation for the given track in the local manifest.
@@ -963,641 +376,111 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// <param name="title">Track title stored as metadata.</param>
     /// <param name="artist">Artist name stored as metadata.</param>
     /// <returns><c>true</c> if a new Play operation was appended; <c>false</c> if rate-capped or not ready.</returns>
-    public bool RecordPlay(string trackId, string title, string artist, string? contentHash = null)
-    {
-        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Play));
-        if (manifest == null || Identity == null) return false;
-        if (string.IsNullOrWhiteSpace(trackId)) return false;
-        if (!_playedThisSession.Add(trackId)) return false;   // already counted this session
 
-        _logger.Info("Recording play for track '{0}' (ID: {1})", title, trackId);
-        _manifestManager.AppendSignedOperation(
-            manifest,
-            ManifestOperationType.Play,
-            SecurityLimits.Truncate(trackId, SecurityLimits.MaxTargetIdLength),
-            "Track",
-            contentHash: contentHash,
-            new Dictionary<string, string>
-            {
-                ["title"]  = SecurityLimits.Truncate(title,  SecurityLimits.MaxTrackTitleLength),
-                ["artist"] = SecurityLimits.Truncate(artist, SecurityLimits.MaxArtistNameLength)
-            },
-            Identity.PrivateKeyPem);
-
-        return true;
-    }
 
     /// <summary>
     /// Announces a track release to the network by appending a signed Create operation to the local manifest.
     /// Automatically stamps <c>releasedAt</c> (ISO-8601 UTC) into the metadata dictionary if not already set.
     /// Call this when the user marks a track as released and wants peers to discover it.
     /// </summary>
-    public void AnnounceTrack(string trackId, string contentHash, Dictionary<string, string>? metadata = null)
-    {
-        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Create));
-        if (manifest == null || Identity == null) return;
-        var meta = metadata != null ? new Dictionary<string, string>(metadata) : [];
-        meta.TryAdd("releasedAt", DateTime.UtcNow.ToString("O"));
 
-        var title = meta.GetValueOrDefault("title") ?? trackId;
-        _logger.Info("Announcing track release: '{0}' (ID: {1}, Hash: {2})", title, trackId, contentHash);
-
-        _manifestManager.AppendSignedOperation(
-            manifest,
-            ManifestOperationType.Create,
-            trackId,
-            "Track",
-            contentHash,
-            meta,
-            Identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest(manifest.StreamType);
-    }
 
     /// <summary>
     /// Updates a released track in the network by appending a signed Update operation to the local manifest.
     /// </summary>
-    public void UpdateTrack(string trackId, string contentHash, Dictionary<string, string>? metadata = null)
-    {
-        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Update));
-        if (manifest == null || Identity == null) return;
-        var meta = metadata != null ? new Dictionary<string, string>(metadata) : [];
 
-        var title = meta.GetValueOrDefault("title") ?? trackId;
-        _logger.Info("Announcing track update: '{0}' (ID: {1}, Hash: {2})", title, trackId, contentHash);
-
-        _manifestManager.AppendSignedOperation(
-            manifest,
-            ManifestOperationType.Update,
-            trackId,
-            "Track",
-            contentHash,
-            meta,
-            Identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest(manifest.StreamType);
-    }
 
     /// <summary>
     /// Announces an album release to the network.
     /// Automatically stamps <c>releasedAt</c> (ISO-8601 UTC) into the metadata dictionary if not already set.
     /// </summary>
-    public void AnnounceAlbum(string albumId, string? contentHash, Dictionary<string, string>? metadata = null)
-    {
-        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Create));
-        if (manifest == null || Identity == null) return;
-        var meta = metadata != null ? new Dictionary<string, string>(metadata) : [];
-        meta.TryAdd("releasedAt", DateTime.UtcNow.ToString("O"));
 
-        var name = meta.GetValueOrDefault("name") ?? albumId;
-        _logger.Info("Announcing album release: '{0}' (ID: {1})", name, albumId);
-
-        _manifestManager.AppendSignedOperation(
-            manifest,
-            ManifestOperationType.Create,
-            albumId,
-            "Album",
-            contentHash,
-            meta,
-            Identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest(manifest.StreamType);
-    }
 
     /// <summary>
     /// Updates a released album in the network by appending a signed Update operation to the local manifest.
     /// </summary>
-    public void UpdateAlbum(string albumId, string? contentHash, Dictionary<string, string>? metadata = null)
-    {
-        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Update));
-        if (manifest == null || Identity == null) return;
-        var meta = metadata != null ? new Dictionary<string, string>(metadata) : [];
 
-        var name = meta.GetValueOrDefault("name") ?? albumId;
-        _logger.Info("Announcing album update: '{0}' (ID: {1})", name, albumId);
-
-        _manifestManager.AppendSignedOperation(
-            manifest,
-            ManifestOperationType.Update,
-            albumId,
-            "Album",
-            contentHash,
-            meta,
-            Identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest(manifest.StreamType);
-    }
 
     /// <summary>
     /// Appends a signed Follow op for <paramref name="targetUserId"/> to the local manifest.
     /// Safe to call multiple times — duplicate ops are ignored during merge.
     /// </summary>
-    public void RecordFollow(string targetUserId)
-    {
-        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Follow));
-        if (manifest == null || Identity == null) return;
-        if (string.IsNullOrWhiteSpace(targetUserId)) return;
 
-        _logger.Info("Recording follow for user {0}", targetUserId);
-        _manifestManager.AppendSignedOperation(
-            manifest,
-            ManifestOperationType.Follow,
-            SecurityLimits.Truncate(targetUserId, SecurityLimits.MaxTargetIdLength),
-            "User",
-            contentHash: null,
-            metadata: null,
-            Identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest(manifest.StreamType);
-    }
 
     /// <summary>
     /// Appends a signed FriendAdd op for <paramref name="targetUserId"/>.
     /// </summary>
-    public void RecordFriendAdd(string targetUserId)
-    {
-        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.FriendAdd));
-        if (manifest == null || Identity == null) return;
-        if (string.IsNullOrWhiteSpace(targetUserId)) return;
 
-        _logger.Info("Recording friend add for user {0}", targetUserId);
-        _manifestManager.AppendSignedOperation(
-            manifest,
-            ManifestOperationType.FriendAdd,
-            SecurityLimits.Truncate(targetUserId, SecurityLimits.MaxTargetIdLength),
-            "User",
-            contentHash: null,
-            metadata: null,
-            Identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest(manifest.StreamType);
-    }
 
     /// <summary>
     /// Appends a signed FriendRemove op for <paramref name="targetUserId"/>.
     /// </summary>
-    public void RecordFriendRemove(string targetUserId)
-    {
-        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.FriendRemove));
-        if (manifest == null || Identity == null) return;
-        if (string.IsNullOrWhiteSpace(targetUserId)) return;
 
-        _logger.Info("Recording friend remove for user {0}", targetUserId);
-        _manifestManager.AppendSignedOperation(
-            manifest,
-            ManifestOperationType.FriendRemove,
-            SecurityLimits.Truncate(targetUserId, SecurityLimits.MaxTargetIdLength),
-            "User",
-            contentHash: null,
-            metadata: null,
-            Identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest(manifest.StreamType);
-    }
 
     /// <summary>
     /// Appends a signed FoundGroup op for <paramref name="groupId"/>.
     /// </summary>
-    public void RecordFoundGroup(string groupId)
-    {
-        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.FoundGroup));
-        if (manifest == null || Identity == null) return;
-        if (string.IsNullOrWhiteSpace(groupId)) return;
 
-        _logger.Info("Recording group found for group {0}", groupId);
-        _manifestManager.AppendSignedOperation(
-            manifest,
-            ManifestOperationType.FoundGroup,
-            SecurityLimits.Truncate(groupId, SecurityLimits.MaxTargetIdLength),
-            "Group",
-            contentHash: null,
-            metadata: null,
-            Identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest(manifest.StreamType);
-    }
 
     /// <summary>
     /// Appends a signed ModerateGroup op for <paramref name="groupId"/>.
     /// </summary>
-    public void RecordModerateGroup(string groupId)
-    {
-        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.ModerateGroup));
-        if (manifest == null || Identity == null) return;
-        if (string.IsNullOrWhiteSpace(groupId)) return;
 
-        _logger.Info("Recording group moderate for group {0}", groupId);
-        _manifestManager.AppendSignedOperation(
-            manifest,
-            ManifestOperationType.ModerateGroup,
-            SecurityLimits.Truncate(groupId, SecurityLimits.MaxTargetIdLength),
-            "Group",
-            contentHash: null,
-            metadata: null,
-            Identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest(manifest.StreamType);
-    }
 
     /// <summary>
     /// Appends a signed CreateChannel op.
     /// </summary>
-    public void RecordCreateChannel(string channelId, string groupId, string name)
-    {
-        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.CreateChannel));
-        if (manifest == null || Identity == null) return;
-        if (string.IsNullOrWhiteSpace(channelId) || string.IsNullOrWhiteSpace(groupId)) return;
 
-        _logger.Info("Recording create channel {0} in group {1}", channelId, groupId);
-        _manifestManager.AppendSignedOperation(
-            manifest,
-            ManifestOperationType.CreateChannel,
-            SecurityLimits.Truncate(channelId, SecurityLimits.MaxTargetIdLength),
-            "GroupChannel",
-            contentHash: null,
-            metadata: new Dictionary<string, string>
-            {
-                ["groupId"] = SecurityLimits.Truncate(groupId, SecurityLimits.MaxTargetIdLength),
-                ["name"] = SecurityLimits.Truncate(name, 100)
-            },
-            Identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest(manifest.StreamType);
-    }
 
     /// <summary>
     /// Appends a signed PostMessage op.
     /// </summary>
-    public void RecordPostMessage(string postId, string channelId, string content, string? parentPostId = null)
-    {
-        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.PostMessage));
-        if (manifest == null || Identity == null) return;
-        if (string.IsNullOrWhiteSpace(postId) || string.IsNullOrWhiteSpace(channelId)) return;
 
-        _logger.Info("Recording post message {0} in channel {1}", postId, channelId);
-
-        var meta = new Dictionary<string, string>
-        {
-            ["channelId"] = SecurityLimits.Truncate(channelId, SecurityLimits.MaxTargetIdLength),
-            ["content"] = SecurityLimits.Truncate(content, SecurityLimits.MaxCommentTextLength)
-        };
-
-        if (!string.IsNullOrWhiteSpace(parentPostId))
-        {
-            meta["parentPostId"] = SecurityLimits.Truncate(parentPostId, SecurityLimits.MaxTargetIdLength);
-        }
-
-        _manifestManager.AppendSignedOperation(
-            manifest,
-            ManifestOperationType.PostMessage,
-            SecurityLimits.Truncate(postId, SecurityLimits.MaxTargetIdLength),
-            "GroupChannel",
-            contentHash: null,
-            metadata: meta,
-            Identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest(manifest.StreamType);
-    }
 
     /// <summary>
     /// Appends a signed GroupJoin op for <paramref name="groupId"/>.
     /// </summary>
-    public void RecordGroupJoin(string groupId)
-    {
-        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.GroupJoin));
-        if (manifest == null || Identity == null) return;
-        if (string.IsNullOrWhiteSpace(groupId)) return;
 
-        _logger.Info("Recording group join for group {0}", groupId);
-        _manifestManager.AppendSignedOperation(
-            manifest,
-            ManifestOperationType.GroupJoin,
-            SecurityLimits.Truncate(groupId, SecurityLimits.MaxTargetIdLength),
-            "Group",
-            contentHash: null,
-            metadata: null,
-            Identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest(manifest.StreamType);
-    }
 
     /// <summary>
     /// Appends a signed GroupLeave op for <paramref name="groupId"/>.
     /// </summary>
-    public void RecordGroupLeave(string groupId)
-    {
-        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.GroupLeave));
-        if (manifest == null || Identity == null) return;
-        if (string.IsNullOrWhiteSpace(groupId)) return;
 
-        _logger.Info("Recording group leave for group {0}", groupId);
-        _manifestManager.AppendSignedOperation(
-            manifest,
-            ManifestOperationType.GroupLeave,
-            SecurityLimits.Truncate(groupId, SecurityLimits.MaxTargetIdLength),
-            "Group",
-            contentHash: null,
-            metadata: null,
-            Identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest(manifest.StreamType);
-    }
 
     /// <summary>
     /// Appends a signed Unfollow op for <paramref name="targetUserId"/> to the local manifest.
     /// </summary>
-    public void RecordUnfollow(string targetUserId)
-    {
-        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Unfollow));
-        if (manifest == null || Identity == null) return;
-        if (string.IsNullOrWhiteSpace(targetUserId)) return;
 
-        _logger.Info("Recording unfollow for user {0}", targetUserId);
-        _manifestManager.AppendSignedOperation(
-            manifest,
-            ManifestOperationType.Unfollow,
-            SecurityLimits.Truncate(targetUserId, SecurityLimits.MaxTargetIdLength),
-            "User",
-            contentHash: null,
-            metadata: null,
-            Identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest(manifest.StreamType);
-    }
 
     /// <summary>
     /// Appends a signed Comment op for a track to the local manifest.
     /// </summary>
-    public string? RecordComment(string trackId, string commentText, string? replyToId = null, Dictionary<string, string>? metadata = null)
-    {
-        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Comment));
-        if (manifest == null || Identity == null) return null;
-        if (string.IsNullOrWhiteSpace(trackId) || string.IsNullOrWhiteSpace(commentText)) return null;
 
-        _logger.Info("Recording comment for track {0}: '{1}'", trackId, SecurityLimits.Truncate(commentText, 32));
-        var meta = metadata != null ? new Dictionary<string, string>(metadata) : [];
-        meta["text"] = SecurityLimits.Truncate(commentText, SecurityLimits.MaxCommentTextLength);
-        if (!string.IsNullOrWhiteSpace(replyToId))
-            meta["replyToId"] = SecurityLimits.Truncate(replyToId, SecurityLimits.MaxOperationIdLength);
-
-        var op = _manifestManager.AppendSignedOperation(
-            manifest,
-            ManifestOperationType.Comment,
-            SecurityLimits.Truncate(trackId, SecurityLimits.MaxTargetIdLength),
-            "Track",
-            contentHash: null,
-            metadata: meta,
-            Identity.PrivateKeyPem);
-
-        PersistAndFanoutLocalManifest(manifest.StreamType);
-        return op.OperationId;
-    }
 
     /// <summary>
     /// Appends a signed CommentDelete op for a previously authored comment operation.
     /// </summary>
-    public void RecordCommentDelete(string trackId, string commentOperationId)
-    {
-        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.CommentDelete));
-        if (manifest == null || Identity == null) return;
-        if (string.IsNullOrWhiteSpace(trackId) || string.IsNullOrWhiteSpace(commentOperationId)) return;
 
-        _logger.Info("Recording comment deletion for track {0}, op {1}", trackId, commentOperationId);
-        _manifestManager.AppendSignedOperation(
-            manifest,
-            ManifestOperationType.CommentDelete,
-            SecurityLimits.Truncate(trackId, SecurityLimits.MaxTargetIdLength),
-            "Track",
-            contentHash: null,
-            metadata: new Dictionary<string, string>
-            {
-                ["commentOperationId"] = SecurityLimits.Truncate(commentOperationId, SecurityLimits.MaxOperationIdLength)
-            },
-            Identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest(manifest.StreamType);
-    }
 
     /// <summary>
     /// Appends a signed Like op for a track.
     /// </summary>
-    public void RecordLike(string trackId)
-    {
-        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Like));
-        if (manifest == null || Identity == null) return;
-        if (string.IsNullOrWhiteSpace(trackId)) return;
 
-        _logger.Info("Recording like for track {0}", trackId);
-        _manifestManager.AppendSignedOperation(
-            manifest,
-            ManifestOperationType.Like,
-            SecurityLimits.Truncate(trackId, SecurityLimits.MaxTargetIdLength),
-            "Track",
-            contentHash: null,
-            metadata: null,
-            Identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest(manifest.StreamType);
-    }
 
     /// <summary>
     /// Appends a signed Unlike op for a track.
     /// </summary>
-    public void RecordUnlike(string trackId)
-    {
-        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Unlike));
-        if (manifest == null || Identity == null) return;
-        if (string.IsNullOrWhiteSpace(trackId)) return;
 
-        _logger.Info("Recording unlike for track {0}", trackId);
-        _manifestManager.AppendSignedOperation(
-            manifest,
-            ManifestOperationType.Unlike,
-            SecurityLimits.Truncate(trackId, SecurityLimits.MaxTargetIdLength),
-            "Track",
-            contentHash: null,
-            metadata: null,
-            Identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest(manifest.StreamType);
-    }
 
     /// <summary>
     /// Broadcasts the user's current profile as a signed Profile op.
     /// Peers receiving this op can update their local view of the user's identity.
     /// </summary>
-    public void BroadcastProfile(string displayName, bool isArtist, string bio, string? website, string? bannerImageHash)
-    {
-        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.Profile));
-        if (manifest == null || Identity == null) return;
 
-        _logger.Info("Broadcasting updated profile for {0} (isArtist: {1})", displayName, isArtist);
-        var meta = new Dictionary<string, string>
-        {
-            ["displayName"] = SecurityLimits.Truncate(displayName, SecurityLimits.MaxArtistNameLength),
-            ["isArtist"]    = isArtist.ToString(),
-            ["bio"]         = SecurityLimits.Truncate(bio, 1000),
-            ["website"]     = SecurityLimits.Truncate(website, 256),
-            ["publicKeyPem"] = Identity.PublicKeyPem
-        };
-        if (!string.IsNullOrWhiteSpace(bannerImageHash))
-            meta["bannerImageHash"] = bannerImageHash;
 
-        _manifestManager.AppendSignedOperation(
-            manifest,
-            ManifestOperationType.Profile,
-            Identity.UserId,
-            "User",
-            contentHash: bannerImageHash,
-            meta,
-            Identity.PrivateKeyPem);
-        PersistAndFanoutLocalManifest(manifest.StreamType);
-    }
 
-    private void TryMerge(Manifest remote, string publicKeyPem)
-    {
-        if (remote.UserId == Identity?.UserId) return;
 
-        _logger.Debug("Attempting merge of manifest from peer {0} ({1} ops, stream={2})", remote.UserId, remote.Operations.Count, remote.StreamType);
-        var existingManifest = _peerStore.Get(remote.UserId, remote.StreamType);
-        var existingCount = existingManifest?.Operations.Count ?? 0;
 
-        var added = _peerStore.MergeAndSave(remote, publicKeyPem, _manifestManager);
-        if (added > 0)
-        {
-            _logger.Info("Merged manifest from peer {0}: added {1} new operations.", remote.UserId, added);
-            var profileOp = remote.Operations
-                .Where(op => op.OperationType == ManifestOperationType.Profile)
-                .OrderByDescending(op => op.SequenceNumber)
-                .FirstOrDefault();
-
-            if (profileOp != null)
-            {
-                _logger.Debug("Updating profile for {0} from merged manifest", remote.UserId);
-                UserRepository?.UpdateProfile(remote.UserId, profileOp.Metadata);
-                var iconHash = profileOp.ContentHash;
-                if (!string.IsNullOrWhiteSpace(iconHash))
-                    _ = Task.Run(async () =>
-                    {
-                        try
-                        {
-                            var bytes = await RequestContentAsync(remote.UserId, iconHash);
-                            if (bytes != null) UserRepository?.SaveUserIcon(remote.UserId, bytes);
-                        }
-                        catch { }
-                    });
-            }
-
-            _ = CatalogueService.IngestAsync(remote);
-
-            // Also trigger icon/content downloads for catalogue entries
-            foreach (var op in remote.Operations)
-                if (op.OperationType == ManifestOperationType.Create || op.OperationType == ManifestOperationType.Update)
-                {
-                    var iconHash = op.Metadata.GetValueOrDefault("iconHash");
-                    if (string.IsNullOrWhiteSpace(iconHash) && op.TargetType == "User")
-                        iconHash = op.ContentHash;
-
-                    if (!string.IsNullOrWhiteSpace(iconHash))
-                        _ = Task.Run(async () =>
-                        {
-                            try
-                            {
-                                var bytes = await RequestContentAsync(remote.UserId, iconHash);
-                                if (bytes != null && UserRepository != null) UserRepository.SaveUserIcon(op.TargetId, bytes);
-                            }
-                            catch { }
-                        });
-                    else if (!string.IsNullOrWhiteSpace(op.ContentHash) && (op.Metadata.ContainsKey("isIcon") && op.Metadata["isIcon"] == "True"))
-                        _ = Task.Run(async () =>
-                        {
-                            try
-                            {
-                                var bytes = await RequestContentAsync(remote.UserId, op.ContentHash!);
-                                if (bytes != null && UserRepository != null) UserRepository.SaveUserIcon(op.TargetId, bytes);
-                            }
-                            catch { }
-                        });
-                }
-
-            foreach (var op in remote.Operations)
-            {
-                if (op.SequenceNumber >= existingCount && op.OperationType == ManifestOperationType.PostMessage)
-                {
-                    GroupMessageReceived?.Invoke(this, new GroupMessageEventArgs(
-                        remote.UserId,
-                        op.Metadata?.GetValueOrDefault("channelId") ?? string.Empty,
-                        op.TargetId,
-                        op.Metadata?.GetValueOrDefault("content") ?? string.Empty,
-                        op.Metadata?.GetValueOrDefault("parentPostId")
-                    ));
-                }
-                else if (op.SequenceNumber >= existingCount && (op.OperationType == ManifestOperationType.CreateChannel || op.OperationType == ManifestOperationType.FoundGroup || op.OperationType == ManifestOperationType.ModerateGroup || op.OperationType == ManifestOperationType.GroupJoin || op.OperationType == ManifestOperationType.GroupLeave))
-                {
-                    GroupStateChanged?.Invoke(this, new GroupStateChangedEventArgs(remote.UserId, op.OperationType, op.TargetId, op.Metadata ?? new Dictionary<string, string>()));
-                }
-            }
-
-            ManifestMerged?.Invoke(this, new ManifestMergedEventArgs(remote.UserId, added));
-        }
-        else
-        {
-            _logger.Trace("Merge of manifest from peer {0} resulted in 0 new operations.", remote.UserId);
-        }
-    }
-
-    private void PersistAndFanoutLocalManifest(ManifestStreamType streamType)
-    {
-        var manifest = GetLocalManifest(streamType);
-        if (manifest == null) return;
-
-        Manifest manifestToShare;
-        lock (manifest)
-        {
-            if (manifest.Operations.Count >= 500 && Identity != null)
-            {
-                _logger.Info("Compacting local {0} manifest ({1} operations)", streamType, manifest.Operations.Count);
-                _manifestManager.Compact(manifest, Identity.PrivateKeyPem, threshold: 500, keepRecent: 100);
-            }
-
-            SaveLocalManifest(manifest);
-
-            _logger.Info("Local {0} manifest updated (ops: {1}). Initiating fan-out to peers.", streamType, manifest.Operations.Count);
-
-            // Clone for sharing to avoid race conditions with further modifications/compactions
-            manifestToShare = new Manifest
-            {
-                UserId = manifest.UserId,
-                StreamType = manifest.StreamType,
-                Snapshot = manifest.Snapshot,
-                Operations = manifest.Operations.ToList(),
-                Version = manifest.Version,
-                LastUpdated = manifest.LastUpdated
-            };
-        }
-
-        _ = CatalogueService.IngestAsync(manifestToShare);
-
-        _ = Task.Run(async () =>
-        {
-            var meshPeers = _router.GetPeers().Where(p => !p.UserId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase)).ToList();
-            foreach (var peer in meshPeers)
-                try
-                {
-                    _logger.Debug("Pushing local {0} manifest to peer {1} ({2}:{3})", streamType, peer.UserId, peer.Address, peer.Port);
-                    await _client.PushManifestAsync(peer.Address, peer.Port, manifestToShare, BuildAnnouncingPeerInfo(streamType));
-                    RecordPeerMessage(peer.UserId, "PushManifest", success: true,
-                        $"Pushed local {streamType} manifest ({manifestToShare.Operations.Count} op) to {peer.Address}:{peer.Port}.");
-                }
-                catch (Exception ex)
-                {
-                    _logger.Warn("Failed to push {0} manifest to {1}: {2}", streamType, peer.UserId, ex.Message);
-                    RecordPeerMessage(peer.UserId, "PushManifest", success: false,
-                        $"Push failed for {streamType} to {peer.Address}:{peer.Port}: {ex.Message}");
-                    // best-effort push; periodic sync/merge will reconcile later
-                }
-
-            if (!_actAsListener)
-                foreach (var bootstrap in _bootstrapNodes.Take(SecurityLimits.MaxBootstrapNodes))
-                    if (TryParseEndpoint(bootstrap, out var host, out var port))
-                        try
-                        {
-                            _logger.Debug("Relaying local {0} manifest via bootstrap {1}:{2}", streamType, host, port);
-                            await _client.RelayManifestPushAsync(host, port, manifestToShare, BuildAnnouncingPeerInfo(streamType));
-                            RecordPeerMessage($"bootstrap:{host}:{port}", "RelayManifestPush", success: true,
-                                $"Pushed local {streamType} manifest to bootstrap for relaying.");
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.Warn("Failed to relay {0} manifest via bootstrap {1}:{2}: {3}", streamType, host, port, ex.Message);
-                            RecordPeerMessage($"bootstrap:{host}:{port}", "RelayManifestPush", success: false,
-                                $"Relay push failed for {streamType}: {ex.Message}");
-                        }
-        });
-    }
 
     private PeerInfo BuildAnnouncingPeerInfo(ManifestStreamType streamType)
     {
@@ -1641,73 +524,4 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         _natTraversal.Dispose();
         _cts?.Dispose();
     }
-}
-
-public class ManifestMergedEventArgs(string userId, int operationsAdded) : EventArgs
-{
-    public string UserId { get; } = userId;
-    public int OperationsAdded { get; } = operationsAdded;
-}
-
-public class GroupMessageEventArgs(string userId, string channelId, string postId, string content, string? parentPostId = null) : EventArgs
-{
-    public string UserId { get; } = userId;
-    public string ChannelId { get; } = channelId;
-    public string PostId { get; } = postId;
-    public string Content { get; } = content;
-    public string? ParentPostId { get; } = parentPostId;
-}
-
-public class GroupStateChangedEventArgs(string userId, ManifestOperationType operationType, string targetId, Dictionary<string, string> metadata) : EventArgs
-{
-    public string UserId { get; } = userId;
-    public ManifestOperationType OperationType { get; } = operationType;
-    public string TargetId { get; } = targetId;
-    public Dictionary<string, string> Metadata { get; } = metadata;
-}
-
-public sealed class PeerConnectionAttemptReport
-{
-    public required string PeerUserId { get; init; }
-    public required string RequestedContentHash { get; init; }
-    public string? TargetAddress { get; set; }
-    public int TargetPort { get; set; }
-    public int LocalManifestPort { get; init; }
-    public string? SuggestedLocalIp { get; init; }
-    public DateTime CreatedAtUtc { get; } = DateTime.UtcNow;
-    public List<PeerConnectionAttemptResult> Attempts { get; } = [];
-
-    public string BuildUserFacingSummary()
-    {
-        var attemptSummary = string.Join(" | ", Attempts.Select(a => $"{a.Method}: {(a.Success ? "ok" : "fail")}"));
-        var finalGuidance = Attempts.LastOrDefault(a => string.Equals(a.Method, "nat-guidance", StringComparison.OrdinalIgnoreCase))?.Details;
-        return string.IsNullOrWhiteSpace(finalGuidance)
-            ? attemptSummary
-            : $"{attemptSummary}{Environment.NewLine}{finalGuidance}";
-    }
-}
-
-public sealed record PeerConnectionAttemptResult(string Method, bool Success, string Details);
-
-public sealed class PeerMessageLogEntry
-{
-    public DateTime TimestampUtc { get; init; }
-    public string MessageType { get; init; } = string.Empty;
-    public bool Success { get; init; }
-    public string Details { get; init; } = string.Empty;
-}
-
-public sealed class PeerDiagnosticsSnapshot
-{
-    public string UserId { get; init; } = string.Empty;
-    public string DisplayName { get; init; } = string.Empty;
-    public string Address { get; init; } = string.Empty;
-    public int Port { get; init; }
-    public bool IsOnline { get; init; }
-    public bool IsBootstrap { get; init; }
-    public bool HasManifest { get; init; }
-    public int PublishedTrackCount { get; init; }
-    public int PublishedAlbumCount { get; init; }
-    public int OperationCount { get; init; }
-    public IReadOnlyList<PeerMessageLogEntry> RecentMessages { get; init; } = [];
 }

@@ -55,7 +55,8 @@ public class PeerManifestStore : IManifestStore
                     }
                 }
             }
-            catch {
+            catch
+            {
                 /* skip corrupted files */
             }
     }
