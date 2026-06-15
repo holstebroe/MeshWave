@@ -28,6 +28,7 @@ public class SettingsViewModel : ViewModelBase
     private readonly UserProfileService _profileService;
     private readonly P2PIdentityService _identityService;
     private readonly Action<WaveformStyle>? _onWaveformStyleSaved;
+    private readonly Action? _onProfileSaved;
     private string _baseFolder = string.Empty;
     private string _username = string.Empty;
     private bool _isInitialized;
@@ -69,11 +70,12 @@ public class SettingsViewModel : ViewModelBase
     private long _usedDriveBytes;
     private readonly IMeshWaveEnvironment _environment;
 
-    public SettingsViewModel(IMeshWaveEnvironment environment, SettingsService settingsService, Action<WaveformStyle>? onWaveformStyleSaved = null, SyncOrchestrator? sync = null)
+    public SettingsViewModel(IMeshWaveEnvironment environment, SettingsService settingsService, Action<WaveformStyle>? onWaveformStyleSaved = null, SyncOrchestrator? sync = null, Action? onProfileSaved = null)
     {
         _environment = environment;
         _identityService = new P2PIdentityService(environment);
         _onWaveformStyleSaved = onWaveformStyleSaved;
+        _onProfileSaved = onProfileSaved;
         _sync = sync;
         _settingsService = settingsService;
         _profileService = new UserProfileService(_environment.GetAppDataRoot());
@@ -490,6 +492,7 @@ public class SettingsViewModel : ViewModelBase
         AvatarIconPath = savedProfile.AvatarIconPath;
 
         _onWaveformStyleSaved?.Invoke(WaveformStyle);
+        _onProfileSaved?.Invoke();
 
         IsInitialized = true;
         RefreshStorageStats();

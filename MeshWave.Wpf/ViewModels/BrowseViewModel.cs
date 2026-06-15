@@ -160,8 +160,10 @@ public class BrowseViewModel : ViewModelBase
         });
 
         if (_sync != null)
-            _sync.ManifestMerged += (_, _) =>
+            _sync.ManifestMerged += (_, e) =>
+            {
                 ExecuteOnUiOrCurrent(Refresh);
+            };
 
         Refresh();
     }
@@ -265,7 +267,7 @@ public class BrowseViewModel : ViewModelBase
     public void NavigateToArtist(string userId)
     {
         _activeArtistUserId = userId;
-        ActiveTab = BrowseTab.Tracks;
+        ActiveTab = BrowseTab.Albums;
         OnPropertyChanged(nameof(IsShowingArtistDetail));
         OnPropertyChanged(nameof(ActiveArtistName));
         Refresh();

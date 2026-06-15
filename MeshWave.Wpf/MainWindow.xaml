@@ -6,7 +6,7 @@
         xmlns:views="clr-namespace:MeshWave.Wpf.Views"
         xmlns:viewModels="clr-namespace:MeshWave.Wpf.ViewModels"
         mc:Ignorable="d"
-        Title="MeshWave - Decentralized Music Sharing" 
+        Title="{Binding ApplicationTitle}"
         Height="760" Width="1240"
         MinHeight="600" MinWidth="900"
         Background="{StaticResource BackgroundColor}"

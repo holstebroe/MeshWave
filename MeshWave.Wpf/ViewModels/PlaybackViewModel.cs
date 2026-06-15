@@ -156,6 +156,20 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         private set => SetProperty(ref _isCurrentTrackLikedByMe, value);
     }
 
+    private int _totalLikes;
+    public int TotalLikes
+    {
+        get => _totalLikes;
+        private set => SetProperty(ref _totalLikes, value);
+    }
+
+    private int _playCount;
+    public int PlayCount
+    {
+        get => _playCount;
+        private set => SetProperty(ref _playCount, value);
+    }
+
     public TimeSpan CurrentPosition
     {
         get => _currentPosition;
@@ -426,7 +440,13 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         CurrentPosition = TimeSpan.Zero;
         _currentFilePath = filePath;
         CurrentTrackId = Path.GetFileNameWithoutExtension(filePath ?? string.Empty) ?? string.Empty;
+
+        _currentTrackHashForStats = string.Empty;
+        if (!string.IsNullOrWhiteSpace(_currentFilePath) && File.Exists(_currentFilePath)) _currentTrackHashForStats = CryptoService.ComputeFileHash(_currentFilePath);
+        _currentPlayTargetForStats = string.IsNullOrWhiteSpace(_currentTrackHashForStats) ? CurrentTrackId : $"{CurrentTrackId}:{_currentTrackHashForStats}";
+
         RefreshCurrentTrackLikeState();
+        RebuildTrackStats();
         _playRecordedForCurrentTrack = false;
 
         if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
@@ -679,11 +699,11 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         var lines = new List<string>();
         foreach (var m in visibleMarkers.Where(m => string.IsNullOrEmpty(m.ReplyToId)))
         {
-            var displayName = _userRepository?.GetDisplayName(m.UserId) ?? m.UserId;
+            var displayName = _userRepository?.GetDisplayName(m.UserId) ?? _sync?.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, m.UserId, StringComparison.OrdinalIgnoreCase))?.DisplayName ?? m.UserId;
             lines.Add($"[{TimeSpan.FromSeconds(m.TimestampSeconds):mm\\:ss}] (v{(m.TrackVersion <= 0 ? 1 : m.TrackVersion)}) {displayName}: {m.Comment}");
             foreach (var r in visibleMarkers.Where(r => r.ReplyToId == m.Id))
             {
-                var replyDisplayName = _userRepository?.GetDisplayName(r.UserId) ?? r.UserId;
+                var replyDisplayName = _userRepository?.GetDisplayName(r.UserId) ?? _sync?.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, r.UserId, StringComparison.OrdinalIgnoreCase))?.DisplayName ?? r.UserId;
                 lines.Add($"  ↳ [{TimeSpan.FromSeconds(r.TimestampSeconds):mm\\:ss}] {replyDisplayName}: {r.Comment}");
             }
         }
@@ -719,16 +739,84 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         if (manifest == null)
             return;
 
+        Application.Current.Dispatcher.InvokeAsync(() =>
+        {
+            RebuildTrackStats();
+        });
+
         var changed = ApplyPeerComments(manifest);
         if (!changed)
             return;
 
-        Application.Current.Dispatcher.Invoke(() =>
+        Application.Current.Dispatcher.InvokeAsync(() =>
         {
             OnPropertyChanged(nameof(TimelineMarkers));
             RebuildComments();
             SaveTimelineMarkers();
         });
+    }
+
+    private string _currentTrackHashForStats = string.Empty;
+    private string _currentPlayTargetForStats = string.Empty;
+
+    private void RebuildTrackStats()
+    {
+        if (_sync == null || string.IsNullOrWhiteSpace(CurrentTrackId)) return;
+
+        var totalLikes = 0;
+        var totalPlays = 0;
+
+        var playTarget = _currentPlayTargetForStats;
+
+        foreach (var manifest in _sync.PeerManifests.Where(m => m.StreamType == ManifestStreamType.Interaction))
+        {
+            var latestLike = manifest.Operations
+                .Where(op => string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase) && string.Equals(op.TargetId, CurrentTrackId, StringComparison.OrdinalIgnoreCase))
+                .Where(op => op.OperationType == ManifestOperationType.Like || op.OperationType == ManifestOperationType.Unlike)
+                .OrderByDescending(op => op.SequenceNumber)
+                .FirstOrDefault();
+
+            if (latestLike?.OperationType == ManifestOperationType.Like)
+                totalLikes++;
+
+            var playOp = manifest.Operations
+                .Where(op => string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase) && string.Equals(op.TargetId, playTarget, StringComparison.OrdinalIgnoreCase))
+                .Where(op => op.OperationType == ManifestOperationType.Play)
+                .OrderByDescending(op => op.SequenceNumber)
+                .FirstOrDefault();
+
+            if (playOp != null && playOp.Metadata.TryGetValue("playCount", out var pcStr) && int.TryParse(pcStr, out var pc))
+                totalPlays += pc;
+            else
+                totalPlays += manifest.Operations.Count(op => string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase) && string.Equals(op.TargetId, CurrentTrackId, StringComparison.OrdinalIgnoreCase) && op.OperationType == ManifestOperationType.Play);
+        }
+
+        var localInteraction = _sync.GetLocalManifest(ManifestStreamType.Interaction);
+        if (localInteraction != null)
+        {
+            var localLatestLike = localInteraction.Operations
+                .Where(op => string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase) && string.Equals(op.TargetId, CurrentTrackId, StringComparison.OrdinalIgnoreCase))
+                .Where(op => op.OperationType == ManifestOperationType.Like || op.OperationType == ManifestOperationType.Unlike)
+                .OrderByDescending(op => op.SequenceNumber)
+                .FirstOrDefault();
+
+            if (localLatestLike?.OperationType == ManifestOperationType.Like)
+                totalLikes++;
+
+            var localPlayOp = localInteraction.Operations
+                .Where(op => string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase) && string.Equals(op.TargetId, playTarget, StringComparison.OrdinalIgnoreCase))
+                .Where(op => op.OperationType == ManifestOperationType.Play)
+                .OrderByDescending(op => op.SequenceNumber)
+                .FirstOrDefault();
+
+            if (localPlayOp != null && localPlayOp.Metadata.TryGetValue("playCount", out var pcStr) && int.TryParse(pcStr, out var pc))
+                totalPlays += pc;
+            else
+                totalPlays += localInteraction.Operations.Count(op => string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase) && string.Equals(op.TargetId, CurrentTrackId, StringComparison.OrdinalIgnoreCase) && op.OperationType == ManifestOperationType.Play);
+        }
+
+        TotalLikes = totalLikes;
+        PlayCount = totalPlays;
     }
 
     private void SyncCommentsFromPeerManifests()
@@ -856,6 +944,7 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             _sync.RecordLike(CurrentTrackId);
             IsCurrentTrackLikedByMe = true;
         }
+        RebuildTrackStats();
     }
 
     private void RefreshCurrentTrackLikeState()
