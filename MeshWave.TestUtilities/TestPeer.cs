@@ -57,8 +57,17 @@ public class TestPeer : IAsyncDisposable
         Orchestrator.Dispose();
 
         if (BaseFolder.StartsWith(Path.GetTempPath()))
-            if (Directory.Exists(BaseFolder))
-                Directory.Delete(BaseFolder, true);
+        {
+            try
+            {
+                if (Directory.Exists(BaseFolder))
+                    Directory.Delete(BaseFolder, true);
+            }
+            catch
+            {
+                // Ignore exceptions during cleanup to avoid failing tests
+            }
+        }
     }
 
     public Manifest? GetLocalManifest(ManifestStreamType streamType)

@@ -772,7 +772,9 @@ public class SettingsViewModel : ViewModelBase
             if (!Directory.Exists(folder))
                 Directory.CreateDirectory(folder);
 
-            Process.Start("explorer.exe", folder);
+            var startInfo = new ProcessStartInfo("explorer.exe");
+            startInfo.ArgumentList.Add(folder);
+            Process.Start(startInfo);
         }
         catch (Exception ex)
         {
