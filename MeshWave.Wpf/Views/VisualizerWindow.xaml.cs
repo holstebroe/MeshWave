@@ -43,7 +43,25 @@ public partial class VisualizerWindow : Window
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
+        if (e.OldValue is VisualizerViewModel oldVm)
+        {
+            oldVm.PropertyChanged -= Vm_PropertyChanged;
+        }
+
+        if (e.NewValue is VisualizerViewModel newVm)
+        {
+            newVm.PropertyChanged += Vm_PropertyChanged;
+        }
+
         CompileShader();
+    }
+
+    private void Vm_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(VisualizerViewModel.SelectedShader))
+        {
+            CompileShader();
+        }
     }
 
     private void InitializeGL()
