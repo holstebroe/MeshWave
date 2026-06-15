@@ -37,6 +37,8 @@ public class ManifestRequest
     public int StartSequenceNumber { get; set; }
     public int? EndSequenceNumber { get; set; }
     public string? TargetUserId { get; set; }
+    public long? ChunkOffset { get; set; }
+    public long? ChunkLength { get; set; }
 }
 
 public class ManifestResponse
@@ -47,6 +49,7 @@ public class ManifestResponse
     public RendezvousResponse? Rendezvous { get; set; }
     public byte[]? ContentBytes { get; set; }
     public long ContentLength { get; set; }
+    public long? TotalContentLength { get; set; }
 }
 
 public class RendezvousRequest
