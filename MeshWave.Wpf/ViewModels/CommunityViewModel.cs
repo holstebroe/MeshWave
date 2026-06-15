@@ -441,7 +441,7 @@ public class CommunityViewModel : ViewModelBase
             File.WriteAllBytes(tempFile, bytes);
 
             var imported = LocalLibraryManager.ImportSingleFileToOrganizedStructure(tempFile, settings.BaseFolder != string.Empty
-                ? _settingsService.GetPeerMusicFolder()
+                ? (_settingsService?.GetPeerMusicFolder() ?? otherMusicFolder)
                 : otherMusicFolder,
                 settings.SupportedExtensions);
 
@@ -726,7 +726,7 @@ public class CommunityViewModel : ViewModelBase
 
                 var imported = LocalLibraryManager.ImportSingleFileToOrganizedStructure(
                     tempFile,
-                    _settingsService.GetPeerMusicFolder(),
+                    _settingsService?.GetPeerMusicFolder() ?? string.Empty,
                     settings.SupportedExtensions);
 
                 if (!imported)
