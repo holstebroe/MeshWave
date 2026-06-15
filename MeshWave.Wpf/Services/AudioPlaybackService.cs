@@ -47,7 +47,10 @@ public class AudioPlaybackService : IAudioPlaybackService
     {
         Stop();
         _currentFilePath = filePath;
-        _audioFile = new AudioFileReader(filePath);
+        if (filePath.EndsWith(".mod", StringComparison.OrdinalIgnoreCase))
+            _audioFile = (WaveStream)Activator.CreateInstance(Type.GetType("MeshWave.Wpf.OpenMpt.OpenMptWaveStream, MeshWave.Wpf.OpenMpt")!, filePath)!;
+        else
+            _audioFile = new AudioFileReader(filePath);
 
         _waveOut = new WaveOutEvent();
 
@@ -87,6 +90,8 @@ public class AudioPlaybackService : IAudioPlaybackService
         // MP3 can be streamed via Mp3FileReader(Stream).
         if (tempPath.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase))
             _audioFile = new Mp3FileReader(_growingStream);
+        else if (tempPath.EndsWith(".mod", StringComparison.OrdinalIgnoreCase))
+            _audioFile = (WaveStream)Activator.CreateInstance(Type.GetType("MeshWave.Wpf.OpenMpt.OpenMptWaveStream, MeshWave.Wpf.OpenMpt")!, _growingStream)!;
         else
             // Fallback to trying to open it as a standard file if format detection fails on stream
             _audioFile = new AudioFileReader(tempPath);
