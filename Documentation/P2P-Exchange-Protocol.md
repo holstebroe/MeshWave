@@ -59,3 +59,28 @@ Social actions like `Play`, `Like`, `Comment`, and `Follow` are represented as s
 -   All operations are signed with the user's private key.
 -   Peers verify the signature of every operation against the user's public key before merging it into their local store.
 -   Protocol limits (message size, operation count) are strictly enforced to prevent DoS attacks.
+
+## P2P Networking Concepts
+
+### Bootstrap
+A bootstrap node serves as a lightweight entry point to the MeshWave network. Peers connect to bootstrap nodes upon startup to retrieve an initial list of active peers (PEX). Bootstrap nodes do not relay content or store persistent mesh state; they purely facilitate initial peer discovery, ensuring new nodes can quickly embed themselves into the mesh. A peer can optionally be configured to act as a bootstrap node by running with a fixed, publicly accessible port.
+
+### Peer Connections
+MeshWave peers establish connections directly with each other to exchange metadata and manifests. To handle NAT and firewall traversal:
+- If at least one peer has a publicly accessible NAT port, a connection is trivially established.
+- If both peers are behind restrictive NATs, MeshWave utilizes UDP hole punching mediated by a known peer or bootstrap node to open a direct communication channel.
+
+### Content Downloading
+Content distribution in MeshWave is fully decentralized. Content can be requested from any peer hosting the corresponding content hash, not just the original creator. This improves network resilience and availability.
+
+### Lan Discovery
+Lan discovery is intended for testing purposes or for local networks. The `PeerDiscovery` class manages LAN peer discovery by broadcasting UDP packets locally and listening for announcements. It allows local peers to connect directly without relying on external bootstrap nodes.
+
+### Responsible Classes
+- **Bootstrap:** `BootstrapCoordinator` manages bootstrap nodes, and `PeerRouter` resolves nodes using bootstrap lists.
+- **Peer Connections:** `ManifestExchangeClient` and `ManifestExchangeServer` manage TCP exchanges, while `NatTraversalService` handles UDP hole punching.
+- **Content Downloading:** `ManifestExchangeClient` performs content requests via `RequestContentAsync`.
+- **Lan Discovery:** `PeerDiscovery` broadcasts and listens for UDP peer announcements locally.
+
+#### Load Balancing & Sequential Downloading (Planned)
+Future protocol enhancements aim to introduce distributed search across the mesh to locate all peers holding specific content. The network will establish load-balancing protocols to request chunked byte-ranges concurrently across multiple peers. For media playback, chunk requests will be prioritized sequentially to enable instant playback before the full file is downloaded.
