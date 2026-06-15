@@ -56,6 +56,8 @@ public static class ManifestStreamMapper
             ManifestOperationType.FoundGroup or
             ManifestOperationType.ModerateGroup => ManifestStreamType.Social,
 
+            ManifestOperationType.Unknown => ManifestStreamType.Content,
+
             _ => ManifestStreamType.Content
         };
     }
@@ -105,7 +107,10 @@ public enum ManifestOperationType
     /// <summary>Signed operation founding a new group.</summary>
     FoundGroup,
     /// <summary>Signed operation moderating a group.</summary>
-    ModerateGroup
+    ModerateGroup,
+
+    /// <summary>A fallback type for unknown or newer operations parsed from older clients.</summary>
+    Unknown = 999
 }
 
 /// <summary>

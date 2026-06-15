@@ -54,7 +54,7 @@ public static class TestPeerFactory
         var store = PeerManifestStore.CreateAtBase(env, tempDir);
         var contentExchange = new ContentExchange();
         var natTraversal = new NatTraversalService(logger: logger);
-        var catalogueService = new CatalogueService();
+        var catalogueService = new CatalogueService(MeshWave.Common.Core.Processors.CatalogueProcessorDefaults.GetDefaultProcessors());
 
         var orchestrator = new SyncOrchestrator(
             peerRouter,

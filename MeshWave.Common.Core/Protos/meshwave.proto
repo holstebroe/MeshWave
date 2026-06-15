@@ -34,6 +34,8 @@ enum ProtoManifestOperationType {
     POST_MESSAGE = 20;
     FOUND_GROUP = 21;
     MODERATE_GROUP = 22;
+
+    UNKNOWN = 999;
 }
 
 message ProtoManifestOperation {

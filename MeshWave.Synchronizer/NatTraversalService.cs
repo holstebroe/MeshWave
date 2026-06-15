@@ -33,6 +33,7 @@ public sealed class NatTraversalService : IDisposable
     public string? ExternalIPAddress { get; private set; }
 
     public string NatStatus { get; private set; } = "Not attempted";
+    public string Diagnostics { get; private set; } = "Initializing...";
 
     public string? MappingProtocol => _natDevice?.NatProtocol.ToString();
 
@@ -90,6 +91,7 @@ public sealed class NatTraversalService : IDisposable
     public async Task SetupPortMappingAsync(int port, CancellationToken cancellationToken = default)
     {
         NatStatus = "Discovering NAT devices...";
+        Diagnostics = "Sending UPnP/PMP discovery broadcast to local network...";
         _logger.Info("Starting NAT discovery for port {0} (TCP/UDP)", port);
 
         var tcs = new TaskCompletionSource<INatDevice>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -142,20 +144,24 @@ public sealed class NatTraversalService : IDisposable
                 }
 
                 NatStatus = $"Mapped via {_natDevice.NatProtocol}";
+                Diagnostics = $"UPnP/PMP configuration successful. Router external IP: {ExternalIPAddress}. Mapped TCP/UDP port {port}.";
             }
             else
             {
                 NatStatus = "No NAT device discovered (UPnP/NAT-PMP may be disabled)";
+                Diagnostics = "UPnP Discovery failed: Router may not support UPnP, or it is disabled. You are likely behind a Symmetric NAT or strict firewall. Manual port forwarding is recommended.";
                 _logger.Info(NatStatus);
             }
         }
         catch (OperationCanceledException)
         {
             NatStatus = "NAT discovery canceled";
+            Diagnostics = "Discovery was aborted.";
         }
         catch (Exception ex)
         {
             NatStatus = $"NAT error: {ex.Message}";
+            Diagnostics = $"An error occurred during NAT traversal: {ex.Message}";
             _logger.Warn("NAT mapping error: {0}", ex.Message);
         }
         finally

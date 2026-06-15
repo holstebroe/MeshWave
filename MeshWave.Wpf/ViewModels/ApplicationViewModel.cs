@@ -59,7 +59,7 @@ public class ApplicationViewModel : ViewModelBase
         var settings = SettingsService.LoadSettings();
         _userRepository = new UserRepository(settings.BaseFolder);
         _metadataLookup = new MetadataLookupRepository(SettingsService.GetLocalMusicFolder());
-        var catalogueService = new CatalogueService();
+        var catalogueService = new CatalogueService(MeshWave.Common.Core.Processors.CatalogueProcessorDefaults.GetDefaultProcessors());
 
         // DI wire-up of the default file-based PeerManifestStore
         var manifestStore = PeerManifestStore.CreateAtBase(environment, _userRepository.BaseDataFolder);
@@ -88,6 +88,7 @@ public class ApplicationViewModel : ViewModelBase
 
 
         HomeMenuNavCommand = new RelayCommand(HomeMenuNav);
+        OpenNatTroubleshooterCommand = new RelayCommand(_ => CurrentViewModel = new NatTroubleshooterViewModel(SyncOrchestrator, settings.P2P.Port));
         OpenVisualizerCommand = new RelayCommand(_ => OpenVisualizer());
 
 
@@ -335,6 +336,7 @@ public class ApplicationViewModel : ViewModelBase
     }
 
     public ICommand HomeMenuNavCommand { get; }
+    public ICommand OpenNatTroubleshooterCommand { get; }
     public ICommand OpenVisualizerCommand { get; }
     private void HomeMenuNav()
     {

@@ -12,7 +12,7 @@ public class AuthorityTests
     [Fact]
     public async Task CatalogueService_EnforcesOwnerAuthority()
     {
-        var service = new CatalogueService();
+        var service = new CatalogueService(MeshWave.Common.Core.Processors.CatalogueProcessorDefaults.GetDefaultProcessors());
         var user1 = "user-1";
         var user2 = "user-2";
         var trackId = "track-1";
@@ -40,7 +40,7 @@ public class AuthorityTests
     [Fact]
     public async Task CatalogueService_EnforcesTrackVersioning()
     {
-        var service = new CatalogueService();
+        var service = new CatalogueService(MeshWave.Common.Core.Processors.CatalogueProcessorDefaults.GetDefaultProcessors());
         var user1 = "user-1";
         var trackId = "track-1";
 
@@ -69,7 +69,7 @@ public class AuthorityTests
     [Fact]
     public async Task CatalogueService_EnforcesHashImmutabilityForSameVersion()
     {
-        var service = new CatalogueService();
+        var service = new CatalogueService(MeshWave.Common.Core.Processors.CatalogueProcessorDefaults.GetDefaultProcessors());
         var user1 = "user-1";
         var trackId = "track-1";
 
