@@ -5,6 +5,7 @@ using MeshWave.Common.Core;
 using MeshWave.Common.Core.Models;
 using MeshWave.Wpf.Models;
 using Microsoft.Win32;
+using NLog;
 
 namespace MeshWave.Wpf.Services;
 
@@ -15,6 +16,7 @@ public class SettingsService
 {
     private AppSettings? _currentSettings;
     private readonly string _appDataRoot;
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
     public SettingsService(string appDataRoot)
     {
@@ -59,10 +61,11 @@ public class SettingsService
 
     public virtual void SaveSettings(AppSettings settings)
     {
+        string? settingsFilePath = null;
         try
         {
             var appDataFolder = _appDataRoot;
-            var settingsFilePath = GetSettingsFilePath();
+            settingsFilePath = GetSettingsFilePath();
 
             if (!Directory.Exists(appDataFolder)) Directory.CreateDirectory(appDataFolder);
 
@@ -77,7 +80,7 @@ public class SettingsService
         }
         catch (Exception ex)
         {
-            // TODO: Log error
+            _logger.Error(ex, "Failed to save settings to {0}", settingsFilePath ?? "unknown path");
             throw new InvalidOperationException("Failed to save settings", ex);
         }
     }
