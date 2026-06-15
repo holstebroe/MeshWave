@@ -87,6 +87,8 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     public string? ExternalIPAddress => _natTraversal.ExternalIPAddress;
     public string? MappingProtocol => _natTraversal.MappingProtocol;
 
+    public NatTraversalService NatTraversal => _natTraversal;
+
     /// <summary>Returns the persisted manifest for a specific peer and stream, or null if not yet received.</summary>
     public Manifest? GetPeerManifest(string userId, ManifestStreamType streamType = ManifestStreamType.Content)
     {
