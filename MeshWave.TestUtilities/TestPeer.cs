@@ -104,6 +104,10 @@ public class TestPeer : IAsyncDisposable
 
 public class TestMeshWaveEnvironment(string appDataRoot, string baseFolder) : IMeshWaveEnvironment
 {
+#pragma warning disable CS9113
+    private readonly string _baseFolder = baseFolder;
+#pragma warning restore CS9113
+
     public string GetAppDataRoot()
     {
         return appDataRoot;
