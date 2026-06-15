@@ -115,7 +115,8 @@ public class PeerDiscovery(int listenPort = PeerDiscovery.DefaultDiscoveryPort) 
                 ProcessAnnouncement(json, result.RemoteEndPoint.Address.ToString());
             }
             catch (OperationCanceledException) { break; }
-            catch {
+            catch
+            {
                 /* ignore malformed packets */
             }
     }
