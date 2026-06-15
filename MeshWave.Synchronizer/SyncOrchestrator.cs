@@ -35,6 +35,7 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     private int _inboundManifestPushCount;
     private int _outboundManifestFetchCount;
     private Func<string, byte[]?>? _contentProvider;
+    private Competitions.CompetitionTallyService? _tallyService;
 
     private readonly Lock _diagnosticsLock = new();
     private readonly Dictionary<string, Queue<PeerMessageLogEntry>> _peerMessageLogs = new(StringComparer.OrdinalIgnoreCase);
@@ -233,6 +234,9 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
         await _router.StartAsync(identity, _bootstrapNodes, _cts.Token);
 
+        _tallyService = new Competitions.CompetitionTallyService(this, _peerStore, _logger);
+        _tallyService.Start();
+
         foreach (var manifest in _localManifests.Values) await CatalogueService.IngestAsync(manifest);
     }
 
@@ -251,6 +255,8 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         if (_server != null)
             await _server.StopAsync();
         await _natTraversal.StopAsync();
+        if (_tallyService != null)
+            await _tallyService.StopAsync();
         _cts?.Cancel();
     }
 
@@ -1506,6 +1512,27 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
             PublicKeyPem = Identity?.PublicKeyPem ?? string.Empty,
             LastSeen = DateTime.UtcNow
         };
+    }
+
+    /// <summary>
+    /// Appends a signed CompetitionRevealResults op for <paramref name="compId"/>.
+    /// </summary>
+    public void RecordCompetitionRevealResults(string compId, string resultJson)
+    {
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.CompetitionRevealResults));
+        if (manifest == null || Identity == null) return;
+        if (string.IsNullOrWhiteSpace(compId)) return;
+
+        _logger.Info("Recording competition reveal results for competition {0}", compId);
+        _manifestManager.AppendSignedOperation(
+            manifest,
+            ManifestOperationType.CompetitionRevealResults,
+            SecurityLimits.Truncate(compId, SecurityLimits.MaxTargetIdLength),
+            "Competition",
+            contentHash: null,
+            metadata: new Dictionary<string, string> { { "ResultPayload", resultJson } },
+            Identity.PrivateKeyPem);
+        PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 
     public void Dispose()
