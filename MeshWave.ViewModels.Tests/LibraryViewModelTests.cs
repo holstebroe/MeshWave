@@ -99,11 +99,11 @@ public class LibraryViewModelTests
 
         // Act - Simulate rapid typing
         vm.SearchQuery = "t";
-        await Task.Delay(50);
+        await Task.Delay(50, TestContext.Current.CancellationToken);
         vm.SearchQuery = "te";
-        await Task.Delay(50);
+        await Task.Delay(50, TestContext.Current.CancellationToken);
         vm.SearchQuery = "tes";
-        await Task.Delay(50);
+        await Task.Delay(50, TestContext.Current.CancellationToken);
         vm.SearchQuery = "test";
 
         // Assert while typing
@@ -112,7 +112,7 @@ public class LibraryViewModelTests
         Assert.Equal(0, isSearchingFalseCount); // Should not have resolved to false yet
 
         // Act - Wait for debounce timer to expire
-        await Task.Delay(400);
+        await Task.Delay(400, TestContext.Current.CancellationToken);
 
         // Assert after delay
         Assert.False(vm.IsSearching);

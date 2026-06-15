@@ -98,11 +98,11 @@ public class TestPeer : IAsyncDisposable
 
     public IMeshWaveEnvironment GetEnvironment()
     {
-        return new TestMeshWaveEnvironment(this.AppDataRoot, this.BaseFolder);
+        return new TestMeshWaveEnvironment(this.AppDataRoot);
     }
 }
 
-public class TestMeshWaveEnvironment(string appDataRoot, string baseFolder) : IMeshWaveEnvironment
+public class TestMeshWaveEnvironment(string appDataRoot) : IMeshWaveEnvironment
 {
     public string GetAppDataRoot()
     {

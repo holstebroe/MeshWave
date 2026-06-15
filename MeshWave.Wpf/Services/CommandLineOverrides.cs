@@ -72,6 +72,10 @@ public static class CommandLineOverrides
                 case "--download-limit":
                     SetIfNonNegativeInt(MeshWaveEnvironment.P2PDownloadLimitEnvironmentVariable, value);
                     break;
+
+                case "--mock-scenario":
+                    SetIfPresent(MeshWaveEnvironment.MockScenarioEnvironmentVariable, value);
+                    break;
             }
         }
     }

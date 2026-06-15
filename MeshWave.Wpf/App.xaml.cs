@@ -2,6 +2,7 @@
 using MeshWave.Common.Core;
 using MeshWave.Wpf.Services;
 using MeshWave.Wpf.ViewModels;
+using System.IO;
 
 namespace MeshWave.Wpf;
 
@@ -24,16 +25,37 @@ public partial class App : Application
         var environment = new MeshWaveEnvironment();
         CommandLineOverrides.Apply(e.Args, environment);
 
-        var settingsService = new SettingsService(environment.GetAppDataRoot());
+        var mockScenario = Environment.GetEnvironmentVariable(MeshWaveEnvironment.MockScenarioEnvironmentVariable);
+        IMeshWaveEnvironment activeEnvironment = environment;
+
+        if (!string.IsNullOrWhiteSpace(mockScenario))
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), $"mw_mock_{Guid.NewGuid():N}");
+            Directory.CreateDirectory(tempDir);
+            activeEnvironment = new MeshWave.TestUtilities.DummyEnvironment(tempDir);
+        }
+
+        var settingsService = new SettingsService(activeEnvironment.GetAppDataRoot());
         var settings = settingsService.LoadSettings();
-        LoggingConfiguration.Configure(environment, settings.Logging);
+        LoggingConfiguration.Configure(activeEnvironment, settings.Logging);
+
+        var appViewModel = new ApplicationViewModel(activeEnvironment, settingsService, new UserProfileService(activeEnvironment.GetAppDataRoot()));
+        if (!string.IsNullOrWhiteSpace(mockScenario))
+        {
+            appViewModel.IsMockMode = true;
+        }
 
         var mainWindow = new MainWindow
         {
-            DataContext = new ApplicationViewModel(environment, settingsService, new UserProfileService(environment.GetAppDataRoot()))
+            DataContext = appViewModel
         };
         MainWindow = mainWindow;
         mainWindow.Show();
+
+        if (!string.IsNullOrWhiteSpace(mockScenario))
+        {
+            _ = MockScenarioRunner.ApplyScenarioAsync(mockScenario, appViewModel);
+        }
 
         base.OnStartup(e);
         InitializeTrayIcon();

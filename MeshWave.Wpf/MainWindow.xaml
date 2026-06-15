@@ -227,11 +227,30 @@
 
         <!-- ===== Main Content Area ===== -->
         <Border Grid.Row="0" Grid.Column="1" Background="{StaticResource BackgroundColor}">
-            <ContentControl x:Name="MainContent" Background="{StaticResource BackgroundColor}">
-                <ContentControl.Content>
-                    <Binding Path="CurrentViewModel" Converter="{StaticResource ViewModelToViewConverter}"/>
-                </ContentControl.Content>
-            </ContentControl>
+            <Grid>
+                <ContentControl x:Name="MainContent" Background="{StaticResource BackgroundColor}">
+                    <ContentControl.Content>
+                        <Binding Path="CurrentViewModel" Converter="{StaticResource ViewModelToViewConverter}"/>
+                    </ContentControl.Content>
+                </ContentControl>
+
+                <!-- Mock Mode Banner -->
+                <Border Background="#D32F2F" Padding="15,4" CornerRadius="0,0,0,8"
+                        HorizontalAlignment="Right" VerticalAlignment="Top"
+                        IsHitTestVisible="False" Opacity="0.85">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsMockMode}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <TextBlock Text="MOCK MODE" FontWeight="Bold" Foreground="White" FontSize="12" />
+                </Border>
+            </Grid>
         </Border>
 
         <!-- ===== Persistent Bottom Player Bar ===== -->
