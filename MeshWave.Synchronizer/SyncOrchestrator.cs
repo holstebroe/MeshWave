@@ -46,6 +46,8 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
     public event EventHandler<ManifestMergedEventArgs>? ManifestMerged;
     public event EventHandler? PeerCountChanged;
+    public event EventHandler<GroupMessageEventArgs>? GroupMessageReceived;
+    public event EventHandler<GroupStateChangedEventArgs>? GroupStateChanged;
 
     /// <summary>Whether the orchestrator is currently running.</summary>
     public bool IsRunning => _cts != null && !_cts.IsCancellationRequested;
@@ -1173,6 +1175,106 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
     }
 
     /// <summary>
+    /// Appends a signed FoundGroup op for <paramref name="groupId"/>.
+    /// </summary>
+    public void RecordFoundGroup(string groupId)
+    {
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.FoundGroup));
+        if (manifest == null || Identity == null) return;
+        if (string.IsNullOrWhiteSpace(groupId)) return;
+
+        _logger.Info("Recording group found for group {0}", groupId);
+        _manifestManager.AppendSignedOperation(
+            manifest,
+            ManifestOperationType.FoundGroup,
+            SecurityLimits.Truncate(groupId, SecurityLimits.MaxTargetIdLength),
+            "Group",
+            contentHash: null,
+            metadata: null,
+            Identity.PrivateKeyPem);
+        PersistAndFanoutLocalManifest(manifest.StreamType);
+    }
+
+    /// <summary>
+    /// Appends a signed ModerateGroup op for <paramref name="groupId"/>.
+    /// </summary>
+    public void RecordModerateGroup(string groupId)
+    {
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.ModerateGroup));
+        if (manifest == null || Identity == null) return;
+        if (string.IsNullOrWhiteSpace(groupId)) return;
+
+        _logger.Info("Recording group moderate for group {0}", groupId);
+        _manifestManager.AppendSignedOperation(
+            manifest,
+            ManifestOperationType.ModerateGroup,
+            SecurityLimits.Truncate(groupId, SecurityLimits.MaxTargetIdLength),
+            "Group",
+            contentHash: null,
+            metadata: null,
+            Identity.PrivateKeyPem);
+        PersistAndFanoutLocalManifest(manifest.StreamType);
+    }
+
+    /// <summary>
+    /// Appends a signed CreateChannel op.
+    /// </summary>
+    public void RecordCreateChannel(string channelId, string groupId, string name)
+    {
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.CreateChannel));
+        if (manifest == null || Identity == null) return;
+        if (string.IsNullOrWhiteSpace(channelId) || string.IsNullOrWhiteSpace(groupId)) return;
+
+        _logger.Info("Recording create channel {0} in group {1}", channelId, groupId);
+        _manifestManager.AppendSignedOperation(
+            manifest,
+            ManifestOperationType.CreateChannel,
+            SecurityLimits.Truncate(channelId, SecurityLimits.MaxTargetIdLength),
+            "GroupChannel",
+            contentHash: null,
+            metadata: new Dictionary<string, string>
+            {
+                ["groupId"] = SecurityLimits.Truncate(groupId, SecurityLimits.MaxTargetIdLength),
+                ["name"] = SecurityLimits.Truncate(name, 100)
+            },
+            Identity.PrivateKeyPem);
+        PersistAndFanoutLocalManifest(manifest.StreamType);
+    }
+
+    /// <summary>
+    /// Appends a signed PostMessage op.
+    /// </summary>
+    public void RecordPostMessage(string postId, string channelId, string content, string? parentPostId = null)
+    {
+        var manifest = GetLocalManifest(ManifestStreamMapper.GetStreamType(ManifestOperationType.PostMessage));
+        if (manifest == null || Identity == null) return;
+        if (string.IsNullOrWhiteSpace(postId) || string.IsNullOrWhiteSpace(channelId)) return;
+
+        _logger.Info("Recording post message {0} in channel {1}", postId, channelId);
+
+        var meta = new Dictionary<string, string>
+        {
+            ["channelId"] = SecurityLimits.Truncate(channelId, SecurityLimits.MaxTargetIdLength),
+            ["content"] = SecurityLimits.Truncate(content, SecurityLimits.MaxCommentTextLength)
+        };
+
+        if (!string.IsNullOrWhiteSpace(parentPostId))
+        {
+            meta["parentPostId"] = SecurityLimits.Truncate(parentPostId, SecurityLimits.MaxTargetIdLength);
+        }
+
+        _manifestManager.AppendSignedOperation(
+            manifest,
+            ManifestOperationType.PostMessage,
+            SecurityLimits.Truncate(postId, SecurityLimits.MaxTargetIdLength),
+            "GroupChannel",
+            contentHash: null,
+            metadata: meta,
+            Identity.PrivateKeyPem);
+        PersistAndFanoutLocalManifest(manifest.StreamType);
+    }
+
+    /// <summary>
     /// Appends a signed GroupJoin op for <paramref name="groupId"/>.
     /// </summary>
     public void RecordGroupJoin(string groupId)
@@ -1366,6 +1468,9 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
         if (remote.UserId == Identity?.UserId) return;
 
         _logger.Debug("Attempting merge of manifest from peer {0} ({1} ops, stream={2})", remote.UserId, remote.Operations.Count, remote.StreamType);
+        var existingManifest = _peerStore.Get(remote.UserId, remote.StreamType);
+        var existingCount = existingManifest?.Operations.Count ?? 0;
+
         var added = _peerStore.MergeAndSave(remote, publicKeyPem, _manifestManager);
         if (added > 0)
         {
@@ -1423,6 +1528,24 @@ public class SyncOrchestrator : ISyncBrowseClient, IDisposable
                             catch { }
                         });
                 }
+
+            foreach (var op in remote.Operations)
+            {
+                if (op.SequenceNumber >= existingCount && op.OperationType == ManifestOperationType.PostMessage)
+                {
+                    GroupMessageReceived?.Invoke(this, new GroupMessageEventArgs(
+                        remote.UserId,
+                        op.Metadata?.GetValueOrDefault("channelId") ?? string.Empty,
+                        op.TargetId,
+                        op.Metadata?.GetValueOrDefault("content") ?? string.Empty,
+                        op.Metadata?.GetValueOrDefault("parentPostId")
+                    ));
+                }
+                else if (op.SequenceNumber >= existingCount && (op.OperationType == ManifestOperationType.CreateChannel || op.OperationType == ManifestOperationType.FoundGroup || op.OperationType == ManifestOperationType.ModerateGroup || op.OperationType == ManifestOperationType.GroupJoin || op.OperationType == ManifestOperationType.GroupLeave))
+                {
+                    GroupStateChanged?.Invoke(this, new GroupStateChangedEventArgs(remote.UserId, op.OperationType, op.TargetId, op.Metadata ?? new Dictionary<string, string>()));
+                }
+            }
 
             ManifestMerged?.Invoke(this, new ManifestMergedEventArgs(remote.UserId, added));
         }
@@ -1550,6 +1673,23 @@ public class ManifestMergedEventArgs(string userId, int operationsAdded) : Event
 {
     public string UserId { get; } = userId;
     public int OperationsAdded { get; } = operationsAdded;
+}
+
+public class GroupMessageEventArgs(string userId, string channelId, string postId, string content, string? parentPostId = null) : EventArgs
+{
+    public string UserId { get; } = userId;
+    public string ChannelId { get; } = channelId;
+    public string PostId { get; } = postId;
+    public string Content { get; } = content;
+    public string? ParentPostId { get; } = parentPostId;
+}
+
+public class GroupStateChangedEventArgs(string userId, ManifestOperationType operationType, string targetId, Dictionary<string, string> metadata) : EventArgs
+{
+    public string UserId { get; } = userId;
+    public ManifestOperationType OperationType { get; } = operationType;
+    public string TargetId { get; } = targetId;
+    public Dictionary<string, string> Metadata { get; } = metadata;
 }
 
 public sealed class PeerConnectionAttemptReport
