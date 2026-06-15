@@ -39,6 +39,7 @@ public class VisualizerViewModel : ViewModelBase
 
     // TODO: Make selector for default shaders, and move these to separate files or embedded resources
 
+    #pragma warning disable CS0414
     private readonly string _defaultAudioShader = @"
 #version 330 core
 out vec4 FragColor;
@@ -63,6 +64,7 @@ void main()
     FragColor = vec4(color, 1.0);
 }";
 
+    #pragma warning disable CS0414
     private readonly string demoPlasmaShader = @"
 #version 330 core
 
