@@ -30,6 +30,7 @@
     <ProjectReference Include="../MeshWave.LibraryManager/MeshWave.LibraryManager.csproj" />
     <ProjectReference Include="../MeshWave.Synchronizer/MeshWave.Synchronizer.csproj" />
     <ProjectReference Include="../MeshWave.TestUtilities/MeshWave.TestUtilities.csproj" />
+    <ProjectReference Include="../MeshWave.Wpf.OpenMpt/MeshWave.Wpf.OpenMpt.csproj" />
   </ItemGroup>
 
   <ItemGroup>
