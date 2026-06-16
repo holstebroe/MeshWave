@@ -23,7 +23,7 @@ namespace MeshWave.Wpf.ViewModels;
 /// </summary>
 public class ApplicationViewModel : ViewModelBase
 {
-    private string _applicationTitle = "MeshWave";
+    private string _applicationTitle = "MeshWave - Decentralized Music Sharing";
     private ViewModelBase _currentViewModel;
 
     public SettingsService SettingsService { get; }
@@ -110,6 +110,8 @@ public class ApplicationViewModel : ViewModelBase
                 || e.PropertyName == nameof(PlaybackViewModel.TrackContextIconPath))
                 _resumeStateDirty = true;
         };
+
+        UpdateApplicationTitle();
 
         RestorePlaybackState(savedSettings);
 
@@ -319,7 +321,13 @@ public class ApplicationViewModel : ViewModelBase
 
     public void NavigateToSettings()
     {
-        CurrentViewModel = new SettingsViewModel(_environment, SettingsService, style => Playback.WaveformStyle = style, SyncOrchestrator);
+        CurrentViewModel = new SettingsViewModel(_environment, SettingsService, style => Playback.WaveformStyle = style, SyncOrchestrator, UpdateApplicationTitle);
+    }
+
+    private void UpdateApplicationTitle()
+    {
+        var profile = _profileService.LoadProfile();
+        ApplicationTitle = $"MeshWave - Decentralized Music Sharing - {profile.DisplayName}";
     }
 
     public void NavigateToBrowse(string? artistUserId = null)
@@ -328,8 +336,7 @@ public class ApplicationViewModel : ViewModelBase
             (title, artist, duration, filePath, length) =>
             {
                 Playback.Stop();
-                Playback.LoadTrack(title, artist, duration, filePath, remoteContentLength: length);
-                CurrentViewModel = Playback;
+                Playback.LoadTrack(title, artist, duration, filePath, autoPlay: true, remoteContentLength: length);
             }
         );
         if (!string.IsNullOrWhiteSpace(artistUserId))
@@ -547,6 +554,7 @@ public class ApplicationViewModel : ViewModelBase
         P2PIsConnected = false;
         P2PPeerCount = 0;
         P2PStatusText = "Disconnected";
+        UpdateP2PStatusText();
     }
 
     private void InitializeP2PAsync()

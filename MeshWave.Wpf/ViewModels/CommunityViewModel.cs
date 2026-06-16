@@ -280,6 +280,7 @@ public class CommunityViewModel : ViewModelBase
     {
         if (user == null) return;
         user.IsFollowing = true;
+        user.FollowerCount++;
         if (!Following.Contains(user))
             Following.Add(user);
         _sync?.RecordFollow(user.UserId);
@@ -290,6 +291,7 @@ public class CommunityViewModel : ViewModelBase
     {
         if (user == null) return;
         user.IsFollowing = false;
+        user.FollowerCount = Math.Max(0, user.FollowerCount - 1);
         Following.Remove(user);
         _sync?.RecordUnfollow(user.UserId);
         RefreshFeed();

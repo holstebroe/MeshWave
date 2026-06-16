@@ -105,6 +105,11 @@
                             </Path>
                         </Grid>
                     </Button>
+                    <TextBlock Text="{Binding TotalLikes}"
+                               Margin="5,0,0,0"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource TextSecondaryColor}"
+                               FontSize="12"/>
                 </StackPanel>
             </StackPanel>
         </Grid>
