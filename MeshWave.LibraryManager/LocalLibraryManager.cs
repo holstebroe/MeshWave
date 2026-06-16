@@ -517,10 +517,10 @@ public class LocalLibraryManager
 
     public string GetTrackCoverPath(string filePath)
     {
-        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath)) return string.Empty;
+        if (string.IsNullOrWhiteSpace(filePath)) return string.Empty;
 
         var cachePath = GetCoverCachePath(filePath);
-        if (!File.Exists(cachePath)) EnsureCoverCached(filePath);
+        if (!File.Exists(cachePath) && File.Exists(filePath)) EnsureCoverCached(filePath);
 
         return File.Exists(cachePath) ? cachePath : string.Empty;
     }
