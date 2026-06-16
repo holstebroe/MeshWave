@@ -210,7 +210,7 @@ public partial class LibraryView : UserControl
             DataContext is LibraryViewModel vm)
         {
             vm.SelectedAlbum = album;
-            var firstTrack = vm.Tracks.FirstOrDefault();
+            var firstTrack = vm.Tracks.FirstOrDefault(t => t.CanPlay);
             if (firstTrack != null)
                 vm.PlayTrackById(firstTrack.TrackId);
         }
@@ -220,7 +220,8 @@ public partial class LibraryView : UserControl
     {
         if (sender is FrameworkElement element &&
             element.DataContext is LibraryTrackItem trackItem &&
-            DataContext is LibraryViewModel vm)
+            DataContext is LibraryViewModel vm &&
+            trackItem.CanPlay)
             vm.PlayTrackById(trackItem.TrackId);
     }
 
