@@ -17,6 +17,7 @@ public class CatalogueEntry
     public string? Genre { get; set; }
     public long FileSize { get; set; }
     public int Version { get; set; }
+    public string? ShaderScript { get; set; }
     public int SequenceNumber { get; set; }
     public DateTime Timestamp { get; set; }
 }

@@ -412,15 +412,22 @@ public class ApplicationViewModel : ViewModelBase
     /// <summary>
     /// Updates a released track in the P2P network.
     /// </summary>
-    public void UpdateTrackInNetwork(string trackId, string contentHash, string title, string artist, string album)
+    public void UpdateTrackInNetwork(string trackId, string contentHash, string title, string artist, string album, string shaderScript)
     {
         if (!P2PIsConnected) return;
-        SyncOrchestrator.UpdateTrack(trackId, contentHash, new Dictionary<string, string>
+        var metadata = new Dictionary<string, string>
         {
             ["title"] = SecurityLimits.Truncate(title, SecurityLimits.MaxTrackTitleLength),
             ["artist"] = SecurityLimits.Truncate(artist, SecurityLimits.MaxArtistNameLength),
             ["album"] = SecurityLimits.Truncate(album, SecurityLimits.MaxAlbumNameLength)
-        });
+        };
+
+        if (!string.IsNullOrWhiteSpace(shaderScript))
+        {
+            metadata["shaderScript"] = shaderScript;
+        }
+
+        SyncOrchestrator.UpdateTrack(trackId, contentHash, metadata);
     }
 
     /// <summary>

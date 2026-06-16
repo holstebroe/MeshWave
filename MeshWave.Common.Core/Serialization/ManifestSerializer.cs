@@ -176,7 +176,14 @@ public static class ManifestSerializer
 
         if (op.ContentHash != null) proto.ContentHash = op.ContentHash;
         if (op.Metadata != null)
-            foreach (var kv in op.Metadata) proto.Metadata.Add(kv.Key, kv.Value);
+        {
+            foreach (var kv in op.Metadata)
+            {
+                if (kv.Key != "shaderScript") proto.Metadata.Add(kv.Key, kv.Value);
+            }
+            if (op.Metadata.TryGetValue("shaderScript", out var shaderScript))
+                proto.ShaderScript = shaderScript;
+        }
 
         return proto;
     }
@@ -199,6 +206,10 @@ public static class ManifestSerializer
             Timestamp = proto.Timestamp.ToDateTime(),
             Metadata = new Dictionary<string, string>(proto.Metadata)
         };
+
+        if (proto.HasShaderScript && !string.IsNullOrWhiteSpace(proto.ShaderScript))
+            op.Metadata["shaderScript"] = proto.ShaderScript;
+
         return op;
     }
 
@@ -251,19 +262,31 @@ public static class ManifestSerializer
         };
         if (entry.ContentHash != null) proto.ContentHash = entry.ContentHash;
         if (entry.Metadata != null)
-            foreach (var kv in entry.Metadata) proto.Metadata.Add(kv.Key, kv.Value);
+        {
+            foreach (var kv in entry.Metadata)
+            {
+                if (kv.Key != "shaderScript") proto.Metadata.Add(kv.Key, kv.Value);
+            }
+            if (entry.Metadata.TryGetValue("shaderScript", out var shaderScript))
+                proto.ShaderScript = shaderScript;
+        }
         return proto;
     }
 
     private static SnapshotStateEntry MapFromProto(ProtoSnapshotStateEntry proto)
     {
-        return new SnapshotStateEntry
+        var entry = new SnapshotStateEntry
         {
             TargetId = proto.TargetId,
             TargetType = proto.TargetType,
             ContentHash = proto.HasContentHash ? proto.ContentHash : null,
             Metadata = new Dictionary<string, string>(proto.Metadata)
         };
+
+        if (proto.HasShaderScript && !string.IsNullOrWhiteSpace(proto.ShaderScript))
+            entry.Metadata["shaderScript"] = proto.ShaderScript;
+
+        return entry;
     }
 
     private static ProtoPeerInfo MapToProto(PeerInfo peer)

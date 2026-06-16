@@ -13,4 +13,5 @@ public class MyMusicMetadata
     public bool IsReleased { get; set; }
     public int Version { get; set; } = 1;
     public int PlayCount { get; set; }
+    public string ShaderScript { get; set; } = string.Empty;
 }

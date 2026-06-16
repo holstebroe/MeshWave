@@ -39,6 +39,61 @@ public partial class VisualizerWindow : Window
         _stopwatch.Start();
 
         DataContextChanged += OnDataContextChanged;
+        Loaded += OnLoaded;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        if (Playback != null)
+        {
+            Playback.PropertyChanged += Playback_PropertyChanged;
+            UpdateShaderForCurrentTrack();
+        }
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        if (Playback != null)
+        {
+            Playback.PropertyChanged -= Playback_PropertyChanged;
+        }
+        base.OnClosed(e);
+    }
+
+    private void Playback_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(PlaybackViewModel.CurrentTrackId))
+        {
+            UpdateShaderForCurrentTrack();
+        }
+    }
+
+    private void UpdateShaderForCurrentTrack()
+    {
+        if (Playback == null || string.IsNullOrWhiteSpace(Playback.CurrentTrackId)) return;
+
+        var appVm = Application.Current?.MainWindow?.DataContext as ApplicationViewModel;
+        if (appVm != null && appVm.SyncOrchestrator != null)
+        {
+            var catalogueService = appVm.SyncOrchestrator.CatalogueService;
+            var trackId = Playback.CurrentTrackId;
+
+            System.Threading.Tasks.Task.Run(async () =>
+            {
+                var entry = await catalogueService.GetEntryAsync(trackId);
+
+                if (Application.Current?.Dispatcher != null)
+                {
+                    await Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        if (DataContext is VisualizerViewModel vm)
+                        {
+                            vm.SetTrackShader(entry?.ShaderScript);
+                        }
+                    });
+                }
+            });
+        }
     }
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -118,6 +173,12 @@ public partial class VisualizerWindow : Window
         {
             string infoLog = GL.GetShaderInfoLog(fragmentShader);
             System.Diagnostics.Debug.WriteLine($"Fragment Shader Error: {infoLog}");
+
+            // Fallback to default shader if custom shader fails
+            if (vm.IsCustomShaderSelected)
+            {
+                vm.SetTrackShader(null); // This will trigger property change and re-compile
+            }
             return;
         }
 
