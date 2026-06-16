@@ -48,6 +48,7 @@ message ProtoManifestOperation {
     string signature = 7;
     google.protobuf.Timestamp timestamp = 8;
     map<string, string> metadata = 9;
+    optional string shader_script = 10;
 }
 
 message ProtoSnapshotStateEntry {
@@ -55,6 +56,7 @@ message ProtoSnapshotStateEntry {
     string target_type = 2;
     optional string content_hash = 3;
     map<string, string> metadata = 4;
+    optional string shader_script = 5;
 }
 
 message ProtoManifestSnapshot {

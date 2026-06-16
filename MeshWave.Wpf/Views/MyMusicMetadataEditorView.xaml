@@ -138,6 +138,26 @@
                                  Height="120"
                                  TextWrapping="Wrap"
                                  VerticalScrollBarVisibility="Auto"/>
+
+                        <StackPanel>
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsAlbumEditor}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <TextBlock Text="Shader Script (GLSL)" Style="{StaticResource EditorFieldLabel}"/>
+                            <TextBox Text="{Binding ShaderScript, UpdateSourceTrigger=PropertyChanged}"
+                                     AcceptsReturn="True"
+                                     Height="160"
+                                     TextWrapping="Wrap"
+                                     FontFamily="Consolas"
+                                     VerticalScrollBarVisibility="Auto"/>
+                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
             </Grid>

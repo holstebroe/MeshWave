@@ -97,6 +97,23 @@ public class VisualizerViewModel : ViewModelBase
         SelectedShader = Shaders[0];
     }
 
+    public void SetTrackShader(string? shaderScript)
+    {
+        if (!string.IsNullOrWhiteSpace(shaderScript))
+        {
+            var customShader = Shaders.FirstOrDefault(s => s.IsCustom);
+            if (customShader != null)
+            {
+                customShader.Script = shaderScript;
+                SelectedShader = customShader;
+            }
+        }
+        else
+        {
+            LoadDefaultShader();
+        }
+    }
+
     #pragma warning disable CS0414, IDE0051
     private readonly string _defaultAudioShader = @"
 #version 330 core

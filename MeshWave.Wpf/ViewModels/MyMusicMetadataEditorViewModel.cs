@@ -103,6 +103,8 @@ public class MyMusicMetadataEditorViewModel : ViewModelBase, INotifyDataErrorInf
         set => SetProperty(ref _albumFolderPath, value);
     }
 
+    private string _shaderScript = string.Empty;
+
     public bool IsAlbumEditor
     {
         get => _isAlbumEditor;
@@ -192,6 +194,12 @@ public class MyMusicMetadataEditorViewModel : ViewModelBase, INotifyDataErrorInf
         set => SetProperty(ref _coverArtSource, value);
     }
 
+    public string ShaderScript
+    {
+        get => _shaderScript;
+        set => SetProperty(ref _shaderScript, value);
+    }
+
     public string ReleaseButtonText => IsReleased ? "Unrelease" : "Release";
 
     public void LoadTrack(string trackFilePath)
@@ -212,6 +220,7 @@ public class MyMusicMetadataEditorViewModel : ViewModelBase, INotifyDataErrorInf
         TrackNumber = metadata.TrackNumber;
         IsReleased = metadata.IsReleased;
         Version = metadata.Version <= 0 ? 1 : metadata.Version;
+        ShaderScript = metadata.ShaderScript;
         ValidateProperties();
         UpdateCoverArtSource(_metadataService.GetCoverArtPath(trackFilePath));
     }
@@ -234,6 +243,7 @@ public class MyMusicMetadataEditorViewModel : ViewModelBase, INotifyDataErrorInf
         TrackNumber = metadata.TrackNumber;
         IsReleased = metadata.IsReleased;
         Version = metadata.Version <= 0 ? 1 : metadata.Version;
+        ShaderScript = metadata.ShaderScript;
         ValidateProperties();
         UpdateCoverArtSource(_metadataService.GetAlbumCoverArtPath(albumFolderPath));
     }
@@ -255,7 +265,8 @@ public class MyMusicMetadataEditorViewModel : ViewModelBase, INotifyDataErrorInf
             Year = Year,
             TrackNumber = TrackNumber,
             IsReleased = IsReleased,
-            Version = Version
+            Version = Version,
+            ShaderScript = ShaderScript
         };
 
         var appVm = Application.Current?.MainWindow?.DataContext as ApplicationViewModel;
@@ -307,7 +318,7 @@ public class MyMusicMetadataEditorViewModel : ViewModelBase, INotifyDataErrorInf
 
                 if (!string.IsNullOrWhiteSpace(trackId))
                 {
-                    appVm.UpdateTrackInNetwork(trackId, contentHash, metadata.Title, metadata.Artist, metadata.Album);
+                    appVm.UpdateTrackInNetwork(trackId, contentHash, metadata.Title, metadata.Artist, metadata.Album, metadata.ShaderScript);
                 }
             }
         }

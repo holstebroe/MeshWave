@@ -29,6 +29,7 @@ public abstract class BaseCatalogueEntryProcessor : ICatalogueEntryProcessor
             Genre = metadata.GetValueOrDefault("genre"),
             FileSize = long.TryParse(metadata.GetValueOrDefault("fileSize"), out var fs) ? fs : 0,
             Version = int.TryParse(metadata.GetValueOrDefault("version") ?? metadata.GetValueOrDefault("trackVersion"), out var v) ? v : 1,
+            ShaderScript = metadata.GetValueOrDefault("shaderScript"),
             SequenceNumber = sequenceNumber,
             Timestamp = timestamp
         };

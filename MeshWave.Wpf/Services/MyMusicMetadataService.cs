@@ -231,7 +231,8 @@ public class MyMusicMetadataService
             TrackNumber = cached.TrackNumber > 0 ? cached.TrackNumber : fallback.TrackNumber,
             IsReleased = cached.IsReleased,
             Version = cached.Version <= 0 ? 1 : cached.Version,
-            PlayCount = cached.PlayCount
+            PlayCount = cached.PlayCount,
+            ShaderScript = cached.ShaderScript
         };
     }
 
