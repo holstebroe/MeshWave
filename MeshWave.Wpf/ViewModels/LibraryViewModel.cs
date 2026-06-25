@@ -6,6 +6,7 @@ using MeshWave.Wpf.Mvvm;
 using MeshWave.Wpf.Services;
 using MeshWave.Common.Core;
 using MeshWave.Wpf.ViewModels.Items;
+using MeshWave.Common.Core.Enums;
 
 namespace MeshWave.Wpf.ViewModels;
 
@@ -41,8 +42,8 @@ public partial class LibraryViewModel : ViewModelBase
         CancelImportCommand = new RelayCommand(_ => CancelImport(), _ => IsImporting);
         SyncAlbumCommand = new RelayCommand(_ => SyncSelectedAlbum(), _ => CanSyncToNetwork);
         SyncTrackCommand = new RelayCommand<LibraryTrackItem>(SyncTrack, t => CanSyncToNetwork && t != null);
-        RemoveTrackFromLibraryCommand = new RelayCommand<LibraryTrackItem>(RemoveTrackFromLibrary, t => t != null && !IsMyMusicLibrary && !t.IsDownloadPlaceholder);
-        ReDownloadTrackCommand = new RelayCommand<LibraryTrackItem>(ReDownloadTrack, t => t != null && ((!IsMyMusicLibrary && t.IsRemovedFromLibrary) || (IsMyMusicLibrary && !t.IsDownloaded)) && !string.IsNullOrWhiteSpace(t.ContentHash));
+        RemoveTrackFromLibraryCommand = new RelayCommand<LibraryTrackItem>(RemoveTrackFromLibrary, t => t != null && !IsMyMusicLibrary && t.AvailabilityState == TrackAvailabilityState.Downloaded);
+        ReDownloadTrackCommand = new RelayCommand<LibraryTrackItem>(ReDownloadTrack, t => t != null && (((!IsMyMusicLibrary && t.AvailabilityState == TrackAvailabilityState.Remote) || (IsMyMusicLibrary && t.AvailabilityState != TrackAvailabilityState.Downloaded && t.AvailabilityState != TrackAvailabilityState.Local))) && !string.IsNullOrWhiteSpace(t.ContentHash));
         if (!IsMyMusicLibrary && _applicationViewModel != null) _applicationViewModel.DownloadQueueItems.CollectionChanged += OnDownloadQueueChanged;
 
         LoadFromConfiguredBaseFolder();
@@ -316,7 +317,7 @@ public partial class LibraryViewModel : ViewModelBase
         if (track == null || IsMyMusicLibrary)
             return;
 
-        if (!track.IsDownloadPlaceholder && !string.IsNullOrWhiteSpace(track.ContentHash))
+        if (track.AvailabilityState != TrackAvailabilityState.Pending && !string.IsNullOrWhiteSpace(track.ContentHash))
             _downloadStateService.MarkRemoved(new RemovedLibraryTrackEntry
             {
                 ContentHash = track.ContentHash,
@@ -414,14 +415,14 @@ public sealed class LibraryTrackItem
     public int TrackNumber { get; set; }
     public TimeSpan Duration { get; set; }
     public int PlayCount { get; set; }
-    public bool IsDownloadPlaceholder { get; set; }
-    public bool IsRemovedFromLibrary { get; set; }
-    public bool IsDownloaded { get; set; } = true;
+
+
+    public TrackAvailabilityState AvailabilityState { get; set; } = TrackAvailabilityState.Downloaded;
     public string DownloadStateLabel { get; set; } = "Downloaded";
-    public string StatusBadge => IsRemovedFromLibrary || !IsDownloaded ? "Not Downloaded" : IsDownloadPlaceholder ? DownloadStateLabel : string.Empty;
+    public string StatusBadge => AvailabilityState == TrackAvailabilityState.Remote ? "Remote" : AvailabilityState == TrackAvailabilityState.Pending ? DownloadStateLabel : string.Empty;
     public string ReleaseBadgeColor => IsReleased ? "#27AE60" : "#E67E22"; // Green for Public, Orange for Private
     public string VersionLabel => Version > 1 ? $"v{Version}" : string.Empty;
-    public bool CanPlay => !IsDownloadPlaceholder && !IsRemovedFromLibrary && IsDownloaded && !string.IsNullOrWhiteSpace(FilePath);
+    public bool CanPlay => (AvailabilityState == TrackAvailabilityState.Downloaded || AvailabilityState == TrackAvailabilityState.Local) && !string.IsNullOrWhiteSpace(FilePath);
     public override string ToString()
     {
         return Title;
