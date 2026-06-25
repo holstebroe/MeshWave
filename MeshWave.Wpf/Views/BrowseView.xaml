@@ -30,7 +30,7 @@
                     <Style TargetType="StackPanel">
                         <Setter Property="Visibility" Value="Collapsed"/>
                         <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsShowingArtistDetail}" Value="Local">
+                            <DataTrigger Binding="{Binding IsShowingArtistDetail}" Value="True">
                                 <Setter Property="Visibility" Value="Visible"/>
                             </DataTrigger>
                         </Style.Triggers>
@@ -93,7 +93,7 @@
                         <Setter Property="Margin" Value="0,0,6,0"/>
                         <Setter Property="Opacity" Value="0.5"/>
                         <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsTabArtists}" Value="Local">
+                            <DataTrigger Binding="{Binding IsTabArtists}" Value="True">
                                 <Setter Property="Opacity" Value="1"/>
                             </DataTrigger>
                         </Style.Triggers>
@@ -106,7 +106,7 @@
                         <Setter Property="Margin" Value="0,0,6,0"/>
                         <Setter Property="Opacity" Value="0.5"/>
                         <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsTabAlbums}" Value="Local">
+                            <DataTrigger Binding="{Binding IsTabAlbums}" Value="True">
                                 <Setter Property="Opacity" Value="1"/>
                             </DataTrigger>
                         </Style.Triggers>
@@ -119,7 +119,7 @@
                         <Setter Property="Margin" Value="0,0,6,0"/>
                         <Setter Property="Opacity" Value="0.5"/>
                         <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsTabTracks}" Value="Local">
+                            <DataTrigger Binding="{Binding IsTabTracks}" Value="True">
                                 <Setter Property="Opacity" Value="1"/>
                             </DataTrigger>
                         </Style.Triggers>
@@ -132,7 +132,7 @@
                         <Setter Property="Margin" Value="0,0,6,0"/>
                         <Setter Property="Opacity" Value="0.5"/>
                         <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsTabPlaylists}" Value="Local">
+                            <DataTrigger Binding="{Binding IsTabPlaylists}" Value="True">
                                 <Setter Property="Opacity" Value="1"/>
                             </DataTrigger>
                         </Style.Triggers>
@@ -145,7 +145,7 @@
                         <Setter Property="Margin" Value="0,0,0,0"/>
                         <Setter Property="Opacity" Value="0.5"/>
                         <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsTabDownloads}" Value="Local">
+                            <DataTrigger Binding="{Binding IsTabDownloads}" Value="True">
                                 <Setter Property="Opacity" Value="1"/>
                             </DataTrigger>
                         </Style.Triggers>
@@ -164,7 +164,7 @@
                         <Style TargetType="ItemsControl">
                             <Setter Property="Visibility" Value="Collapsed"/>
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsTabArtists}" Value="Local">
+                                <DataTrigger Binding="{Binding IsTabArtists}" Value="True">
                                     <Setter Property="Visibility" Value="Visible"/>
                                 </DataTrigger>
                             </Style.Triggers>
@@ -270,7 +270,7 @@
                         <Style TargetType="ItemsControl">
                             <Setter Property="Visibility" Value="Collapsed"/>
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsTabAlbums}" Value="Local">
+                                <DataTrigger Binding="{Binding IsTabAlbums}" Value="True">
                                     <Setter Property="Visibility" Value="Visible"/>
                                 </DataTrigger>
                             </Style.Triggers>
@@ -352,7 +352,7 @@
                         <Style TargetType="ItemsControl">
                             <Setter Property="Visibility" Value="Collapsed"/>
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsTabPlaylists}" Value="Local">
+                                <DataTrigger Binding="{Binding IsTabPlaylists}" Value="True">
                                     <Setter Property="Visibility" Value="Visible"/>
                                 </DataTrigger>
                             </Style.Triggers>
@@ -439,7 +439,7 @@
                         <Style TargetType="ItemsControl">
                             <Setter Property="Visibility" Value="Collapsed"/>
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsTabTracks}" Value="Local">
+                                <DataTrigger Binding="{Binding IsTabTracks}" Value="True">
                                     <Setter Property="Visibility" Value="Visible"/>
                                 </DataTrigger>
                             </Style.Triggers>
@@ -521,7 +521,7 @@
                         <Style TargetType="StackPanel">
                             <Setter Property="Visibility" Value="Collapsed"/>
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsTabDownloads}" Value="Local">
+                                <DataTrigger Binding="{Binding IsTabDownloads}" Value="True">
                                     <Setter Property="Visibility" Value="Visible"/>
                                 </DataTrigger>
                             </Style.Triggers>
@@ -593,11 +593,11 @@
                                                             <DataTrigger Binding="{Binding StatusMessage}" Value="">
                                                                 <Setter Property="Visibility" Value="Collapsed"/>
                                                             </DataTrigger>
-                                                            <DataTrigger Binding="{Binding IsFailed}" Value="Local">
+                                                            <DataTrigger Binding="{Binding IsFailed}" Value="True">
                                                                 <Setter Property="Visibility" Value="Visible"/>
                                                                 <Setter Property="Foreground" Value="#E53935"/>
                                                             </DataTrigger>
-                                                            <DataTrigger Binding="{Binding IsDone}" Value="Local">
+                                                            <DataTrigger Binding="{Binding IsDone}" Value="True">
                                                                 <Setter Property="Visibility" Value="Visible"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
@@ -638,7 +638,7 @@
                                                         <Setter Property="FontSize" Value="12"/>
                                                         <Setter Property="Visibility" Value="Collapsed"/>
                                                         <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsPending}" Value="Local">
+                                                            <DataTrigger Binding="{Binding IsPending}" Value="True">
                                                                 <Setter Property="Visibility" Value="Visible"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
@@ -655,7 +655,7 @@
                                                         <Setter Property="FontSize" Value="12"/>
                                                         <Setter Property="Visibility" Value="Collapsed"/>
                                                         <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsFailed}" Value="Local">
+                                                            <DataTrigger Binding="{Binding IsFailed}" Value="True">
                                                                 <Setter Property="Visibility" Value="Visible"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>

@@ -403,8 +403,7 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
                 PlayCount = 0,
 
                 AvailabilityState = TrackAvailabilityState.Remote,
-                AvailabilityState = TrackAvailabilityState.Pending,
-                    DownloadStateLabel = "Not Downloaded"
+                DownloadStateLabel = "Not Downloaded"
             })
             .ToList();
 

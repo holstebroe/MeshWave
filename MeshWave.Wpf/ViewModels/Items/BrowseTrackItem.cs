@@ -41,10 +41,6 @@ public class BrowseTrackItem : ViewModelBase
         }
     }
 
-    }
-
-    }
-
     public bool NeedsUpdate
     {
         get => _needsUpdate;
