@@ -202,7 +202,7 @@
                                                     <Style TargetType="Border">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
                                                         <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding AvailabilityState}" Value="Local">
+                                                            <DataTrigger Binding="{Binding IsLocal}" Value="True">
                                                                 <Setter Property="Visibility" Value="Visible"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
@@ -240,7 +240,7 @@
                                                 <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
                                                     <Setter Property="Margin" Value="0,0,8,0"/>
                                                     <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding AvailabilityState}" Value="Local">
+                                                        <DataTrigger Binding="{Binding IsLocal}" Value="True">
                                                             <Setter Property="Visibility" Value="Collapsed"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
@@ -303,7 +303,7 @@
                                                     <Style TargetType="Border">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
                                                         <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding AvailabilityState}" Value="Local">
+                                                            <DataTrigger Binding="{Binding IsLocal}" Value="True">
                                                                 <Setter Property="Visibility" Value="Visible"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
@@ -332,7 +332,7 @@
                                                 <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
                                                     <Setter Property="Margin" Value="0"/>
                                                     <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding AvailabilityState}" Value="Local">
+                                                        <DataTrigger Binding="{Binding IsLocal}" Value="True">
                                                             <Setter Property="Visibility" Value="Collapsed"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
@@ -384,7 +384,7 @@
                                                     <Style TargetType="Border">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
                                                         <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding AvailabilityState}" Value="Local">
+                                                            <DataTrigger Binding="{Binding IsLocal}" Value="True">
                                                                 <Setter Property="Visibility" Value="Visible"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
@@ -419,7 +419,7 @@
                                                 <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
                                                     <Setter Property="Margin" Value="0"/>
                                                     <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding AvailabilityState}" Value="Local">
+                                                        <DataTrigger Binding="{Binding IsLocal}" Value="True">
                                                             <Setter Property="Visibility" Value="Collapsed"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
