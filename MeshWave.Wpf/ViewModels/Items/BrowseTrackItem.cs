@@ -8,14 +8,13 @@ using MeshWave.Synchronizer;
 using MeshWave.Wpf.Mvvm;
 using MeshWave.Wpf.Services;
 using MeshWave.Wpf.Models;
+using MeshWave.Common.Core.Enums;
 
 namespace MeshWave.Wpf.ViewModels.Items;
 
 public class BrowseTrackItem : ViewModelBase
 {
-    private bool _isQueued;
-    private bool _isDownloaded;
-    private bool _isLocal;
+    private TrackAvailabilityState _availabilityState = TrackAvailabilityState.Remote;
     private bool _needsUpdate;
     private string _iconPath = string.Empty;
 
@@ -31,37 +30,19 @@ public class BrowseTrackItem : ViewModelBase
     public DateTime? ReleasedAt { get; set; }
     public string ReleasedAtDisplay => ReleasedAt.HasValue ? ReleasedAt.Value.ToLocalTime().ToString("MMM d, yyyy") : string.Empty;
 
-    public bool IsQueued
+    public TrackAvailabilityState AvailabilityState
     {
-        get => _isQueued;
+        get => _availabilityState;
         set
         {
-            SetProperty(ref _isQueued, value);
+            SetProperty(ref _availabilityState, value);
             OnPropertyChanged(nameof(DownloadButtonLabel));
             OnPropertyChanged(nameof(CanDownload));
         }
     }
 
-    public bool IsDownloaded
-    {
-        get => _isDownloaded;
-        set
-        {
-            SetProperty(ref _isDownloaded, value);
-            OnPropertyChanged(nameof(DownloadButtonLabel));
-            OnPropertyChanged(nameof(CanDownload));
-        }
     }
 
-    public bool IsLocal
-    {
-        get => _isLocal;
-        set
-        {
-            SetProperty(ref _isLocal, value);
-            OnPropertyChanged(nameof(DownloadButtonLabel));
-            OnPropertyChanged(nameof(CanDownload));
-        }
     }
 
     public bool NeedsUpdate
@@ -82,11 +63,11 @@ public class BrowseTrackItem : ViewModelBase
     }
 
     public string DownloadButtonLabel =>
-        IsLocal ? "Local" :
-        IsQueued ? "⏳ Queued" :
+        AvailabilityState == TrackAvailabilityState.Local ? "Local" :
+        AvailabilityState == TrackAvailabilityState.Pending ? "⏳ Pending" :
         NeedsUpdate ? "Update Available" :
-        IsDownloaded ? "✅ Downloaded" :
-        "⬇ Download";
+        AvailabilityState == TrackAvailabilityState.Downloaded ? "✅ Downloaded" :
+        "⬇ Remote";
 
-    public bool CanDownload => !IsLocal && !IsQueued && (!IsDownloaded || NeedsUpdate) && (!string.IsNullOrWhiteSpace(ContentHash) || !string.IsNullOrWhiteSpace(CompressedContentHash));
+    public bool CanDownload => (AvailabilityState == TrackAvailabilityState.Remote || NeedsUpdate) && (!string.IsNullOrWhiteSpace(ContentHash) || !string.IsNullOrWhiteSpace(CompressedContentHash));
 }

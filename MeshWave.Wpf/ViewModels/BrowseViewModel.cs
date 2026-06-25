@@ -9,6 +9,7 @@ using MeshWave.Wpf.Mvvm;
 using MeshWave.Wpf.Services;
 using MeshWave.Wpf.Models;
 using MeshWave.Wpf.ViewModels.Items;
+using MeshWave.Common.Core.Enums;
 
 namespace MeshWave.Wpf.ViewModels;
 
@@ -57,7 +58,7 @@ public class BrowseViewModel : ViewModelBase
         }, a => a != null);
 
         DownloadTrackCommand = new RelayCommand<BrowseTrackItem>(EnqueueTrackDownload,
-            t => t != null && (!string.IsNullOrWhiteSpace(t.ContentHash) || !string.IsNullOrWhiteSpace(t.CompressedContentHash)) && !t.IsQueued);
+            t => t != null && (!string.IsNullOrWhiteSpace(t.ContentHash) || !string.IsNullOrWhiteSpace(t.CompressedContentHash)) && t.AvailabilityState != TrackAvailabilityState.Pending);
 
         PlayRemoteTrackCommand = new RelayCommand<BrowseTrackItem>(async t =>
         {
@@ -144,7 +145,9 @@ public class BrowseViewModel : ViewModelBase
                 string.Equals(t.ContentHash, item.ContentHash, StringComparison.OrdinalIgnoreCase) || string.Equals(t.CompressedContentHash, item.ContentHash, StringComparison.OrdinalIgnoreCase));
             if (track != null)
             {
-                track.IsQueued = false;
+                Application.Current.Dispatcher.InvokeAsync(() => {
+                        track.AvailabilityState = TrackAvailabilityState.Remote;
+                    });
                 EnqueueTrackDownload(track);
             }
         }, item => item != null && item.IsFailed);
@@ -474,9 +477,10 @@ public class BrowseViewModel : ViewModelBase
                     FileSizeDisplay = FormatFileSize(fileSize),
                     ReleasedAt = releasedAt,
                     IconPath = _sync?.UserRepository?.GetUserIconPath(entity.TargetId) ?? string.Empty,
-                    IsQueued = isQueued,
-                    IsDownloaded = isDownloaded,
-                    IsLocal = isLocal,
+                    AvailabilityState = isLocal ? TrackAvailabilityState.Local :
+                                        isDownloaded ? TrackAvailabilityState.Downloaded :
+                                        isQueued ? TrackAvailabilityState.Pending :
+                                        TrackAvailabilityState.Remote,
                     NeedsUpdate = needsUpdate
                 });
             }
@@ -579,7 +583,7 @@ public class BrowseViewModel : ViewModelBase
             "Track",
             track.TrackId);
 
-        track.IsQueued = true;
+        track.AvailabilityState = TrackAvailabilityState.Pending;
 
         EnsureDownloadFolderPlaceholder(track.ArtistDisplayName, track.Album);
 
@@ -611,7 +615,9 @@ public class BrowseViewModel : ViewModelBase
                         item.State = DownloadState.Failed;
                         item.StatusMessage = details;
                         StatusText = $"Download failed for \"{track.Title}\". {details}";
-                        track.IsQueued = false;
+                        Application.Current.Dispatcher.InvokeAsync(() => {
+                        track.AvailabilityState = TrackAvailabilityState.Remote;
+                    });
                     });
                     ScheduleAutoRetry(track, item);
                     return;
@@ -635,8 +641,12 @@ public class BrowseViewModel : ViewModelBase
                     item.State = DownloadState.Done;
                     item.PercentComplete = 100;
                     item.StatusMessage = destPath;
-                    track.IsQueued = false;
-                    track.IsDownloaded = true;
+                    Application.Current.Dispatcher.InvokeAsync(() => {
+                        track.AvailabilityState = TrackAvailabilityState.Downloaded;
+                    });
+                    Application.Current.Dispatcher.InvokeAsync(() => {
+                        track.AvailabilityState = TrackAvailabilityState.Remote;
+                    });
                     if (!string.IsNullOrWhiteSpace(track.TrackId))
                     {
                         var meshTrack = manifests.SelectMany(m => GetLatestEntities(m, "Track"))
@@ -654,7 +664,9 @@ public class BrowseViewModel : ViewModelBase
                     item.State = DownloadState.Failed;
                     item.StatusMessage = ex.Message;
                     StatusText = $"Download failed for \"{track.Title}\": {ex.Message}";
-                    track.IsQueued = false;
+                    Application.Current.Dispatcher.InvokeAsync(() => {
+                        track.AvailabilityState = TrackAvailabilityState.Remote;
+                    });
                 });
                 ScheduleAutoRetry(track, item);
             }
@@ -701,8 +713,9 @@ public class BrowseViewModel : ViewModelBase
                 item.State = DownloadState.Pending;
                 item.StatusMessage = "Auto-retrying...";
                 StatusText = $"Retrying download for \"{track.Title}\"...";
-                track.IsQueued = false;
-                track.IsDownloaded = false;
+                Application.Current.Dispatcher.InvokeAsync(() => {
+                        track.AvailabilityState = TrackAvailabilityState.Remote;
+                    });
                 EnqueueTrackDownload(track);
             });
         });
@@ -712,7 +725,7 @@ public class BrowseViewModel : ViewModelBase
     {
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher != null)
-            dispatcher.Invoke(action);
+            dispatcher.InvokeAsync(action);
         else
             action();
     }

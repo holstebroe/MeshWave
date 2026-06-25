@@ -5,6 +5,7 @@ using MeshWave.Common.Core.Models;
 using MeshWave.LibraryManager;
 using MeshWave.Wpf.Mvvm;
 using MeshWave.Wpf.Services;
+using MeshWave.Common.Core.Enums;
 
 namespace MeshWave.Wpf.ViewModels;
 
@@ -147,7 +148,7 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
                 Duration = t.Duration,
                 PlayCount = trackMeta.PlayCount,
                 SourcePeerUserId = string.Empty,
-                IsDownloaded = t.IsDownloaded
+                AvailabilityState = t.AvailabilityState
             };
         }).ToList();
 
@@ -400,9 +401,10 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
                 TrackNumber = int.MaxValue,
                 Duration = TimeSpan.Zero,
                 PlayCount = 0,
-                IsDownloadPlaceholder = true,
-                IsRemovedFromLibrary = true,
-                DownloadStateLabel = "Not Downloaded"
+
+                AvailabilityState = TrackAvailabilityState.Remote,
+                AvailabilityState = TrackAvailabilityState.Pending,
+                    DownloadStateLabel = "Not Downloaded"
             })
             .ToList();
 
@@ -439,7 +441,7 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
                     TrackNumber = int.MaxValue,
                     Duration = TimeSpan.Zero,
                     PlayCount = 0,
-                    IsDownloadPlaceholder = true,
+
                     DownloadStateLabel = q.State switch
                     {
                         DownloadState.Pending => "Pending",

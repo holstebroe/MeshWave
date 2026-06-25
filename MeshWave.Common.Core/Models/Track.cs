@@ -1,3 +1,5 @@
+using MeshWave.Common.Core.Enums;
+
 namespace MeshWave.Common.Core.Models;
 
 /// <summary>
@@ -21,6 +23,6 @@ public class Track
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     /// <summary>UTC timestamp when this track was first announced to the network. Null = not yet released.</summary>
     public DateTime? ReleasedAt { get; set; }
-    public bool IsDownloaded { get; set; } = true;
+    public TrackAvailabilityState AvailabilityState { get; set; } = TrackAvailabilityState.Downloaded;
     public string? ContentHash { get; set; }
 }
