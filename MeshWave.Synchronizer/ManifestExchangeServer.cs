@@ -31,6 +31,7 @@ public class ManifestExchangeServer : IDisposable
     private Func<RendezvousRequest, RendezvousResponse?>? _rendezvousProvider;
     private Func<string, byte[]?>? _contentProvider;
     private Func<string, ManifestStreamType, Manifest?>? _relayedManifestProvider;
+    private Func<PeerInfo?>? _selfInfoProvider;
 
     public ManifestExchangeServer(int port = DefaultPort, Logger? logger = null)
     {
@@ -39,6 +40,9 @@ public class ManifestExchangeServer : IDisposable
     }
 
     public event EventHandler<ManifestReceivedEventArgs>? ManifestReceived;
+
+    /// <summary>Raised when a peer registers itself via <see cref="ManifestRequestType.Announce"/>.</summary>
+    public event EventHandler<PeerAnnouncedEventArgs>? PeerAnnounced;
 
     /// <summary>
     /// Starts the TCP server.
@@ -52,8 +56,10 @@ public class ManifestExchangeServer : IDisposable
         Func<RendezvousRequest, RendezvousResponse?>? rendezvousProvider = null,
         Func<string, byte[]?>? contentProvider = null,
         Func<string, ManifestStreamType, Manifest?>? relayedManifestProvider = null,
+        Func<PeerInfo?>? selfInfoProvider = null,
         CancellationToken cancellationToken = default)
     {
+        _selfInfoProvider = selfInfoProvider;
         _localManifestProvider = localManifestProvider;
         _peersProvider = peersProvider;
         _rendezvousProvider = rendezvousProvider;
@@ -209,6 +215,32 @@ public class ManifestExchangeServer : IDisposable
                             await WriteMessageAsync(stream, ack, ct);
                             break;
                         }
+                    case ManifestRequestType.Announce when request.AnnouncingPeer != null:
+                        {
+                            var observedAddress = (client.Client.RemoteEndPoint as IPEndPoint)?.Address;
+                            if (observedAddress?.IsIPv4MappedToIPv6 == true) observedAddress = observedAddress.MapToIPv4();
+
+                            var announced = request.AnnouncingPeer;
+                            var peer = new PeerInfo
+                            {
+                                UserId = announced.UserId,
+                                DisplayName = SecurityLimits.Truncate(announced.DisplayName, SecurityLimits.MaxDisplayNameLength),
+                                // Always trust the observed source address over a self-reported one.
+                                Address = observedAddress?.ToString() ?? announced.Address,
+                                Port = announced.Port is > 0 and < 65536 ? announced.Port : 0,
+                                PublicKeyPem = announced.PublicKeyPem,
+                                LastSeen = DateTime.UtcNow,
+                                Capabilities = announced.Capabilities.Take(8).ToList()
+                            };
+
+                            _logger.Info("Peer {0} announced from {1} (port {2})", peer.UserId, remoteEndpoint, peer.Port);
+                            PeerAnnounced?.Invoke(this, new PeerAnnouncedEventArgs(peer));
+
+                            var self = _selfInfoProvider?.Invoke();
+                            var response = new ManifestResponse { Acknowledged = true, Peers = self != null ? [self] : [] };
+                            await WriteMessageAsync(stream, response, ct);
+                            break;
+                        }
                     case ManifestRequestType.GetPeers:
                         {
                             var peers = _peersProvider?.Invoke()
@@ -239,15 +271,22 @@ public class ManifestExchangeServer : IDisposable
                             var contentBytes = _contentProvider?.Invoke(request.ContentHash);
                             _logger.Info("Content request from {0} for hash {1}. Found: {2}",
                                 remoteEndpoint, request.ContentHash, contentBytes != null);
+
+                            var found = contentBytes != null && contentBytes.Length > 0;
+                            var (sliceOffset, sliceLength) = found
+                                ? ResolveContentSlice(contentBytes!.LongLength, request.ChunkOffset, request.ChunkLength)
+                                : (0L, 0L);
+
                             var response = new ManifestResponse
                             {
-                                Acknowledged = contentBytes != null && contentBytes.Length > 0,
-                                ContentLength = contentBytes?.Length ?? 0
+                                Acknowledged = found,
+                                ContentLength = sliceLength,
+                                TotalContentLength = found ? contentBytes!.LongLength : null
                             };
                             await WriteMessageAsync(stream, response, ct);
-                            if (contentBytes != null && contentBytes.Length > 0)
+                            if (sliceLength > 0)
                             {
-                                await stream.WriteAsync(contentBytes, ct);
+                                await stream.WriteAsync(contentBytes.AsMemory((int)sliceOffset, (int)sliceLength), ct);
                                 await stream.FlushAsync(ct);
                             }
                             break;
@@ -277,6 +316,22 @@ public class ManifestExchangeServer : IDisposable
                 _logger.Warn(ex, "Error handling client {0}", remoteEndpoint);
             }
         }
+    }
+
+    /// <summary>
+    /// Resolves the byte range to send for a content request.
+    /// Without a chunk offset the whole content is sent. A chunk request is clamped to the content bounds;
+    /// a zero-length chunk (or an offset past the end) sends no bytes, which lets clients probe the total length.
+    /// </summary>
+    internal static (long Offset, long Length) ResolveContentSlice(long totalLength, long? chunkOffset, long? chunkLength)
+    {
+        if (!chunkOffset.HasValue)
+            return (0, totalLength);
+
+        var offset = Math.Clamp(chunkOffset.Value, 0, totalLength);
+        var remaining = totalLength - offset;
+        var length = chunkLength.HasValue ? Math.Clamp(chunkLength.Value, 0, remaining) : remaining;
+        return (offset, length);
     }
 
     internal static Task WriteMessageAsync(Stream stream, ManifestRequest request, CancellationToken ct)
@@ -335,6 +390,12 @@ public class ManifestExchangeServer : IDisposable
         _listener?.Stop();
         _cts?.Dispose();
     }
+}
+
+public class PeerAnnouncedEventArgs(PeerInfo peer) : EventArgs
+{
+    /// <summary>The announcing peer, with <see cref="PeerInfo.Address"/> set to the observed source address.</summary>
+    public PeerInfo Peer { get; } = peer;
 }
 
 public class ManifestReceivedEventArgs(Manifest manifest, string peerAddress, PeerInfo? announcingPeer, bool isRelay) : EventArgs

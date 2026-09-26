@@ -187,4 +187,18 @@ public class CryptoServiceTests
             File.Delete(tempFilePath);
         }
     }
+
+    [Fact]
+    public void IsPublicKeyForUser_OnlyAcceptsTheKeyTheUserIdWasDerivedFrom()
+    {
+        var (_, publicKey) = CryptoService.GenerateKeyPair();
+        var (_, otherPublicKey) = CryptoService.GenerateKeyPair();
+        var userId = CryptoService.DeriveUserIdFromPublicKey(publicKey);
+
+        Assert.True(CryptoService.IsPublicKeyForUser(userId, publicKey));
+        Assert.True(CryptoService.IsPublicKeyForUser(userId.ToUpperInvariant(), publicKey));
+        Assert.False(CryptoService.IsPublicKeyForUser(userId, otherPublicKey));
+        Assert.False(CryptoService.IsPublicKeyForUser(userId, null));
+        Assert.False(CryptoService.IsPublicKeyForUser(null, publicKey));
+    }
 }

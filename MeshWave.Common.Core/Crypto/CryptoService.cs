@@ -34,6 +34,18 @@ public class CryptoService
     }
 
     /// <summary>
+    /// Returns true when <paramref name="publicKeyPem"/> is the key that <paramref name="userId"/> was derived from.
+    /// User IDs are self-certifying, so a key claimed for a user must always pass this check before it is trusted.
+    /// </summary>
+    public static bool IsPublicKeyForUser(string? userId, string? publicKeyPem)
+    {
+        if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(publicKeyPem))
+            return false;
+
+        return string.Equals(DeriveUserIdFromPublicKey(publicKeyPem), userId, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Signs data using RSA private key.
     /// </summary>
     public static string SignData(string data, string privateKeyPem)

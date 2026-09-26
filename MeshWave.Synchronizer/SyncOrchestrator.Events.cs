@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using MeshWave.Common.Core;
+using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
 using MeshWave.Common.Core.P2P;
 using MeshWave.Common.Core.Storage;
@@ -25,6 +26,10 @@ public partial class SyncOrchestrator
         _ = Task.Run(() => TryFetchAndMergeAsync(peer, _cts?.Token ?? CancellationToken.None));
 
         if (peer.UserId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        // Outbound-only peers have no listener; they fetch our manifests themselves.
+        if (!PeerRouter.IsDialable(peer))
             return;
 
         _ = Task.Run(async () =>
@@ -68,6 +73,19 @@ public partial class SyncOrchestrator
         });
             }
 
+    private void OnPeerAnnounced(object? sender, PeerAnnouncedEventArgs e)
+            {
+        if (!CryptoService.IsPublicKeyForUser(e.Peer.UserId, e.Peer.PublicKeyPem))
+            {
+            _logger.Warn("Ignored announcement for user {0} from {1}: public key does not match the UserId.", e.Peer.UserId, e.Peer.Address);
+            return;
+            }
+
+        RecordPeerMessage(e.Peer.UserId, "Announce", success: true,
+            $"Peer announced from {e.Peer.Address} (port {e.Peer.Port}{(e.Peer.Port > 0 ? string.Empty : ", outbound-only")}).");
+        _router.LearnPeers([e.Peer]);
+            }
+
     private void OnPeerRemoved(object? sender, string userId)
             {
         PeerCountChanged?.Invoke(this, EventArgs.Empty);
@@ -88,6 +106,26 @@ public partial class SyncOrchestrator
 
         var peer = _router.GetPeers().FirstOrDefault(p => p.UserId == e.Manifest.UserId);
 
+        // UserIds are derived from public keys, so only a key that hashes to the manifest's UserId may be used
+        // to verify it. Without this check anyone could push a manifest for another user signed with their own key.
+        var publicKeyPem = new[]
+            {
+                peer?.PublicKeyPem,
+                e.AnnouncingPeer?.PublicKeyPem,
+                e.Manifest.Operations
+                    .Where(op => op.OperationType == ManifestOperationType.Profile)
+                    .OrderByDescending(op => op.SequenceNumber)
+                    .Select(op => op.Metadata.GetValueOrDefault("publicKeyPem"))
+                    .FirstOrDefault(pk => !string.IsNullOrWhiteSpace(pk))
+            }
+            .FirstOrDefault(pk => CryptoService.IsPublicKeyForUser(e.Manifest.UserId, pk));
+
+        if (string.IsNullOrWhiteSpace(publicKeyPem))
+            {
+            _logger.Warn("Rejected manifest push for user {0} from {1}: no public key matching the UserId.", e.Manifest.UserId, e.PeerAddress);
+            return;
+            }
+
         if (peer == null)
                 {
             var profile = e.Manifest.Operations
@@ -104,44 +142,28 @@ public partial class SyncOrchestrator
                     ?? e.Manifest.UserId,
                     SecurityLimits.MaxDisplayNameLength),
                 Address = e.PeerAddress,
-                Port = e.AnnouncingPeer?.Port > 0 ? e.AnnouncingPeer.Port : ManifestExchangeServer.DefaultPort,
+                // Port 0 means the sender is outbound-only; only fall back to the default port for senders that don't announce.
+                Port = e.AnnouncingPeer != null ? Math.Max(0, e.AnnouncingPeer.Port) : ManifestExchangeServer.DefaultPort,
                 LastSeen = DateTime.UtcNow,
-                PublicKeyPem = e.AnnouncingPeer?.PublicKeyPem
-                    ?? profile?.Metadata.GetValueOrDefault("publicKeyPem")
-                    ?? string.Empty
+                PublicKeyPem = publicKeyPem
             };
 
             _router.LearnPeers([discovered]);
-            peer = _router.GetPeers().FirstOrDefault(p => p.UserId == e.Manifest.UserId);
                     }
-
-        var publicKeyPem = peer?.PublicKeyPem;
-        if (string.IsNullOrWhiteSpace(publicKeyPem))
-            publicKeyPem = e.AnnouncingPeer?.PublicKeyPem;
-
-        if (string.IsNullOrWhiteSpace(publicKeyPem))
-            publicKeyPem = e.Manifest.Operations
-                .Where(op => op.OperationType == ManifestOperationType.Profile)
-                .OrderByDescending(op => op.SequenceNumber)
-                .Select(op => op.Metadata.GetValueOrDefault("publicKeyPem"))
-                .FirstOrDefault(pk => !string.IsNullOrWhiteSpace(pk));
-
-        if (string.IsNullOrWhiteSpace(publicKeyPem))
-            return;
 
         TryMerge(e.Manifest, publicKeyPem);
                 }
 
     private async Task TryFetchAndMergeAsync(PeerInfo peer, CancellationToken ct)
                 {
-        if (string.IsNullOrWhiteSpace(peer.PublicKeyPem)) return;
+        if (!CryptoService.IsPublicKeyForUser(peer.UserId, peer.PublicKeyPem)) return;
         if (peer.UserId == Identity?.UserId) return;
 
         foreach (ManifestStreamType streamType in Enum.GetValues(typeof(ManifestStreamType)))
             try
                     {
                 var existing = _peerStore.Get(peer.UserId, streamType);
-                var startSeq = (existing?.Snapshot?.LastSequenceNumber ?? -1) + 1 + (existing?.Operations.Count ?? 0);
+                var startSeq = ManifestManager.GetHeadSequenceNumber(existing) + 1;
 
                 Manifest? remoteManifest = null;
                 var fetchedFromPeer = false;

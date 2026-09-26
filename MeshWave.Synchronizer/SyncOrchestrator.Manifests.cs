@@ -105,7 +105,9 @@ public partial class SyncOrchestrator
 
         _ = Task.Run(async () =>
             {
-            var meshPeers = _router.GetPeers().Where(p => !p.UserId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase)).ToList();
+            var meshPeers = _router.GetPeers()
+                .Where(p => !p.UserId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase) && PeerRouter.IsDialable(p))
+                .ToList();
             foreach (var peer in meshPeers)
                 try
                 {
@@ -147,7 +149,7 @@ public partial class SyncOrchestrator
 
         _logger.Debug("Attempting merge of manifest from peer {0} ({1} ops, stream={2})", remote.UserId, remote.Operations.Count, remote.StreamType);
         var existingManifest = _peerStore.Get(remote.UserId, remote.StreamType);
-        var existingCount = existingManifest?.Operations.Count ?? 0;
+        var previousHeadSeq = ManifestManager.GetHeadSequenceNumber(existingManifest);
 
         var added = _peerStore.MergeAndSave(remote, publicKeyPem, _manifestManager);
         if (added > 0)
@@ -209,7 +211,7 @@ public partial class SyncOrchestrator
 
             foreach (var op in remote.Operations)
                                 {
-                if (op.SequenceNumber >= existingCount && op.OperationType == ManifestOperationType.PostMessage)
+                if (op.SequenceNumber > previousHeadSeq && op.OperationType == ManifestOperationType.PostMessage)
                                     {
                     GroupMessageReceived?.Invoke(this, new GroupMessageEventArgs(
                         remote.UserId,
@@ -219,7 +221,7 @@ public partial class SyncOrchestrator
                         op.Metadata?.GetValueOrDefault("parentPostId")
                     ));
                                     }
-                else if (op.SequenceNumber >= existingCount && (op.OperationType == ManifestOperationType.CreateChannel || op.OperationType == ManifestOperationType.FoundGroup || op.OperationType == ManifestOperationType.ModerateGroup || op.OperationType == ManifestOperationType.GroupJoin || op.OperationType == ManifestOperationType.GroupLeave))
+                else if (op.SequenceNumber > previousHeadSeq && (op.OperationType == ManifestOperationType.CreateChannel || op.OperationType == ManifestOperationType.FoundGroup || op.OperationType == ManifestOperationType.ModerateGroup || op.OperationType == ManifestOperationType.GroupJoin || op.OperationType == ManifestOperationType.GroupLeave))
                                     {
                     GroupStateChanged?.Invoke(this, new GroupStateChangedEventArgs(remote.UserId, op.OperationType, op.TargetId, op.Metadata ?? new Dictionary<string, string>()));
                                     }

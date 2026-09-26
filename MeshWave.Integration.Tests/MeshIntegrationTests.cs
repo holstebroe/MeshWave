@@ -40,10 +40,100 @@ public class MeshIntegrationTests : IAsyncLifetime
         _output.WriteLine($"Peer B (Bob) created: {peerB.UserId} on port {peerB.Port}");
 
         _output.WriteLine("Waiting for Peer B to discover Peer A...");
-        await peerB.WaitForConditionAsync(() => peerB.Orchestrator.ConnectedPeerCount > 0);
+        await peerB.WaitForConditionAsync(() => peerB.Orchestrator.GetPeers().Any(p => p.UserId == peerA.UserId));
         _output.WriteLine($"Peer B connected peer count: {peerB.Orchestrator.ConnectedPeerCount}");
 
-        Assert.True(peerB.Orchestrator.ConnectedPeerCount >= 0);
+        // The bootstrap entry itself must not be what satisfies discovery: B must know A by UserId, with A's key.
+        var aAsSeenByB = peerB.Orchestrator.GetPeers().Single(p => p.UserId == peerA.UserId);
+        Assert.Equal(peerA.Identity.PublicKeyPem, aAsSeenByB.PublicKeyPem);
+        Assert.Equal(peerA.Port, aAsSeenByB.Port);
+    }
+
+    [Fact]
+    public async Task Bootstrap_ListeningPeers_ConvergeWithoutForcedPushes()
+    {
+        var alice = await _context.CreatePeerAsync("Alice");
+        var bob = await _context.CreatePeerAsync("Bob");
+
+        alice.AnnounceTrack("alice-track-1", "alice-hash-1", new Dictionary<string, string> { ["title"] = "Alice One" });
+
+        // ConnectAndSyncAllAsync only waits and triggers the periodic sync; it throws if discovery is broken.
+        await _context.ConnectAndSyncAllAsync(timeoutMs: 30000);
+
+        await bob.WaitForConditionAsync(() => CountPublicTracks(bob.GetPeerManifest(alice.UserId)) == 1);
+        Assert.Contains(alice.Orchestrator.GetPeers(), p => p.UserId == bob.UserId);
+    }
+
+    [Fact]
+    public async Task OnlyOnePeerListening_OutboundOnlyPeerExchangesManifestsBothWays()
+    {
+        // Alice has an open port and is Bob's only bootstrap node. Bob has no listener at all (behind NAT).
+        var alice = await _context.CreatePeerAsync("Alice", useBootstrap: false);
+        var bob = await _context.CreatePeerAsync("Bob", bootstrapNodes: [$"127.0.0.1:{alice.Port}"], actAsListener: false);
+
+        alice.AnnounceTrack("alice-track-1", "alice-hash-1", new Dictionary<string, string> { ["title"] = "Alice One" });
+        bob.AnnounceTrack("bob-track-1", "bob-hash-1", new Dictionary<string, string> { ["title"] = "Bob One" });
+
+        // Bob learns Alice as a real peer (not only as an anonymous bootstrap entry) from the Announce response.
+        await bob.WaitForConditionAsync(() => bob.Orchestrator.GetPeers().Any(p => p.UserId == alice.UserId));
+
+        // Alice learns Bob as outbound-only: registered, but with port 0 so nobody tries to dial him.
+        await alice.WaitForConditionAsync(() => alice.Orchestrator.GetPeers().Any(p => p.UserId == bob.UserId));
+        Assert.Equal(0, alice.Orchestrator.GetPeers().Single(p => p.UserId == bob.UserId).Port);
+
+        // Bob -> Alice: Bob pushes over his own outbound connection.
+        await alice.WaitForConditionAsync(() => CountPublicTracks(alice.GetPeerManifest(bob.UserId)) == 1);
+
+        // Alice -> Bob: Bob pulls (periodic sync). Later updates must reach him too.
+        await bob.WaitForConditionAsync(() => CountPublicTracks(bob.GetPeerManifest(alice.UserId)) == 1);
+        alice.AnnounceTrack("alice-track-2", "alice-hash-2", new Dictionary<string, string> { ["title"] = "Alice Two" });
+        await bob.WaitForConditionAsync(() => CountPublicTracks(bob.GetPeerManifest(alice.UserId)) == 2);
+    }
+
+    [Fact]
+    public async Task ForgedManifestPush_WithKeyNotMatchingUserId_IsRejected()
+    {
+        var alice = await _context.CreatePeerAsync("Alice", useBootstrap: false);
+        var victimUserId = CryptoService.DeriveUserIdFromPublicKey(CryptoService.GenerateKeyPair().publicKeyPem);
+        var (attackerPrivateKey, attackerPublicKey) = CryptoService.GenerateKeyPair();
+
+        var manager = new ManifestManager();
+        var forged = manager.CreateManifest(victimUserId);
+        forged.StreamType = ManifestStreamType.Content;
+        manager.AppendSignedOperation(forged, ManifestOperationType.Create, "fake-track", "Track", "fake-hash",
+            new Dictionary<string, string> { ["title"] = "Forged" }, attackerPrivateKey);
+
+        var client = new ManifestExchangeClient(timeoutMs: 2000);
+        await client.PushManifestAsync("127.0.0.1", alice.Port, forged, new MeshWave.Common.Core.P2P.PeerInfo
+        {
+            UserId = victimUserId,
+            DisplayName = "Victim",
+            Address = "127.0.0.1",
+            Port = 1,
+            PublicKeyPem = attackerPublicKey
+        }, TestContext.Current.CancellationToken);
+
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+        Assert.Null(alice.GetPeerManifest(victimUserId));
+        Assert.DoesNotContain(alice.Orchestrator.GetPeers(), p => p.UserId == victimUserId);
+    }
+
+    [Fact]
+    public async Task LargeContent_SpanningManyChunks_IsDownloadedByteExact()
+    {
+        // Larger than several 512 KB chunks, with non-repeating bytes so a mis-placed chunk is detected.
+        var content = new byte[3 * 1024 * 1024 + 12345];
+        new Random(42).NextBytes(content);
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(content));
+
+        var john = await _context.CreatePeerAsync("John", contentProvider: h => string.Equals(h, hash, StringComparison.OrdinalIgnoreCase) ? content : null);
+        var jane = await _context.CreatePeerAsync("Jane");
+        await _context.ConnectAndSyncAllAsync();
+
+        var downloaded = await jane.Orchestrator.RequestContentAsync(john.UserId, hash);
+
+        Assert.NotNull(downloaded);
+        Assert.Equal(content, downloaded);
     }
 
     [Fact]
@@ -175,7 +265,7 @@ public class MeshIntegrationTests : IAsyncLifetime
 
         var downloadedBytes = await jane.Orchestrator.RequestContentAsync(john.UserId, hash);
         Assert.NotNull(downloadedBytes);
-        Assert.Equal(johnContentIndex[hash].Length, downloadedBytes.Length);
+        Assert.Equal(johnContentIndex[hash], downloadedBytes);
     }
 
     [Fact]

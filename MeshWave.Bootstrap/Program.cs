@@ -9,11 +9,14 @@ namespace MeshWave.Bootstrap;
 /// MeshWave Bootstrap Node
 /// 
 /// A minimal, low-bandwidth server that helps peers discover each other.
-/// It does NOT store or serve any music manifests — it only maintains a
-/// routing table and answers PEX (GetPeers) requests.
+/// It maintains a routing table (peers register via Announce, with their observed
+/// public IP) and answers PEX (GetPeers) requests. It never serves music content.
+///
+/// Note: it still accepts RelayManifestPush from outbound-only peers and serves those
+/// manifests on request. That relay is scheduled for removal; see
+/// Documentation/P2P-Protocol-Review.md.
 ///
 /// Bandwidth usage is kept to a minimum:
-///   - No manifest data is stored or transmitted.
 ///   - Peer table is capped at SecurityLimits.MaxRoutingTableSize.
 ///   - Each GetPeers response returns at most SecurityLimits.MaxPeersPerExchange peers.
 ///   - Idle connections are rejected via a short read timeout.

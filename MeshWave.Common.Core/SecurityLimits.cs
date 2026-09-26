@@ -60,6 +60,12 @@ public static class SecurityLimits
     /// </summary>
     public const int BootstrapRetryIntervalMinutes = 5;
 
+    /// <summary>
+    /// How often (in seconds) the orchestrator pulls manifest deltas from all known peers.
+    /// This is the only way an outbound-only peer (no open port) receives updates, since pushes cannot reach it.
+    /// </summary>
+    public const int PeriodicSyncIntervalSeconds = 60;
+
     // --- Connection timeouts ---
 
     public const int ConnectTimeoutMs = 8_000;

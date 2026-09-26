@@ -207,9 +207,34 @@ public partial class SyncOrchestrator
             {
             var ms = new MemoryStream();
             await stream.CopyToAsync(ms);
-            return ms.ToArray();
+            var bytes = ms.ToArray();
+
+            if (!ContentMatchesHash(bytes, contentHash))
+                {
+                _logger.Warn("Discarding content for hash {0} from {1}: received bytes do not match the content hash.", contentHash, peerUserId);
+                LastConnectionAttemptReport?.Attempts.Add(new PeerConnectionAttemptResult(
+                    "content-hash-verification",
+                    false,
+                    "Received content did not match the requested SHA-256 hash and was discarded."));
+                return null;
+                }
+
+            return bytes;
             }
         }
+
+    /// <summary>
+    /// Verifies downloaded bytes against a SHA-256 content hash.
+    /// Only hashes that are 64 hex characters are verifiable; other identifiers (legacy or test hashes) are accepted as-is.
+    /// </summary>
+    internal static bool ContentMatchesHash(byte[] bytes, string contentHash)
+    {
+        if (contentHash.Length != 64 || !contentHash.All(Uri.IsHexDigit))
+            return true;
+
+        var actual = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
+        return string.Equals(actual, contentHash, StringComparison.OrdinalIgnoreCase);
+    }
 
     public async Task<(Stream? Stream, long ContentLength)> RequestContentStreamAsync(string peerUserId, string contentHash)
         {
@@ -240,7 +265,7 @@ public partial class SyncOrchestrator
         foreach (var uid in peersWithContent)
                 {
             var peer = _router.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, uid, StringComparison.OrdinalIgnoreCase));
-            if (peer != null)
+            if (peer != null && PeerRouter.IsDialable(peer))
                 availableEndpoints.Add(peer);
                 }
 

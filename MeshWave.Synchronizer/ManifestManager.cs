@@ -83,6 +83,23 @@ public class ManifestManager(ILogger logger)
         }
     }
 
+    /// <summary>
+    /// Returns the highest sequence number already covered by <paramref name="manifest"/> (its snapshot or its operations),
+    /// or -1 if it is empty. Peer manifests can have holes where operations were discarded during merge
+    /// (e.g. the daily play cap), so this must not be derived from the operation count.
+    /// </summary>
+    public static int GetHeadSequenceNumber(Manifest? manifest)
+    {
+        if (manifest == null) return -1;
+        lock (manifest)
+        {
+            var head = manifest.Snapshot?.LastSequenceNumber ?? -1;
+            foreach (var op in manifest.Operations)
+                if (op.SequenceNumber > head) head = op.SequenceNumber;
+            return head;
+        }
+    }
+
     private static int GetNextSequenceNumber(Manifest manifest)
     {
         if (manifest.Snapshot != null)
@@ -178,6 +195,10 @@ public class ManifestManager(ILogger logger)
                     case ManifestOperationType.CompetitionSubmit:
                     case ManifestOperationType.CompetitionCastVote:
                     case ManifestOperationType.CompetitionRevealResults:
+                    case ManifestOperationType.FoundGroup:
+                    case ManifestOperationType.ModerateGroup:
+                    case ManifestOperationType.CreateChannel:
+                    case ManifestOperationType.PostMessage:
                         persistent.Add(op);
                         break;
                     case ManifestOperationType.CommentDelete:
@@ -388,7 +409,8 @@ public class ManifestManager(ILogger logger)
             var playCounts = BuildPlayCounts(local.Operations);
 
             var added = 0;
-            var localMaxSeqNum = (local.Snapshot?.LastSequenceNumber ?? -1) + local.Operations.Count;
+            var localMaxSeqNum = GetHeadSequenceNumber(local);
+            var nextExpectedSeqNum = localMaxSeqNum + 1;
 
             foreach (var op in remote.Operations.OrderBy(o => o.SequenceNumber))
             {
@@ -397,6 +419,15 @@ public class ManifestManager(ILogger logger)
                     logger.Trace("Skipping operation {0} for user {1} stream {2}: Sequence number already applied.", op.SequenceNumber, remote.UserId, remote.StreamType);
                     continue;
                 }
+
+                // Never create a gap in the chain: an op can only follow the last op we have evaluated.
+                // Discarded ops (below) still advance the expected sequence so later ops are not treated as gaps.
+                if (op.SequenceNumber != nextExpectedSeqNum)
+                {
+                    logger.Debug("Stopping merge for user {0} stream {1}: expected sequence {2} but got {3} (gap).", remote.UserId, remote.StreamType, nextExpectedSeqNum, op.SequenceNumber);
+                    break;
+                }
+                nextExpectedSeqNum++;
 
                 if (!IsOperationWithinLimits(remote, op))
                     continue;
