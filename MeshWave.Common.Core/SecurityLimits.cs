@@ -61,10 +61,46 @@ public static class SecurityLimits
     public const int BootstrapRetryIntervalMinutes = 5;
 
     /// <summary>
-    /// How often (in seconds) the orchestrator pulls manifest deltas from all known peers.
-    /// This is the only way an outbound-only peer (no open port) receives updates, since pushes cannot reach it.
+    /// How often (in seconds) the orchestrator pulls manifest deltas from all known peers (anti-entropy).
+    /// Updates normally arrive as pushes over persistent sessions, which also reach peers behind NAT;
+    /// this pull only repairs anything a push missed.
     /// </summary>
-    public const int PeriodicSyncIntervalSeconds = 60;
+    public const int PeriodicSyncIntervalSeconds = 300;
+
+    /// <summary>
+    /// A peer drops out of the routing table when it has not been in direct contact (or re-signed its record) for this long.
+    /// Must be longer than <see cref="BootstrapRetryIntervalMinutes"/> so that entries refreshed by the bootstrap heartbeat never flicker.
+    /// </summary>
+    public const int PeerLivenessTimeoutMinutes = 12;
+
+    /// <summary>How often a peer re-signs its own <c>PeerInfo</c> record, so relayed copies stay fresh.</summary>
+    public const int PeerRecordResignMinutes = 4;
+
+    // --- Persistent sessions ---
+
+    /// <summary>Keepalive interval on persistent sessions. Short enough to hold typical NAT mappings (30 s or more) open.</summary>
+    public const int SessionKeepaliveSeconds = 25;
+
+    /// <summary>A session that receives nothing (not even a keepalive) for this long is closed.</summary>
+    public const int SessionIdleTimeoutSeconds = 75;
+
+    /// <summary>A session must complete its identity handshake within this time.</summary>
+    public const int SessionHandshakeTimeoutSeconds = 15;
+
+    /// <summary>Maximum number of persistent sessions a node keeps (inbound and outbound).</summary>
+    public const int MaxSessions = 128;
+
+    /// <summary>Maximum number of outbound sessions a peer opens to dialable neighbours (bootstrap control sessions not counted).</summary>
+    public const int MaxOutboundNeighbourSessions = 8;
+
+    /// <summary>Timeout for the dial-back reachability check after an Announce.</summary>
+    public const int DialBackTimeoutMs = 3_000;
+
+    /// <summary>How long an introducer keeps an introduction token, and how long peers keep punching for it.</summary>
+    public const int IntroductionTimeoutSeconds = 12;
+
+    /// <summary>Minimum seconds between two introduction attempts for the same target peer.</summary>
+    public const int IntroductionRetryCooldownSeconds = 60;
 
     // --- Connection timeouts ---
 

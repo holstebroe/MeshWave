@@ -8,13 +8,15 @@ namespace MeshWave.Bootstrap;
 /// <summary>
 /// MeshWave Bootstrap Node
 /// 
-/// A minimal, low-bandwidth server that helps peers discover each other.
+/// A minimal, low-bandwidth server that helps peers discover and reach each other.
 /// It maintains a routing table (peers register via Announce, with their observed
-/// public IP) and answers PEX (GetPeers) requests. It never serves music content.
+/// public IP and a dial-back check of their announced port), answers PEX (GetPeers)
+/// requests, keeps a control session with each peer, and introduces peers behind NAT
+/// to each other for UDP hole punching (same port number, UDP).
 ///
-/// Note: it still accepts RelayManifestPush from outbound-only peers and serves those
-/// manifests on request. That relay is scheduled for removal; see
-/// Documentation/P2P-Protocol-Review.md.
+/// It never stores, relays or serves manifests or music content. Peers that cannot
+/// punch through to each other (symmetric NAT on both sides) get their data from
+/// other peers instead; see Documentation/P2P-Protocol-Review.md (C3, C4).
 ///
 /// Bandwidth usage is kept to a minimum:
 ///   - Peer table is capped at SecurityLimits.MaxRoutingTableSize.
@@ -58,7 +60,7 @@ internal class Program
 
         await _coordinator.StartAsync(cts.Token);
 
-        Console.WriteLine($"Listening on port {port}. Press Ctrl+C to stop.\n");
+        Console.WriteLine($"Listening on TCP port {port}, UDP introductions on port {_coordinator.UdpPort}. Press Ctrl+C to stop.\n");
 
         // Bootstrap: seed our own table from any configured seeds
         if (seeds.Count > 0)
@@ -90,7 +92,8 @@ internal class Program
                 var live = coordinator?.GetLivePeers().Count ?? 0;
                 var total = coordinator?.RegisteredPeerCount ?? 0;
                 var requests = coordinator?.RequestCount ?? 0;
-                Console.WriteLine($"[status] {DateTime.UtcNow:HH:mm:ss}  live={live}/{total}  total-requests={requests}");
+                var sessions = coordinator?.SessionCount ?? 0;
+                Console.WriteLine($"[status] {DateTime.UtcNow:HH:mm:ss}  live={live}/{total}  sessions={sessions}  total-requests={requests}");
             }
             catch (OperationCanceledException) { break; }
     }

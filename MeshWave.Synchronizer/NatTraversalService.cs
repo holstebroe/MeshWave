@@ -1,7 +1,3 @@
-using System.Collections.Concurrent;
-using System.Net;
-using System.Net.Sockets;
-using System.Text;
 using Mono.Nat;
 using NLog;
 using Logger = NLog.Logger;
@@ -9,28 +5,25 @@ using Logger = NLog.Logger;
 namespace MeshWave.Synchronizer;
 
 /// <summary>
-/// Lightweight UDP NAT traversal helper for peer-to-peer hole punching.
-/// Both peers periodically send punch probes so NAT mappings can open in both directions.
-/// Also handles automated UPnP/NAT-PMP port mapping via Mono.Nat.
+/// Automated UPnP/NAT-PMP port mapping via Mono.Nat.
+/// Hole punching lives in <see cref="UdpSessionHost"/>; this service only opens ports on the local router
+/// and reports the mapped external address and port.
 /// </summary>
 public sealed class NatTraversalService : IDisposable
 {
     private readonly Logger _logger;
-    private const string PunchPrefix = "meshwave:punch:";
-    private const string AckPrefix = "meshwave:ack:";
-
-    private readonly ConcurrentDictionary<string, TaskCompletionSource<bool>> _pendingPunches = new(StringComparer.OrdinalIgnoreCase);
-
-    private UdpClient? _udp;
-    private CancellationTokenSource? _cts;
-    private Task? _receiveTask;
 
     private INatDevice? _natDevice;
     private Mapping? _tcpMapping;
     private Mapping? _udpMapping;
 
-    public bool IsRunning => _udp != null;
     public string? ExternalIPAddress { get; private set; }
+
+    /// <summary>
+    /// The public TCP port the router forwards to our listener, or null if no TCP mapping exists.
+    /// May differ from the local port when the router picked another one.
+    /// </summary>
+    public int? ExternalPort { get; private set; }
 
     public string NatStatus { get; private set; } = "Not attempted";
     public string Diagnostics { get; private set; } = "Initializing...";
@@ -42,50 +35,9 @@ public sealed class NatTraversalService : IDisposable
         _logger = logger ?? LogManager.GetCurrentClassLogger();
     }
 
-    public async Task StartAsync(int localPort, CancellationToken cancellationToken = default)
-    {
-        if (_udp != null)
-            return;
-
-        _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
-        try
-        {
-            _udp = new UdpClient(localPort)
-            {
-                EnableBroadcast = false
-            };
-        }
-        catch (SocketException)
-        {
-            // Do not fail overall mesh startup if UDP bind on the preferred port is unavailable.
-            // Fall back to an ephemeral UDP port so NAT probing remains best-effort.
-            _udp = new UdpClient(0)
-            {
-                EnableBroadcast = false
-            };
-        }
-
-        _receiveTask = ReceiveLoopAsync(_cts.Token);
-        await Task.CompletedTask;
-    }
-
     public async Task StopAsync()
     {
-        _cts?.Cancel();
-        _udp?.Close();
-
-        if (_receiveTask != null)
-            try { await _receiveTask; } catch { }
-
         await RemovePortMappingsAsync();
-
-        _udp?.Dispose();
-        _udp = null;
-        _cts?.Dispose();
-        _cts = null;
-        _receiveTask = null;
-        _pendingPunches.Clear();
     }
 
     public async Task SetupPortMappingAsync(int port, CancellationToken cancellationToken = default)
@@ -125,26 +77,41 @@ public sealed class NatTraversalService : IDisposable
 
                 try
                 {
-                    await _natDevice.CreatePortMapAsync(_tcpMapping);
-                    _logger.Info("Successfully mapped TCP port {0} via {1}", port, _natDevice.NatProtocol);
+                    // The router may assign a different public port than the one requested; announce what it created.
+                    var created = await _natDevice.CreatePortMapAsync(_tcpMapping);
+                    _tcpMapping = created ?? _tcpMapping;
+                    ExternalPort = _tcpMapping.PublicPort > 0 ? _tcpMapping.PublicPort : port;
+                    _logger.Info("Successfully mapped TCP port {0} -> {1} via {2}", ExternalPort, port, _natDevice.NatProtocol);
                 }
                 catch (Exception ex)
                 {
+                    _tcpMapping = null;
+                    ExternalPort = null;
                     _logger.Warn("Failed to map TCP port {0}: {1}", port, ex.Message);
                 }
 
                 try
                 {
-                    await _natDevice.CreatePortMapAsync(_udpMapping);
-                    _logger.Info("Successfully mapped UDP port {0} via {1}", port, _natDevice.NatProtocol);
+                    var created = await _natDevice.CreatePortMapAsync(_udpMapping);
+                    _udpMapping = created ?? _udpMapping;
+                    _logger.Info("Successfully mapped UDP port {0} -> {1} via {2}", _udpMapping.PublicPort, port, _natDevice.NatProtocol);
                 }
                 catch (Exception ex)
                 {
+                    _udpMapping = null;
                     _logger.Warn("Failed to map UDP port {0}: {1}", port, ex.Message);
                 }
 
-                NatStatus = $"Mapped via {_natDevice.NatProtocol}";
-                Diagnostics = $"UPnP/PMP configuration successful. Router external IP: {ExternalIPAddress}. Mapped TCP/UDP port {port}.";
+                if (ExternalPort != null)
+                {
+                    NatStatus = $"Mapped via {_natDevice.NatProtocol}";
+                    Diagnostics = $"UPnP/PMP configuration successful. Router external IP: {ExternalIPAddress}. Mapped TCP port {ExternalPort} to local port {port}.";
+                }
+                else
+                {
+                    NatStatus = $"Port mapping refused by {_natDevice.NatProtocol} device";
+                    Diagnostics = $"A {_natDevice.NatProtocol} device was found (external IP {ExternalIPAddress}) but refused to map TCP port {port}. The bootstrap's dial-back check decides whether this peer is reachable; if not, it runs outbound-only.";
+                }
             }
             else
             {
@@ -198,94 +165,12 @@ public sealed class NatTraversalService : IDisposable
             _udpMapping = null;
             _natDevice = null;
             ExternalIPAddress = null;
+            ExternalPort = null;
             NatStatus = "Mappings removed";
         }
     }
 
-    /// <summary>
-    /// Sends UDP punch probes to the target and waits briefly for an ACK.
-    /// Returns true when at least one ACK is received.
-    /// </summary>
-    public async Task<bool> TryPunchAsync(string peerAddress, int peerPort, CancellationToken cancellationToken = default)
-    {
-        if (_udp == null || string.IsNullOrWhiteSpace(peerAddress) || peerPort <= 0)
-            return false;
-
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        linkedCts.CancelAfter(TimeSpan.FromSeconds(3));
-
-        var nonce = Guid.NewGuid().ToString("N");
-        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _pendingPunches[nonce] = tcs;
-
-        try
-        {
-            var payload = Encoding.UTF8.GetBytes(PunchPrefix + nonce);
-            var endpoint = new IPEndPoint(IPAddress.Parse(peerAddress), peerPort);
-
-            for (var i = 0; i < 8 && !linkedCts.IsCancellationRequested; i++)
-            {
-                await _udp.SendAsync(payload, endpoint, linkedCts.Token);
-                if (tcs.Task.IsCompleted)
-                    break;
-
-                await Task.Delay(250, linkedCts.Token);
-            }
-
-            var completed = await Task.WhenAny(tcs.Task, Task.Delay(Timeout.Infinite, linkedCts.Token));
-            return completed == tcs.Task && tcs.Task.Result;
-        }
-        catch
-        {
-            return false;
-        }
-        finally
-        {
-            _pendingPunches.TryRemove(nonce, out _);
-        }
-    }
-
-    private async Task ReceiveLoopAsync(CancellationToken cancellationToken)
-    {
-        if (_udp == null)
-            return;
-
-        while (!cancellationToken.IsCancellationRequested)
-            try
-            {
-                var result = await _udp.ReceiveAsync(cancellationToken);
-                var text = Encoding.UTF8.GetString(result.Buffer);
-
-                if (text.StartsWith(PunchPrefix, StringComparison.Ordinal))
-                {
-                    var nonce = text[PunchPrefix.Length..];
-                    if (!string.IsNullOrWhiteSpace(nonce))
-                    {
-                        var ack = Encoding.UTF8.GetBytes(AckPrefix + nonce);
-                        await _udp.SendAsync(ack, result.RemoteEndPoint, cancellationToken);
-                    }
-                }
-                else if (text.StartsWith(AckPrefix, StringComparison.Ordinal))
-                {
-                    var nonce = text[AckPrefix.Length..];
-                    if (_pendingPunches.TryGetValue(nonce, out var pending))
-                        pending.TrySetResult(true);
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch
-            {
-                // best-effort probing, ignore transient network errors
-            }
-    }
-
     public void Dispose()
     {
-        _cts?.Cancel();
-        _udp?.Dispose();
-        _cts?.Dispose();
     }
 }

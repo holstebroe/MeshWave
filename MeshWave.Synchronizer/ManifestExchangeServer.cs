@@ -1,4 +1,5 @@
 using MeshWave.Common.Core;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -12,14 +13,22 @@ using Logger = NLog.Logger;
 namespace MeshWave.Synchronizer;
 
 /// <summary>
-/// Listens for incoming manifest exchange requests over TCP.
-/// Handles: GetManifest, PushManifest, GetPeers (Peer Exchange / PEX).
+/// Serves manifest exchange requests: GetManifest, PushManifest, GetPeers (PEX), Announce, RequestContent and Ping.
+/// Requests arrive either as one-shot TCP connections (one request, one response) or over persistent
+/// <see cref="PeerSession"/>s; both go through <see cref="HandleRequestAsync"/>.
+/// A one-shot <see cref="ManifestRequestType.OpenSession"/> request upgrades the TCP connection to a session.
 /// All message sizes are enforced against SecurityLimits.
 /// </summary>
 public class ManifestExchangeServer : IDisposable
 {
     private readonly Logger _logger;
     public const int DefaultPort = 39877;
+
+    /// <summary>Largest content slice sent inline in a session response (sessions carry content in the message body).</summary>
+    internal const int MaxSessionContentSliceBytes = 1024 * 1024;
+
+    private static readonly TimeSpan DialBackCacheDuration = TimeSpan.FromMinutes(1);
+    private readonly ConcurrentDictionary<string, (bool Reachable, DateTime CheckedUtc)> _dialBackCache = new(StringComparer.Ordinal);
 
     private readonly int _port;
     private TcpListener? _listener;
@@ -28,9 +37,7 @@ public class ManifestExchangeServer : IDisposable
 
     private Func<ManifestStreamType, Manifest?>? _localManifestProvider;
     private Func<IReadOnlyList<PeerInfo>>? _peersProvider;
-    private Func<RendezvousRequest, RendezvousResponse?>? _rendezvousProvider;
     private Func<string, byte[]?>? _contentProvider;
-    private Func<string, ManifestStreamType, Manifest?>? _relayedManifestProvider;
     private Func<PeerInfo?>? _selfInfoProvider;
 
     public ManifestExchangeServer(int port = DefaultPort, Logger? logger = null)
@@ -45,33 +52,53 @@ public class ManifestExchangeServer : IDisposable
     public event EventHandler<PeerAnnouncedEventArgs>? PeerAnnounced;
 
     /// <summary>
-    /// Starts the TCP server.
+    /// Takes ownership of a TCP connection whose peer asked for a persistent session. When not set,
+    /// <see cref="ManifestRequestType.OpenSession"/> requests are refused.
+    /// </summary>
+    public Action<TcpClient>? SessionUpgradeHandler { get; set; }
+
+    /// <summary>Whether Announce requests with a port are verified by connecting back to it. Disabled for tests only.</summary>
+    public bool DialBackEnabled { get; set; } = true;
+
+    public bool IsListening => _listener != null;
+
+    /// <summary>
+    /// Sets the data sources used to answer requests. Needed even without a listener, because requests also arrive over sessions.
     /// </summary>
     /// <param name="localManifestProvider">Returns this peer's current manifest on demand for a given stream.</param>
     /// <param name="peersProvider">Returns known peers for PEX responses. May be null to disable PEX serving.</param>
-    /// <param name="rendezvousProvider">Optional bootstrap rendezvous provider for crossing-hands session issuance.</param>
-    public async Task StartAsync(
+    /// <param name="contentProvider">Returns content bytes by hash. May be null to serve no content.</param>
+    /// <param name="selfInfoProvider">Returns this node's own peer record, reported in Announce responses. Null for a standalone bootstrap.</param>
+    public void Configure(
         Func<ManifestStreamType, Manifest?> localManifestProvider,
         Func<IReadOnlyList<PeerInfo>>? peersProvider = null,
-        Func<RendezvousRequest, RendezvousResponse?>? rendezvousProvider = null,
         Func<string, byte[]?>? contentProvider = null,
-        Func<string, ManifestStreamType, Manifest?>? relayedManifestProvider = null,
+        Func<PeerInfo?>? selfInfoProvider = null)
+    {
+        _localManifestProvider = localManifestProvider;
+        _peersProvider = peersProvider;
+        _contentProvider = contentProvider;
+        _selfInfoProvider = selfInfoProvider;
+    }
+
+    /// <summary>
+    /// Configures the server and starts listening for TCP connections.
+    /// </summary>
+    public Task StartAsync(
+        Func<ManifestStreamType, Manifest?> localManifestProvider,
+        Func<IReadOnlyList<PeerInfo>>? peersProvider = null,
+        Func<string, byte[]?>? contentProvider = null,
         Func<PeerInfo?>? selfInfoProvider = null,
         CancellationToken cancellationToken = default)
     {
-        _selfInfoProvider = selfInfoProvider;
-        _localManifestProvider = localManifestProvider;
-        _peersProvider = peersProvider;
-        _rendezvousProvider = rendezvousProvider;
-        _contentProvider = contentProvider;
-        _relayedManifestProvider = relayedManifestProvider;
+        Configure(localManifestProvider, peersProvider, contentProvider, selfInfoProvider);
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         _listener = new TcpListener(IPAddress.Any, _port);
         _listener.Start();
 
         _serverTask = AcceptLoopAsync(_cts.Token);
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -105,217 +132,257 @@ public class ManifestExchangeServer : IDisposable
         var remoteEndpoint = client.Client.RemoteEndPoint?.ToString() ?? "unknown";
         _logger.Debug("Accepted connection from {0}", remoteEndpoint);
 
-        using (client)
+        var keepOpen = false;
+        try
         {
             client.ReceiveTimeout = SecurityLimits.ReadTimeoutMs;
             client.SendTimeout = SecurityLimits.ReadTimeoutMs;
 
-            try
+            var stream = client.GetStream();
+            var (bytes, isJson) = await ReadMessageAsync(stream, ct);
+
+            var request = isJson
+                ? JsonSerializer.Deserialize<ManifestRequest>(Encoding.UTF8.GetString(bytes))
+                : ManifestSerializer.DeserializeRequest(bytes);
+
+            if (request == null)
             {
-                var stream = client.GetStream();
-                var (bytes, isJson) = await ReadMessageAsync(stream, ct);
-
-                ManifestRequest? request;
-                if (isJson)
-                {
-                    var json = Encoding.UTF8.GetString(bytes);
-                    request = JsonSerializer.Deserialize<ManifestRequest>(json);
-                }
-                else
-                {
-                    request = ManifestSerializer.DeserializeRequest(bytes);
-                }
-
-                if (request == null)
-                {
-                    _logger.Warn("Received empty or invalid request from {0}", remoteEndpoint);
-                    return;
-                }
-
-                _logger.Debug("Received {0} request from {1} (format={2})", request.Type, remoteEndpoint, isJson ? "JSON" : "Protobuf");
-
-                switch (request.Type)
-                {
-                    case ManifestRequestType.GetManifest:
-                        {
-                            var originalManifest = !string.IsNullOrWhiteSpace(request.TargetUserId)
-                                ? _relayedManifestProvider?.Invoke(request.TargetUserId, request.StreamType)
-                                : _localManifestProvider?.Invoke(request.StreamType);
-
-                            Manifest? responseManifest = null;
-                            if (originalManifest == null)
-                            {
-                                _logger.Warn("Could not provide manifest for {0} (TargetUserId: {1})",
-                                    remoteEndpoint, request.TargetUserId ?? "local");
-                            }
-                            else
-                            {
-                                _logger.Info("Serving manifest for {0} to {1} (delta={2}, ops={3})",
-                                    originalManifest.UserId, remoteEndpoint, request.StartSequenceNumber > 0, originalManifest.Operations.Count);
-
-                                lock (originalManifest)
-                                {
-                                    var snapshot = originalManifest.Snapshot;
-                                    if (request.StartSequenceNumber > (snapshot?.LastSequenceNumber ?? -1)) snapshot = null;
-
-                                    var filteredOps = originalManifest.Operations
-                                        .Where(op => op.SequenceNumber >= request.StartSequenceNumber &&
-                                                    (request.EndSequenceNumber == null || op.SequenceNumber <= request.EndSequenceNumber))
-                                        .ToList();
-
-                                    responseManifest = new Manifest
-                                    {
-                                        UserId = originalManifest.UserId,
-                                        StreamType = originalManifest.StreamType,
-                                        Version = originalManifest.Version,
-                                        LastUpdated = originalManifest.LastUpdated,
-                                        Snapshot = snapshot,
-                                        Operations = filteredOps
-                                    };
-                                }
-                            }
-
-                            var response = new ManifestResponse { Manifest = responseManifest };
-                            await WriteMessageAsync(stream, response, ct);
-                            break;
-                        }
-                    case ManifestRequestType.PushManifest when request.Manifest != null:
-                        {
-                            var opCount = request.Manifest.Operations.Count;
-                            if (opCount <= SecurityLimits.MaxManifestOperations)
-                            {
-                                var peerEndpoint = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString() ?? "unknown";
-                                _logger.Info("Received manifest push from {0} (User: {1}, Ops: {2})",
-                                    remoteEndpoint, request.Manifest.UserId, opCount);
-                                ManifestReceived?.Invoke(this, new ManifestReceivedEventArgs(request.Manifest, peerEndpoint, request.AnnouncingPeer, isRelay: false));
-                            }
-                            else
-                            {
-                                _logger.Warn("Rejected push from {0}: too many operations ({1})", remoteEndpoint, opCount);
-                            }
-                            var ack = new ManifestResponse { Acknowledged = true };
-                            await WriteMessageAsync(stream, ack, ct);
-                            break;
-                        }
-                    case ManifestRequestType.RelayManifestPush when request.Manifest != null:
-                        {
-                            var opCount = request.Manifest.Operations.Count;
-                            if (opCount <= SecurityLimits.MaxManifestOperations)
-                            {
-                                var peerEndpoint = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString() ?? "unknown";
-                                _logger.Info("Received relayed manifest push from {0} (User: {1}, Ops: {2})",
-                                    remoteEndpoint, request.Manifest.UserId, opCount);
-                                ManifestReceived?.Invoke(this, new ManifestReceivedEventArgs(request.Manifest, peerEndpoint, request.AnnouncingPeer, isRelay: true));
-                            }
-                            else
-                            {
-                                _logger.Warn("Rejected relayed push from {0}: too many operations ({1})", remoteEndpoint, opCount);
-                            }
-                            var ack = new ManifestResponse { Acknowledged = true };
-                            await WriteMessageAsync(stream, ack, ct);
-                            break;
-                        }
-                    case ManifestRequestType.Announce when request.AnnouncingPeer != null:
-                        {
-                            var observedAddress = (client.Client.RemoteEndPoint as IPEndPoint)?.Address;
-                            if (observedAddress?.IsIPv4MappedToIPv6 == true) observedAddress = observedAddress.MapToIPv4();
-
-                            var announced = request.AnnouncingPeer;
-                            var peer = new PeerInfo
-                            {
-                                UserId = announced.UserId,
-                                DisplayName = SecurityLimits.Truncate(announced.DisplayName, SecurityLimits.MaxDisplayNameLength),
-                                // Always trust the observed source address over a self-reported one.
-                                Address = observedAddress?.ToString() ?? announced.Address,
-                                Port = announced.Port is > 0 and < 65536 ? announced.Port : 0,
-                                PublicKeyPem = announced.PublicKeyPem,
-                                LastSeen = DateTime.UtcNow,
-                                Capabilities = announced.Capabilities.Take(8).ToList()
-                            };
-
-                            _logger.Info("Peer {0} announced from {1} (port {2})", peer.UserId, remoteEndpoint, peer.Port);
-                            PeerAnnounced?.Invoke(this, new PeerAnnouncedEventArgs(peer));
-
-                            var self = _selfInfoProvider?.Invoke();
-                            var response = new ManifestResponse { Acknowledged = true, Peers = self != null ? [self] : [] };
-                            await WriteMessageAsync(stream, response, ct);
-                            break;
-                        }
-                    case ManifestRequestType.GetPeers:
-                        {
-                            var peers = _peersProvider?.Invoke()
-                                .Take(SecurityLimits.MaxPeersPerExchange)
-                                .ToList() ?? [];
-                            _logger.Info("Serving {0} peers to {1} (PEX)", peers.Count, remoteEndpoint);
-                            var response = new ManifestResponse { Peers = peers };
-                            await WriteMessageAsync(stream, response, ct);
-                            break;
-                        }
-                    case ManifestRequestType.RequestRendezvous when request.Rendezvous != null:
-                        {
-                            var rendezvous = _rendezvousProvider?.Invoke(request.Rendezvous)
-                                ?? new RendezvousResponse
-                                {
-                                    Success = false,
-                                    Message = "Rendezvous is not enabled on this node."
-                                };
-
-                            _logger.Info("Rendezvous request from {0} (Target: {1}) -> Success: {2}",
-                                remoteEndpoint, request.Rendezvous.TargetUserId, rendezvous.Success);
-                            var response = new ManifestResponse { Rendezvous = rendezvous, Acknowledged = rendezvous.Success };
-                            await WriteMessageAsync(stream, response, ct);
-                            break;
-                        }
-                    case ManifestRequestType.RequestContent when !string.IsNullOrWhiteSpace(request.ContentHash):
-                        {
-                            var contentBytes = _contentProvider?.Invoke(request.ContentHash);
-                            _logger.Info("Content request from {0} for hash {1}. Found: {2}",
-                                remoteEndpoint, request.ContentHash, contentBytes != null);
-
-                            var found = contentBytes != null && contentBytes.Length > 0;
-                            var (sliceOffset, sliceLength) = found
-                                ? ResolveContentSlice(contentBytes!.LongLength, request.ChunkOffset, request.ChunkLength)
-                                : (0L, 0L);
-
-                            var response = new ManifestResponse
-                            {
-                                Acknowledged = found,
-                                ContentLength = sliceLength,
-                                TotalContentLength = found ? contentBytes!.LongLength : null
-                            };
-                            await WriteMessageAsync(stream, response, ct);
-                            if (sliceLength > 0)
-                            {
-                                await stream.WriteAsync(contentBytes.AsMemory((int)sliceOffset, (int)sliceLength), ct);
-                                await stream.FlushAsync(ct);
-                            }
-                            break;
-                        }
-                    default:
-                        {
-                            var response = new ManifestResponse { Acknowledged = false };
-                            await WriteMessageAsync(stream, response, ct);
-                            break;
-                        }
-                }
+                _logger.Warn("Received empty or invalid request from {0}", remoteEndpoint);
+                return;
             }
-            catch (EndOfStreamException)
+
+            _logger.Debug("Received {0} request from {1} (format={2})", request.Type, remoteEndpoint, isJson ? "JSON" : "Protobuf");
+            var remoteAddress = ObservedAddressOf(client);
+
+            if (request.Type == ManifestRequestType.OpenSession)
             {
-                _logger.Debug("Client {0} disconnected before sending a complete message (expected for TCP probes).", remoteEndpoint);
+                var upgrade = SessionUpgradeHandler;
+                await WriteMessageAsync(stream, new ManifestResponse { Acknowledged = upgrade != null, ObservedAddress = remoteAddress }, ct);
+                if (upgrade != null)
+                {
+                    keepOpen = true;
+                    upgrade(client);
+                }
+                return;
             }
-            catch (IOException ex)
+
+            var (response, content) = await HandleRequestAsync(request, remoteAddress, inlineContent: false, ct);
+            await WriteMessageAsync(stream, response, ct);
+            if (!content.IsEmpty)
             {
-                _logger.Debug("IO error with client {0}: {1}", remoteEndpoint, ex.Message);
-            }
-            catch (OperationCanceledException)
-            {
-                _logger.Debug("Connection with {0} was canceled.", remoteEndpoint);
-            }
-            catch (Exception ex)
-            {
-                _logger.Warn(ex, "Error handling client {0}", remoteEndpoint);
+                await stream.WriteAsync(content, ct);
+                await stream.FlushAsync(ct);
             }
         }
+        catch (EndOfStreamException)
+        {
+            _logger.Debug("Client {0} disconnected before sending a complete message (expected for TCP probes).", remoteEndpoint);
+        }
+        catch (IOException ex)
+        {
+            _logger.Debug("IO error with client {0}: {1}", remoteEndpoint, ex.Message);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.Debug("Connection with {0} was canceled.", remoteEndpoint);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Error handling client {0}", remoteEndpoint);
+        }
+        finally
+        {
+            if (!keepOpen) client.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Answers one request. <paramref name="remoteAddress"/> is the requester's observed IP.
+    /// With <paramref name="inlineContent"/> (sessions) content bytes are returned in <see cref="ManifestResponse.ContentBytes"/>,
+    /// capped at <see cref="MaxSessionContentSliceBytes"/>; otherwise they are returned separately, to be written after the response.
+    /// </summary>
+    public async Task<(ManifestResponse Response, ReadOnlyMemory<byte> Content)> HandleRequestAsync(
+        ManifestRequest request, string remoteAddress, bool inlineContent, CancellationToken ct)
+    {
+        switch (request.Type)
+        {
+            case ManifestRequestType.GetManifest:
+                return (new ManifestResponse { Manifest = BuildManifestResponse(request, remoteAddress) }, ReadOnlyMemory<byte>.Empty);
+
+            case ManifestRequestType.PushManifest when request.Manifest != null:
+                {
+                    var opCount = request.Manifest.Operations.Count;
+                    if (opCount <= SecurityLimits.MaxManifestOperations)
+                    {
+                        _logger.Info("Received manifest push from {0} (User: {1}, Ops: {2})", remoteAddress, request.Manifest.UserId, opCount);
+                        ManifestReceived?.Invoke(this, new ManifestReceivedEventArgs(request.Manifest, remoteAddress, request.AnnouncingPeer));
+                    }
+                    else
+                    {
+                        _logger.Warn("Rejected push from {0}: too many operations ({1})", remoteAddress, opCount);
+                    }
+                    return (new ManifestResponse { Acknowledged = true }, ReadOnlyMemory<byte>.Empty);
+                }
+
+            case ManifestRequestType.Announce when request.AnnouncingPeer != null:
+                return (await HandleAnnounceAsync(request.AnnouncingPeer, remoteAddress, ct), ReadOnlyMemory<byte>.Empty);
+
+            case ManifestRequestType.GetPeers:
+                {
+                    var peers = _peersProvider?.Invoke()
+                        .Take(SecurityLimits.MaxPeersPerExchange)
+                        .ToList() ?? [];
+                    _logger.Info("Serving {0} peers to {1} (PEX)", peers.Count, remoteAddress);
+                    return (new ManifestResponse { Peers = peers }, ReadOnlyMemory<byte>.Empty);
+                }
+
+            case ManifestRequestType.Ping:
+                return (new ManifestResponse { Acknowledged = true, ObservedAddress = remoteAddress }, ReadOnlyMemory<byte>.Empty);
+
+            case ManifestRequestType.RequestContent when !string.IsNullOrWhiteSpace(request.ContentHash):
+                {
+                    var contentBytes = _contentProvider?.Invoke(request.ContentHash);
+                    _logger.Info("Content request from {0} for hash {1}. Found: {2}", remoteAddress, request.ContentHash, contentBytes != null);
+
+                    var found = contentBytes != null && contentBytes.Length > 0;
+                    var (sliceOffset, sliceLength) = found
+                        ? ResolveContentSlice(contentBytes!.LongLength, request.ChunkOffset, request.ChunkLength)
+                        : (0L, 0L);
+                    if (inlineContent)
+                        sliceLength = Math.Min(sliceLength, MaxSessionContentSliceBytes);
+
+                    var slice = sliceLength > 0 ? contentBytes.AsMemory((int)sliceOffset, (int)sliceLength) : ReadOnlyMemory<byte>.Empty;
+                    var response = new ManifestResponse
+                    {
+                        Acknowledged = found,
+                        ContentLength = sliceLength,
+                        TotalContentLength = found ? contentBytes!.LongLength : null,
+                        ContentBytes = inlineContent && sliceLength > 0 ? slice.ToArray() : null
+                    };
+                    return (response, inlineContent ? ReadOnlyMemory<byte>.Empty : slice);
+                }
+
+            default:
+                return (new ManifestResponse { Acknowledged = false }, ReadOnlyMemory<byte>.Empty);
+        }
+    }
+
+    private Manifest? BuildManifestResponse(ManifestRequest request, string remoteAddress)
+    {
+        var originalManifest = _localManifestProvider?.Invoke(request.StreamType);
+        if (originalManifest == null)
+        {
+            _logger.Debug("No {0} manifest to serve to {1}", request.StreamType, remoteAddress);
+            return null;
+        }
+
+        _logger.Info("Serving manifest for {0} to {1} (delta={2}, ops={3})",
+            originalManifest.UserId, remoteAddress, request.StartSequenceNumber > 0, originalManifest.Operations.Count);
+
+        lock (originalManifest)
+        {
+            var snapshot = originalManifest.Snapshot;
+            if (request.StartSequenceNumber > (snapshot?.LastSequenceNumber ?? -1)) snapshot = null;
+
+            var filteredOps = originalManifest.Operations
+                .Where(op => op.SequenceNumber >= request.StartSequenceNumber &&
+                            (request.EndSequenceNumber == null || op.SequenceNumber <= request.EndSequenceNumber))
+                .ToList();
+
+            return new Manifest
+            {
+                UserId = originalManifest.UserId,
+                StreamType = originalManifest.StreamType,
+                Version = originalManifest.Version,
+                LastUpdated = originalManifest.LastUpdated,
+                Snapshot = snapshot,
+                Operations = filteredOps
+            };
+        }
+    }
+
+    private async Task<ManifestResponse> HandleAnnounceAsync(PeerInfo announced, string observedAddress, CancellationToken ct)
+    {
+        var announcedPort = announced.Port is > 0 and < 65536 ? announced.Port : 0;
+
+        // Only a port we can actually connect back to is registered; otherwise the peer is outbound-only.
+        bool? dialBack = null;
+        if (announcedPort > 0 && DialBackEnabled && !string.IsNullOrWhiteSpace(observedAddress))
+        {
+            dialBack = await DialBackAsync(observedAddress, announcedPort, ct);
+            if (dialBack == false) announcedPort = 0;
+        }
+
+        var peer = new PeerInfo
+        {
+            UserId = announced.UserId,
+            DisplayName = SecurityLimits.Truncate(announced.DisplayName, SecurityLimits.MaxDisplayNameLength),
+            // Always trust the observed source address over a self-reported one.
+            Address = string.IsNullOrWhiteSpace(observedAddress) ? announced.Address : observedAddress,
+            Port = announcedPort,
+            PublicKeyPem = announced.PublicKeyPem,
+            LastSeen = DateTime.UtcNow,
+            Capabilities = announced.Capabilities.Take(8).ToList()
+        };
+
+        // The owner's signature stays attached only if it still describes the registered address and port.
+        if (announced.Address == peer.Address && announced.Port == peer.Port && PeerRecords.IsValidlySigned(announced))
+        {
+            peer.SignedAtUtc = announced.SignedAtUtc;
+            peer.Signature = announced.Signature;
+        }
+
+        _logger.Info("Peer {0} announced from {1} (port {2}, dial-back {3})", peer.UserId, observedAddress, peer.Port,
+            dialBack switch { true => "ok", false => "failed", null => "skipped" });
+        PeerAnnounced?.Invoke(this, new PeerAnnouncedEventArgs(peer));
+
+        var self = _selfInfoProvider?.Invoke();
+        return new ManifestResponse
+        {
+            Acknowledged = true,
+            Peers = self != null ? [self] : [],
+            ObservedAddress = observedAddress,
+            DialBackSucceeded = dialBack
+        };
+    }
+
+    /// <summary>
+    /// Checks that a MeshWave node answers on <paramref name="address"/>:<paramref name="port"/>.
+    /// Only ever dials the requester's own observed address, so it cannot be used to probe third parties.
+    /// </summary>
+    private async Task<bool> DialBackAsync(string address, int port, CancellationToken ct)
+    {
+        var key = $"{address}:{port}";
+        if (_dialBackCache.TryGetValue(key, out var cached) && DateTime.UtcNow - cached.CheckedUtc < DialBackCacheDuration)
+            return cached.Reachable;
+
+        var reachable = false;
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(SecurityLimits.DialBackTimeoutMs);
+            using var probe = new TcpClient();
+            await probe.ConnectAsync(address, port, cts.Token);
+            var stream = probe.GetStream();
+            await WriteMessageAsync(stream, new ManifestRequest { Type = ManifestRequestType.Ping }, cts.Token);
+            var (bytes, _) = await ReadMessageAsync(stream, cts.Token);
+            reachable = ManifestSerializer.DeserializeResponse(bytes).Acknowledged;
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug("Dial-back to {0} failed: {1}", key, ex.Message);
+        }
+
+        if (_dialBackCache.Count > 1000) _dialBackCache.Clear();
+        _dialBackCache[key] = (reachable, DateTime.UtcNow);
+        return reachable;
+    }
+
+    private static string ObservedAddressOf(TcpClient client)
+    {
+        var address = (client.Client.RemoteEndPoint as IPEndPoint)?.Address;
+        if (address?.IsIPv4MappedToIPv6 == true) address = address.MapToIPv4();
+        return address?.ToString() ?? string.Empty;
     }
 
     /// <summary>
@@ -394,14 +461,16 @@ public class ManifestExchangeServer : IDisposable
 
 public class PeerAnnouncedEventArgs(PeerInfo peer) : EventArgs
 {
-    /// <summary>The announcing peer, with <see cref="PeerInfo.Address"/> set to the observed source address.</summary>
+    /// <summary>
+    /// The announcing peer, with <see cref="PeerInfo.Address"/> set to the observed source address and
+    /// <see cref="PeerInfo.Port"/> set to 0 if the dial-back failed.
+    /// </summary>
     public PeerInfo Peer { get; } = peer;
 }
 
-public class ManifestReceivedEventArgs(Manifest manifest, string peerAddress, PeerInfo? announcingPeer, bool isRelay) : EventArgs
+public class ManifestReceivedEventArgs(Manifest manifest, string peerAddress, PeerInfo? announcingPeer) : EventArgs
 {
     public Manifest Manifest { get; } = manifest;
     public string PeerAddress { get; } = peerAddress;
     public PeerInfo? AnnouncingPeer { get; } = announcingPeer;
-    public bool IsRelay { get; } = isRelay;
 }

@@ -77,40 +77,4 @@ public partial class SyncOrchestrator
                 false,
                 "Bootstrap refresh completed without usable peer data."));
     }
-
-    private async Task<RendezvousResponse?> RequestBootstrapRendezvousAsync(string targetUserId, PeerConnectionAttemptReport report)
-    {
-        if (_bootstrapNodes.Count == 0 || Identity == null)
-            return null;
-
-        foreach (var endpoint in _bootstrapNodes.Take(SecurityLimits.MaxBootstrapNodes))
-        {
-            if (!TryParseEndpoint(endpoint, out var host, out var port))
-                continue;
-
-            try
-            {
-                var response = await _client.RequestRendezvousAsync(host, port, new RendezvousRequest
-                {
-                    InitiatorUserId = Identity.UserId,
-                    TargetUserId = targetUserId,
-                    InitiatorPort = Identity.ManifestPort,
-                    RequestedProbeWindowMs = 4_000
-                });
-
-                if (response != null)
-                    return response;
-                }
-            catch (Exception ex)
-                {
-                report.Attempts.Add(new PeerConnectionAttemptResult(
-                    "bootstrap-rendezvous",
-                    false,
-                    $"Rendezvous request to {host}:{port} failed: {ex.Message}"));
-                }
-            }
-
-        return null;
-        }
-
-    }
+}

@@ -93,43 +93,6 @@ public class ManifestExchangeTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task RequestRendezvous_ReturnsSessionFromServerProvider()
-    {
-        var port = FindFreePort();
-        using var server = new ManifestExchangeServer(port);
-        await server.StartAsync(
-            _ => null,
-            peersProvider: null,
-            rendezvousProvider: request => new RendezvousResponse
-            {
-                Success = true,
-                SessionId = $"rv-{request.InitiatorUserId}-{request.TargetUserId}",
-                ExpiresAtUtc = DateTime.UtcNow.AddSeconds(30),
-                Message = "ok"
-            },
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        try
-        {
-            var client = new ManifestExchangeClient(timeoutMs: 15000);
-            var response = await client.RequestRendezvousAsync("127.0.0.1", port, new RendezvousRequest
-            {
-                InitiatorUserId = "initiator-1",
-                TargetUserId = "target-1",
-                InitiatorPort = 40001
-            }, cancellationToken: TestContext.Current.CancellationToken);
-
-            Assert.NotNull(response);
-            Assert.True(response!.Success);
-            Assert.Contains("initiator-1", response.SessionId, StringComparison.Ordinal);
-        }
-        finally
-        {
-            await server.StopAsync();
-        }
-    }
-
-    [Fact]
     public async Task FetchManifest_WithRange_ReturnsFilteredOperations()
     {
         var port = FindFreePort();

@@ -55,13 +55,13 @@ public static class ManifestSerializer
         };
 
         if (request.Manifest != null) proto.Manifest = MapToProto(request.Manifest);
-        if (request.Rendezvous != null) proto.Rendezvous = MapToProto(request.Rendezvous);
         if (request.ContentHash != null) proto.ContentHash = request.ContentHash;
         if (request.AnnouncingPeer != null) proto.AnnouncingPeer = MapToProto(request.AnnouncingPeer);
         if (request.EndSequenceNumber.HasValue) proto.EndSequenceNumber = request.EndSequenceNumber.Value;
-        if (request.TargetUserId != null) proto.TargetUserId = request.TargetUserId;
         if (request.ChunkOffset.HasValue) proto.ChunkOffset = request.ChunkOffset.Value;
         if (request.ChunkLength.HasValue) proto.ChunkLength = request.ChunkLength.Value;
+        if (request.Hello != null) proto.Hello = MapToProto(request.Hello);
+        if (request.Introduction != null) proto.Introduction = MapToProto(request.Introduction);
 
         return proto;
     }
@@ -73,14 +73,14 @@ public static class ManifestSerializer
             Type = (ManifestRequestType)proto.Type,
             StreamType = (ManifestStreamType)proto.StreamType,
             Manifest = proto.Manifest != null ? MapFromProto(proto.Manifest) : null,
-            Rendezvous = proto.Rendezvous != null ? MapFromProto(proto.Rendezvous) : null,
             ContentHash = proto.HasContentHash ? proto.ContentHash : null,
             AnnouncingPeer = proto.AnnouncingPeer != null ? MapFromProto(proto.AnnouncingPeer) : null,
             StartSequenceNumber = proto.StartSequenceNumber,
             EndSequenceNumber = proto.HasEndSequenceNumber ? proto.EndSequenceNumber : null,
-            TargetUserId = proto.HasTargetUserId ? proto.TargetUserId : null,
             ChunkOffset = proto.HasChunkOffset ? proto.ChunkOffset : null,
-            ChunkLength = proto.HasChunkLength ? proto.ChunkLength : null
+            ChunkLength = proto.HasChunkLength ? proto.ChunkLength : null,
+            Hello = proto.Hello != null ? MapFromProto(proto.Hello) : null,
+            Introduction = proto.Introduction != null ? MapFromProto(proto.Introduction) : null
         };
     }
 
@@ -94,9 +94,12 @@ public static class ManifestSerializer
 
         if (response.Manifest != null) proto.Manifest = MapToProto(response.Manifest);
         if (response.Peers != null) proto.Peers.AddRange(response.Peers.Select(MapToProto));
-        if (response.Rendezvous != null) proto.Rendezvous = MapToProto(response.Rendezvous);
         if (response.ContentBytes != null) proto.ContentBytes = ByteString.CopyFrom(response.ContentBytes);
         if (response.TotalContentLength.HasValue) proto.TotalContentLength = response.TotalContentLength.Value;
+        if (response.Hello != null) proto.Hello = MapToProto(response.Hello);
+        if (response.Introduction != null) proto.Introduction = MapToProto(response.Introduction);
+        if (response.ObservedAddress != null) proto.ObservedAddress = response.ObservedAddress;
+        if (response.DialBackSucceeded.HasValue) proto.DialBackSucceeded = response.DialBackSucceeded.Value;
 
         return proto;
     }
@@ -108,10 +111,13 @@ public static class ManifestSerializer
             Manifest = proto.Manifest != null ? MapFromProto(proto.Manifest) : null,
             Acknowledged = proto.Acknowledged,
             Peers = proto.Peers.Select(MapFromProto).ToList(),
-            Rendezvous = proto.Rendezvous != null ? MapFromProto(proto.Rendezvous) : null,
             ContentBytes = proto.HasContentBytes ? proto.ContentBytes.ToByteArray() : null,
             ContentLength = proto.ContentLength,
-            TotalContentLength = proto.HasTotalContentLength ? proto.TotalContentLength : null
+            TotalContentLength = proto.HasTotalContentLength ? proto.TotalContentLength : null,
+            Hello = proto.Hello != null ? MapFromProto(proto.Hello) : null,
+            Introduction = proto.Introduction != null ? MapFromProto(proto.Introduction) : null,
+            ObservedAddress = proto.HasObservedAddress ? proto.ObservedAddress : null,
+            DialBackSucceeded = proto.HasDialBackSucceeded ? proto.DialBackSucceeded : null
         };
     }
 
@@ -307,6 +313,8 @@ public static class ManifestSerializer
             LastSeen = Timestamp.FromDateTime(peer.LastSeen.ToUniversalTime())
         };
         if (peer.Capabilities != null) proto.Capabilities.AddRange(peer.Capabilities);
+        if (peer.SignedAtUtc.HasValue) proto.SignedAt = Timestamp.FromDateTime(DateTime.SpecifyKind(peer.SignedAtUtc.Value, DateTimeKind.Utc));
+        proto.Signature = peer.Signature ?? string.Empty;
         return proto;
     }
 
@@ -320,55 +328,56 @@ public static class ManifestSerializer
             Port = proto.Port,
             PublicKeyPem = proto.PublicKeyPem,
             LastSeen = proto.LastSeen.ToDateTime(),
-            Capabilities = proto.Capabilities.ToList()
+            Capabilities = proto.Capabilities.ToList(),
+            SignedAtUtc = proto.SignedAt?.ToDateTime(),
+            Signature = proto.Signature
         };
     }
 
-    private static ProtoRendezvousRequest MapToProto(RendezvousRequest request)
+    private static ProtoSessionHello MapToProto(SessionHello hello)
     {
-        return new ProtoRendezvousRequest
+        var proto = new ProtoSessionHello
         {
-            InitiatorUserId = request.InitiatorUserId,
-            TargetUserId = request.TargetUserId,
-            InitiatorPort = request.InitiatorPort,
-            RequestedProbeWindowMs = request.RequestedProbeWindowMs
+            Nonce = hello.Nonce,
+            Proof = hello.Proof ?? string.Empty,
+            UdpPort = hello.UdpPort,
+            IsIntroducer = hello.IsIntroducer
+        };
+        if (hello.Peer != null) proto.Peer = MapToProto(hello.Peer);
+        return proto;
+    }
+
+    private static SessionHello MapFromProto(ProtoSessionHello proto)
+    {
+        return new SessionHello
+        {
+            Peer = proto.Peer != null ? MapFromProto(proto.Peer) : null,
+            Nonce = proto.Nonce,
+            Proof = proto.Proof,
+            UdpPort = proto.UdpPort,
+            IsIntroducer = proto.IsIntroducer
         };
     }
 
-    private static RendezvousRequest MapFromProto(ProtoRendezvousRequest proto)
+    private static ProtoIntroduction MapToProto(Introduction introduction)
     {
-        return new RendezvousRequest
+        return new ProtoIntroduction
         {
-            InitiatorUserId = proto.InitiatorUserId,
+            RequesterUserId = introduction.RequesterUserId ?? string.Empty,
+            TargetUserId = introduction.TargetUserId ?? string.Empty,
+            Token = introduction.Token ?? string.Empty,
+            IntroducerUdpPort = introduction.IntroducerUdpPort
+        };
+    }
+
+    private static Introduction MapFromProto(ProtoIntroduction proto)
+    {
+        return new Introduction
+        {
+            RequesterUserId = proto.RequesterUserId,
             TargetUserId = proto.TargetUserId,
-            InitiatorPort = proto.InitiatorPort,
-            RequestedProbeWindowMs = proto.RequestedProbeWindowMs
-        };
-    }
-
-    private static ProtoRendezvousResponse MapToProto(RendezvousResponse response)
-    {
-        return new ProtoRendezvousResponse
-        {
-            Success = response.Success,
-            SessionId = response.SessionId,
-            ExpiresAtUtc = Timestamp.FromDateTime(response.ExpiresAtUtc.ToUniversalTime()),
-            ProbeStartUtc = Timestamp.FromDateTime(response.ProbeStartUtc.ToUniversalTime()),
-            ProbeWindowMs = response.ProbeWindowMs,
-            Message = response.Message
-        };
-    }
-
-    private static RendezvousResponse MapFromProto(ProtoRendezvousResponse proto)
-    {
-        return new RendezvousResponse
-        {
-            Success = proto.Success,
-            SessionId = proto.SessionId,
-            ExpiresAtUtc = proto.ExpiresAtUtc.ToDateTime(),
-            ProbeStartUtc = proto.ProbeStartUtc.ToDateTime(),
-            ProbeWindowMs = proto.ProbeWindowMs,
-            Message = proto.Message
+            Token = proto.Token,
+            IntroducerUdpPort = proto.IntroducerUdpPort
         };
     }
 }

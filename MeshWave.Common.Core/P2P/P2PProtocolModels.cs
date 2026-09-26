@@ -14,23 +14,54 @@ public class PeerInfo
     public string PublicKeyPem { get; set; } = string.Empty;
     public DateTime LastSeen { get; set; }
     public List<string> Capabilities { get; set; } = [];
+
+    /// <summary>
+    /// When the owner signed <see cref="Address"/> and <see cref="Port"/> (see <see cref="Signature"/>). Null for unsigned records.
+    /// </summary>
+    public DateTime? SignedAtUtc { get; set; }
+
+    /// <summary>
+    /// The owner's signature over UserId, Address, Port and <see cref="SignedAtUtc"/>. Only a signed record may change the
+    /// address or port of a peer that is already known, so relayed (PEX) entries cannot redirect traffic.
+    /// </summary>
+    public string Signature { get; set; } = string.Empty;
 }
 
 public enum ManifestRequestType
 {
-    GetManifest,
-    PushManifest,
-    GetPeers,
-    RequestRendezvous,
-    RequestContent,
-    RelayManifestPush,
+    GetManifest = 0,
+    PushManifest = 1,
+    GetPeers = 2,
+    // 3 was RequestRendezvous (removed; replaced by RequestIntroduction).
+    RequestContent = 4,
+    // 5 was RelayManifestPush (removed; the bootstrap never relays data).
 
     /// <summary>
     /// Registers the sender (<see cref="ManifestRequest.AnnouncingPeer"/>) with the receiving node without sending a manifest.
-    /// The receiver records the observed source IP with the announced port (0 = outbound-only, not dialable).
-    /// The response's <see cref="ManifestResponse.Peers"/> contains the receiver's own peer info when it is a regular peer.
+    /// The receiver records the observed source IP. A non-zero announced port is verified with a dial-back
+    /// (<see cref="Ping"/>); if that fails the peer is registered as outbound-only (port 0).
+    /// The response carries the observed address, the dial-back result and, for a regular peer, its own peer info.
     /// </summary>
-    Announce
+    Announce = 6,
+
+    /// <summary>
+    /// Sent as the first (and only) one-shot message on a TCP connection to turn it into a persistent, multiplexed
+    /// session. After the acknowledgement both sides exchange
+    /// <see cref="Hello"/> requests over the session.
+    /// </summary>
+    OpenSession = 7,
+
+    /// <summary>Liveness probe. Used for the dial-back reachability check after <see cref="Announce"/>.</summary>
+    Ping = 8,
+
+    /// <summary>Session only: asks the receiver (an introducer) to introduce the sender to <see cref="Introduction.TargetUserId"/> for UDP hole punching.</summary>
+    RequestIntroduction = 9,
+
+    /// <summary>Session only: an introducer tells the receiver that <see cref="Introduction.RequesterUserId"/> wants to punch through to it.</summary>
+    IntroductionOffer = 10,
+
+    /// <summary>Session only: identity handshake. The response proves key ownership by signing the request's nonce.</summary>
+    Hello = 11
 }
 
 public class ManifestRequest
@@ -38,14 +69,14 @@ public class ManifestRequest
     public ManifestRequestType Type { get; set; }
     public ManifestStreamType StreamType { get; set; } = ManifestStreamType.Content;
     public Manifest? Manifest { get; set; }
-    public RendezvousRequest? Rendezvous { get; set; }
     public string? ContentHash { get; set; }
     public PeerInfo? AnnouncingPeer { get; set; }
     public int StartSequenceNumber { get; set; }
     public int? EndSequenceNumber { get; set; }
-    public string? TargetUserId { get; set; }
     public long? ChunkOffset { get; set; }
     public long? ChunkLength { get; set; }
+    public SessionHello? Hello { get; set; }
+    public Introduction? Introduction { get; set; }
 }
 
 public class ManifestResponse
@@ -53,26 +84,45 @@ public class ManifestResponse
     public Manifest? Manifest { get; set; }
     public bool Acknowledged { get; set; }
     public List<PeerInfo> Peers { get; set; } = [];
-    public RendezvousResponse? Rendezvous { get; set; }
     public byte[]? ContentBytes { get; set; }
     public long ContentLength { get; set; }
     public long? TotalContentLength { get; set; }
+    public SessionHello? Hello { get; set; }
+    public Introduction? Introduction { get; set; }
+
+    /// <summary>The requester's source address as the responder observed it (lets peers learn their public IP).</summary>
+    public string? ObservedAddress { get; set; }
+
+    /// <summary>Announce only: whether the responder could connect back to the announced port. Null when not checked.</summary>
+    public bool? DialBackSucceeded { get; set; }
 }
 
-public class RendezvousRequest
+/// <summary>
+/// Session identity handshake. Each side sends one in a <see cref="ManifestRequestType.Hello"/> request with a fresh
+/// <see cref="Nonce"/>; the other side answers with its own hello whose <see cref="Proof"/> signs that nonce.
+/// A node without an identity (a standalone bootstrap) answers with an empty <see cref="Peer"/> and no proof.
+/// </summary>
+public class SessionHello
 {
-    public string InitiatorUserId { get; set; } = string.Empty;
+    public PeerInfo? Peer { get; set; }
+    public long Nonce { get; set; }
+    public string Proof { get; set; } = string.Empty;
+
+    /// <summary>The UDP port on which the sender accepts NAT introduction requests; 0 if it cannot introduce.</summary>
+    public int UdpPort { get; set; }
+
+    /// <summary>Whether the sender introduces peers to each other (<see cref="ManifestRequestType.RequestIntroduction"/>).</summary>
+    public bool IsIntroducer { get; set; }
+}
+
+/// <summary>
+/// Introduction of two peers for UDP hole punching. Both peers send a NAT introduce request carrying <see cref="Token"/>
+/// to the introducer's UDP port; the introducer then tells each one the other's public and private UDP endpoint.
+/// </summary>
+public class Introduction
+{
+    public string RequesterUserId { get; set; } = string.Empty;
     public string TargetUserId { get; set; } = string.Empty;
-    public int InitiatorPort { get; set; }
-    public int RequestedProbeWindowMs { get; set; } = 4_000;
-}
-
-public class RendezvousResponse
-{
-    public bool Success { get; set; }
-    public string SessionId { get; set; } = string.Empty;
-    public DateTime ExpiresAtUtc { get; set; }
-    public DateTime ProbeStartUtc { get; set; }
-    public int ProbeWindowMs { get; set; } = 4_000;
-    public string Message { get; set; } = string.Empty;
+    public string Token { get; set; } = string.Empty;
+    public int IntroducerUdpPort { get; set; }
 }

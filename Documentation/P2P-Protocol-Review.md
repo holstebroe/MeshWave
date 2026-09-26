@@ -6,9 +6,9 @@ Review of the MeshWave network protocol against its design goals:
 - **Minimal open ports.** Only one peer (or a standalone bootstrap) needs an open port. The bootstrap's only job is establishing direct connections (discovery, hole-punching); it must never relay data.
 - **Scales to many small items** (comments, likes) and many peers.
 
-This document lists what was fixed in the first pass (quick fixes) and what remains, with a proposed fix for each remaining item so it can be picked up in a separate session.
+This document lists what was fixed in the first pass (quick fixes), what was fixed in the connectivity pass (C1–C6), and what remains, with a proposed fix for each remaining item so it can be picked up in a separate session.
 
-## Part 1: Fixed in this pass
+## Part 1: Fixed in the first pass
 
 | # | Problem | Fix | Tests |
 |---|---|---|---|
@@ -21,58 +21,30 @@ This document lists what was fixed in the first pass (quick fixes) and what rema
 | F7 | **"A and B, only A has an open port" did not work.** B saw A only as an anonymous `bootstrap:host:port` entry without a key, so it never fetched A's manifests. Outbound-only peers were registered with a made-up port 39877. There was no periodic sync, so a peer that can't receive pushes never saw later updates. | A regular peer answers `Announce` with its own peer info, so B learns A as a real peer. Outbound-only peers are registered with port 0, and `PeerRouter.IsDialable` keeps everyone from dialling them. `SyncOrchestrator` pulls deltas from all peers every 60 s (`SecurityLimits.PeriodicSyncIntervalSeconds`). | `OnlyOnePeerListening_OutboundOnlyPeerExchangesManifestsBothWays` |
 | F8 | **The integration tests could not detect broken discovery.** `Bootstrap_LateJoiner_*` asserted `ConnectedPeerCount >= 0` (always true), and `MeshTestContext.ConnectAndSyncAllAsync` force-pushed every manifest between peers over 127.0.0.1. | Real assertions. `ConnectAndSyncAllAsync` now only waits (and triggers the periodic sync) and throws `TimeoutException` if the mesh does not converge by itself. | All integration tests |
 
-## Part 2: Out of scope, to be addressed in later sessions
+## Part 2: Connectivity, fixed in the second pass
+
+The connection model is now: every peer keeps a **persistent session** with each bootstrap node and with a few neighbours. A session is a TCP connection where the remote has an open port, or a **hole-punched UDP** connection (LiteNetLib, reliable ordered) where neither side has one. Requests and pushes flow in both directions over it. The bootstrap only introduces peers; it never relays data.
+
+| # | Problem | Fix | Tests |
+|---|---|---|---|
+| C1 | **No persistent, bidirectional connections.** Every exchange opened a new TCP connection to the target's listening port, so peers behind NAT could only poll (every 60 s). | `PeerSession` multiplexes requests in both directions over one connection (frames carry a kind and a request ID; several requests can be in flight). A one-shot `OpenSession` request upgrades an incoming TCP connection (`ManifestExchangeServer.SessionUpgradeHandler`); `PeerSessionManager` owns the sessions. Keepalive every 25 s (`SessionKeepaliveSeconds`), closed after 75 s of silence. Each side sends a `Hello` with a fresh nonce and the answer signs it, so a session is only attributed to a UserId after a challenge-response. Duplicate sessions (both sides dialled) are pruned deterministically (both sides rank by the two nonces). `ManifestExchangeClient` routes every request over a session when one exists (`SessionResolver`), else one-shot TCP. Peers open control sessions to all bootstrap nodes and up to 8 dialable neighbours (`MaxOutboundNeighbourSessions`). Fan-out pushes go to every peer with a session, including outbound-only ones. The periodic pull is now a 5-minute anti-entropy fallback (`PeriodicSyncIntervalSeconds = 300`). | `PeerSessionTests.TcpSession_*`, `TcpSessions_DialledFromBothSides_*`, `OnlyOnePeerListening_OutboundOnlyPeerExchangesManifestsBothWays` (later updates now arrive by push, without polling) |
+| C2 | **Hole punching did nothing useful.** The bootstrap had no UDP socket, rendezvous sessions never reached the target, punches went to the TCP port, and all real traffic was TCP. | `UdpSessionHost`: one UDP socket per node (LiteNetLib with `NatPunchModule`, bound to the manifest port number). Any peer with an open port, and the standalone bootstrap, is an **introducer**. B sends `RequestIntroduction(C)` over its session with the introducer A; A issues a single-use token, forwards an `IntroductionOffer` over its session with C, and both B and C send NAT introduce requests with that token to A's UDP port. A observes both public endpoints (like STUN) and sends each side the other's public and private endpoint; both punch at once, connect (only once per token, only accepting connections that carry an expected token), and run the same `PeerSession` protocol (including the `Hello` challenge) over the reliable UDP channel. Peers try this automatically for every non-dialable peer they learn about (`EnsureSessionsAsync`, cooldown 60 s per target) and on demand before a content download (`PrepareConnectionAsync` reports `persistent-session`, `direct-tcp-probe`, `udp-introduction`). The old rendezvous (`RequestRendezvous`, `BootstrapCoordinator.OnRendezvousRequested`, `NatTraversalService.TryPunchAsync`) is removed. | `PeerSessionTests.Introduction_*`, `TwoPeersWithoutOpenPorts_ExchangeManifestsDirectlyOverHolePunchedUdp` |
+| C3 | **The bootstrap relayed data.** `RelayManifestPush` and relay `GetManifest` made it store and serve (unverified) manifests; the relay path only activated for hostnames containing "bootstrap". | Removed `RelayManifestPush`, `TargetUserId`, the `relay` capability, `relayedManifestProvider` and the bootstrap's manifest store. Proto numbers are `reserved`; old peers sending them get `Acknowledged = false`. The bootstrap no longer registers peers from pushes (only from `Announce`). | `Bootstrap_NeverStoresOrServesManifests` |
+| C4 | **Symmetric NAT on both sides.** | Accepted, not relayed: if no introducer can connect two peers, `PrepareConnectionAsync` reports it and the download uses any other peer that holds the hash. The NAT guidance text no longer promises a relay. Small items still need S2 (gossip) to reach such pairs; see below. | — |
+| C5 | **Announced port after UPnP.** The mapped port was assumed equal to the local one, failures were ignored, and nothing checked reachability. | `NatTraversalService.ExternalPort` records the public port the router actually mapped (null if mapping failed); the router's external IP is only used when a mapping exists. On every `Announce` with a port, the receiver **dials back** to the observed address and that port (a one-shot `Ping`, 3 s timeout, cached 1 min) and registers the peer as outbound-only (port 0) if it fails. The response carries `ObservedAddress` and `DialBackSucceeded`. The peer then shares port 0 in its own record (`IsPubliclyReachable = false`) but keeps announcing its candidate port to bootstrap nodes, so it recovers as soon as the port opens. | `PeerSessionTests.Announce_WithUnreachablePort_*`, `Announce_WithReachablePort_*` |
+| C6 | **Routing-table liveness and address authenticity.** PEX mentions refreshed `LastSeen`, keyless PEX entries could overwrite a known peer's address, and the 5-minute cutoff equalled the 5-minute re-bootstrap interval. | Peers sign their own `PeerInfo` (UserId, address, port, `SignedAtUtc`; `PeerRecords`), re-signed every 4 minutes and shared in hellos, announcements and pushes. `PeerRouter` separates **direct** contact (announce, session handshake and traffic, successful fetch/push/PEX, LAN discovery: refresh `LastSeen`, observed address wins) from **hearsay** (PEX and bootstrap lists: may add an unknown peer, but only a validly signed, newer record may change a known peer's address or move its `LastSeen`, and only up to its signing time). Relaying nodes keep the owner's signature only while it still matches the address and port they forward. The liveness cutoff is 12 minutes (`PeerLivenessTimeoutMinutes`), longer than the bootstrap heartbeat; the bootstrap also treats a live control session as liveness. | `PeerRouterLivenessTests` |
+
+### Deviations from the proposed fixes, and follow-ups
+
+- **TCP stays for peers with an open port.** The proposal was one UDP socket for all P2P traffic. Here UDP carries only hole-punched sessions; peers with an open port keep TCP (and one-shot TCP stays for backward compatibility and bulk content from dialable peers). The UDP socket uses the same port number as TCP, and UPnP maps both.
+- **No transport encryption yet.** Sessions (TCP and UDP) are authenticated (challenge-response on the `Hello`) but not encrypted, the same as the previous one-shot TCP. All manifest data is signed, so integrity is covered; confidentiality is not. A follow-up could derive a session key from an ephemeral key exchange during the `Hello` and encrypt frames (for UDP, as a LiteNetLib `PacketLayerBase`).
+- **IPv6 and LAN-first candidates.** LiteNetLib's introduction already tries the private (LAN) endpoint alongside the public one. IPv6 is not enabled on the UDP socket.
+- **Session content is capped at 1 MB per response** (`MaxSessionContentSliceBytes`); chunked downloads (512 KB) are unaffected. Whole-file one-shot requests only use TCP to a dialable peer.
+- **Tests run on 127.0.0.1**, where punching trivially succeeds. The protocol path is exercised end to end (introducer, tokens, punch, connect, handshake), but real NAT behaviour still needs H3.
+
+## Part 3: Out of scope, to be addressed in later sessions
 
 Ordered roughly by priority. Each item can be done in its own session.
-
-### Connectivity (the core design gap)
-
-#### C1. Persistent, bidirectional peer connections
-**Problem.** Every exchange opens a new TCP connection from the requester to the target's listening port. A peer behind NAT can only make requests; it can never be pushed to. F7 works around this by polling every 60 s, which is slow for comments and costs about 3 connections per peer per minute.
-
-**Fix.** Keep one long-lived connection per neighbour and multiplex requests over it in both directions (frames carry a request ID and a direction). Whoever can dial, dials; once connected, both sides can push and request. Send a keepalive about every 25 s to hold NAT mappings open. Then remove the periodic poll (or reduce it to an anti-entropy fallback every few minutes). Files: `ManifestExchangeClient`, `ManifestExchangeServer`, `SyncOrchestrator`, `PeerRouter`.
-
-#### C2. Real rendezvous and hole punching (B↔C through A)
-**Problem.** The hole punching that exists does nothing useful:
-- The bootstrap has no UDP socket, so it never learns anyone's public UDP address and port.
-- `BootstrapCoordinator.OnRendezvousRequested` stores a session but never notifies the target and exchanges no addresses.
-- `NatTraversalService.TryPunchAsync` punches UDP towards the peer's TCP port, but all traffic afterwards is TCP.
-- `PrepareConnectionAsync` only runs when the peer is missing from the routing table.
-
-**Fix.**
-1. Every peer keeps a control connection (C1) to at least one introducer. Any peer with an open port can be one; fold `BootstrapCoordinator` features into normal peers.
-2. Use one UDP socket per peer for all P2P traffic. The introducer observes each peer's public address and port on it (like STUN) and sends an "introduce" message to **both** B and C with each other's public and private addresses.
-3. Both sides punch at the same time, then run a reliable, encrypted transport over the same socket.
-
-LiteNetLib (`NatPunchModule` + introducer) implements this pattern in .NET. Try LAN (private) and IPv6 addresses first. TCP simultaneous-open is not reliable enough to rely on.
-
-#### C3. Remove the bootstrap data relay
-**Problem.** `RelayManifestPush` and relay `GetManifest` (`TargetUserId`) make the bootstrap store and serve manifests. That contradicts the design, and the implementation is broken too:
-- The relay fetch path only activates if the bootstrap's hostname contains the word "bootstrap" (`ManifestExchangeClient.FetchManifestAsync`).
-- The bootstrap stores relayed manifests without verifying them, so anyone can overwrite a user's relayed manifest.
-
-**Fix.** Once F7/C1 give outbound-only peers a working path, delete `RelayManifestPush`, the `relay` capability and `relayedManifestProvider`. Update the header comment in `MeshWave.Bootstrap/Program.cs`.
-
-#### C4. Symmetric NAT on both sides
-**Problem.** Two peers behind symmetric NATs usually cannot punch through to each other.
-
-**Fix.** Accept it, rather than relaying through the bootstrap. With gossip replication (S2), small items don't need a direct B↔C link, and files can come from any other peer that holds the hash. Optionally, peers (not the bootstrap) can volunteer as relays with user consent later.
-
-#### C5. Announced address and port after UPnP
-**Problem.** `NatTraversalService.SetupPortMappingAsync` maps external port = internal port and ignores failures. `BuildAnnouncingPeerInfo` always announces the local port.
-
-**Fix.** Announce the mapped external port. If mapping fails and the peer is not reachable, fall back to outbound-only (port 0) automatically. Detect reachability with a dial-back check by the bootstrap after `Announce`.
-
-#### C6. Routing-table liveness and address authenticity
-**Problem.**
-- `PeerRouter.AddOrRefreshPeer` refreshes `LastSeen` from any PEX mention, so peers nobody has actually reached look online.
-- Keyless PEX entries can still overwrite a known peer's address (F5 only protects the key).
-- The bootstrap entry's 5-minute cutoff equals the 5-minute re-bootstrap interval, so it can flicker out of `GetPeers()`.
-
-**Fix.**
-- Only refresh `LastSeen` on direct contact.
-- Make peers sign their own `PeerInfo` records (address, port, timestamp) and ignore unsigned updates to known peers.
-- Make the liveness cutoff longer than the re-bootstrap interval.
 
 ### Scalability of manifests
 
@@ -82,7 +54,7 @@ LiteNetLib (`NatPunchModule` + introducer) implements this pattern in .NET. Try 
 **Fix.** Push only new ops (from the receiver's last acknowledged sequence), or announce `{author, stream, headSeq, headHash}` and let receivers pull. Debounce and batch fan-out using the cooldown.
 
 #### S2. Store-and-forward gossip
-**Problem.** Peers only serve their own manifests (`relayedManifestProvider` returns null in `SyncOrchestrator`). To see all comments on a track you need a live, direct connection to every commenter.
+**Problem.** Peers only serve their own manifests. To see all comments on a track you need a live, direct connection to every commenter. This also matters for C4: two peers that cannot punch through to each other never see each other's updates.
 
 **Fix.** Signed ops verify themselves, so every peer should serve every op it holds. Push to a bounded set of peers (6–8) and let the rest pull lazily; deduplicate by op ID. Secure Scuttlebutt's EBT (per-feed version vectors over append-only signed feeds) is very close to MeshWave's model. GossipSub is the libp2p equivalent.
 
@@ -148,4 +120,4 @@ LiteNetLib (`NatPunchModule` + introducer) implements this pattern in .NET. Try 
 `MeshWave.ViewModels.Tests` (net10.0-windows) could not be run while making these fixes. They use `MeshTestContext.ConnectAndSyncAllAsync`, which now requires real convergence (F8). Run them on Windows and fix any test that relied on the old forced pushes.
 
 #### H3. NAT-realistic test harness
-All integration tests run on 127.0.0.1, where every peer can reach every other. Add tests that simulate NAT (outbound-only peers, as in F7). For C2, use Linux network namespaces with iptables MASQUERADE in CI, so hole punching is exercised for real.
+All integration tests run on 127.0.0.1, where every peer can reach every other. Outbound-only peers (F7) and introductions between them (C2) are covered on loopback, but NAT itself is not simulated. Use Linux network namespaces with iptables MASQUERADE in CI so hole punching (including a symmetric-NAT pair, C4) is exercised for real.

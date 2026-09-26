@@ -84,10 +84,70 @@ public class MeshIntegrationTests : IAsyncLifetime
         // Bob -> Alice: Bob pushes over his own outbound connection.
         await alice.WaitForConditionAsync(() => CountPublicTracks(alice.GetPeerManifest(bob.UserId)) == 1);
 
-        // Alice -> Bob: Bob pulls (periodic sync). Later updates must reach him too.
+        // Alice -> Bob: Bob keeps a persistent session with Alice, so Alice can push to him although he has no open port.
         await bob.WaitForConditionAsync(() => CountPublicTracks(bob.GetPeerManifest(alice.UserId)) == 1);
+        Assert.NotNull(alice.Orchestrator.Sessions.GetSession(bob.UserId));
+
+        // Later updates arrive as pushes over that session, without anyone polling.
         alice.AnnounceTrack("alice-track-2", "alice-hash-2", new Dictionary<string, string> { ["title"] = "Alice Two" });
-        await bob.WaitForConditionAsync(() => CountPublicTracks(bob.GetPeerManifest(alice.UserId)) == 2);
+        await WaitWithoutSyncAsync(() => CountPublicTracks(bob.GetPeerManifest(alice.UserId)) == 2);
+    }
+
+    [Fact]
+    public async Task TwoPeersWithoutOpenPorts_ExchangeManifestsDirectlyOverHolePunchedUdp()
+    {
+        // Alice has an open port and acts as bootstrap and introducer. Bob and Carol have no listener (behind NAT).
+        // Alice never serves Bob's data to Carol (or vice versa), so Carol can only get it over a direct Bob <-> Carol link.
+        var alice = await _context.CreatePeerAsync("Alice", useBootstrap: false);
+        var bob = await _context.CreatePeerAsync("Bob", bootstrapNodes: [$"127.0.0.1:{alice.Port}"], actAsListener: false);
+        var carol = await _context.CreatePeerAsync("Carol", bootstrapNodes: [$"127.0.0.1:{alice.Port}"], actAsListener: false);
+
+        bob.AnnounceTrack("bob-track-1", "bob-hash-1", new Dictionary<string, string> { ["title"] = "Bob One" });
+        carol.AnnounceTrack("carol-track-1", "carol-hash-1", new Dictionary<string, string> { ["title"] = "Carol One" });
+
+        await WaitWithoutSyncAsync(() => bob.Orchestrator.Sessions.GetSession(carol.UserId) != null
+                                         && carol.Orchestrator.Sessions.GetSession(bob.UserId) != null, timeoutMs: 60000);
+        Assert.Equal("udp", bob.Orchestrator.Sessions.GetSession(carol.UserId)!.TransportKind);
+
+        await WaitWithoutSyncAsync(() => CountPublicTracks(carol.GetPeerManifest(bob.UserId)) == 1
+                                         && CountPublicTracks(bob.GetPeerManifest(carol.UserId)) == 1);
+
+        // New publications are pushed over the punched session.
+        bob.AnnounceTrack("bob-track-2", "bob-hash-2", new Dictionary<string, string> { ["title"] = "Bob Two" });
+        await WaitWithoutSyncAsync(() => CountPublicTracks(carol.GetPeerManifest(bob.UserId)) == 2);
+
+        // Neither has an open port: both are known as outbound-only.
+        Assert.Equal(0, carol.Orchestrator.GetPeers().Single(p => p.UserId == bob.UserId).Port);
+    }
+
+    [Fact]
+    public async Task Bootstrap_NeverStoresOrServesManifests()
+    {
+        var alice = await _context.CreatePeerAsync("Alice", actAsListener: false);
+        alice.AnnounceTrack("alice-track-1", "alice-hash-1", new Dictionary<string, string> { ["title"] = "Alice One" });
+        await Task.Delay(1000, TestContext.Current.CancellationToken);
+
+        var client = new ManifestExchangeClient(timeoutMs: 2000);
+        var manifest = await client.FetchManifestAsync("127.0.0.1", _context.BootstrapPort, ManifestStreamType.Content,
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Null(manifest);
+
+        // The bootstrap knows Alice (outbound-only), but does not advertise any relay for her.
+        var peers = await client.FetchPeersAsync("127.0.0.1", _context.BootstrapPort, cancellationToken: TestContext.Current.CancellationToken);
+        var aliceEntry = Assert.Single(peers!, p => p.UserId == alice.UserId);
+        Assert.Equal(0, aliceEntry.Port);
+        Assert.DoesNotContain("relay", aliceEntry.Capabilities);
+    }
+
+    /// <summary>Waits for a condition without triggering any sync, so only pushes can satisfy it.</summary>
+    private static async Task WaitWithoutSyncAsync(Func<bool> condition, int timeoutMs = 20000)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (!condition())
+        {
+            if (DateTime.UtcNow > deadline) throw new TimeoutException("Condition not met within timeout.");
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+        }
     }
 
     [Fact]
