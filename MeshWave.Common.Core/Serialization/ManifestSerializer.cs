@@ -62,6 +62,7 @@ public static class ManifestSerializer
         if (request.ChunkLength.HasValue) proto.ChunkLength = request.ChunkLength.Value;
         if (request.Hello != null) proto.Hello = MapToProto(request.Hello);
         if (request.Introduction != null) proto.Introduction = MapToProto(request.Introduction);
+        if (request.TargetUserId != null) proto.TargetUserId = request.TargetUserId;
 
         return proto;
     }
@@ -80,7 +81,8 @@ public static class ManifestSerializer
             ChunkOffset = proto.HasChunkOffset ? proto.ChunkOffset : null,
             ChunkLength = proto.HasChunkLength ? proto.ChunkLength : null,
             Hello = proto.Hello != null ? MapFromProto(proto.Hello) : null,
-            Introduction = proto.Introduction != null ? MapFromProto(proto.Introduction) : null
+            Introduction = proto.Introduction != null ? MapFromProto(proto.Introduction) : null,
+            TargetUserId = proto.HasTargetUserId ? proto.TargetUserId : null
         };
     }
 
@@ -100,6 +102,7 @@ public static class ManifestSerializer
         if (response.Introduction != null) proto.Introduction = MapToProto(response.Introduction);
         if (response.ObservedAddress != null) proto.ObservedAddress = response.ObservedAddress;
         if (response.DialBackSucceeded.HasValue) proto.DialBackSucceeded = response.DialBackSucceeded.Value;
+        if (response.Heads != null) proto.Heads.AddRange(response.Heads.Take(SecurityLimits.MaxHeadsPerExchange).Select(MapToProto));
 
         return proto;
     }
@@ -117,8 +120,54 @@ public static class ManifestSerializer
             Hello = proto.Hello != null ? MapFromProto(proto.Hello) : null,
             Introduction = proto.Introduction != null ? MapFromProto(proto.Introduction) : null,
             ObservedAddress = proto.HasObservedAddress ? proto.ObservedAddress : null,
-            DialBackSucceeded = proto.HasDialBackSucceeded ? proto.DialBackSucceeded : null
+            DialBackSucceeded = proto.HasDialBackSucceeded ? proto.DialBackSucceeded : null,
+            Heads = proto.Heads.Take(SecurityLimits.MaxHeadsPerExchange).Select(MapFromProto).ToList()
         };
+    }
+
+    private static ProtoStreamHead MapToProto(StreamHead head)
+    {
+        return new ProtoStreamHead
+        {
+            UserId = head.UserId,
+            StreamType = (ProtoManifestStreamType)head.StreamType,
+            HeadSequenceNumber = head.HeadSequenceNumber,
+            HeadHash = head.HeadHash ?? string.Empty
+        };
+    }
+
+    private static StreamHead MapFromProto(ProtoStreamHead proto)
+    {
+        return new StreamHead(proto.UserId, (ManifestStreamType)proto.StreamType, proto.HeadSequenceNumber, proto.HeadHash);
+    }
+
+    /// <summary>Encoded size of an operation on the wire, used to fill manifest pages up to <see cref="SecurityLimits.MaxManifestPageBytes"/>.</summary>
+    public static int GetEncodedSize(ManifestOperation op)
+    {
+        return MapToProto(op).CalculateSize();
+    }
+
+    /// <summary>Encoded size of a snapshot on the wire.</summary>
+    public static int GetEncodedSize(ManifestSnapshot snapshot)
+    {
+        return MapToProto(snapshot).CalculateSize();
+    }
+
+    /// <summary>
+    /// Signatures are base64 in the model (and in storage) but raw bytes on the wire, which saves a third of their size.
+    /// </summary>
+    private static ByteString SignatureToBytes(string? signature)
+    {
+        if (string.IsNullOrEmpty(signature)) return ByteString.Empty;
+        var buffer = new byte[signature.Length];
+        return Convert.TryFromBase64String(signature, buffer, out var written)
+            ? ByteString.CopyFrom(buffer, 0, written)
+            : ByteString.Empty;
+    }
+
+    private static string SignatureFromBytes(ByteString bytes)
+    {
+        return bytes.IsEmpty ? string.Empty : Convert.ToBase64String(bytes.Span);
     }
 
     public static ProtoManifest MapToProto(Manifest manifest)
@@ -128,9 +177,11 @@ public static class ManifestSerializer
             UserId = manifest.UserId,
             StreamType = (ProtoManifestStreamType)manifest.StreamType,
             Version = manifest.Version,
-            LastUpdated = Timestamp.FromDateTime(manifest.LastUpdated.ToUniversalTime())
+            LastUpdated = Timestamp.FromDateTime(manifest.LastUpdated.ToUniversalTime()),
+            HasMore = manifest.HasMore
         };
 
+        if (manifest.AuthorPublicKey != null) proto.AuthorPublicKey = manifest.AuthorPublicKey;
         if (manifest.Snapshot != null) proto.Snapshot = MapToProto(manifest.Snapshot);
         if (manifest.Operations != null) proto.Operations.AddRange(manifest.Operations.Select(MapToProto));
 
@@ -146,6 +197,8 @@ public static class ManifestSerializer
             Snapshot = proto.Snapshot != null ? MapFromProto(proto.Snapshot) : null,
             Version = proto.Version,
             LastUpdated = proto.LastUpdated.ToDateTime(),
+            AuthorPublicKey = proto.HasAuthorPublicKey ? proto.AuthorPublicKey : null,
+            HasMore = proto.HasMore,
             Operations = new List<ManifestOperation>()
         };
 
@@ -182,8 +235,9 @@ public static class ManifestSerializer
             TargetId = op.TargetId,
             TargetType = op.TargetType,
             SequenceNumber = op.SequenceNumber,
-            Signature = op.Signature,
-            Timestamp = Timestamp.FromDateTime(op.Timestamp.ToUniversalTime())
+            Signature = SignatureToBytes(op.Signature),
+            Timestamp = Timestamp.FromDateTime(op.Timestamp.ToUniversalTime()),
+            PrevHash = op.PrevHash ?? string.Empty
         };
 
         if (op.ContentHash != null) proto.ContentHash = op.ContentHash;
@@ -214,9 +268,10 @@ public static class ManifestSerializer
             TargetType = proto.TargetType,
             ContentHash = proto.HasContentHash ? proto.ContentHash : null,
             SequenceNumber = proto.SequenceNumber,
-            Signature = proto.Signature,
+            Signature = SignatureFromBytes(proto.Signature),
             Timestamp = proto.Timestamp.ToDateTime(),
-            Metadata = new Dictionary<string, string>(proto.Metadata)
+            Metadata = new Dictionary<string, string>(proto.Metadata),
+            PrevHash = proto.PrevHash
         };
 
         if (proto.HasShaderScript && !string.IsNullOrWhiteSpace(proto.ShaderScript))
@@ -231,7 +286,8 @@ public static class ManifestSerializer
         {
             LastSequenceNumber = snapshot.LastSequenceNumber,
             Timestamp = Timestamp.FromDateTime(snapshot.Timestamp.ToUniversalTime()),
-            Signature = snapshot.Signature
+            Signature = SignatureToBytes(snapshot.Signature),
+            HeadHash = snapshot.HeadHash ?? string.Empty
         };
 
         if (snapshot.LibraryStateDigest != null) proto.LibraryStateDigest = snapshot.LibraryStateDigest;
@@ -253,7 +309,8 @@ public static class ManifestSerializer
         {
             LastSequenceNumber = proto.LastSequenceNumber,
             Timestamp = proto.Timestamp.ToDateTime(),
-            Signature = proto.Signature,
+            Signature = SignatureFromBytes(proto.Signature),
+            HeadHash = proto.HeadHash,
             LibraryStateDigest = proto.HasLibraryStateDigest ? proto.LibraryStateDigest : null,
             PlayCounts = new Dictionary<string, int>(proto.PlayCounts),
             FollowedUserIds = proto.FollowedUserIds.ToList(),

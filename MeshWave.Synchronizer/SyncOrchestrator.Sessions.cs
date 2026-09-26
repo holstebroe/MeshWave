@@ -108,7 +108,7 @@ public partial class SyncOrchestrator
         // Catch up over the new session; for a newly punched peer this is the first exchange ever.
         var routed = _router.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, remote.UserId, StringComparison.OrdinalIgnoreCase));
         if (routed != null)
-            _ = Task.Run(() => TryFetchAndMergeAsync(routed, _cts?.Token ?? CancellationToken.None));
+            _ = Task.Run(() => SyncWithPeerAsync(routed, _cts?.Token ?? CancellationToken.None));
     }
 
     private void OnSessionActivity(PeerSession session)

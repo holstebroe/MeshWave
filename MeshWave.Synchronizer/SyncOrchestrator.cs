@@ -119,7 +119,10 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
         lock (_diagnosticsLock)
         {
             var routedPeers = _router.GetPeers().ToDictionary(p => p.UserId, StringComparer.OrdinalIgnoreCase);
-            var manifests = _peerStore.GetAll().ToDictionary(m => m.UserId, StringComparer.OrdinalIgnoreCase);
+            // The store holds one manifest per stream, so several per user.
+            var manifests = _peerStore.GetAll()
+                .GroupBy(m => m.UserId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
 
             var allUserIds = routedPeers.Keys
                 .Concat(manifests.Keys)
@@ -133,7 +136,9 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
                 .Select(userId =>
                 {
                     routedPeers.TryGetValue(userId, out var peer);
-                    manifests.TryGetValue(userId, out var manifest);
+                    var streams = manifests.GetValueOrDefault(userId) ?? [];
+                    var content = streams.FirstOrDefault(m => m.StreamType == ManifestStreamType.Content);
+                    var social = streams.FirstOrDefault(m => m.StreamType == ManifestStreamType.Social);
                     _peerMessageLogs.TryGetValue(userId, out var queue);
 
                     var logs = queue?.ToList() ?? [];
@@ -142,15 +147,15 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
                     return new PeerDiagnosticsSnapshot
                     {
                         UserId = userId,
-                        DisplayName = ResolveDisplayName(manifest, peer),
+                        DisplayName = ResolveDisplayName(social ?? content, peer),
                         Address = peer?.Address ?? string.Empty,
                         Port = peer?.Port ?? 0,
                         IsOnline = peer != null,
                         IsBootstrap = isBootstrap,
-                        HasManifest = manifest != null,
-                        PublishedTrackCount = CountPublishedItems(manifest, "Track"),
-                        PublishedAlbumCount = CountPublishedItems(manifest, "Album"),
-                        OperationCount = manifest?.Operations.Count ?? 0,
+                        HasManifest = streams.Count > 0,
+                        PublishedTrackCount = CountPublishedItems(content, "Track"),
+                        PublishedAlbumCount = CountPublishedItems(content, "Album"),
+                        OperationCount = streams.Sum(m => m.Operations.Count),
                         RecentMessages = logs
                     };
                 })
@@ -186,6 +191,9 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
         CatalogueService = catalogueService;
 
         _peerStore = peerManifestStore;
+        _manifestManager.ForkDetected += (userId, streamType, sequenceNumber) =>
+            RecordPeerMessage(userId, "Fork", success: false,
+                $"Rejected an operation {sequenceNumber} of the {streamType} stream that conflicts with the one already held: the author signed two versions.");
 
         _contentExchange = contentExchange;
         _natTraversal = natTraversal;
@@ -228,6 +236,15 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
                 _localManifests[streamType] = m;
             }
 
+        // Our own streams must be valid hash-linked logs before anyone replicates them (re-signs manifests from older versions).
+        lock (_persistedLocal) _persistedLocal.Clear();
+        foreach (var manifest in _localManifests.Values)
+        {
+            _manifestManager.EnsureSignedChain(manifest, identity.PrivateKeyPem, identity.PublicKeyPem);
+            SaveLocalManifest(manifest);
+            _lastFanoutHeads[manifest.StreamType] = ManifestManager.GetHeadSequenceNumber(manifest);
+        }
+
         _actAsListener = actAsListener;
         _contentProvider = contentProvider;
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -247,6 +264,7 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
             () => _router.GetPeersForExchange(),
             contentProvider: _contentProvider,
             selfInfoProvider: GetSelfRecord);
+        _server.ConfigureReplication(GetStream, GetAllHeads);
 
         _sessions.Configure(
             identity,

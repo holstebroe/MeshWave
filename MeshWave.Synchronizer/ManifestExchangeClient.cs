@@ -70,15 +70,25 @@ public class ManifestExchangeClient
         return FetchManifestCoreAsync(null, address, port, streamType, startSequenceNumber, endSequenceNumber, cancellationToken);
     }
 
-    private async Task<Manifest?> FetchManifestCoreAsync(string? userId, string address, int port, ManifestStreamType streamType, int startSequenceNumber, int? endSequenceNumber, CancellationToken cancellationToken)
+    /// <summary>
+    /// Fetches one page of <paramref name="authorUserId"/>'s stream from <paramref name="peer"/>, starting at
+    /// <paramref name="startSequenceNumber"/>. The author may be the peer itself or anyone whose stream it replicates.
+    /// </summary>
+    public Task<Manifest?> FetchStreamAsync(PeerInfo peer, string authorUserId, ManifestStreamType streamType, int startSequenceNumber, CancellationToken cancellationToken = default)
     {
-        _logger.Debug("Fetching {0} manifest from {1}:{2} (start={3}, end={4})", streamType, address, port, startSequenceNumber, endSequenceNumber);
+        return FetchManifestCoreAsync(peer.UserId, peer.Address, peer.Port, streamType, startSequenceNumber, null, cancellationToken, authorUserId);
+    }
+
+    private async Task<Manifest?> FetchManifestCoreAsync(string? userId, string address, int port, ManifestStreamType streamType, int startSequenceNumber, int? endSequenceNumber, CancellationToken cancellationToken, string? targetUserId = null)
+    {
+        _logger.Debug("Fetching {0} manifest of {1} from {2}:{3} (start={4}, end={5})", streamType, targetUserId ?? userId ?? "peer", address, port, startSequenceNumber, endSequenceNumber);
         var response = await ExchangeAsync(userId, address, port, new ManifestRequest
         {
             Type = ManifestRequestType.GetManifest,
             StreamType = streamType,
             StartSequenceNumber = startSequenceNumber,
-            EndSequenceNumber = endSequenceNumber
+            EndSequenceNumber = endSequenceNumber,
+            TargetUserId = targetUserId
         }, cancellationToken);
 
         _logger.Debug("FetchManifest from {0}:{1} outcome: {2} ops", address, port, response?.Manifest?.Operations.Count ?? 0);
@@ -109,9 +119,27 @@ public class ManifestExchangeClient
         return PushManifestCoreAsync(peer.UserId, peer.Address, peer.Port, manifest, announcingPeer, cancellationToken);
     }
 
+    /// <summary>
+    /// Pushes a manifest (usually a delta: the operations the peer is missing) to a peer, over its session if there is one.
+    /// Returns whether it was acknowledged and the peer's head of that stream after merging, if it reported one.
+    /// </summary>
+    public async Task<PushResult> PushStreamAsync(PeerInfo peer, Manifest manifest, PeerInfo? announcingPeer, CancellationToken cancellationToken = default)
+    {
+        var response = await PushCoreAsync(peer.UserId, peer.Address, peer.Port, manifest, announcingPeer, cancellationToken);
+        var head = response?.Heads.FirstOrDefault(h => h.UserId == manifest.UserId && h.StreamType == manifest.StreamType);
+        return new PushResult(response?.Acknowledged == true, head);
+    }
+
     private async Task<bool> PushManifestCoreAsync(string? userId, string address, int port, Manifest manifest, PeerInfo? announcingPeer, CancellationToken cancellationToken)
     {
-        _logger.Debug("Pushing {0} manifest for {1} to {2}:{3}", manifest.StreamType, manifest.UserId, address, port);
+        var response = await PushCoreAsync(userId, address, port, manifest, announcingPeer, cancellationToken);
+        return response?.Acknowledged == true;
+    }
+
+    private async Task<ManifestResponse?> PushCoreAsync(string? userId, string address, int port, Manifest manifest, PeerInfo? announcingPeer, CancellationToken cancellationToken)
+    {
+        _logger.Debug("Pushing {0} manifest of {1} ({2} ops from seq {3}) to {4}:{5}", manifest.StreamType, manifest.UserId,
+            manifest.Operations.Count, manifest.Snapshot?.LastSequenceNumber ?? manifest.Operations.FirstOrDefault()?.SequenceNumber, address, port);
         var response = await ExchangeAsync(userId, address, port, new ManifestRequest
         {
             Type = ManifestRequestType.PushManifest,
@@ -121,7 +149,17 @@ public class ManifestExchangeClient
         }, cancellationToken);
 
         _logger.Debug("PushManifest to {0}:{1} outcome: {2}", address, port, response?.Acknowledged == true);
-        return response?.Acknowledged == true;
+        return response;
+    }
+
+    /// <summary>
+    /// Asks a peer for the heads of every stream it holds (anti-entropy). Returns null if the peer cannot be reached or
+    /// does not replicate streams.
+    /// </summary>
+    public async Task<IReadOnlyList<StreamHead>?> FetchHeadsAsync(PeerInfo peer, CancellationToken cancellationToken = default)
+    {
+        var response = await ExchangeAsync(peer.UserId, peer.Address, peer.Port, new ManifestRequest { Type = ManifestRequestType.GetHeads }, cancellationToken);
+        return response?.Acknowledged == true ? response.Heads : null;
     }
 
     /// <summary>
@@ -476,6 +514,11 @@ public class ManifestExchangeClient
         }
     }
 }
+
+/// <summary>Outcome of a <see cref="ManifestRequestType.PushManifest"/>.</summary>
+/// <param name="Acknowledged">Whether the peer accepted the request.</param>
+/// <param name="ReceiverHead">The peer's head of the pushed stream after merging; null if it did not report one.</param>
+public record PushResult(bool Acknowledged, StreamHead? ReceiverHead);
 
 /// <summary>Outcome of an <see cref="ManifestRequestType.Announce"/>.</summary>
 /// <param name="Peers">The node's own peer info (empty for a standalone bootstrap).</param>

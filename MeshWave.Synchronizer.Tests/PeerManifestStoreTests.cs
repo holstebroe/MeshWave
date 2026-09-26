@@ -71,7 +71,7 @@ public class PeerManifestStoreTests : IDisposable
         _store.MergeAndSave(incoming, pub, _manager);
 
         // A file should exist in the temp directory
-        var files = Directory.GetFiles(_tempDir, "*.json");
+        var files = Directory.GetFiles(_tempDir, "*" + ManifestLog.Extension);
         Assert.Single(files);
     }
 
@@ -133,7 +133,7 @@ public class PeerManifestStoreTests : IDisposable
         _store.Remove(userId);
 
         Assert.Null(_store.Get(userId));
-        Assert.Empty(Directory.GetFiles(_tempDir, "*.json"));
+        Assert.Empty(Directory.GetFiles(_tempDir, "*" + ManifestLog.Extension));
     }
 
     [Fact]

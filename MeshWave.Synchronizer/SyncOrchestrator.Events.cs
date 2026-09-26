@@ -30,50 +30,10 @@ public partial class SyncOrchestrator
         _ = Task.Run(async () =>
         {
             // Open a persistent session first (TCP, or hole-punched UDP for peers without an open port),
-            // so that the fetch and the pushes below can use it.
+            // so that the heads exchange below can use it.
             try { await TryOpenSessionAsync(peer, ct); } catch { }
-            await TryFetchAndMergeAsync(peer, ct);
-
-            if (!HasRoute(peer))
-                return;
-
-            foreach (var streamType in Enum.GetValues<ManifestStreamType>())
-            {
-                var manifest = GetLocalManifest(streamType);
-                if (manifest == null)
-                {
-                    _logger.Debug($"OnPeerAdded: No {streamType} manifest available for {peer.UserId}");
-                    continue;
-                }
-                _logger.Debug($"OnPeerAdded: Pushing {streamType} manifest ({manifest.Operations.Count} ops) to {peer.UserId}");
-
-                Manifest manifestToPush;
-                lock (manifest)
-                {
-                    manifestToPush = new Manifest
-                    {
-                        UserId = manifest.UserId,
-                        StreamType = manifest.StreamType,
-                        Snapshot = manifest.Snapshot,
-                        Operations = manifest.Operations.ToList(),
-                        Version = manifest.Version,
-                        LastUpdated = manifest.LastUpdated
-                    };
-                }
-
-                try
-                {
-                    var acknowledged = await _client.PushManifestAsync(peer, manifestToPush, BuildAnnouncingPeerInfo(manifestToPush.StreamType), ct);
-                    if (acknowledged) _router.MarkContacted(peer.UserId);
-                    RecordPeerMessage(peer.UserId, "PushManifest", success: acknowledged,
-                        $"Pushed local {manifestToPush.StreamType} manifest ({manifestToPush.Operations.Count} op) to {DescribeRoute(peer)}.");
-                }
-                catch (Exception ex)
-                {
-                    RecordPeerMessage(peer.UserId, "PushManifest", success: false,
-                        $"Push failed for {manifestToPush.StreamType} to {DescribeRoute(peer)}: {ex.Message}");
-                }
-            }
+            // Pulls what the peer has that we lack and pushes our own streams it lacks.
+            await SyncWithPeerAsync(peer, ct);
         });
     }
 
@@ -97,107 +57,56 @@ public partial class SyncOrchestrator
             }
 
     private void OnPeerRemoved(object? sender, string userId)
-            {
+    {
+        ForgetPeerHeads(userId);
         PeerCountChanged?.Invoke(this, EventArgs.Empty);
-            }
+    }
 
     private void OnManifestReceived(object? sender, ManifestReceivedEventArgs e)
-            {
-        // Ignore pushes from ourselves
+    {
+        // Ignore pushes of our own streams
         if (e.Manifest.UserId == Identity?.UserId)
-                {
-            _logger.Debug("Ignored manifest push from self ({0})", e.Manifest.UserId);
+        {
+            _logger.Debug("Ignored manifest push of our own stream ({0})", e.Manifest.UserId);
             return;
-                }
+        }
 
         Interlocked.Increment(ref _inboundManifestPushCount);
+        var senderUserId = e.AnnouncingPeer?.UserId;
+        var fromAuthor = string.Equals(senderUserId, e.Manifest.UserId, StringComparison.OrdinalIgnoreCase);
         RecordPeerMessage(e.Manifest.UserId, "PushManifest", success: true,
-            $"Received manifest with {e.Manifest.Operations.Count} operation(s) from {e.PeerAddress}.");
-
-        var peer = _router.GetPeers().FirstOrDefault(p => p.UserId == e.Manifest.UserId);
+            $"Received {e.Manifest.StreamType} delta with {e.Manifest.Operations.Count} operation(s) from {(fromAuthor ? "the author" : senderUserId ?? "unknown")} at {e.PeerAddress}.");
 
         // UserIds are derived from public keys, so only a key that hashes to the manifest's UserId may be used
         // to verify it. Without this check anyone could push a manifest for another user signed with their own key.
-        var publicKeyPem = new[]
-            {
-                peer?.PublicKeyPem,
-                e.AnnouncingPeer?.PublicKeyPem,
-                e.Manifest.Operations
-                    .Where(op => op.OperationType == ManifestOperationType.Profile)
-                    .OrderByDescending(op => op.SequenceNumber)
-                    .Select(op => op.Metadata.GetValueOrDefault("publicKeyPem"))
-                    .FirstOrDefault(pk => !string.IsNullOrWhiteSpace(pk))
-            }
-            .FirstOrDefault(pk => CryptoService.IsPublicKeyForUser(e.Manifest.UserId, pk));
-
+        var publicKeyPem = ResolveAuthorKey(e.Manifest.UserId, e.Manifest, e.AnnouncingPeer);
         if (string.IsNullOrWhiteSpace(publicKeyPem))
-            {
-            _logger.Warn("Rejected manifest push for user {0} from {1}: no public key matching the UserId.", e.Manifest.UserId, e.PeerAddress);
+        {
+            // The push response reports that we hold nothing of this stream, so the sender follows up from the start, with the key.
+            _logger.Debug("Deferred manifest push for user {0} from {1}: no public key matching the UserId yet.", e.Manifest.UserId, e.PeerAddress);
             return;
-            }
+        }
 
-        if (peer == null)
-                {
-            var profile = e.Manifest.Operations
-                .Where(op => op.OperationType == ManifestOperationType.Profile)
-                .OrderByDescending(op => op.SequenceNumber)
-                .FirstOrDefault();
-
-            var discovered = new PeerInfo
-                    {
+        // Only a push from the author itself introduces the author as a peer; forwarded (gossiped) operations say nothing
+        // about where their author can be reached. A push is also not proof that the author is online, so a known peer is not refreshed.
+        if (fromAuthor && e.AnnouncingPeer != null && PeerRecords.IsValidlySigned(e.AnnouncingPeer)
+            && _router.GetPeers().All(p => p.UserId != e.Manifest.UserId))
+        {
+            var profile = e.Manifest.Operations.LastOrDefault(op => op.OperationType == ManifestOperationType.Profile);
+            _router.LearnPeers([new PeerInfo
+            {
                 UserId = e.Manifest.UserId,
                 DisplayName = SecurityLimits.Truncate(
-                    profile?.Metadata.GetValueOrDefault("displayName")
-                    ?? e.AnnouncingPeer?.DisplayName
-                    ?? e.Manifest.UserId,
+                    profile?.Metadata.GetValueOrDefault("displayName") ?? e.AnnouncingPeer.DisplayName ?? e.Manifest.UserId,
                     SecurityLimits.MaxDisplayNameLength),
                 Address = e.PeerAddress,
-                // Port 0 means the sender is outbound-only; only fall back to the default port for senders that don't announce.
-                Port = e.AnnouncingPeer != null ? Math.Max(0, e.AnnouncingPeer.Port) : ManifestExchangeServer.DefaultPort,
+                // Port 0 means the sender is outbound-only.
+                Port = Math.Max(0, e.AnnouncingPeer.Port),
                 LastSeen = DateTime.UtcNow,
                 PublicKeyPem = publicKeyPem
-            };
+            }]);
+        }
 
-            // A push is not proof that its author is online (anyone can forward a signed manifest),
-            // so the sender only introduces an unknown peer; it does not refresh a known one.
-            _router.LearnPeers([discovered]);
-                    }
-
-        TryMerge(e.Manifest, publicKeyPem);
-                }
-
-    private async Task TryFetchAndMergeAsync(PeerInfo peer, CancellationToken ct)
-    {
-        if (!CryptoService.IsPublicKeyForUser(peer.UserId, peer.PublicKeyPem)) return;
-        if (peer.UserId == Identity?.UserId) return;
-        if (!HasRoute(peer)) return;
-
-        foreach (ManifestStreamType streamType in Enum.GetValues(typeof(ManifestStreamType)))
-            try
-            {
-                var existing = _peerStore.Get(peer.UserId, streamType);
-                var startSeq = ManifestManager.GetHeadSequenceNumber(existing) + 1;
-
-                var remoteManifest = await _client.FetchManifestAsync(peer, _peerStore, streamType, ct);
-                _router.MarkContacted(peer.UserId);
-
-                if (remoteManifest == null)
-                {
-                    RecordPeerMessage(peer.UserId, "FetchManifest", success: false,
-                        $"Peer {DescribeRoute(peer)} returned no {streamType} manifest.");
-                    continue;
-                }
-
-                Interlocked.Increment(ref _outboundManifestFetchCount);
-                var details = $"Fetched {streamType} manifest with {remoteManifest.Operations.Count} operation(s) (delta sync from seq {startSeq}) via {DescribeRoute(peer)}.";
-                _logger.Debug(details);
-                RecordPeerMessage(peer.UserId, "FetchManifest", success: true, details);
-                TryMerge(remoteManifest, peer.PublicKeyPem);
-            }
-            catch (Exception ex)
-            {
-                RecordPeerMessage(peer.UserId, "FetchManifest", success: false,
-                    $"Fetch failed for {streamType}: {ex.Message}");
-            }
+        TryMerge(e.Manifest, publicKeyPem, senderUserId, forward: true);
     }
 }

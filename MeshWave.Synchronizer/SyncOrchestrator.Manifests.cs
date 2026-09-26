@@ -35,28 +35,47 @@ public partial class SyncOrchestrator
         SaveLocalManifests();
     }
 
+    /// <summary>
+    /// Loads the persisted local manifest for a stream, or null. Reads the append-only log; a manifest saved in the
+    /// earlier whole-file JSON format is still read (it is re-signed as a hash-linked log when P2P starts).
+    /// </summary>
     public Manifest? LoadLocalManifest(string userId, ManifestStreamType streamType)
     {
         var path = BuildLocalManifestPath(userId, streamType);
-        if (!File.Exists(path)) return null;
         try
         {
-            var json = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<Manifest>(json);
+            var manifest = ManifestLog.Read(path);
+            if (manifest != null) return manifest;
+
+            var legacyPath = Path.ChangeExtension(path, ".json");
+            return File.Exists(legacyPath) ? JsonSerializer.Deserialize<Manifest>(File.ReadAllText(legacyPath)) : null;
         }
         catch { return null; }
     }
+
+    /// <summary>Last persisted state of each local stream, so that saving appends only the new operations.</summary>
+    private readonly Dictionary<ManifestStreamType, (ManifestSnapshot? Snapshot, int Head)> _persistedLocal = [];
 
     private void SaveLocalManifest(Manifest manifest)
     {
         var path = BuildLocalManifestPath(manifest.UserId, manifest.StreamType);
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             lock (manifest)
             {
-                File.WriteAllText(path, JsonSerializer.Serialize(manifest));
+                var head = ManifestManager.GetHeadSequenceNumber(manifest);
+                lock (_persistedLocal)
+                {
+                    if (_persistedLocal.TryGetValue(manifest.StreamType, out var persisted) && ReferenceEquals(persisted.Snapshot, manifest.Snapshot) && File.Exists(path))
+                        ManifestLog.Append(path, manifest.Operations.Where(o => o.SequenceNumber > persisted.Head).OrderBy(o => o.SequenceNumber));
+                    else
+                        ManifestLog.Rewrite(path, manifest);
+                    _persistedLocal[manifest.StreamType] = (manifest.Snapshot, head);
+                }
             }
+
+            var legacyPath = Path.ChangeExtension(path, ".json");
+            if (File.Exists(legacyPath)) File.Delete(legacyPath);
         }
         catch { /* best-effort disk write */ }
     }
@@ -68,15 +87,19 @@ public partial class SyncOrchestrator
         var baseFolder = UserRepository?.BaseDataFolder ?? _environment.GetAppDataRoot();
         var dir = Path.Combine(baseFolder, "LocalManifests");
         Directory.CreateDirectory(dir);
-        return Path.Combine(dir, $"{safeName}.{suffix}.json");
+        return Path.Combine(dir, $"{safeName}.{suffix}{ManifestLog.Extension}");
     }
 
+    /// <summary>
+    /// Called after a local operation was appended: compacts the stream if needed, appends the operation to disk and
+    /// schedules a debounced delta push to neighbours.
+    /// </summary>
     private void PersistAndFanoutLocalManifest(ManifestStreamType streamType)
     {
         var manifest = GetLocalManifest(streamType);
         if (manifest == null) return;
 
-        Manifest manifestToShare;
+        Manifest copy;
         lock (manifest)
         {
             if (manifest.Operations.Count >= 500 && Identity != null)
@@ -86,11 +109,10 @@ public partial class SyncOrchestrator
             }
 
             SaveLocalManifest(manifest);
+            _logger.Debug("Local {0} manifest updated (head: {1}). Scheduling delta push.", streamType, ManifestManager.GetHeadSequenceNumber(manifest));
 
-            _logger.Info("Local {0} manifest updated (ops: {1}). Initiating fan-out to peers.", streamType, manifest.Operations.Count);
-
-            // Clone for sharing to avoid race conditions with further modifications/compactions
-            manifestToShare = new Manifest
+            // Copy for the catalogue, which reads it asynchronously while further operations may be appended.
+            copy = new Manifest
             {
                 UserId = manifest.UserId,
                 StreamType = manifest.StreamType,
@@ -99,126 +121,11 @@ public partial class SyncOrchestrator
                 Version = manifest.Version,
                 LastUpdated = manifest.LastUpdated
             };
-            }
+        }
 
-        _ = CatalogueService.IngestAsync(manifestToShare);
-
-        _ = Task.Run(async () =>
-        {
-            // Peers with a session include those without an open port: the push travels over the connection they opened.
-            var meshPeers = _router.GetPeers()
-                .Where(p => !IsBootstrapEntry(p) && HasRoute(p))
-                .ToList();
-            foreach (var peer in meshPeers)
-                try
-                {
-                    _logger.Debug("Pushing local {0} manifest to peer {1} via {2}", streamType, peer.UserId, DescribeRoute(peer));
-                    var acknowledged = await _client.PushManifestAsync(peer, manifestToShare, BuildAnnouncingPeerInfo(streamType));
-                    if (acknowledged) _router.MarkContacted(peer.UserId);
-                    RecordPeerMessage(peer.UserId, "PushManifest", success: acknowledged,
-                        $"Pushed local {streamType} manifest ({manifestToShare.Operations.Count} op) to {DescribeRoute(peer)}.");
-                }
-                catch (Exception ex)
-                {
-                    _logger.Warn("Failed to push {0} manifest to {1}: {2}", streamType, peer.UserId, ex.Message);
-                    RecordPeerMessage(peer.UserId, "PushManifest", success: false,
-                        $"Push failed for {streamType} to {DescribeRoute(peer)}: {ex.Message}");
-                    // best-effort push; periodic sync/merge will reconcile later
-                }
-        });
+        _ = CatalogueService.IngestAsync(copy);
+        ScheduleFanout(streamType);
     }
-
-    private void TryMerge(Manifest remote, string publicKeyPem)
-            {
-        if (remote.UserId == Identity?.UserId) return;
-
-        _logger.Debug("Attempting merge of manifest from peer {0} ({1} ops, stream={2})", remote.UserId, remote.Operations.Count, remote.StreamType);
-        var existingManifest = _peerStore.Get(remote.UserId, remote.StreamType);
-        var previousHeadSeq = ManifestManager.GetHeadSequenceNumber(existingManifest);
-
-        var added = _peerStore.MergeAndSave(remote, publicKeyPem, _manifestManager);
-        if (added > 0)
-                {
-            _logger.Info("Merged manifest from peer {0}: added {1} new operations.", remote.UserId, added);
-            var profileOp = remote.Operations
-                .Where(op => op.OperationType == ManifestOperationType.Profile)
-                .OrderByDescending(op => op.SequenceNumber)
-                .FirstOrDefault();
-
-            if (profileOp != null)
-                    {
-                _logger.Debug("Updating profile for {0} from merged manifest", remote.UserId);
-                UserRepository?.UpdateProfile(remote.UserId, profileOp.Metadata);
-                var iconHash = profileOp.ContentHash;
-                if (!string.IsNullOrWhiteSpace(iconHash))
-                    _ = Task.Run(async () =>
-                        {
-                        try
-                            {
-                            var bytes = await RequestContentAsync(remote.UserId, iconHash);
-                            if (bytes != null) UserRepository?.SaveUserIcon(remote.UserId, bytes);
-                            }
-                        catch { }
-                    });
-                        }
-
-            _ = CatalogueService.IngestAsync(remote);
-
-            // Also trigger icon/content downloads for catalogue entries
-            foreach (var op in remote.Operations)
-                if (op.OperationType == ManifestOperationType.Create || op.OperationType == ManifestOperationType.Update)
-                        {
-                    var iconHash = op.Metadata.GetValueOrDefault("iconHash");
-                    if (string.IsNullOrWhiteSpace(iconHash) && op.TargetType == "User")
-                        iconHash = op.ContentHash;
-
-                    if (!string.IsNullOrWhiteSpace(iconHash))
-                        _ = Task.Run(async () =>
-                            {
-                            try
-                                {
-                                var bytes = await RequestContentAsync(remote.UserId, iconHash);
-                                if (bytes != null && UserRepository != null) UserRepository.SaveUserIcon(op.TargetId, bytes);
-                                }
-                            catch { }
-                        });
-                    else if (!string.IsNullOrWhiteSpace(op.ContentHash) && (op.Metadata.ContainsKey("isIcon") && op.Metadata["isIcon"] == "True"))
-                        _ = Task.Run(async () =>
-                                {
-                            try
-                                    {
-                                var bytes = await RequestContentAsync(remote.UserId, op.ContentHash!);
-                                if (bytes != null && UserRepository != null) UserRepository.SaveUserIcon(op.TargetId, bytes);
-                                    }
-                            catch { }
-                        });
-                                }
-
-            foreach (var op in remote.Operations)
-                                {
-                if (op.SequenceNumber > previousHeadSeq && op.OperationType == ManifestOperationType.PostMessage)
-                                    {
-                    GroupMessageReceived?.Invoke(this, new GroupMessageEventArgs(
-                        remote.UserId,
-                        op.Metadata?.GetValueOrDefault("channelId") ?? string.Empty,
-                        op.TargetId,
-                        op.Metadata?.GetValueOrDefault("content") ?? string.Empty,
-                        op.Metadata?.GetValueOrDefault("parentPostId")
-                    ));
-                                    }
-                else if (op.SequenceNumber > previousHeadSeq && (op.OperationType == ManifestOperationType.CreateChannel || op.OperationType == ManifestOperationType.FoundGroup || op.OperationType == ManifestOperationType.ModerateGroup || op.OperationType == ManifestOperationType.GroupJoin || op.OperationType == ManifestOperationType.GroupLeave))
-                                    {
-                    GroupStateChanged?.Invoke(this, new GroupStateChangedEventArgs(remote.UserId, op.OperationType, op.TargetId, op.Metadata ?? new Dictionary<string, string>()));
-                                    }
-                                }
-
-            ManifestMerged?.Invoke(this, new ManifestMergedEventArgs(remote.UserId, added));
-                            }
-        else
-                            {
-            _logger.Trace("Merge of manifest from peer {0} resulted in 0 new operations.", remote.UserId);
-                            }
-                        }
 
     private static int CountPublishedItems(Manifest? manifest, string targetType)
                         {

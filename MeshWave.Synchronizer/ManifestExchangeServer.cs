@@ -13,7 +13,7 @@ using Logger = NLog.Logger;
 namespace MeshWave.Synchronizer;
 
 /// <summary>
-/// Serves manifest exchange requests: GetManifest, PushManifest, GetPeers (PEX), Announce, RequestContent and Ping.
+/// Serves manifest exchange requests: GetManifest, PushManifest, GetHeads, GetPeers (PEX), Announce, RequestContent and Ping.
 /// Requests arrive either as one-shot TCP connections (one request, one response) or over persistent
 /// <see cref="PeerSession"/>s; both go through <see cref="HandleRequestAsync"/>.
 /// A one-shot <see cref="ManifestRequestType.OpenSession"/> request upgrades the TCP connection to a session.
@@ -39,6 +39,8 @@ public class ManifestExchangeServer : IDisposable
     private Func<IReadOnlyList<PeerInfo>>? _peersProvider;
     private Func<string, byte[]?>? _contentProvider;
     private Func<PeerInfo?>? _selfInfoProvider;
+    private Func<string, ManifestStreamType, Manifest?>? _streamProvider;
+    private Func<IReadOnlyList<StreamHead>>? _headsProvider;
 
     public ManifestExchangeServer(int port = DefaultPort, Logger? logger = null)
     {
@@ -79,6 +81,17 @@ public class ManifestExchangeServer : IDisposable
         _peersProvider = peersProvider;
         _contentProvider = contentProvider;
         _selfInfoProvider = selfInfoProvider;
+    }
+
+    /// <summary>
+    /// Enables store-and-forward replication: <paramref name="streamProvider"/> returns any stream this node holds (its own
+    /// or one it replicates) for <see cref="ManifestRequest.TargetUserId"/> fetches and for reporting heads after a push;
+    /// <paramref name="headsProvider"/> answers <see cref="ManifestRequestType.GetHeads"/>.
+    /// </summary>
+    public void ConfigureReplication(Func<string, ManifestStreamType, Manifest?> streamProvider, Func<IReadOnlyList<StreamHead>> headsProvider)
+    {
+        _streamProvider = streamProvider;
+        _headsProvider = headsProvider;
     }
 
     /// <summary>
@@ -211,17 +224,33 @@ public class ManifestExchangeServer : IDisposable
 
             case ManifestRequestType.PushManifest when request.Manifest != null:
                 {
-                    var opCount = request.Manifest.Operations.Count;
+                    var pushed = request.Manifest;
+                    var opCount = pushed.Operations.Count;
                     if (opCount <= SecurityLimits.MaxManifestOperations)
                     {
-                        _logger.Info("Received manifest push from {0} (User: {1}, Ops: {2})", remoteAddress, request.Manifest.UserId, opCount);
-                        ManifestReceived?.Invoke(this, new ManifestReceivedEventArgs(request.Manifest, remoteAddress, request.AnnouncingPeer));
+                        _logger.Debug("Received manifest push from {0} (User: {1}, Stream: {2}, Ops: {3})", remoteAddress, pushed.UserId, pushed.StreamType, opCount);
+                        ManifestReceived?.Invoke(this, new ManifestReceivedEventArgs(pushed, remoteAddress, request.AnnouncingPeer));
                     }
                     else
                     {
                         _logger.Warn("Rejected push from {0}: too many operations ({1})", remoteAddress, opCount);
                     }
-                    return (new ManifestResponse { Acknowledged = true }, ReadOnlyMemory<byte>.Empty);
+
+                    // Report what we now hold, so the sender knows whether the push connected and where to continue.
+                    var response = new ManifestResponse { Acknowledged = true };
+                    if (_streamProvider != null)
+                    {
+                        var held = _streamProvider(pushed.UserId, pushed.StreamType);
+                        response.Heads = [held != null ? ManifestManager.GetHead(held) : new StreamHead(pushed.UserId, pushed.StreamType, -1, string.Empty)];
+                    }
+                    return (response, ReadOnlyMemory<byte>.Empty);
+                }
+
+            case ManifestRequestType.GetHeads:
+                {
+                    var heads = _headsProvider?.Invoke().Take(SecurityLimits.MaxHeadsPerExchange).ToList() ?? [];
+                    _logger.Debug("Serving {0} stream heads to {1}", heads.Count, remoteAddress);
+                    return (new ManifestResponse { Acknowledged = _headsProvider != null, Heads = heads }, ReadOnlyMemory<byte>.Empty);
                 }
 
             case ManifestRequestType.Announce when request.AnnouncingPeer != null:
@@ -267,38 +296,26 @@ public class ManifestExchangeServer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Returns one page of the requested stream, starting at <see cref="ManifestRequest.StartSequenceNumber"/>.
+    /// Without a target (or targeting this node's own UserId) it is this node's own stream; otherwise a stream it replicates.
+    /// </summary>
     private Manifest? BuildManifestResponse(ManifestRequest request, string remoteAddress)
     {
-        var originalManifest = _localManifestProvider?.Invoke(request.StreamType);
-        if (originalManifest == null)
+        var own = _localManifestProvider?.Invoke(request.StreamType);
+        var source = string.IsNullOrWhiteSpace(request.TargetUserId) || string.Equals(request.TargetUserId, own?.UserId, StringComparison.OrdinalIgnoreCase)
+            ? own
+            : _streamProvider?.Invoke(request.TargetUserId, request.StreamType);
+        if (source == null)
         {
-            _logger.Debug("No {0} manifest to serve to {1}", request.StreamType, remoteAddress);
+            _logger.Debug("No {0} manifest of {1} to serve to {2}", request.StreamType, request.TargetUserId ?? "self", remoteAddress);
             return null;
         }
 
-        _logger.Info("Serving manifest for {0} to {1} (delta={2}, ops={3})",
-            originalManifest.UserId, remoteAddress, request.StartSequenceNumber > 0, originalManifest.Operations.Count);
-
-        lock (originalManifest)
-        {
-            var snapshot = originalManifest.Snapshot;
-            if (request.StartSequenceNumber > (snapshot?.LastSequenceNumber ?? -1)) snapshot = null;
-
-            var filteredOps = originalManifest.Operations
-                .Where(op => op.SequenceNumber >= request.StartSequenceNumber &&
-                            (request.EndSequenceNumber == null || op.SequenceNumber <= request.EndSequenceNumber))
-                .ToList();
-
-            return new Manifest
-            {
-                UserId = originalManifest.UserId,
-                StreamType = originalManifest.StreamType,
-                Version = originalManifest.Version,
-                LastUpdated = originalManifest.LastUpdated,
-                Snapshot = snapshot,
-                Operations = filteredOps
-            };
-        }
+        var page = ManifestManager.BuildPage(source, request.StartSequenceNumber, request.EndSequenceNumber);
+        _logger.Debug("Serving {0} manifest of {1} to {2} (from={3}, ops={4}, more={5})",
+            source.StreamType, source.UserId, remoteAddress, request.StartSequenceNumber, page.Operations.Count, page.HasMore);
+        return page;
     }
 
     private async Task<ManifestResponse> HandleAnnounceAsync(PeerInfo announced, string observedAddress, CancellationToken ct)

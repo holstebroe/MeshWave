@@ -1,20 +1,32 @@
 using MeshWave.Common.Core;
+using System.Runtime.CompilerServices;
 using System.Text;
 using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
+using MeshWave.Common.Core.Serialization;
 using NLog;
 
 namespace MeshWave.Synchronizer;
 
 /// <summary>
-/// ManifestManager handles creation, signing, and management of user manifests.
-/// Manifests are append-only, signed lists of operations on the user's content.
+/// ManifestManager handles creation, signing, verification and merging of manifests.
+/// A manifest stream is an append-only, hash-linked log of operations signed by its author: every operation signs its
+/// sequence number, its metadata and the hash of the previous operation (<see cref="ManifestOperation.PrevHash"/>).
+/// Each operation therefore verifies on its own, which lets any peer store and forward it, and two different operations
+/// with the same sequence number (a fork) are detected.
 /// </summary>
 public class ManifestManager(ILogger logger)
 {
+    private const string SignablePayloadVersion = "mw2";
+
+    private static readonly ConditionalWeakTable<ManifestOperation, Tuple<string, string>> HashCache = new();
+
     public ManifestManager() : this(LogManager.GetCurrentClassLogger())
     {
     }
+
+    /// <summary>Raised when a peer offers an operation that conflicts with one already held for the same author, stream and sequence number.</summary>
+    public event Action<string, ManifestStreamType, int>? ForkDetected;
 
     /// <summary>
     /// Creates a new manifest for a user.
@@ -31,7 +43,7 @@ public class ManifestManager(ILogger logger)
     }
 
     /// <summary>
-    /// Builds a signed operation and appends it to the manifest.
+    /// Builds a signed operation and appends it to the manifest, chained to the current head.
     /// </summary>
     public ManifestOperation AppendSignedOperation(
         Manifest manifest,
@@ -51,14 +63,14 @@ public class ManifestManager(ILogger logger)
                 TargetId = targetId,
                 TargetType = targetType,
                 ContentHash = contentHash,
-                SequenceNumber = GetNextSequenceNumber(manifest),
+                SequenceNumber = GetHeadSequenceNumber(manifest) + 1,
+                PrevHash = GetHeadHash(manifest),
                 Metadata = metadata ?? [],
                 Timestamp = DateTime.UtcNow,
                 Signature = string.Empty
             };
 
-            var signable = BuildSignablePayload(operation);
-            operation.Signature = CryptoService.SignData(signable, privateKeyPem);
+            operation.Signature = CryptoService.SignData(BuildSignablePayload(operation), privateKeyPem);
 
             manifest.Operations.Add(operation);
             manifest.Version++;
@@ -70,13 +82,14 @@ public class ManifestManager(ILogger logger)
 
     /// <summary>
     /// Adds a pre-built operation to the manifest (create, update, or delete).
-    /// Assigns sequence number and increments manifest version.
+    /// Assigns sequence number, chains it to the head and increments manifest version. The caller signs it.
     /// </summary>
     public void AppendOperation(Manifest manifest, ManifestOperation operation)
     {
         lock (manifest)
         {
-            operation.SequenceNumber = GetNextSequenceNumber(manifest);
+            operation.SequenceNumber = GetHeadSequenceNumber(manifest) + 1;
+            operation.PrevHash = GetHeadHash(manifest);
             manifest.Operations.Add(operation);
             manifest.Version++;
             manifest.LastUpdated = DateTime.UtcNow;
@@ -85,8 +98,7 @@ public class ManifestManager(ILogger logger)
 
     /// <summary>
     /// Returns the highest sequence number already covered by <paramref name="manifest"/> (its snapshot or its operations),
-    /// or -1 if it is empty. Peer manifests can have holes where operations were discarded during merge
-    /// (e.g. the daily play cap), so this must not be derived from the operation count.
+    /// or -1 if it is empty.
     /// </summary>
     public static int GetHeadSequenceNumber(Manifest? manifest)
     {
@@ -100,16 +112,105 @@ public class ManifestManager(ILogger logger)
         }
     }
 
-    private static int GetNextSequenceNumber(Manifest manifest)
+    /// <summary>
+    /// Hash of the head operation (the snapshot's head hash if there are no live operations); for an empty stream, the
+    /// stream's <see cref="GetGenesisHash">genesis hash</see>.
+    /// </summary>
+    public static string GetHeadHash(Manifest? manifest)
     {
-        if (manifest.Snapshot != null)
-            return manifest.Snapshot.LastSequenceNumber + 1 + manifest.Operations.Count;
-        return manifest.Operations.Count;
+        if (manifest == null) return string.Empty;
+        lock (manifest)
+        {
+            var head = manifest.Operations.Count > 0 ? manifest.Operations.MaxBy(o => o.SequenceNumber) : null;
+            if (head != null && head.SequenceNumber > (manifest.Snapshot?.LastSequenceNumber ?? -1))
+                return ComputeOperationHash(head);
+            return manifest.Snapshot?.HeadHash ?? GetGenesisHash(manifest.UserId, manifest.StreamType);
+        }
+    }
+
+    /// <summary>
+    /// The <see cref="ManifestOperation.PrevHash"/> of a stream's first operation. It names the author and the stream, so
+    /// the signature of every operation binds it to one stream of one author: an operation cannot be replayed into
+    /// another stream.
+    /// </summary>
+    public static string GetGenesisHash(string userId, ManifestStreamType streamType)
+    {
+        return CryptoService.ComputeHash(Encoding.UTF8.GetBytes($"{SignablePayloadVersion}-genesis|{userId}|{streamType}"));
+    }
+
+    /// <summary>The stream's head as exchanged in anti-entropy.</summary>
+    public static StreamHead GetHead(Manifest manifest)
+    {
+        lock (manifest)
+        {
+            return new StreamHead(manifest.UserId, manifest.StreamType, GetHeadSequenceNumber(manifest), GetHeadHash(manifest));
+        }
+    }
+
+    /// <summary>
+    /// Identifies an operation: the SHA-256 of its signable payload, which covers every field except the signature.
+    /// The next operation of the author signs this value as its <see cref="ManifestOperation.PrevHash"/>.
+    /// </summary>
+    public static string ComputeOperationHash(ManifestOperation op)
+    {
+        if (HashCache.TryGetValue(op, out var cached) && ReferenceEquals(cached.Item1, op.Signature))
+            return cached.Item2;
+
+        var hash = CryptoService.ComputeHash(Encoding.UTF8.GetBytes(BuildSignablePayload(op)));
+        HashCache.AddOrUpdate(op, Tuple.Create(op.Signature, hash));
+        return hash;
+    }
+
+    /// <summary>
+    /// Returns one page of <paramref name="source"/> for a peer that already has everything up to
+    /// <paramref name="fromSequenceNumber"/> - 1: the snapshot if the peer is behind it, then operations until the page
+    /// reaches <paramref name="maxPageBytes"/>. <see cref="Manifest.HasMore"/> is set when operations were left out.
+    /// The author's public key is included when the page starts from the beginning, so that a peer that has never seen
+    /// the author can verify it.
+    /// </summary>
+    public static Manifest BuildPage(Manifest source, int fromSequenceNumber, int? toSequenceNumber = null, int maxPageBytes = SecurityLimits.MaxManifestPageBytes)
+    {
+        lock (source)
+        {
+            var from = Math.Max(0, fromSequenceNumber);
+            var snapshot = source.Snapshot != null && from <= source.Snapshot.LastSequenceNumber ? source.Snapshot : null;
+            var size = snapshot != null ? ManifestSerializer.GetEncodedSize(snapshot) : 0;
+
+            var ops = new List<ManifestOperation>();
+            var hasMore = false;
+            foreach (var op in source.Operations.OrderBy(o => o.SequenceNumber))
+            {
+                if (op.SequenceNumber < from) continue;
+                if (toSequenceNumber.HasValue && op.SequenceNumber > toSequenceNumber.Value) break;
+
+                var opSize = ManifestSerializer.GetEncodedSize(op);
+                if ((ops.Count > 0 || snapshot != null) && size + opSize > maxPageBytes)
+                {
+                    hasMore = true;
+                    break;
+                }
+                ops.Add(op);
+                size += opSize;
+            }
+
+            return new Manifest
+            {
+                UserId = source.UserId,
+                StreamType = source.StreamType,
+                Version = source.Version,
+                LastUpdated = source.LastUpdated,
+                Snapshot = snapshot,
+                Operations = ops,
+                HasMore = hasMore,
+                AuthorPublicKey = from == 0 || snapshot != null ? source.AuthorPublicKey : null
+            };
+        }
     }
 
     /// <summary>
     /// Creates a signed snapshot of the manifest state up to a certain sequence number.
     /// Squashes redundant operations (Play, Follow, Like, etc.) and keeps latest entity metadata.
+    /// Comments and group posts are preserved up to <see cref="SecurityLimits.MaxSnapshotRetainedOperations"/>; older ones are dropped.
     /// </summary>
     public ManifestSnapshot CreateSnapshot(Manifest manifest, int upToSequenceNumber, string privateKeyPem)
     {
@@ -120,6 +221,7 @@ public class ManifestManager(ILogger logger)
         var groups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var entities = new Dictionary<(string Id, string Type), SnapshotStateEntry>();
         var persistent = new List<ManifestOperation>();
+        var headHash = string.Empty;
 
         lock (manifest)
         {
@@ -133,25 +235,29 @@ public class ManifestManager(ILogger logger)
                 foreach (var id in manifest.Snapshot.GroupIds) groups.Add(id);
                 foreach (var ent in manifest.Snapshot.EntityStates) entities[(ent.TargetId, ent.TargetType)] = ent;
                 persistent.AddRange(manifest.Snapshot.PersistentOperations);
+                headHash = manifest.Snapshot.HeadHash;
             }
 
-            // Process operations in order
-            foreach (var op in manifest.Operations.OrderBy(o => o.SequenceNumber))
-            {
-                if (op.SequenceNumber > upToSequenceNumber) break;
+            var squashed = manifest.Operations.Where(o => o.SequenceNumber <= upToSequenceNumber).OrderBy(o => o.SequenceNumber).ToList();
 
+            // Plays are counted with the same daily cap that readers apply to live operations.
+            foreach (var group in squashed.Where(o => o.OperationType == ManifestOperationType.Play)
+                         .GroupBy(o => (o.TargetId, Day: o.Timestamp.ToUniversalTime().Date)))
+                foreach (var op in group.Take(SecurityLimits.MaxPlaysPerUserPerTrackPerDay))
+                {
+                    playCounts[op.TargetId] = playCounts.GetValueOrDefault(op.TargetId) + 1;
+                    if (!string.IsNullOrEmpty(op.ContentHash))
+                    {
+                        var versionKey = $"{op.TargetId}:{op.ContentHash}";
+                        playCounts[versionKey] = playCounts.GetValueOrDefault(versionKey) + 1;
+                    }
+                }
+
+            foreach (var op in squashed)
+            {
+                headHash = ComputeOperationHash(op);
                 switch (op.OperationType)
                 {
-                    case ManifestOperationType.Play:
-                        // Total plays
-                        playCounts[op.TargetId] = playCounts.GetValueOrDefault(op.TargetId) + 1;
-                        // Versioned plays
-                        if (!string.IsNullOrEmpty(op.ContentHash))
-                        {
-                            var versionKey = $"{op.TargetId}:{op.ContentHash}";
-                            playCounts[versionKey] = playCounts.GetValueOrDefault(versionKey) + 1;
-                        }
-                        break;
                     case ManifestOperationType.Follow:
                         followed.Add(op.TargetId);
                         break;
@@ -208,27 +314,45 @@ public class ManifestManager(ILogger logger)
                 }
             }
 
+            ApplyRetention(persistent);
+
             var snapshot = new ManifestSnapshot
             {
                 LastSequenceNumber = upToSequenceNumber,
                 Timestamp = DateTime.UtcNow,
+                HeadHash = headHash,
                 PlayCounts = playCounts,
                 FollowedUserIds = followed.ToList(),
                 LikedTrackIds = liked.ToList(),
                 FriendUserIds = friends.ToList(),
                 GroupIds = groups.ToList(),
                 EntityStates = entities.Values.ToList(),
-                PersistentOperations = persistent,
+                PersistentOperations = persistent.OrderBy(o => o.SequenceNumber).ToList(),
                 Signature = string.Empty
             };
 
             snapshot.LibraryStateDigest = ComputeLibraryStateDigest(snapshot);
-
-            var signable = BuildSnapshotSignablePayload(snapshot);
-            snapshot.Signature = CryptoService.SignData(signable, privateKeyPem);
+            snapshot.Signature = CryptoService.SignData(BuildSnapshotSignablePayload(snapshot), privateKeyPem);
 
             return snapshot;
         }
+    }
+
+    /// <summary>
+    /// Drops the oldest comments and group posts beyond <see cref="SecurityLimits.MaxSnapshotRetainedOperations"/>.
+    /// Group and competition structure (founding, channels, moderation, competitions) is always kept.
+    /// </summary>
+    private static void ApplyRetention(List<ManifestOperation> persistent)
+    {
+        var chatty = persistent
+            .Where(o => o.OperationType is ManifestOperationType.Comment or ManifestOperationType.PostMessage)
+            .OrderBy(o => o.SequenceNumber)
+            .ToList();
+        var excess = chatty.Count - SecurityLimits.MaxSnapshotRetainedOperations;
+        if (excess <= 0) return;
+
+        var dropped = chatty.Take(excess).ToHashSet();
+        persistent.RemoveAll(dropped.Contains);
     }
 
     /// <summary>
@@ -262,40 +386,87 @@ public class ManifestManager(ILogger logger)
         }
     }
 
+    /// <summary>
+    /// Makes sure the author's own manifest is a valid signed hash chain, re-signing it if it is not
+    /// (e.g. a manifest written before operations were chained, or before their metadata was signed).
+    /// Keeps operation IDs, timestamps and content; renumbers sequence numbers if they have holes.
+    /// Returns true if the manifest was re-signed.
+    /// </summary>
+    public bool EnsureSignedChain(Manifest manifest, string privateKeyPem, string publicKeyPem)
+    {
+        lock (manifest)
+        {
+            manifest.AuthorPublicKey = publicKeyPem;
+            if (VerifyManifest(manifest, publicKeyPem) && (manifest.Snapshot != null || manifest.Operations.Count == 0 || manifest.Operations[0].SequenceNumber == 0))
+                return false;
+
+            logger.Info("Re-signing local {0} manifest of {1} as a hash-linked log ({2} operations).", manifest.StreamType, manifest.UserId, manifest.Operations.Count);
+
+            var prevHash = GetGenesisHash(manifest.UserId, manifest.StreamType);
+            var nextSeq = 0;
+            if (manifest.Snapshot != null)
+            {
+                var snapshot = manifest.Snapshot;
+                foreach (var op in snapshot.PersistentOperations)
+                    op.Signature = CryptoService.SignData(BuildSignablePayload(op), privateKeyPem);
+                if (string.IsNullOrEmpty(snapshot.HeadHash))
+                    snapshot.HeadHash = CryptoService.ComputeHash(Encoding.UTF8.GetBytes($"migrated-snapshot|{manifest.UserId}|{manifest.StreamType}|{snapshot.LastSequenceNumber}"));
+                snapshot.LibraryStateDigest = ComputeLibraryStateDigest(snapshot);
+                snapshot.Signature = CryptoService.SignData(BuildSnapshotSignablePayload(snapshot), privateKeyPem);
+                prevHash = snapshot.HeadHash;
+                nextSeq = snapshot.LastSequenceNumber + 1;
+            }
+
+            foreach (var op in manifest.Operations.OrderBy(o => o.SequenceNumber).ToList())
+            {
+                op.SequenceNumber = nextSeq++;
+                op.PrevHash = prevHash;
+                op.Signature = CryptoService.SignData(BuildSignablePayload(op), privateKeyPem);
+                prevHash = ComputeOperationHash(op);
+            }
+            manifest.Operations = manifest.Operations.OrderBy(o => o.SequenceNumber).ToList();
+            manifest.Version++;
+            return true;
+        }
+    }
+
     private static string ComputeLibraryStateDigest(ManifestSnapshot snapshot)
     {
         var sb = new StringBuilder();
 
         // Followed, Liked, Friends, Groups
-        foreach (var id in snapshot.FollowedUserIds.OrderBy(s => s)) sb.Append("f:").Append(id).Append(';');
-        foreach (var id in snapshot.LikedTrackIds.OrderBy(s => s)) sb.Append("l:").Append(id).Append(';');
-        foreach (var id in snapshot.FriendUserIds.OrderBy(s => s)) sb.Append("fr:").Append(id).Append(';');
-        foreach (var id in snapshot.GroupIds.OrderBy(s => s)) sb.Append("g:").Append(id).Append(';');
+        foreach (var id in snapshot.FollowedUserIds.OrderBy(s => s, StringComparer.Ordinal)) sb.Append("f:").Append(id).Append(';');
+        foreach (var id in snapshot.LikedTrackIds.OrderBy(s => s, StringComparer.Ordinal)) sb.Append("l:").Append(id).Append(';');
+        foreach (var id in snapshot.FriendUserIds.OrderBy(s => s, StringComparer.Ordinal)) sb.Append("fr:").Append(id).Append(';');
+        foreach (var id in snapshot.GroupIds.OrderBy(s => s, StringComparer.Ordinal)) sb.Append("g:").Append(id).Append(';');
 
         // EntityStates
-        foreach (var ent in snapshot.EntityStates.OrderBy(e => e.TargetId).ThenBy(e => e.TargetType))
+        foreach (var ent in snapshot.EntityStates.OrderBy(e => e.TargetId, StringComparer.Ordinal).ThenBy(e => e.TargetType, StringComparer.Ordinal))
         {
             sb.Append("e:").Append(ent.TargetId).Append(':').Append(ent.TargetType).Append(':').Append(ent.ContentHash ?? string.Empty).Append('{');
-            foreach (var kv in ent.Metadata.OrderBy(k => k.Key)) sb.Append(kv.Key).Append('=').Append(kv.Value).Append(',');
+            AppendCanonicalMetadata(sb, ent.Metadata);
             sb.Append("};");
         }
 
         // PlayCounts
-        foreach (var kv in snapshot.PlayCounts.OrderBy(k => k.Key)) sb.Append("p:").Append(kv.Key).Append('=').Append(kv.Value).Append(';');
+        foreach (var kv in snapshot.PlayCounts.OrderBy(k => k.Key, StringComparer.Ordinal)) sb.Append("p:").Append(kv.Key).Append('=').Append(kv.Value).Append(';');
 
         return CryptoService.ComputeHash(Encoding.UTF8.GetBytes(sb.ToString()));
     }
 
     /// <summary>
-    /// Verifies the integrity and authenticity of a manifest.
-    /// Checks monotonic sequence numbers and each operation's RSA signature.
-    /// Supports manifests starting from a snapshot.
+    /// Verifies the integrity and authenticity of a manifest (a whole stream or a page of it).
+    /// Checks the snapshot signature, contiguous sequence numbers, the hash chain between consecutive operations
+    /// (from the stream's genesis or the snapshot's head) and each operation's signature.
+    /// A page without a snapshot may start anywhere; whether its first operation connects to what the receiver holds is
+    /// checked when merging.
     /// </summary>
     public bool VerifyManifest(Manifest manifest, string userPublicKey)
     {
         lock (manifest)
         {
             var expectedSeq = 0;
+            string? prevHash = null;
 
             if (manifest.Snapshot != null)
             {
@@ -320,18 +491,22 @@ public class ManifestManager(ILogger logger)
                 // Verify persistent operations in the snapshot
                 foreach (var op in manifest.Snapshot.PersistentOperations)
                 {
-                    var signable = BuildSignablePayload(op);
-                    if (!CryptoService.VerifySignature(signable, op.Signature, userPublicKey))
+                    if (op.SequenceNumber > manifest.Snapshot.LastSequenceNumber
+                        || !CryptoService.VerifySignature(BuildSignablePayload(op), op.Signature, userPublicKey))
                     {
-                        logger.Debug("Manifest verification failed for user {0} stream {1}: Invalid persistent operation signature for sequence {2}.", manifest.UserId, manifest.StreamType, op.SequenceNumber);
+                        logger.Debug("Manifest verification failed for user {0} stream {1}: Invalid persistent operation {2}.", manifest.UserId, manifest.StreamType, op.SequenceNumber);
                         return false;
                     }
                 }
 
                 expectedSeq = manifest.Snapshot.LastSequenceNumber + 1;
+                prevHash = manifest.Snapshot.HeadHash;
             }
-
-            if (manifest.Snapshot == null && manifest.Operations.Count > 0) expectedSeq = manifest.Operations[0].SequenceNumber;
+            else if (manifest.Operations.Count > 0)
+            {
+                expectedSeq = manifest.Operations[0].SequenceNumber;
+                if (expectedSeq == 0) prevHash = GetGenesisHash(manifest.UserId, manifest.StreamType);
+            }
 
             for (var i = 0; i < manifest.Operations.Count; i++)
             {
@@ -343,26 +518,33 @@ public class ManifestManager(ILogger logger)
                     return false;
                 }
 
-                var signable = BuildSignablePayload(op);
-                if (!CryptoService.VerifySignature(signable, op.Signature, userPublicKey))
+                if (prevHash != null && op.PrevHash != prevHash)
+                {
+                    logger.Debug("Manifest verification failed for user {0} stream {1}: Operation {2} does not chain to its predecessor.", manifest.UserId, manifest.StreamType, op.SequenceNumber);
+                    return false;
+                }
+
+                if (!CryptoService.VerifySignature(BuildSignablePayload(op), op.Signature, userPublicKey))
                 {
                     logger.Debug("Manifest verification failed for user {0} stream {1}: Invalid operation signature for sequence {2}.", manifest.UserId, manifest.StreamType, op.SequenceNumber);
                     return false;
                 }
+
+                prevHash = ComputeOperationHash(op);
             }
             return true;
         }
     }
 
     /// <summary>
-    /// Merges a remote manifest into a local one, appending any operations the local copy lacks.
-    /// Only operations that pass signature verification are accepted.
-    /// Rejects manifests that exceed security limits.
-    /// Supports merging manifests with snapshots.
-    /// Play operations are capped at <see cref="SecurityLimits.MaxPlaysPerUserPerTrackPerDay"/> per track per UTC day.
-    /// Returns the number of new operations added.
+    /// Merges a remote manifest (a whole stream or a page of it) into the local copy, appending the operations the local
+    /// copy lacks. Every operation that verifies is stored as it is, so that the copy is identical to the author's log;
+    /// read-side rules (the daily play cap, competition deadlines) are applied by <see cref="ManifestState"/>.
+    /// Merging stops at a gap, at an operation that does not chain to the local head (a fork, raising <see cref="ForkDetected"/>),
+    /// or at an operation exceeding the field limits.
+    /// Returns the number of live operations appended (a newly adopted snapshot is not counted; compare heads to see it).
     /// </summary>
-    public int MergeManifest(Manifest local, Manifest remote, string remoteUserPublicKey, Func<string, ManifestOperation?>? getCreateCompetitionOp = null)
+    public int MergeManifest(Manifest local, Manifest remote, string remoteUserPublicKey)
     {
         if (local.UserId != remote.UserId)
             throw new ArgumentException("Cannot merge manifests from different users.");
@@ -385,161 +567,89 @@ public class ManifestManager(ILogger logger)
 
         lock (local)
         {
-            // 2. Handle Snapshot merge
-            // If remote has a NEWER snapshot, we adopt it and discard local operations that are now squashed.
-            if (remote.Snapshot != null)
-            {
-                if (remote.Snapshot.LastSequenceNumber > (local.Snapshot?.LastSequenceNumber ?? -1))
-                {
-                    // Remote snapshot is more recent than ours.
-                    // We keep only the remote snapshot and remote operations.
-                    local.Snapshot = remote.Snapshot;
-                    local.Operations = new List<ManifestOperation>(remote.Operations);
-                    local.Version = Math.Max(local.Version, remote.Version);
-                    local.LastUpdated = DateTime.UtcNow;
+            local.AuthorPublicKey ??= remoteUserPublicKey;
+            var added = 0;
 
-                    // Since we replaced the whole state, we "added" as many ops as the remote currently has
-                    return remote.Operations.Count;
+            // 2. Adopt a newer snapshot. Local operations after it are kept if they continue from it.
+            if (remote.Snapshot != null && remote.Snapshot.LastSequenceNumber > (local.Snapshot?.LastSequenceNumber ?? -1))
+            {
+                var snapshot = remote.Snapshot;
+                var covered = local.Operations.FirstOrDefault(o => o.SequenceNumber == snapshot.LastSequenceNumber);
+                if (covered != null && !string.IsNullOrEmpty(snapshot.HeadHash) && ComputeOperationHash(covered) != snapshot.HeadHash)
+                {
+                    ReportFork(local, snapshot.LastSequenceNumber);
+                    return 0;
                 }
+
+                var kept = local.Operations.Where(o => o.SequenceNumber > snapshot.LastSequenceNumber).OrderBy(o => o.SequenceNumber).ToList();
+                if (kept.Count > 0 && (kept[0].SequenceNumber != snapshot.LastSequenceNumber + 1 || kept[0].PrevHash != snapshot.HeadHash))
+                    kept.Clear();
+
+                local.Snapshot = snapshot;
+                local.Operations = kept;
+                local.Version = Math.Max(local.Version, remote.Version);
+                local.LastUpdated = DateTime.UtcNow;
             }
 
-            // 3. Merge individual operations
-            // Build existing play counts per (trackId, utcDate) from the local manifest so we
-            // know how much headroom remains before merging remote play ops.
-            var playCounts = BuildPlayCounts(local.Operations);
-
-            var added = 0;
-            var localMaxSeqNum = GetHeadSequenceNumber(local);
-            var nextExpectedSeqNum = localMaxSeqNum + 1;
+            // 3. Append operations that continue the local head.
+            var head = GetHeadSequenceNumber(local);
+            var headHash = GetHeadHash(local);
 
             foreach (var op in remote.Operations.OrderBy(o => o.SequenceNumber))
             {
-                if (op.SequenceNumber <= localMaxSeqNum)
+                if (op.SequenceNumber <= head)
                 {
-                    logger.Trace("Skipping operation {0} for user {1} stream {2}: Sequence number already applied.", op.SequenceNumber, remote.UserId, remote.StreamType);
+                    var existing = local.Operations.FirstOrDefault(o => o.SequenceNumber == op.SequenceNumber);
+                    if (existing != null && ComputeOperationHash(existing) != ComputeOperationHash(op))
+                    {
+                        ReportFork(local, op.SequenceNumber);
+                        break;
+                    }
                     continue;
                 }
 
-                // Never create a gap in the chain: an op can only follow the last op we have evaluated.
-                // Discarded ops (below) still advance the expected sequence so later ops are not treated as gaps.
-                if (op.SequenceNumber != nextExpectedSeqNum)
+                // Never create a gap in the chain: an op can only follow the local head.
+                if (op.SequenceNumber != head + 1)
                 {
-                    logger.Debug("Stopping merge for user {0} stream {1}: expected sequence {2} but got {3} (gap).", remote.UserId, remote.StreamType, nextExpectedSeqNum, op.SequenceNumber);
+                    logger.Debug("Stopping merge for user {0} stream {1}: expected sequence {2} but got {3} (gap).", remote.UserId, remote.StreamType, head + 1, op.SequenceNumber);
                     break;
                 }
-                nextExpectedSeqNum++;
 
-                if (!IsOperationWithinLimits(remote, op))
-                    continue;
-
-                // Enforce per-user daily play cap.
-                if (op.OperationType == ManifestOperationType.Play)
+                if (op.PrevHash != headHash)
                 {
-                    var key = (TrackId: op.TargetId, op.Timestamp.ToUniversalTime().Date);
-                    playCounts.TryGetValue(key, out var existing);
-                    if (existing >= SecurityLimits.MaxPlaysPerUserPerTrackPerDay)
-                    {
-                        logger.Debug("Discarding operation {0} in stream {1} for user {2}: Max plays per user per track per day exceeded.", op.SequenceNumber, remote.StreamType, remote.UserId);
-                        continue;
-                    }
-                    playCounts[key] = existing + 1;
+                    ReportFork(local, op.SequenceNumber);
+                    break;
                 }
 
-                if (IsCompetitionOperation(op.OperationType))
-                    if (!ValidateCompetitionOperation(remote, op, getCreateCompetitionOp))
-                    {
-                        logger.Debug("Discarding operation {0} in stream {1} for user {2}: Invalid competition operation.", op.SequenceNumber, remote.StreamType, remote.UserId);
-                        continue;
-                    }
+                if (!IsOperationWithinLimits(remote, op))
+                    break;
 
-                // We already verified all signatures in VerifyManifest call above,
-                // but we can re-verify if we want to be paranoid or if VerifyManifest was skipped.
-                // For performance, we trust the previous VerifyManifest(remote) call.
+                if (local.Operations.Count >= SecurityLimits.MaxManifestOperations)
+                {
+                    logger.Warn("Stopping merge for user {0} stream {1}: the author has {2} uncompacted operations.", remote.UserId, remote.StreamType, local.Operations.Count);
+                    break;
+                }
 
                 local.Operations.Add(op);
-                local.Version = Math.Max(local.Version, remote.Version);
-                local.LastUpdated = DateTime.UtcNow;
+                head = op.SequenceNumber;
+                headHash = ComputeOperationHash(op);
                 added++;
             }
 
+            if (added > 0)
+            {
+                local.Version = Math.Max(local.Version, remote.Version);
+                local.LastUpdated = DateTime.UtcNow;
+            }
             return added;
         }
     }
 
-    /// <summary>
-    /// Counts existing Play operations in a list grouped by (trackId, utcDate).
-    /// Used to enforce <see cref="SecurityLimits.MaxPlaysPerUserPerTrackPerDay"/> during merge.
-    /// </summary>
-    private static Dictionary<(string TrackId, DateTime Date), int> BuildPlayCounts(
-        IEnumerable<ManifestOperation> ops)
+    private void ReportFork(Manifest local, int sequenceNumber)
     {
-        var counts = new Dictionary<(string TrackId, DateTime Date), int>();
-        foreach (var op in ops.Where(o => o.OperationType == ManifestOperationType.Play))
-        {
-            var key = (TrackId: op.TargetId, op.Timestamp.ToUniversalTime().Date);
-            counts.TryGetValue(key, out var c);
-            counts[key] = c + 1;
-        }
-        return counts;
-    }
-
-    private static bool IsCompetitionOperation(ManifestOperationType type)
-    {
-        return type is ManifestOperationType.CreateCompetition
-                    or ManifestOperationType.CompetitionSubmit
-                    or ManifestOperationType.CompetitionCastVote
-                    or ManifestOperationType.CompetitionRevealResults;
-    }
-
-    /// <summary>
-    /// Validates a competition-related operation.
-    /// Logic to be fully implemented in #76.
-    /// </summary>
-    private static bool ValidateCompetitionOperation(Manifest manifest, ManifestOperation op, Func<string, ManifestOperation?>? getCreateCompetitionOp = null)
-    {
-        var skewMargin = TimeSpan.FromHours(1);
-
-        if (op.OperationType == ManifestOperationType.CreateCompetition)
-            return true; // The user appending it is the creator natively.
-
-        var createOp = getCreateCompetitionOp?.Invoke(op.TargetId);
-        if (createOp == null) return false; // Reject if we can't verify deadlines
-
-        if (op.OperationType == ManifestOperationType.CompetitionSubmit)
-        {
-            if (createOp.Metadata.TryGetValue("SubmissionDeadline", out var deadlineStr) &&
-                DateTime.TryParse(deadlineStr, out var submissionDeadline))
-            {
-                if (op.Timestamp > submissionDeadline + skewMargin)
-                    return false;
-            }
-        }
-        else if (op.OperationType == ManifestOperationType.CompetitionCastVote)
-        {
-            if (createOp.Metadata.TryGetValue("SubmissionDeadline", out var subDeadlineStr) &&
-                DateTime.TryParse(subDeadlineStr, out var submissionDeadline))
-            {
-                if (op.Timestamp < submissionDeadline - skewMargin)
-                    return false;
-            }
-
-            if (createOp.Metadata.TryGetValue("VotingDeadline", out var voteDeadlineStr) &&
-                DateTime.TryParse(voteDeadlineStr, out var votingDeadline))
-            {
-                if (op.Timestamp > votingDeadline + skewMargin)
-                    return false;
-            }
-        }
-        else if (op.OperationType == ManifestOperationType.CompetitionRevealResults)
-        {
-            if (createOp.Metadata.TryGetValue("AdministratorUserId", out var adminId))
-            {
-                if (manifest.UserId != adminId)
-                    return false;
-            }
-        }
-
-        return true;
+        logger.Warn("Fork detected for user {0} stream {1} at sequence {2}: a peer offered an operation that conflicts with the one already held. Keeping the first.",
+            local.UserId, local.StreamType, sequenceNumber);
+        ForkDetected?.Invoke(local.UserId, local.StreamType, sequenceNumber);
     }
 
     private bool IsOperationWithinLimits(Manifest manifest, ManifestOperation op)
@@ -587,105 +697,71 @@ public class ManifestManager(ILogger logger)
         return true;
     }
 
+    /// <summary>
+    /// The exact data an operation's signature covers: every field (including all metadata, so that track titles, cover
+    /// hashes or shader scripts cannot be altered by the peers that forward it) and the hash of the author's previous operation.
+    /// </summary>
     public static string BuildSignablePayload(ManifestOperation op)
     {
         var sb = new StringBuilder();
-        sb.Append(op.OperationId);
-        sb.Append('|');
-        sb.Append(op.OperationType);
-        sb.Append('|');
-        sb.Append(op.TargetId);
-        sb.Append('|');
-        sb.Append(op.TargetType);
-        sb.Append('|');
-        sb.Append(op.ContentHash ?? string.Empty);
-        sb.Append('|');
-        sb.Append(op.SequenceNumber);
-        sb.Append('|');
-        sb.Append(op.Timestamp.Ticks);
+        sb.Append(SignablePayloadVersion).Append('|');
+        sb.Append(op.OperationId).Append('|');
+        sb.Append(op.OperationType).Append('|');
+        sb.Append(op.TargetId).Append('|');
+        sb.Append(op.TargetType).Append('|');
+        sb.Append(op.ContentHash ?? string.Empty).Append('|');
+        sb.Append(op.SequenceNumber).Append('|');
+        sb.Append(op.Timestamp.ToUniversalTime().Ticks).Append('|');
+        sb.Append(op.PrevHash ?? string.Empty).Append('|');
+        AppendCanonicalMetadata(sb, op.Metadata);
         return sb.ToString();
+    }
+
+    /// <summary>Length-prefixed and sorted, so that no two different dictionaries produce the same text.</summary>
+    private static void AppendCanonicalMetadata(StringBuilder sb, Dictionary<string, string>? metadata)
+    {
+        if (metadata == null) return;
+        foreach (var kv in metadata.OrderBy(k => k.Key, StringComparer.Ordinal))
+        {
+            var value = kv.Value ?? string.Empty;
+            sb.Append(kv.Key.Length).Append(':').Append(kv.Key).Append('=').Append(value.Length).Append(':').Append(value).Append(';');
+        }
     }
 
     public static string BuildSnapshotSignablePayload(ManifestSnapshot snapshot)
     {
         var sb = new StringBuilder();
-        sb.Append(snapshot.LastSequenceNumber);
-        sb.Append('|');
-        sb.Append(snapshot.Timestamp.Ticks);
+        sb.Append(SignablePayloadVersion).Append('|');
+        sb.Append(snapshot.LastSequenceNumber).Append('|');
+        sb.Append(snapshot.Timestamp.ToUniversalTime().Ticks).Append('|');
+        sb.Append(snapshot.HeadHash ?? string.Empty).Append('|');
+
+        foreach (var kv in snapshot.PlayCounts.OrderBy(k => k.Key, StringComparer.Ordinal))
+            sb.Append(kv.Key).Append(':').Append(kv.Value).Append(',');
         sb.Append('|');
 
-        // Sorted PlayCounts
-        foreach (var kv in snapshot.PlayCounts.OrderBy(k => k.Key))
+        foreach (var id in snapshot.FollowedUserIds.OrderBy(s => s, StringComparer.Ordinal)) sb.Append(id).Append(',');
+        sb.Append('|');
+        foreach (var id in snapshot.LikedTrackIds.OrderBy(s => s, StringComparer.Ordinal)) sb.Append(id).Append(',');
+        sb.Append('|');
+        foreach (var id in snapshot.FriendUserIds.OrderBy(s => s, StringComparer.Ordinal)) sb.Append(id).Append(',');
+        sb.Append('|');
+        foreach (var id in snapshot.GroupIds.OrderBy(s => s, StringComparer.Ordinal)) sb.Append(id).Append(',');
+        sb.Append('|');
+
+        foreach (var entity in snapshot.EntityStates.OrderBy(e => e.TargetId, StringComparer.Ordinal).ThenBy(e => e.TargetType, StringComparer.Ordinal))
         {
-            sb.Append(kv.Key);
-            sb.Append(':');
-            sb.Append(kv.Value);
+            sb.Append(entity.TargetId).Append(':').Append(entity.TargetType).Append(':').Append(entity.ContentHash ?? string.Empty).Append(':');
+            AppendCanonicalMetadata(sb, entity.Metadata);
             sb.Append(',');
         }
         sb.Append('|');
 
-        // Sorted FollowedUserIds
-        foreach (var id in snapshot.FollowedUserIds.OrderBy(s => s))
-        {
-            sb.Append(id);
-            sb.Append(',');
-        }
-        sb.Append('|');
-
-        // Sorted LikedTrackIds
-        foreach (var id in snapshot.LikedTrackIds.OrderBy(s => s))
-        {
-            sb.Append(id);
-            sb.Append(',');
-        }
-        sb.Append('|');
-
-        // Sorted FriendUserIds
-        foreach (var id in snapshot.FriendUserIds.OrderBy(s => s))
-        {
-            sb.Append(id);
-            sb.Append(',');
-        }
-        sb.Append('|');
-
-        // Sorted GroupIds
-        foreach (var id in snapshot.GroupIds.OrderBy(s => s))
-        {
-            sb.Append(id);
-            sb.Append(',');
-        }
-        sb.Append('|');
-
-        // Sorted EntityStates
-        foreach (var entity in snapshot.EntityStates.OrderBy(e => e.TargetId).ThenBy(e => e.TargetType))
-        {
-            sb.Append(entity.TargetId);
-            sb.Append(':');
-            sb.Append(entity.TargetType);
-            sb.Append(':');
-            sb.Append(entity.ContentHash ?? string.Empty);
-            sb.Append(':');
-            // Sorted Metadata
-            foreach (var kv in entity.Metadata.OrderBy(k => k.Key))
-            {
-                sb.Append(kv.Key);
-                sb.Append('=');
-                sb.Append(kv.Value);
-                sb.Append(';');
-            }
-            sb.Append(',');
-        }
-        sb.Append('|');
-
-        // Sorted PersistentOperations
+        // Persistent operations are signed individually; the snapshot binds which ones it preserves.
         foreach (var op in snapshot.PersistentOperations.OrderBy(o => o.SequenceNumber))
-        {
-            sb.Append(op.OperationId);
-            sb.Append(',');
-        }
+            sb.Append(ComputeOperationHash(op)).Append(',');
         sb.Append('|');
 
-        // LibraryStateDigest
         sb.Append(snapshot.LibraryStateDigest ?? string.Empty);
 
         return sb.ToString();

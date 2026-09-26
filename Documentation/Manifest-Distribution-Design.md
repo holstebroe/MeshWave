@@ -91,7 +91,7 @@ Assuming a peer follows 100 artists and interacts with 500 total peers. Daily up
 ## 4. Consensus and Integrity
 
 ### Play Count Spoofing
-- **Rate Limiting**: (Implemented) `MaxPlaysPerUserPerTrackPerDay = 3`.
+- **Rate Limiting**: (Implemented) `MaxPlaysPerUserPerTrackPerDay = 3`, applied when plays are counted (`ManifestState.CountPlays`) and when snapshots squash plays. Peers keep every signed Play operation so that replicated streams stay identical.
 - **Proof of Play**: Future consideration — requiring a small PoW or a time-stamped "heartbeat" from the playback engine to validate long-duration plays.
 
 ### Like Spoofing
@@ -112,7 +112,7 @@ When expanding MeshWave's feature set, data structures should be augmented caref
     - Handlers in `ManifestManager` and `SyncOrchestrator` must be updated to process the new operation type during manifest merges.
 
 2. **Modifying Models**:
-    - Add new properties to the `Metadata` dictionary of `ManifestOperation` or `GroupOperation` rather than altering the schema of the core classes if possible. This prevents breaking RSA signature validation on older clients.
+    - Add new properties to the `Metadata` dictionary of `ManifestOperation` or `GroupOperation` rather than altering the schema of the core classes if possible. The signature covers all metadata in a canonical (sorted, length-prefixed) form, so new keys are signed without changing the signable payload format, and peers cannot alter them in transit.
     - If core domain classes (`Track`, `Album`, `User`) are updated, ensure that mapping logic (`CachedTrackMetadata`, `LocalLibraryManager`) is updated accordingly.
 
 3. **Snapshots and Compaction**:
