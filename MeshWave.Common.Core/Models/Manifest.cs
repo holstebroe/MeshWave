@@ -15,6 +15,13 @@ public class ManifestOperation
     public required string Signature { get; set; }
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
     public Dictionary<string, string> Metadata { get; set; } = [];
+
+    /// <summary>
+    /// Hash of the author's previous operation in the same stream (or of the snapshot head it follows); empty for the first operation.
+    /// Signed with the operation, so the author's log is a hash chain: two different operations with the same sequence number
+    /// (a fork) are detected instead of silently diverging between peers.
+    /// </summary>
+    public string PrevHash { get; set; } = string.Empty;
 }
 
 public enum ManifestStreamType
@@ -130,6 +137,12 @@ public class ManifestSnapshot
     /// <summary>Canonical hash of the entire squashed library state (Set Verification).</summary>
     public string? LibraryStateDigest { get; set; }
 
+    /// <summary>
+    /// Hash of the last operation the snapshot covers (<see cref="LastSequenceNumber"/>). The first operation after the
+    /// snapshot chains from it through <see cref="ManifestOperation.PrevHash"/>.
+    /// </summary>
+    public string HeadHash { get; set; } = string.Empty;
+
     // --- Squashed State ---
 
     /// <summary>Cumulative play counts: TrackId -> Total Plays.</summary>
@@ -150,7 +163,10 @@ public class ManifestSnapshot
     /// <summary>Latest metadata for entities (Tracks, Albums, Profiles, etc.).</summary>
     public List<SnapshotStateEntry> EntityStates { get; set; } = [];
 
-    /// <summary>Operations that are preserved even when squashed (e.g., Comments).</summary>
+    /// <summary>
+    /// Operations that are preserved even when squashed (comments, group and competition operations).
+    /// Comments and group posts are subject to a retention cap (<see cref="SecurityLimits.MaxSnapshotRetainedOperations"/>).
+    /// </summary>
     public List<ManifestOperation> PersistentOperations { get; set; } = [];
 }
 
@@ -183,4 +199,35 @@ public class Manifest
     public List<ManifestOperation> Operations { get; set; } = [];
     public int Version { get; set; } = 1;
     public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// The author's public key. Stored with every replicated manifest and sent along when a peer receives an author's stream
+    /// from the start, so that peers can verify (and forward) streams of authors they have never been connected to.
+    /// Only trusted after <c>CryptoService.IsPublicKeyForUser</c>.
+    /// </summary>
+    public string? AuthorPublicKey { get; set; }
+
+    /// <summary>Wire only: the sender has more operations after the last one in this page.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool HasMore { get; set; }
+
+    /// <summary>
+    /// All operations of the stream that are still held, oldest first: the operations preserved in the snapshot
+    /// followed by the live operations. Consumers that look for comments, group or competition operations must use this
+    /// rather than <see cref="Operations"/>, which loses everything compacted into the snapshot.
+    /// </summary>
+    public IEnumerable<ManifestOperation> AllOperations()
+    {
+        if (Snapshot != null)
+            foreach (var op in Snapshot.PersistentOperations.OrderBy(o => o.SequenceNumber))
+                yield return op;
+        foreach (var op in Operations)
+            yield return op;
+    }
 }
+
+/// <summary>
+/// Compact summary of one author's stream: the highest sequence number held and the hash of that operation.
+/// Peers exchange lists of heads to find out what they are missing (anti-entropy) without sending any operations.
+/// </summary>
+public record StreamHead(string UserId, ManifestStreamType StreamType, int HeadSequenceNumber, string HeadHash);

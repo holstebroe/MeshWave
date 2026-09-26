@@ -61,7 +61,13 @@ public enum ManifestRequestType
     IntroductionOffer = 10,
 
     /// <summary>Session only: identity handshake. The response proves key ownership by signing the request's nonce.</summary>
-    Hello = 11
+    Hello = 11,
+
+    /// <summary>
+    /// Anti-entropy: asks for the heads (<see cref="StreamHead"/>) of every stream the receiver holds, its own and the ones
+    /// it replicates for other authors. The requester then pulls only the streams where it is behind.
+    /// </summary>
+    GetHeads = 12
 }
 
 public class ManifestRequest
@@ -77,6 +83,12 @@ public class ManifestRequest
     public long? ChunkLength { get; set; }
     public SessionHello? Hello { get; set; }
     public Introduction? Introduction { get; set; }
+
+    /// <summary>
+    /// <see cref="ManifestRequestType.GetManifest"/>: whose stream to return. Null or the receiver's own UserId returns the
+    /// receiver's own stream; any other author is served from the streams the receiver replicates (store-and-forward).
+    /// </summary>
+    public string? TargetUserId { get; set; }
 }
 
 public class ManifestResponse
@@ -95,6 +107,13 @@ public class ManifestResponse
 
     /// <summary>Announce only: whether the responder could connect back to the announced port. Null when not checked.</summary>
     public bool? DialBackSucceeded { get; set; }
+
+    /// <summary>
+    /// <see cref="ManifestRequestType.GetHeads"/>: every stream the responder holds.
+    /// <see cref="ManifestRequestType.PushManifest"/>: the responder's head of the pushed stream after merging, so the sender
+    /// knows which operations to send next time (or has to send now, when the push did not connect to what the responder had).
+    /// </summary>
+    public List<StreamHead> Heads { get; set; } = [];
 }
 
 /// <summary>

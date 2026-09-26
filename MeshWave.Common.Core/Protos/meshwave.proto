@@ -45,10 +45,11 @@ message ProtoManifestOperation {
     string target_type = 4;
     optional string content_hash = 5;
     int32 sequence_number = 6;
-    string signature = 7;
+    bytes signature = 7;
     google.protobuf.Timestamp timestamp = 8;
     map<string, string> metadata = 9;
     optional string shader_script = 10;
+    string prev_hash = 11;
 }
 
 message ProtoSnapshotStateEntry {
@@ -62,7 +63,7 @@ message ProtoSnapshotStateEntry {
 message ProtoManifestSnapshot {
     int32 last_sequence_number = 1;
     google.protobuf.Timestamp timestamp = 2;
-    string signature = 3;
+    bytes signature = 3;
     optional string library_state_digest = 4;
     map<string, int32> play_counts = 5;
     repeated string followed_user_ids = 6;
@@ -71,6 +72,7 @@ message ProtoManifestSnapshot {
     repeated string group_ids = 9;
     repeated ProtoSnapshotStateEntry entity_states = 10;
     repeated ProtoManifestOperation persistent_operations = 11;
+    string head_hash = 12;
 }
 
 message ProtoManifest {
@@ -80,6 +82,15 @@ message ProtoManifest {
     repeated ProtoManifestOperation operations = 4;
     int32 version = 5;
     google.protobuf.Timestamp last_updated = 6;
+    optional string author_public_key = 7;
+    bool has_more = 8;
+}
+
+message ProtoStreamHead {
+    string user_id = 1;
+    ProtoManifestStreamType stream_type = 2;
+    int32 head_sequence_number = 3;
+    string head_hash = 4;
 }
 
 message ProtoPeerInfo {
@@ -106,6 +117,7 @@ enum ProtoManifestRequestType {
     REQUEST_INTRODUCTION = 9;
     INTRODUCTION_OFFER = 10;
     HELLO = 11;
+    GET_HEADS = 12;
 }
 
 message ProtoSessionHello {
@@ -136,6 +148,7 @@ message ProtoManifestRequest {
     optional int64 chunk_length = 11;
     optional ProtoSessionHello hello = 12;
     optional ProtoIntroduction introduction = 13;
+    optional string target_user_id = 14;
 }
 
 message ProtoManifestResponse {
@@ -150,4 +163,5 @@ message ProtoManifestResponse {
     optional ProtoIntroduction introduction = 9;
     optional string observed_address = 10;
     optional bool dial_back_succeeded = 11;
+    repeated ProtoStreamHead heads = 12;
 }

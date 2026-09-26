@@ -86,10 +86,11 @@ public class CompetitionTallyService(
 
         lock (localSocialManifest)
         {
-            localCompetitions = localSocialManifest.Operations
+            // Competitions compacted into the snapshot are still running, so read the preserved operations too.
+            localCompetitions = localSocialManifest.AllOperations()
                 .Where(o => o.OperationType == ManifestOperationType.CreateCompetition)
                 .ToList();
-            localReveals = localSocialManifest.Operations
+            localReveals = localSocialManifest.AllOperations()
                 .Where(o => o.OperationType == ManifestOperationType.CompetitionRevealResults)
                 .ToList();
         }
@@ -113,13 +114,16 @@ public class CompetitionTallyService(
             if (localReveals.Any(r => r.TargetId == compId)) continue;
 
             logger.Info("Tallying votes for expired competition {0}", compId);
-            await TallyCompetitionAsync(compId, privateKeyPem, localSocialManifest);
+            await TallyCompetitionAsync(compOp, privateKeyPem, localSocialManifest);
         }
     }
 
-    private Task TallyCompetitionAsync(string compId, string privateKeyPem, Manifest localSocialManifest)
+    private Task TallyCompetitionAsync(ManifestOperation compOp, string privateKeyPem, Manifest localSocialManifest)
     {
-        // 1. Gather all votes for this competition from all peer manifests (and local)
+        var compId = compOp.TargetId;
+
+        // 1. Gather all votes for this competition from all peer manifests (and local), including votes preserved in
+        // snapshots. Peers replicate every signed vote; votes outside the voting window are ignored here.
         var allVotes = new List<ManifestOperation>();
 
         // From peers
@@ -128,18 +132,20 @@ public class CompetitionTallyService(
             if (peerManifest.StreamType != ManifestStreamType.Social) continue;
             lock (peerManifest)
             {
-                allVotes.AddRange(peerManifest.Operations.Where(o =>
+                allVotes.AddRange(peerManifest.AllOperations().Where(o =>
                     o.OperationType == ManifestOperationType.CompetitionCastVote &&
-                    o.TargetId == compId));
+                    o.TargetId == compId &&
+                    ManifestState.IsValidCompetitionOperation(peerManifest.UserId, o, compOp)));
             }
         }
 
         // From local
         lock (localSocialManifest)
         {
-            allVotes.AddRange(localSocialManifest.Operations.Where(o =>
+            allVotes.AddRange(localSocialManifest.AllOperations().Where(o =>
                 o.OperationType == ManifestOperationType.CompetitionCastVote &&
-                o.TargetId == compId));
+                o.TargetId == compId &&
+                ManifestState.IsValidCompetitionOperation(localSocialManifest.UserId, o, compOp)));
         }
 
         // 2. Decrypt and count

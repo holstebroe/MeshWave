@@ -43,10 +43,42 @@ public static class SecurityLimits
     public const int MaxMetadataValueLength = 2048;
     public const int MaxMetadataEntries = 20;
 
-    // --- Rate limiting ---
+    // --- Manifest replication ---
 
-    /// <summary>Minimum milliseconds between manifest pushes to the same peer.</summary>
-    public const int ManifestPushCooldownMs = 30_000;
+    /// <summary>
+    /// Operations recorded within this window are pushed together as one delta. Keeps bursts (several likes, a comment thread)
+    /// to one message per neighbour while still delivering a single comment within a few seconds.
+    /// </summary>
+    public const int FanoutDebounceMs = 1_500;
+
+    /// <summary>
+    /// Number of peers a newly received operation is forwarded to (store-and-forward gossip). Peers not reached this way
+    /// get the operation through anti-entropy (<see cref="PeriodicSyncIntervalSeconds"/>).
+    /// </summary>
+    public const int GossipFanout = 6;
+
+    /// <summary>Operations per manifest page are added until the page reaches this size; the rest is fetched with further requests.</summary>
+    public const int MaxManifestPageBytes = 512 * 1024;
+
+    /// <summary>Maximum number of stream heads in one heads exchange.</summary>
+    public const int MaxHeadsPerExchange = 4_000;
+
+    /// <summary>Maximum number of streams pulled from one peer in one anti-entropy round.</summary>
+    public const int MaxStreamsPulledPerRound = 200;
+
+    /// <summary>
+    /// Maximum number of authors whose streams a peer replicates. Authors beyond this are not stored, so that cheaply
+    /// generated identities cannot fill a peer's disk.
+    /// </summary>
+    public const int MaxReplicatedAuthors = 5_000;
+
+    /// <summary>
+    /// Maximum number of comments and group posts a snapshot preserves. Compaction drops the oldest beyond this, which bounds
+    /// the snapshot (and the first sync of a new peer) no matter how long a user has been active.
+    /// </summary>
+    public const int MaxSnapshotRetainedOperations = 1_000;
+
+    // --- Rate limiting ---
 
     /// <summary>
     /// Maximum play-count operations a single user may contribute per track per UTC day.

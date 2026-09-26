@@ -441,10 +441,6 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         _currentFilePath = filePath;
         CurrentTrackId = Path.GetFileNameWithoutExtension(filePath ?? string.Empty) ?? string.Empty;
 
-        _currentTrackHashForStats = string.Empty;
-        if (!string.IsNullOrWhiteSpace(_currentFilePath) && File.Exists(_currentFilePath)) _currentTrackHashForStats = CryptoService.ComputeFileHash(_currentFilePath);
-        _currentPlayTargetForStats = string.IsNullOrWhiteSpace(_currentTrackHashForStats) ? CurrentTrackId : $"{CurrentTrackId}:{_currentTrackHashForStats}";
-
         RefreshCurrentTrackLikeState();
         RebuildTrackStats();
         _playRecordedForCurrentTrack = false;
@@ -756,9 +752,6 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         });
     }
 
-    private string _currentTrackHashForStats = string.Empty;
-    private string _currentPlayTargetForStats = string.Empty;
-
     private void RebuildTrackStats()
     {
         if (_sync == null || string.IsNullOrWhiteSpace(CurrentTrackId)) return;
@@ -766,53 +759,20 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         var totalLikes = 0;
         var totalPlays = 0;
 
-        var playTarget = _currentPlayTargetForStats;
-
-        foreach (var manifest in _sync.PeerManifests.Where(m => m.StreamType == ManifestStreamType.Interaction))
-        {
-            var latestLike = manifest.Operations
-                .Where(op => string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase) && string.Equals(op.TargetId, CurrentTrackId, StringComparison.OrdinalIgnoreCase))
-                .Where(op => op.OperationType == ManifestOperationType.Like || op.OperationType == ManifestOperationType.Unlike)
-                .OrderByDescending(op => op.SequenceNumber)
-                .FirstOrDefault();
-
-            if (latestLike?.OperationType == ManifestOperationType.Like)
-                totalLikes++;
-
-            var playOp = manifest.Operations
-                .Where(op => string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase) && string.Equals(op.TargetId, playTarget, StringComparison.OrdinalIgnoreCase))
-                .Where(op => op.OperationType == ManifestOperationType.Play)
-                .OrderByDescending(op => op.SequenceNumber)
-                .FirstOrDefault();
-
-            if (playOp != null && playOp.Metadata.TryGetValue("playCount", out var pcStr) && int.TryParse(pcStr, out var pc))
-                totalPlays += pc;
-            else
-                totalPlays += manifest.Operations.Count(op => string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase) && string.Equals(op.TargetId, CurrentTrackId, StringComparison.OrdinalIgnoreCase) && op.OperationType == ManifestOperationType.Play);
-        }
-
+        // ManifestState also reads what compaction squashed into snapshots, and applies the daily play cap.
+        var interactionManifests = _sync.PeerManifests.Where(m => m.StreamType == ManifestStreamType.Interaction).ToList();
         var localInteraction = _sync.GetLocalManifest(ManifestStreamType.Interaction);
         if (localInteraction != null)
+            interactionManifests.Add(localInteraction);
+
+        foreach (var manifest in interactionManifests)
         {
-            var localLatestLike = localInteraction.Operations
-                .Where(op => string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase) && string.Equals(op.TargetId, CurrentTrackId, StringComparison.OrdinalIgnoreCase))
-                .Where(op => op.OperationType == ManifestOperationType.Like || op.OperationType == ManifestOperationType.Unlike)
-                .OrderByDescending(op => op.SequenceNumber)
-                .FirstOrDefault();
-
-            if (localLatestLike?.OperationType == ManifestOperationType.Like)
-                totalLikes++;
-
-            var localPlayOp = localInteraction.Operations
-                .Where(op => string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase) && string.Equals(op.TargetId, playTarget, StringComparison.OrdinalIgnoreCase))
-                .Where(op => op.OperationType == ManifestOperationType.Play)
-                .OrderByDescending(op => op.SequenceNumber)
-                .FirstOrDefault();
-
-            if (localPlayOp != null && localPlayOp.Metadata.TryGetValue("playCount", out var pcStr) && int.TryParse(pcStr, out var pc))
-                totalPlays += pc;
-            else
-                totalPlays += localInteraction.Operations.Count(op => string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase) && string.Equals(op.TargetId, CurrentTrackId, StringComparison.OrdinalIgnoreCase) && op.OperationType == ManifestOperationType.Play);
+            lock (manifest)
+            {
+                if (ManifestState.IsLiked(manifest, CurrentTrackId))
+                    totalLikes++;
+                totalPlays += ManifestState.CountPlays(manifest, CurrentTrackId);
+            }
         }
 
         TotalLikes = totalLikes;
@@ -855,7 +815,13 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
         }
 
         var changed = false;
-        foreach (var op in manifest.Operations.OrderBy(o => o.SequenceNumber))
+        List<ManifestOperation> operations;
+        lock (manifest)
+        {
+            // Comments compacted into the snapshot are preserved there.
+            operations = manifest.AllOperations().ToList();
+        }
+        foreach (var op in operations)
         {
             if (imported.Contains(op.OperationId))
                 continue;
@@ -955,14 +921,11 @@ public class PlaybackViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        var lastLikeState = _sync.GetLocalManifest(ManifestStreamType.Interaction)!.Operations
-            .Where(op => string.Equals(op.TargetType, "Track", StringComparison.OrdinalIgnoreCase)
-                && string.Equals(op.TargetId, CurrentTrackId, StringComparison.OrdinalIgnoreCase)
-                && (op.OperationType == ManifestOperationType.Like || op.OperationType == ManifestOperationType.Unlike))
-            .OrderBy(op => op.SequenceNumber)
-            .LastOrDefault();
-
-        IsCurrentTrackLikedByMe = lastLikeState?.OperationType == ManifestOperationType.Like;
+        var localInteraction = _sync.GetLocalManifest(ManifestStreamType.Interaction)!;
+        lock (localInteraction)
+        {
+            IsCurrentTrackLikedByMe = ManifestState.IsLiked(localInteraction, CurrentTrackId);
+        }
     }
 
     private static double ParseDouble(string? value, DateTime timestamp)

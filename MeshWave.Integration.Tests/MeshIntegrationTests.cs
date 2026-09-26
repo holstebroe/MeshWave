@@ -97,7 +97,8 @@ public class MeshIntegrationTests : IAsyncLifetime
     public async Task TwoPeersWithoutOpenPorts_ExchangeManifestsDirectlyOverHolePunchedUdp()
     {
         // Alice has an open port and acts as bootstrap and introducer. Bob and Carol have no listener (behind NAT).
-        // Alice never serves Bob's data to Carol (or vice versa), so Carol can only get it over a direct Bob <-> Carol link.
+        // Alice replicates their streams like any peer, so the test checks that Bob's own pushes reach Carol: with no open
+        // port on either side, that is only possible over a direct, hole-punched Bob <-> Carol session.
         var alice = await _context.CreatePeerAsync("Alice", useBootstrap: false);
         var bob = await _context.CreatePeerAsync("Bob", bootstrapNodes: [$"127.0.0.1:{alice.Port}"], actAsListener: false);
         var carol = await _context.CreatePeerAsync("Carol", bootstrapNodes: [$"127.0.0.1:{alice.Port}"], actAsListener: false);
@@ -115,6 +116,8 @@ public class MeshIntegrationTests : IAsyncLifetime
         // New publications are pushed over the punched session.
         bob.AnnounceTrack("bob-track-2", "bob-hash-2", new Dictionary<string, string> { ["title"] = "Bob Two" });
         await WaitWithoutSyncAsync(() => CountPublicTracks(carol.GetPeerManifest(bob.UserId)) == 2);
+        await WaitWithoutSyncAsync(() => carol.Orchestrator.GetPeerDiagnosticsSnapshots().Single(p => p.UserId == bob.UserId).RecentMessages
+            .Any(m => m.MessageType == "PushManifest" && m.Details.Contains("from the author")));
 
         // Neither has an open port: both are known as outbound-only.
         Assert.Equal(0, carol.Orchestrator.GetPeers().Single(p => p.UserId == bob.UserId).Port);
@@ -313,12 +316,10 @@ public class MeshIntegrationTests : IAsyncLifetime
         var johnContentIndex = new Dictionary<string, byte[]>();
         johnContentIndex[hash] = File.ReadAllBytes(firstMp3);
 
-        // Restart john with content provider, keeping same identity and port
-        var identity = john.Identity;
-        var port = john.Port;
+        // Restart john with content provider, keeping same identity, port and persisted manifests
         var bootstrapNodes = new[] { $"127.0.0.1:{_context.BootstrapPort}" };
 
-        await john.DisposeAsync();
+        await john.Orchestrator.StopAsync();
         await john.StartAsync(bootstrapNodes: bootstrapNodes, contentProvider: h => johnContentIndex.GetValueOrDefault(h));
 
         await _context.ConnectAndSyncAllAsync();

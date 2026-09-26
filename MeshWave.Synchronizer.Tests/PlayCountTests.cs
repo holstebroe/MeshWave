@@ -11,7 +11,7 @@ namespace MeshWave.Synchronizer.Tests;
 /// <summary>
 /// Tests for play-count manifest operations:
 /// - RecordPlay session rate cap (one per track per session in SyncOrchestrator)
-/// - MergeManifest daily play cap enforcement (MaxPlaysPerUserPerTrackPerDay)
+/// - Daily play cap (MaxPlaysPerUserPerTrackPerDay), applied when plays are counted (ManifestState)
 /// </summary>
 public class PlayCountTests
 {
@@ -32,7 +32,7 @@ public class PlayCountTests
     private static void AppendPlayAt(
         Manifest manifest, string trackId, DateTime utcTimestamp, string privateKeyPem, string? contentHash = null)
     {
-        var seq = manifest.Operations.Count;
+        var seq = ManifestManager.GetHeadSequenceNumber(manifest) + 1;
         var op = new ManifestOperation
         {
             OperationId  = Guid.NewGuid().ToString(),
@@ -43,6 +43,7 @@ public class PlayCountTests
             Signature    = string.Empty,
             Timestamp    = utcTimestamp,
             SequenceNumber = seq,
+            PrevHash     = ManifestManager.GetHeadHash(manifest),
             Metadata     = new Dictionary<string, string> { ["title"] = "Test Track" }
         };
         // Use ManifestManager to build the signable payload to ensure consistency.
@@ -86,123 +87,94 @@ public class PlayCountTests
         );
     }
 
-    // ─── MergeManifest daily play cap ────────────────────────────────────────
+    // ─── Daily play cap (applied when counting) ─────────────────────────────
+
+    /// <summary>Merges the author's stream into an empty copy, as a peer would, and returns the copy.</summary>
+    private Manifest Replicate(Manifest remote, string publicKeyPem)
+    {
+        var local = _manager.CreateManifest(remote.UserId);
+        local.StreamType = remote.StreamType;
+        _manager.MergeManifest(local, remote, publicKeyPem);
+        return local;
+    }
 
     [Fact]
-    public void MergeManifest_AcceptsPlays_UpToDailyCap()
+    public void CountPlays_CountsPlays_UpToDailyCap()
     {
         var (pub, priv) = GenerateKeyPair();
-        var local  = _manager.CreateManifest("user-merge-1");
         var remote = _manager.CreateManifest("user-merge-1");
 
         for (var i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay; i++)
             AppendPlayAt(remote, "track-a", DateTime.UtcNow, priv);
 
-        var added = _manager.MergeManifest(local, remote, pub);
-
-        Assert.Equal(SecurityLimits.MaxPlaysPerUserPerTrackPerDay, added);
+        Assert.Equal(SecurityLimits.MaxPlaysPerUserPerTrackPerDay, ManifestState.CountPlays(Replicate(remote, pub), "track-a"));
     }
 
     [Fact]
-    public void MergeManifest_DropsExcessPlays_BeyondDailyCap()
+    public void CountPlays_IgnoresExcessPlays_BeyondDailyCap_ButMergeKeepsThem()
     {
         var (pub, priv) = GenerateKeyPair();
-        var local  = _manager.CreateManifest("user-merge-2");
         var remote = _manager.CreateManifest("user-merge-2");
 
         var overCount = SecurityLimits.MaxPlaysPerUserPerTrackPerDay + 5;
         for (var i = 0; i < overCount; i++)
             AppendPlayAt(remote, "track-b", DateTime.UtcNow, priv);
 
-        var added = _manager.MergeManifest(local, remote, pub);
+        var local = Replicate(remote, pub);
 
-        Assert.Equal(SecurityLimits.MaxPlaysPerUserPerTrackPerDay, added);
+        Assert.Equal(overCount, local.Operations.Count);
+        Assert.Equal(SecurityLimits.MaxPlaysPerUserPerTrackPerDay, ManifestState.CountPlays(local, "track-b"));
     }
 
     [Fact]
-    public void MergeManifest_CountsExistingLocalPlaysTowardCap()
+    public void CountPlays_CapIsPerTrack_DifferentTracksCountSeparately()
     {
         var (pub, priv) = GenerateKeyPair();
-
-        // Local already has (cap-1) plays — built properly via AppendPlayAt
-        var local = _manager.CreateManifest("user-merge-3");
-        for (var i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay - 1; i++)
-            AppendPlayAt(local, "track-c", DateTime.UtcNow, priv);
-
-        // Remote must be a valid full manifest (or at least continuous from 0 if no snapshot)
-        var remote = _manager.CreateManifest("user-merge-3");
-        // Add same initial plays
-        for (var i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay - 1; i++)
-            AppendPlayAt(remote, "track-c", DateTime.UtcNow, priv);
-        // Add 3 new ones
-        for (var i = 0; i < 3; i++)
-            AppendPlayAt(remote, "track-c", DateTime.UtcNow, priv);
-
-        var added = _manager.MergeManifest(local, remote, pub);
-
-        // Only 1 play should be accepted (fills the cap)
-        Assert.Equal(1, added);
-    }
-
-    [Fact]
-    public void MergeManifest_CapIsPerTrack_DifferentTracksCountSeparately()
-    {
-        var (pub, priv) = GenerateKeyPair();
-        var local  = _manager.CreateManifest("user-merge-4");
         var remote = _manager.CreateManifest("user-merge-4");
 
-        // Add cap plays for track-x then cap plays for track-y in one sequential manifest
-        for (var i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay; i++)
+        for (var i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay + 1; i++)
             AppendPlayAt(remote, "track-x", DateTime.UtcNow, priv);
-        for (var i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay; i++)
+        for (var i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay + 1; i++)
             AppendPlayAt(remote, "track-y", DateTime.UtcNow, priv);
 
-        var added = _manager.MergeManifest(local, remote, pub);
+        var local = Replicate(remote, pub);
 
-        Assert.Equal(SecurityLimits.MaxPlaysPerUserPerTrackPerDay * 2, added);
+        Assert.Equal(SecurityLimits.MaxPlaysPerUserPerTrackPerDay, ManifestState.CountPlays(local, "track-x"));
+        Assert.Equal(SecurityLimits.MaxPlaysPerUserPerTrackPerDay, ManifestState.CountPlays(local, "track-y"));
     }
 
     [Fact]
-    public void MergeManifest_CapIsPerDay_DifferentDaysCountSeparately()
+    public void CountPlays_CapIsPerDay_DifferentDaysCountSeparately()
     {
         var (pub, priv) = GenerateKeyPair();
-        var local  = _manager.CreateManifest("user-merge-5");
         var remote = _manager.CreateManifest("user-merge-5");
 
         var today     = DateTime.UtcNow.Date.AddHours(12);
         var yesterday = today.AddDays(-1);
 
-        for (var i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay; i++)
+        for (var i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay + 1; i++)
             AppendPlayAt(remote, "track-d", today, priv);
-        for (var i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay; i++)
+        for (var i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay + 1; i++)
             AppendPlayAt(remote, "track-d", yesterday, priv);
 
-        var added = _manager.MergeManifest(local, remote, pub);
-
-        // Both days should each get their full quota
-        Assert.Equal(SecurityLimits.MaxPlaysPerUserPerTrackPerDay * 2, added);
+        // Both days each get their full quota
+        Assert.Equal(SecurityLimits.MaxPlaysPerUserPerTrackPerDay * 2, ManifestState.CountPlays(Replicate(remote, pub), "track-d"));
     }
 
     [Fact]
-    public void MergeManifest_NonPlayOperations_AreNotAffectedByCap()
+    public void CountPlays_AddsThePlayCountSquashedIntoTheSnapshot()
     {
         var (pub, priv) = GenerateKeyPair();
-        var local  = _manager.CreateManifest("user-merge-6");
         var remote = _manager.CreateManifest("user-merge-6");
+        var yesterday = DateTime.UtcNow.Date.AddHours(-12);
 
-        var overCount = SecurityLimits.MaxPlaysPerUserPerTrackPerDay + 2;
-        for (var i = 0; i < overCount; i++)
-            AppendPlayAt(remote, "track-e", DateTime.UtcNow, priv);
+        for (var i = 0; i < 2; i++)
+            AppendPlayAt(remote, "track-e", yesterday, priv);
+        remote.Snapshot = _manager.CreateSnapshot(remote, ManifestManager.GetHeadSequenceNumber(remote), priv);
+        remote.Operations.Clear();
+        AppendPlayAt(remote, "track-e", DateTime.UtcNow, priv);
 
-        // Append a Create op — not subject to play cap
-        _manager.AppendSignedOperation(
-            remote, ManifestOperationType.Create, "track-e", "Track",
-            "hash-abc", null, priv);
-
-        var added = _manager.MergeManifest(local, remote, pub);
-
-        // Capped plays + the 1 Create op
-        Assert.Equal(SecurityLimits.MaxPlaysPerUserPerTrackPerDay + 1, added);
+        Assert.Equal(3, ManifestState.CountPlays(Replicate(remote, pub), "track-e"));
     }
 
     [Fact]

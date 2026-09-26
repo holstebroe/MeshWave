@@ -6,7 +6,7 @@ Review of the MeshWave network protocol against its design goals:
 - **Minimal open ports.** Only one peer (or a standalone bootstrap) needs an open port. The bootstrap's only job is establishing direct connections (discovery, hole-punching); it must never relay data.
 - **Scales to many small items** (comments, likes) and many peers.
 
-This document lists what was fixed in the first pass (quick fixes), what was fixed in the connectivity pass (C1–C6), and what remains, with a proposed fix for each remaining item so it can be picked up in a separate session.
+This document lists what was fixed in the first pass (quick fixes), the connectivity pass (C1–C6) and the manifest scalability pass (S1–S8), and what remains, with a proposed fix for each remaining item so it can be picked up in a separate session.
 
 ## Part 1: Fixed in the first pass
 
@@ -30,7 +30,7 @@ The connection model is now: every peer keeps a **persistent session** with each
 | C1 | **No persistent, bidirectional connections.** Every exchange opened a new TCP connection to the target's listening port, so peers behind NAT could only poll (every 60 s). | `PeerSession` multiplexes requests in both directions over one connection (frames carry a kind and a request ID; several requests can be in flight). A one-shot `OpenSession` request upgrades an incoming TCP connection (`ManifestExchangeServer.SessionUpgradeHandler`); `PeerSessionManager` owns the sessions. Keepalive every 25 s (`SessionKeepaliveSeconds`), closed after 75 s of silence. Each side sends a `Hello` with a fresh nonce and the answer signs it, so a session is only attributed to a UserId after a challenge-response. Duplicate sessions (both sides dialled) are pruned deterministically (both sides rank by the two nonces). `ManifestExchangeClient` routes every request over a session when one exists (`SessionResolver`), else one-shot TCP. Peers open control sessions to all bootstrap nodes and up to 8 dialable neighbours (`MaxOutboundNeighbourSessions`). Fan-out pushes go to every peer with a session, including outbound-only ones. The periodic pull is now a 5-minute anti-entropy fallback (`PeriodicSyncIntervalSeconds = 300`). | `PeerSessionTests.TcpSession_*`, `TcpSessions_DialledFromBothSides_*`, `OnlyOnePeerListening_OutboundOnlyPeerExchangesManifestsBothWays` (later updates now arrive by push, without polling) |
 | C2 | **Hole punching did nothing useful.** The bootstrap had no UDP socket, rendezvous sessions never reached the target, punches went to the TCP port, and all real traffic was TCP. | `UdpSessionHost`: one UDP socket per node (LiteNetLib with `NatPunchModule`, bound to the manifest port number). Any peer with an open port, and the standalone bootstrap, is an **introducer**. B sends `RequestIntroduction(C)` over its session with the introducer A; A issues a single-use token, forwards an `IntroductionOffer` over its session with C, and both B and C send NAT introduce requests with that token to A's UDP port. A observes both public endpoints (like STUN) and sends each side the other's public and private endpoint; both punch at once, connect (only once per token, only accepting connections that carry an expected token), and run the same `PeerSession` protocol (including the `Hello` challenge) over the reliable UDP channel. Peers try this automatically for every non-dialable peer they learn about (`EnsureSessionsAsync`, cooldown 60 s per target) and on demand before a content download (`PrepareConnectionAsync` reports `persistent-session`, `direct-tcp-probe`, `udp-introduction`). The old rendezvous (`RequestRendezvous`, `BootstrapCoordinator.OnRendezvousRequested`, `NatTraversalService.TryPunchAsync`) is removed. | `PeerSessionTests.Introduction_*`, `TwoPeersWithoutOpenPorts_ExchangeManifestsDirectlyOverHolePunchedUdp` |
 | C3 | **The bootstrap relayed data.** `RelayManifestPush` and relay `GetManifest` made it store and serve (unverified) manifests; the relay path only activated for hostnames containing "bootstrap". | Removed `RelayManifestPush`, `TargetUserId`, the `relay` capability, `relayedManifestProvider` and the bootstrap's manifest store. Proto numbers are `reserved`; old peers sending them get `Acknowledged = false`. The bootstrap no longer registers peers from pushes (only from `Announce`). | `Bootstrap_NeverStoresOrServesManifests` |
-| C4 | **Symmetric NAT on both sides.** | Accepted, not relayed: if no introducer can connect two peers, `PrepareConnectionAsync` reports it and the download uses any other peer that holds the hash. The NAT guidance text no longer promises a relay. Small items still need S2 (gossip) to reach such pairs; see below. | — |
+| C4 | **Symmetric NAT on both sides.** | Accepted, not relayed: if no introducer can connect two peers, `PrepareConnectionAsync` reports it and the download uses any other peer that holds the hash. The NAT guidance text no longer promises a relay. Manifests now reach such pairs through any common neighbour, which stores and forwards them (S2). | — |
 | C5 | **Announced port after UPnP.** The mapped port was assumed equal to the local one, failures were ignored, and nothing checked reachability. | `NatTraversalService.ExternalPort` records the public port the router actually mapped (null if mapping failed); the router's external IP is only used when a mapping exists. On every `Announce` with a port, the receiver **dials back** to the observed address and that port (a one-shot `Ping`, 3 s timeout, cached 1 min) and registers the peer as outbound-only (port 0) if it fails. The response carries `ObservedAddress` and `DialBackSucceeded`. The peer then shares port 0 in its own record (`IsPubliclyReachable = false`) but keeps announcing its candidate port to bootstrap nodes, so it recovers as soon as the port opens. | `PeerSessionTests.Announce_WithUnreachablePort_*`, `Announce_WithReachablePort_*` |
 | C6 | **Routing-table liveness and address authenticity.** PEX mentions refreshed `LastSeen`, keyless PEX entries could overwrite a known peer's address, and the 5-minute cutoff equalled the 5-minute re-bootstrap interval. | Peers sign their own `PeerInfo` (UserId, address, port, `SignedAtUtc`; `PeerRecords`), re-signed every 4 minutes and shared in hellos, announcements and pushes. `PeerRouter` separates **direct** contact (announce, session handshake and traffic, successful fetch/push/PEX, LAN discovery: refresh `LastSeen`, observed address wins) from **hearsay** (PEX and bootstrap lists: may add an unknown peer, but only a validly signed, newer record may change a known peer's address or move its `LastSeen`, and only up to its signing time). Relaying nodes keep the owner's signature only while it still matches the address and port they forward. The liveness cutoff is 12 minutes (`PeerLivenessTimeoutMinutes`), longer than the bootstrap heartbeat; the bootstrap also treats a live control session as liveness. | `PeerRouterLivenessTests` |
 
@@ -42,59 +42,53 @@ The connection model is now: every peer keeps a **persistent session** with each
 - **Session content is capped at 1 MB per response** (`MaxSessionContentSliceBytes`); chunked downloads (512 KB) are unaffected. Whole-file one-shot requests only use TCP to a dialable peer.
 - **Tests run on 127.0.0.1**, where punching trivially succeeds. The protocol path is exercised end to end (introducer, tokens, punch, connect, handshake), but real NAT behaviour still needs H3.
 
-## Part 3: Out of scope, to be addressed in later sessions
+## Part 3: Manifest scalability, fixed in the third pass
 
-Ordered roughly by priority. Each item can be done in its own session.
+The model is now: each author's stream (Content, Interaction, Social) is an **append-only, hash-linked log of individually signed operations**. Because every operation verifies on its own, streams travel as **deltas** and **any peer can store and forward** them. Neighbours compare compact **stream heads** to find what they are missing.
 
-### Scalability of manifests
+### Design choice: delta manifests, not "small packages first, verified later"
 
-#### S1. Push deltas, not whole manifests
-**Problem.** Every like or comment triggers `PersistAndFanoutLocalManifest`, which pushes the author's whole stream (snapshot plus 100–500 ops) to every dialable peer in the routing table, one after another. With RSA-4096 each op is about 0.8–1 KB, so a single like to 50 peers is on the order of 10–20 MB of upload. Receivers re-verify every signature each time. `SecurityLimits.ManifestPushCooldownMs` is defined but unused.
+The alternative considered was to send chatty items (likes, comments) as lightweight unsigned or loosely checked packages first and verify them occasionally against the author's signed manifest. It was rejected:
 
-**Fix.** Push only new ops (from the receiver's last acknowledged sequence), or announce `{author, stream, headSeq, headHash}` and let receivers pull. Debounce and batch fan-out using the cooldown.
+- **An unverified package can be forged by anyone who forwards it.** A receiver would have to either display it unverified (spoofable likes and comments) or hold it until the next signed manifest arrives (minutes of latency). Only a per-operation signature makes a package safe to forward through third parties, and store-and-forward (S2) is what makes the mesh scale.
+- **The cost was never verification but sending the whole stream.** A signed like is about 0.8 KB on the wire (680 bytes for the operation, measured with RSA-4096). Sending it as a delta instead of the whole stream is the entire S1 saving; the signature itself is the remaining overhead (see S7 follow-up).
+- **Delta manifests already provide the "occasional verification".** The hash chain and the heads exchange (S4) detect missing operations and forks without re-sending anything. Operations recorded within 1.5 s are pushed together (`SecurityLimits.FanoutDebounceMs`).
 
-#### S2. Store-and-forward gossip
-**Problem.** Peers only serve their own manifests. To see all comments on a track you need a live, direct connection to every commenter. This also matters for C4: two peers that cannot punch through to each other never see each other's updates.
+So a "small package" is simply a one-operation delta of the author's signed log: it is verified on arrival and can be forwarded immediately. Music is protected at least as well as before and better in two ways. Operation **metadata is now signed** (before, titles, artists, cover and icon hashes and shader scripts could be altered by any peer that forwarded a release). And an author's two conflicting versions of an operation (a fork) are now detected.
 
-**Fix.** Signed ops verify themselves, so every peer should serve every op it holds. Push to a bounded set of peers (6–8) and let the rest pull lazily; deduplicate by op ID. Secure Scuttlebutt's EBT (per-feed version vectors over append-only signed feeds) is very close to MeshWave's model. GossipSub is the libp2p equivalent.
+| # | Problem | Fix | Tests |
+|---|---|---|---|
+| S1 | **Every like or comment pushed the author's whole stream** to every dialable peer (≈10–20 MB of upload for one like to 50 peers). Receivers re-verified every signature each time. | Pushes carry only the operations the receiver lacks (`SyncOrchestrator.PushStreamAsync`, pages from `ManifestManager.BuildPage`). The push response reports the receiver's head of that stream (`ManifestResponse.Heads`), so the sender learns where to continue. When the delta does not connect to what the receiver has, the sender sends the missing range next: from the snapshot, or from the start with the author's key. Local changes are debounced for 1.5 s (`SecurityLimits.FanoutDebounceMs`, which replaces the unused `ManifestPushCooldownMs`) and pushed to session peers plus a few dialable ones. Over an authenticated session the sender identifies itself by UserId only, so a single like push is ≈0.8 KB instead of ≈2.3 KB with the full signed record. Signatures travel as raw bytes, not base64 (−33%). | `Like_IsPushedAsADeltaOfOneOperation_NotTheWholeStream`, `Merge_OfDeltas_AppendsOnlyNewOperations` |
+| S2 | **Peers only served their own manifests**, so seeing a comment required a live, direct connection to its author. | Every peer serves every stream it holds: `GetManifest` takes a `TargetUserId`, answered from the peer store (`ManifestExchangeServer.ConfigureReplication`). Operations received by push are forwarded to `SecurityLimits.GossipFanout` (6) neighbours, preferring session peers. A receiver that already has them merges nothing and does not forward, which ends the flood. Only fresh deltas of up to 64 operations are gossiped; larger catch-ups go through anti-entropy. The author's public key travels with any page that starts at sequence 0 (`Manifest.AuthorPublicKey`) and is stored with the stream, so peers can verify authors they have never been connected to. Only a push from the author itself, with a validly signed record, registers the author as a peer; forwarded operations say nothing about where their author is. | `Peer_ServesTheSignedStreamsOfOtherAuthors_AndTheirHeads`, `OfflineAuthorsComments_ReachALateJoiner_ThroughAnotherPeer` |
+| S3 | **Replication per author, capped by the 500-peer routing table.** | Partly addressed: through S2, operations of authors outside the routing table arrive from neighbours, so they are no longer invisible. Replication is not yet by topic (see follow-ups). The peer store is capped at `SecurityLimits.MaxReplicatedAuthors` (5,000) authors, so that cheaply generated identities cannot fill the disk. | — |
+| S4 | **Anti-entropy fetched every stream from every peer.** | `GetHeads` returns `(author, stream, headSeq, headHash)` for every stream a peer holds. `SyncWithPeerAsync` compares heads and pulls, page by page, only the streams where it is behind (the peer's own streams first, at most `MaxStreamsPulledPerRound` per round), then pushes our own streams the peer lacks. The periodic loop runs this against session peers plus a few dialable ones (`SyncNeighboursAsync`) instead of every peer in the routing table. Equal sequence numbers with different head hashes are reported as a fork. It also replaces the full-manifest pushes on `OnPeerAdded`. | `Peer_ServesTheSignedStreamsOfOtherAuthors_AndTheirHeads`, all integration tests (convergence now goes through heads) |
+| S5 | **Unbounded snapshots and the 2 MB message ceiling.** Comments and posts were kept in snapshots forever, and around 2,000 lifetime comments made a stream impossible to sync. | Compaction keeps at most `SecurityLimits.MaxSnapshotRetainedOperations` (1,000) comments and group posts in the snapshot and drops the oldest. Group and competition structure (founding, channels, moderation, competitions) is always kept. Responses and pushes are paged at `SecurityLimits.MaxManifestPageBytes` (512 KB) with `Manifest.HasMore`, and the receiver continues from its new head. | `CreateSnapshot_DropsTheOldestComments_BeyondTheRetentionCap`, `BuildPage_SplitsLargeStreams_AndPagesMergeInOrder` |
+| S6 | **Consumers ignored snapshot data.** | `Manifest.AllOperations()` enumerates the snapshot's preserved operations followed by the live ones. `CompetitionTallyService` (competitions and votes) and the group message and state events use it. When a newer snapshot is adopted, its new preserved operations raise events too. `ManifestState` reads likes (live Like/Unlike, else the snapshot's liked set) and plays (the snapshot count plus the capped live plays) for the WPF playback view, and its timeline comments now include compacted ones. | `CountPlays_AddsThePlayCountSquashedIntoTheSnapshot`, `CreateSnapshot_KeepsGroupOperations` |
+| S7 | **No fork detection; unsigned metadata; large signatures.** | Each operation signs `PrevHash`, the hash of the author's previous operation (`ManifestManager.ComputeOperationHash`). The first operation chains from a **genesis hash** of (author, stream), so an operation cannot be replayed into another stream or as another author's. Snapshots sign their `HeadHash`. The signable payload now includes **all metadata** (sorted and length-prefixed). Merges only append operations that chain to the local head. A different operation at a sequence number already held is a fork: the first version is kept, the conflict is logged, `ManifestManager.ForkDetected` is raised and it shows in the peer diagnostics. Local manifests from older versions are re-signed as chains at startup (`EnsureSignedChain`). A peer that lost its local data pulls its own streams back from a neighbour that holds more of them (`RecoverOwnStreamAsync`), so it continues them instead of forking itself. Ed25519 is not done yet (see follow-ups); signatures are sent as raw bytes. | `Merge_DetectsAFork_AndKeepsTheFirstVersion`, `PeerThatLostItsLocalData_RecoversItsOwnStream_InsteadOfForkingIt`, `Merge_RejectsADeltaThatDoesNotChainToTheLocalHead`, `Verify_RejectsAnOperationReplayedIntoAnotherStream`, `Verify_RejectsTamperedMetadata`, `EnsureSignedChain_ResignsAManifestWrittenBeforeChaining`, `SerializeAndDeserialize_ReplicationFields_RoundTrip` |
+| S8 | **The peer store rewrote a peer's whole JSON file on every merge** (and the local manifest on every like). | Append-only JSON-lines logs (`ManifestLog`, `*.mwlog`): a header line (snapshot, author key), then one line per operation. Merges and local operations append; the file is only rewritten when the snapshot changes. A torn last line is ignored. Peer stores from older versions (`*.json`) cannot be continued as chains and are deleted on load (they are fetched again). | `PeerManifestStoreTests` |
 
-#### S3. Topic-based replication
-**Problem.** Replication is per author, and the routing table is capped at 500 peers, so comments from anyone outside that set are invisible.
+### Merge semantics changed: rules are applied when reading
 
-**Fix.** Replicate by topic (track, artist, group) so interested peers get a topic's ops from whoever has them. This fits ADR 0001's hybrid model.
+A replicated stream must be identical on every peer, so that heads can be compared and any peer can serve it. Merges therefore no longer drop operations that pass verification. **This replaces the discard handling of F3.**
 
-#### S4. Efficient anti-entropy
-**Fix.** Exchange compact heads summaries (author → head seq + head hash). For large sets, use range-based set reconciliation (e.g. Negentropy) or Bloom filters instead of per-peer, per-stream fetches.
+- The daily play cap is applied when plays are counted (`ManifestState.CountPlays`, and when a snapshot squashes plays).
+- Competition deadlines and the administrator check are applied when votes are tallied (`ManifestState.IsValidCompetitionOperation`).
+- Merging stops (and does not skip) at an operation that exceeds the field limits.
+- Merging also stops once a stream holds `MaxManifestOperations` uncompacted operations, which bounds what a misbehaving author can make peers store.
 
-#### S5. Unbounded snapshots and the message-size ceiling
-**Problem.**
-- Comments (and now group posts, F4) are kept in `Snapshot.PersistentOperations` forever.
-- A new peer is always sent the full snapshot.
-- Around 2,000 lifetime comments exceeds `SecurityLimits.MaxMessageBytes` (2 MB), after which that user's stream can never be synced by new peers.
+### Deviations from the proposed fixes, and follow-ups
 
-**Fix.**
-- Move comments and posts into per-topic logs with a retention policy.
-- Keep snapshots to aggregated state.
-- Page large responses instead of one framed message.
+- **Ed25519 (S7) is not done.** It would shrink a like from ≈0.8 KB to ≈0.25 KB. But sealed competition votes are RSA-encrypted to the administrator's key (`CompetitionTallyService`), so switching the identity key also needs an X25519 (or separate encryption key) scheme and a key-migration plan, because the `UserId` is derived from the key. `CryptoService` could detect the key type from the PEM and support both during migration.
+- **Topic-based replication (S3) and per-topic comment logs (S5) are not done.** Every peer replicates every author it hears of, up to 5,000 authors. For large networks, streams should be split or filtered by topic (track, artist, group), so that peers only store and gossip what they are interested in. Until then, the retention cap is the bound on comments: a new peer does not see comments older than the newest 1,000 of a user.
+- **Heads lists grow linearly** (≈110 bytes per stream, at most `MaxHeadsPerExchange` = 4,000 per exchange). When peers hold thousands of streams, replace them with range-based set reconciliation (Negentropy) or send a digest of the heads first.
+- **Forks are detected, not resolved.** First-seen wins, so two peers can keep different versions. A follow-up could publish a signed fork proof (both conflicting operations) so that every peer flags the author.
+- **Other WPF views still read only live operations.** `CommunityViewModel` and `BrowseViewModel` build the release feed, follow and friend state and profiles from `Manifest.Operations`. After compaction they miss what moved into the snapshot's `EntityStates`, `FollowedUserIds` and `FriendUserIds`; they should read those through `ManifestState` too.
+- **A peer that acts as another peer's bootstrap now serves other authors' streams** like any peer (store-and-forward of signed data). The standalone bootstrap still stores and serves nothing (C3).
+- **Storage is JSON lines, not SQLite**, and streams are still held in memory. This is enough for append-only writes; an indexed store is only needed once streams no longer fit in memory.
 
-#### S6. Consumers ignore snapshot data
-**Problem.** `CompetitionTallyService` and the `GroupMessageReceived`/`GroupStateChanged` events only read `Manifest.Operations`. Anything compacted into `Snapshot.PersistentOperations` (competition ops, and now group ops from F4) is invisible to them after compaction.
+## Part 4: Out of scope, to be addressed in later sessions
 
-**Fix.** Read persistent operations too, via a shared helper that enumerates "snapshot persistent ops + live ops".
-
-#### S7. Smaller, faster signatures and a hash-linked log
-**Problem.**
-- RSA-4096 signatures are 684 base64 characters per op, dwarfing a like's payload.
-- Ops are linked only by sequence number, so an author can sign two different op #N and different peers will silently diverge (no fork detection).
-
-**Fix.**
-- Switch to Ed25519 (64-byte signatures) stored as raw bytes, which needs a key-migration plan because `UserId` is derived from the key.
-- Add `prevHash` to each op and reject or flag forks.
-
-#### S8. Storage
-**Problem.** `PeerManifestStore.SaveToDisk` rewrites a peer's whole JSON file on every merge.
-
-**Fix.** Append-only storage (e.g. SQLite) indexed by author, stream and sequence.
+Each item can be done in its own session.
 
 ### Content transfer
 
@@ -113,8 +107,8 @@ Ordered roughly by priority. Each item can be done in its own session.
 
 ### Hardening and testing
 
-#### H1. Unused rate limits
-`SecurityLimits.MaxConnectionsPerMinutePerIp` and `ManifestPushCooldownMs` are defined but never enforced. Enforce them in `ManifestExchangeServer.AcceptLoopAsync` and the fan-out.
+#### H1. Unused rate limit
+`SecurityLimits.MaxConnectionsPerMinutePerIp` is defined but never enforced. Enforce it in `ManifestExchangeServer.AcceptLoopAsync`. (`ManifestPushCooldownMs` was replaced by the fan-out debounce, S1.) Per-sender limits on pushes and pulls would also bound the cost of the replication in S2.
 
 #### H2. Windows-only view-model tests
 `MeshWave.ViewModels.Tests` (net10.0-windows) could not be run while making these fixes. They use `MeshTestContext.ConnectAndSyncAllAsync`, which now requires real convergence (F8). Run them on Windows and fix any test that relied on the old forced pushes.

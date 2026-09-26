@@ -1,3 +1,4 @@
+using MeshWave.Common.Core;
 using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
 using Xunit;
@@ -27,7 +28,8 @@ public class ManifestCompactionTests
         Assert.Equal(5, manifest.Operations.Count);
         Assert.NotNull(manifest.Snapshot);
         Assert.Equal(14, manifest.Snapshot.LastSequenceNumber); // 0-14 squashed, 15-19 kept
-        Assert.Equal(15, manifest.Snapshot.PlayCounts["track-1"]);
+        // Squashed plays obey the same daily cap readers apply to live Play operations.
+        Assert.Equal(SecurityLimits.MaxPlaysPerUserPerTrackPerDay, manifest.Snapshot.PlayCounts["track-1"]);
 
         // Verify manifest still passes
         Assert.True(_manager.VerifyManifest(manifest, publicKey));

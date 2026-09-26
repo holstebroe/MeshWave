@@ -139,4 +139,62 @@ public class ManifestSerializerTests
         Assert.Equal("user-1", deserialized.AnnouncingPeer!.UserId);
         Assert.Equal(0, deserialized.AnnouncingPeer.Port);
     }
+
+    [Fact]
+    public void SerializeAndDeserialize_ReplicationFields_RoundTrip()
+    {
+        var signature = Convert.ToBase64String(Enumerable.Range(0, 512).Select(i => (byte)i).ToArray());
+        var request = new ManifestRequest
+        {
+            Type = ManifestRequestType.PushManifest,
+            StreamType = ManifestStreamType.Interaction,
+            TargetUserId = "author-1",
+            Manifest = new Manifest
+            {
+                UserId = "author-1",
+                StreamType = ManifestStreamType.Interaction,
+                AuthorPublicKey = "-----BEGIN RSA PUBLIC KEY-----",
+                HasMore = true,
+                Snapshot = new ManifestSnapshot { LastSequenceNumber = 4, HeadHash = "HEAD", Signature = signature },
+                Operations =
+                [
+                    new ManifestOperation
+                    {
+                        OperationId = "op-5", OperationType = ManifestOperationType.Like, TargetId = "track-1", TargetType = "Track",
+                        SequenceNumber = 5, PrevHash = "HEAD", Signature = signature
+                    }
+                ]
+            }
+        };
+
+        var bytes = ManifestSerializer.SerializeRequest(request);
+        var deserialized = ManifestSerializer.DeserializeRequest(bytes);
+
+        Assert.Equal("author-1", deserialized.TargetUserId);
+        var manifest = deserialized.Manifest!;
+        Assert.Equal("-----BEGIN RSA PUBLIC KEY-----", manifest.AuthorPublicKey);
+        Assert.True(manifest.HasMore);
+        Assert.Equal("HEAD", manifest.Snapshot!.HeadHash);
+        Assert.Equal(signature, manifest.Snapshot.Signature);
+        Assert.Equal("HEAD", manifest.Operations[0].PrevHash);
+        Assert.Equal(signature, manifest.Operations[0].Signature);
+
+        // Signatures travel as raw bytes, not base64 text.
+        Assert.True(ManifestSerializer.GetEncodedSize(manifest.Operations[0]) < 512 + 100);
+    }
+
+    [Fact]
+    public void SerializeAndDeserialize_Heads_RoundTrip()
+    {
+        var response = new ManifestResponse
+        {
+            Acknowledged = true,
+            Heads = [new StreamHead("author-1", ManifestStreamType.Social, 41, "ABC"), new StreamHead("author-2", ManifestStreamType.Content, -1, "")]
+        };
+
+        var deserialized = ManifestSerializer.DeserializeResponse(ManifestSerializer.SerializeResponse(response));
+
+        Assert.Equal(response.Heads, deserialized.Heads);
+        Assert.Null(ManifestSerializer.DeserializeRequest(ManifestSerializer.SerializeRequest(new ManifestRequest { Type = ManifestRequestType.GetHeads })).TargetUserId);
+    }
 }

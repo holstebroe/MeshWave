@@ -33,22 +33,13 @@ public class TestPeer : IAsyncDisposable
         _memoryTarget = memoryTarget;
     }
 
+    /// <summary>
+    /// Starts the peer. Without <paramref name="initialManifests"/> the orchestrator loads the peer's persisted local
+    /// manifests (empty on the first start), as the app does, so a restarted peer keeps its streams.
+    /// </summary>
     public async Task StartAsync(IEnumerable<Manifest>? initialManifests = null, IReadOnlyList<string>? bootstrapNodes = null, bool actAsListener = true, Func<string, byte[]?>? contentProvider = null)
     {
-        var manifests = initialManifests ?? CreateEmptyManifests();
-        await Orchestrator.StartAsync(Identity, manifests, bootstrapNodes, actAsListener, contentProvider);
-    }
-
-    private List<Manifest> CreateEmptyManifests()
-    {
-        return Enum.GetValues<ManifestStreamType>().Select(st => new Manifest
-        {
-            UserId = UserId,
-            StreamType = st,
-            Operations = [],
-            Version = 1,
-            LastUpdated = DateTime.UtcNow
-        }).ToList();
+        await Orchestrator.StartAsync(Identity, initialManifests ?? [], bootstrapNodes, actAsListener, contentProvider);
     }
 
     public async ValueTask DisposeAsync()

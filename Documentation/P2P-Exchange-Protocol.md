@@ -32,11 +32,13 @@ Peers keep one long-lived connection per neighbour (`PeerSession`, managed by `P
 
 ## Request Types (`ManifestRequestType`)
 
-1.  **`GetManifest`**: Requests the receiver's own manifest.
+1.  **`GetManifest`**: Requests one page of a stream.
     - `StreamType`: Identifies whether to fetch the Content, Interaction, or Social stream.
-    - `StartSequenceNumber`: Used for delta synchronization.
+    - `TargetUserId`: Whose stream. Empty (or the receiver's own UserId) returns the receiver's own stream; any other author is served from the streams the receiver replicates (store-and-forward).
+    - `StartSequenceNumber`: One past the requester's head (delta synchronization).
     - `EndSequenceNumber`: Optional upper bound.
-2.  **`PushManifest`**: Proactively sends the local manifest (or a specific stream/group manifest) to a peer. Used when the local state changes.
+    - The response is filled up to `SecurityLimits.MaxManifestPageBytes` (512 KB); `Manifest.HasMore` says there is more after the last operation. It includes the snapshot when the start is at or before it, and the author's public key (`Manifest.AuthorPublicKey`) when the page starts at sequence 0.
+2.  **`PushManifest`**: Sends a delta of a stream (the author's own, or one being forwarded) to a peer. The response's `Heads` holds the receiver's head of that stream after merging (sequence -1 if it holds nothing, e.g. because it has no key for the author yet); the sender uses it to send the missing range when the delta did not connect.
 3.  **`GetPeers`**: Peer Exchange (PEX). Requests a list of known peers from a node. Each entry's `LastSeen` is when the node last had first-hand evidence the peer was alive.
 4.  **`RequestContent`**: Requests raw content bytes (e.g., audio files) by content hash.
     - `ChunkOffset` / `ChunkLength` (optional): request a byte range. Without `ChunkOffset` the whole content is sent.
@@ -57,6 +59,7 @@ Peers keep one long-lived connection per neighbour (`PeerSession`, managed by `P
 9.  **`RequestIntroduction`**: Session only. Asks an introducer (any peer with an open port, or the bootstrap) to introduce the sender to `Introduction.TargetUserId`. The introducer needs a session with the target. It returns a single-use `Token` and its UDP port.
 10. **`IntroductionOffer`**: Session only. The introducer tells the target who wants to connect, with the same token.
     - Both peers then send LiteNetLib NAT introduce requests with the token to the introducer's UDP port. The introducer observes both public UDP endpoints and sends each peer the other's public and private endpoint; both punch and connect at the same time, and the connection becomes a UDP session.
+11. **`GetHeads`**: Returns the head (`StreamHead`: author, stream, head sequence number, head hash) of every stream the receiver holds, at most `SecurityLimits.MaxHeadsPerExchange`. Used for anti-entropy. A standalone bootstrap answers `Acknowledged = false`.
 
 Request type numbers 3 (`RequestRendezvous`) and 5 (`RelayManifestPush`) are retired and answered with `Acknowledged = false`.
 
@@ -69,25 +72,32 @@ Request type numbers 3 (`RequestRendezvous`) and 5 (`RelayManifestPush`) are ret
 
 ## Distribution Strategies
 
-### Push on Update
-Whenever a user performs an action (releases a track, likes a post, etc.), the local `SyncOrchestrator` appends a signed operation to its manifest and immediately pushes the updated manifest to every peer it can reach: over a session if there is one (this includes peers without an open port), otherwise by dialling the peer's open port.
+### Push deltas on update
+Whenever a user performs an action (releases a track, likes a post, etc.), the local `SyncOrchestrator` appends a signed operation to its stream, appends it to disk, and schedules a push. Operations recorded within `SecurityLimits.FanoutDebounceMs` (1.5 s) go out together. Each neighbour gets only the operations it lacks (from its last reported head), over a session if there is one (this includes peers without an open port), otherwise by dialling the peer's open port. Our own operations go to every peer with a session plus up to `SecurityLimits.GossipFanout` dialable ones. Over an authenticated session the sender is identified by UserId only; otherwise it sends its signed peer record.
 
-### No relay
-Bootstrap nodes never store, relay or serve manifests or content. Peers that cannot reach each other directly, even with hole punching (symmetric NAT on both sides), do not exchange data through the bootstrap; content comes from any other peer that holds the hash.
+### Store-and-forward gossip
+Every peer stores the streams it receives and serves them to others (`GetManifest` with `TargetUserId`). A peer that receives new operations by push forwards them to `SecurityLimits.GossipFanout` (6) neighbours, preferring session peers and skipping the sender and the author. A peer that already has them merges nothing and does not forward them further. Only fresh deltas (at most 64 operations) are gossiped; catch-up goes through anti-entropy. Because operations are signed individually, a forwarding peer cannot alter or forge them. A peer stores the streams of at most `SecurityLimits.MaxReplicatedAuthors` authors.
 
-### Periodic Poll / Sync
+### No relay by the bootstrap
+Standalone bootstrap nodes never store, relay or serve manifests or content. Peers that cannot reach each other directly, even with hole punching (symmetric NAT on both sides), still get each other's manifests from any common neighbour (store-and-forward of signed data, above). Content comes from any other peer that holds the hash.
+
+### Anti-entropy
 The `SyncOrchestrator` periodically performs maintenance, which includes:
--   Pulling deltas from all reachable peers every `SecurityLimits.PeriodicSyncIntervalSeconds` (5 minutes), as an anti-entropy fallback for missed pushes.
+-   Every `SecurityLimits.PeriodicSyncIntervalSeconds` (5 minutes), a heads exchange (`GetHeads`) with every session peer and a few dialable ones. It pulls, page by page, the streams where the neighbour is ahead (at most `SecurityLimits.MaxStreamsPulledPerRound` per round) and pushes our own streams the neighbour lacks. The same exchange runs when a peer is discovered and when a session is established.
 -   Opening missing sessions (every 20 s): bootstrap control sessions, dialable neighbours, and introductions to peers without an open port.
 -   Performing PEX to discover new peers.
 -   Re-contacting bootstrap nodes.
 
-## Delta Synchronization and Compaction
-To minimize bandwidth, MeshWave supports delta sync across its multiple streams.
+## Streams, Delta Synchronization and Compaction
+Each author has three streams (Content, Interaction, Social). A stream is an append-only, **hash-linked log**. Every operation signs its sequence number, all of its fields including all metadata, and `PrevHash`, the hash of the author's previous operation in the stream (`ManifestManager.ComputeOperationHash`). The first operation's `PrevHash` is a genesis hash of (author, stream), so an operation cannot be replayed into another stream.
 
-When requesting a manifest stream, a peer specifies a `StartSequenceNumber` one past the highest sequence number it has already evaluated for that user/group (`ManifestManager.GetHeadSequenceNumber`). This is not the operation count: operations can be discarded during merge (e.g. the daily play cap), leaving holes. Merges never accept an operation that would leave a gap in the chain. The server then only returns operations with a sequence number greater than or equal to the requested start.
+When requesting a manifest stream, a peer specifies a `StartSequenceNumber` one past its head for that author and stream (`ManifestManager.GetHeadSequenceNumber`). Merges only append an operation that is the next sequence number **and** chains to the local head, so a stream never has gaps. Peers keep every operation that verifies, so a replicated stream is identical to the author's log. Rules that depend on the reader are applied when reading (`ManifestState`): the daily play cap when counting plays, competition deadlines when tallying votes. If a peer offers a different operation for a sequence number already held (the author signed two versions: a **fork**), the first version is kept and the conflict is reported (`ManifestManager.ForkDetected`, peer diagnostics).
 
-If the requested `StartSequenceNumber` is significantly behind the server's current state, and the server has generated a `ManifestSnapshot` that covers the missing history, the server will return the `ManifestSnapshot` as the baseline. The requesting peer validates the snapshot's signature to securely update its base state (e.g., squashing thousands of historic `Play` operations into the updated totals in the snapshot), and then applies the remaining linear operations on top of it.
+If the requested `StartSequenceNumber` is at or before the author's `ManifestSnapshot`, the snapshot is returned as the baseline. The snapshot is signed, covers everything up to `LastSequenceNumber`, and signs `HeadHash` (the hash of its last operation), so the operations after it chain from it. The requesting peer validates the snapshot's signature to update its base state (e.g., squashing thousands of historic `Play` operations into the totals in the snapshot) and then applies the remaining operations on top of it. Local operations that continue the adopted snapshot are kept.
+
+Compaction (at 500 operations, keeping the latest 100) preserves comments, group and competition operations in the snapshot, but at most `SecurityLimits.MaxSnapshotRetainedOperations` (1,000) comments and group posts; older ones are dropped. Consumers read preserved and live operations together through `Manifest.AllOperations()`.
+
+Streams are stored as append-only JSON-lines logs (`ManifestLog`, `*.mwlog`): new operations are appended, and the file is only rewritten when the snapshot changes.
 
 ## Social Actions and Metadata
 Social actions like `Play`, `Like`, `Comment`, and `Follow` are represented as standard `ManifestOperation` entries.
@@ -97,8 +107,9 @@ Social actions like `Play`, `Like`, `Comment`, and `Follow` are represented as s
 
 ## Security and Verification
 -   A `UserId` is derived from the user's public key. Any key presented for a user (in a push, an announcement or a PEX entry) is only accepted if it hashes to that `UserId` (`CryptoService.IsPublicKeyForUser`).
--   All operations are signed with the user's private key.
--   Peers verify the signature of every operation against the user's public key before merging it into their local store.
+-   All operations are signed with the user's private key, including all of their metadata (titles, artists, cover and icon hashes, shader scripts), so a peer that forwards them cannot alter them.
+-   Peers verify the signature of every operation, and that it chains to the previous one, against the author's public key before merging it into their local store. The author's key only comes from a source whose key hashes to the author's UserId: a stored stream, the routing table, the sender if it is the author, or `Manifest.AuthorPublicKey`.
+-   Signatures are base64 in the model and in storage, and raw bytes on the wire.
 -   Protocol limits (message size, operation count) are strictly enforced to prevent DoS attacks.
 
 ## P2P Networking Concepts
@@ -121,6 +132,7 @@ Lan discovery is intended for testing purposes or for local networks. The `PeerD
 ### Responsible Classes
 - **Bootstrap:** `BootstrapCoordinator` manages bootstrap nodes, and `PeerRouter` resolves nodes using bootstrap lists.
 - **Peer Connections:** `PeerSessionManager` owns persistent sessions (`PeerSession` over `TcpFrameTransport` or `UdpFrameTransport`) and introductions; `UdpSessionHost` does the UDP introducing and punching (LiteNetLib). `ManifestExchangeClient` sends requests (over a session when one exists), `ManifestExchangeServer` answers them. `NatTraversalService` sets up UPnP/NAT-PMP port mappings.
+- **Manifest Replication:** `ManifestManager` signs, verifies, merges and pages hash-linked streams; `SyncOrchestrator` (`SyncOrchestrator.Replication.cs`) pushes deltas, forwards gossip and runs the heads exchange; `PeerManifestStore` stores replicated streams as `ManifestLog` files; `ManifestState` interprets streams for readers.
 - **Content Downloading:** `ManifestExchangeClient` performs content requests via `RequestContentAsync`.
 - **Lan Discovery:** `PeerDiscovery` broadcasts and listens for UDP peer announcements locally.
 

@@ -19,14 +19,30 @@ namespace MeshWave.Synchronizer;
 
 public partial class SyncOrchestrator
 {
+    /// <summary>
+    /// Runs anti-entropy (heads exchange, then pulls of the streams where we are behind) with every peer we can reach.
+    /// </summary>
     public async Task SyncAllPeersAsync(CancellationToken cancellationToken = default)
     {
-        foreach (var peer in _router.GetPeers()) await TryFetchAndMergeAsync(peer, cancellationToken);
+        foreach (var peer in _router.GetPeers().Where(p => !IsBootstrapEntry(p)).ToList())
+            await SyncWithPeerAsync(peer, cancellationToken);
     }
 
     /// <summary>
-    /// Periodically pulls deltas from all known peers. Pushes cannot reach peers behind NAT, so without this
-    /// an outbound-only peer would only ever see a remote peer's state as of the moment it was first discovered.
+    /// Anti-entropy with a bounded set of neighbours: every peer with a session plus a few random dialable ones. Streams
+    /// are replicated by every peer, so a few neighbours are enough to catch up on everything a push missed.
+    /// </summary>
+    private async Task SyncNeighboursAsync(CancellationToken cancellationToken)
+    {
+        var peers = _router.GetPeers().Where(p => !IsBootstrapEntry(p) && HasRoute(p)).OrderBy(_ => Random.Shared.Next()).ToList();
+        var neighbours = peers.Where(p => _sessions.GetSession(p.UserId) != null)
+            .Concat(peers.Where(p => _sessions.GetSession(p.UserId) == null).Take(SecurityLimits.GossipFanout));
+        foreach (var peer in neighbours)
+            await SyncWithPeerAsync(peer, cancellationToken);
+    }
+
+    /// <summary>
+    /// Periodic anti-entropy. Updates normally arrive as pushes; this repairs anything a push missed.
     /// </summary>
     private async Task PeriodicSyncLoopAsync(CancellationToken ct)
     {
@@ -34,7 +50,7 @@ public partial class SyncOrchestrator
             try
             {
                 await Task.Delay(TimeSpan.FromSeconds(SecurityLimits.PeriodicSyncIntervalSeconds), ct);
-                await SyncAllPeersAsync(ct);
+                await SyncNeighboursAsync(ct);
             }
             catch (OperationCanceledException) { break; }
             catch (Exception ex)

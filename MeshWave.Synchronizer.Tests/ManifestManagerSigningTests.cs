@@ -173,6 +173,7 @@ public class ManifestManagerSigningTests
             TargetId = "track-2",
             TargetType = "Track",
             SequenceNumber = 1,
+            PrevHash = ManifestManager.GetHeadHash(remote),
             Timestamp = System.DateTime.UtcNow,
             Signature = "" // Set it properly
         };

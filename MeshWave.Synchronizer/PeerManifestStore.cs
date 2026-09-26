@@ -1,18 +1,18 @@
 using System.Collections.Concurrent;
-using System.Text.Json;
 using MeshWave.Common.Core;
 using MeshWave.Common.Core.Models;
 
 namespace MeshWave.Synchronizer;
 
 /// <summary>
-/// Persists and manages one <see cref="Manifest"/> per remote peer.
+/// Persists and manages the manifest streams this peer replicates for other authors.
 ///
-/// Each peer manifest is stored on disk as:
-///   {storeDirectory}/{userId}.json
+/// Each stream is stored as an append-only log (<see cref="ManifestLog"/>):
+///   {storeDirectory}/{userId}.{stream}.mwlog
+/// Merging appends the new operations; the file is only rewritten when a newer snapshot is adopted.
 ///
-/// The store is the single source of truth for all received peer data.
-/// The local user's own manifest is intentionally NOT stored here.
+/// The store is the single source of truth for all received peer data, and the source this peer serves other
+/// authors' streams from (store-and-forward). The local user's own manifest is intentionally NOT stored here.
 /// </summary>
 public class PeerManifestStore : IManifestStore
 {
@@ -34,25 +34,26 @@ public class PeerManifestStore : IManifestStore
 
     /// <summary>
     /// Loads all persisted peer manifests from disk.  Call once at application start.
+    /// Stores written before operations were hash-linked (<c>*.json</c>) cannot be continued and are deleted; the
+    /// streams are fetched again from peers.
     /// </summary>
     public void LoadAll()
     {
         if (!Directory.Exists(_storeDirectory))
             return;
 
-        foreach (var file in Directory.EnumerateFiles(_storeDirectory, "*.json"))
+        foreach (var legacy in Directory.EnumerateFiles(_storeDirectory, "*.json"))
+            try { File.Delete(legacy); }
+            catch { /* ignored */ }
+
+        foreach (var file in Directory.EnumerateFiles(_storeDirectory, "*" + ManifestLog.Extension))
             try
             {
-                var json = File.ReadAllText(file);
-                var manifest = JsonSerializer.Deserialize<Manifest>(json);
+                var manifest = ManifestLog.Read(file);
                 if (manifest != null && !string.IsNullOrWhiteSpace(manifest.UserId))
                 {
                     _manifests[(manifest.UserId, manifest.StreamType)] = manifest;
-                    foreach (var op in manifest.Operations)
-                    {
-                        if (op.OperationType == ManifestOperationType.CreateCompetition)
-                            _competitionIndex[op.TargetId] = op;
-                    }
+                    IndexCompetitions(manifest.AllOperations());
                 }
             }
             catch
@@ -77,48 +78,74 @@ public class PeerManifestStore : IManifestStore
         return _manifests.Values.ToList();
     }
 
+    /// <summary>The CreateCompetition operation for a competition, if any replicated stream holds it.</summary>
+    public ManifestOperation? GetCompetition(string competitionId)
+    {
+        return _competitionIndex.GetValueOrDefault(competitionId);
+    }
+
     /// <summary>
     /// Merges <paramref name="incoming"/> into the cached manifest for its owner and stream type.
-    /// Creates a new entry if this is the first manifest from that peer for this stream.
+    /// Creates a new entry if this is the first manifest from that peer for this stream (unless
+    /// <see cref="SecurityLimits.MaxReplicatedAuthors"/> authors are already stored).
     /// Persists to disk after merging.  Returns the number of new operations merged.
     /// </summary>
     public int MergeAndSave(Manifest incoming, string peerPublicKeyPem, ManifestManager manager)
     {
         if (string.IsNullOrWhiteSpace(incoming.UserId)) return 0;
 
-        var local = _manifests.GetOrAdd((incoming.UserId, incoming.StreamType), _ =>
+        var key = (incoming.UserId, incoming.StreamType);
+        if (!_manifests.ContainsKey(key) && !IsKnownAuthor(incoming.UserId) && CountAuthors() >= SecurityLimits.MaxReplicatedAuthors)
+        {
+            NLog.LogManager.GetCurrentClassLogger().Debug("Not replicating {0}: already storing {1} authors.", incoming.UserId, SecurityLimits.MaxReplicatedAuthors);
+            return 0;
+        }
+
+        var local = _manifests.GetOrAdd(key, _ =>
         {
             var m = manager.CreateManifest(incoming.UserId);
             m.StreamType = incoming.StreamType;
             return m;
         });
 
-        int added;
-        try
+        lock (local)
         {
-            added = manager.MergeManifest(local, incoming, peerPublicKeyPem, id => _competitionIndex.TryGetValue(id, out var op) ? op : null);
+            var snapshotBefore = local.Snapshot;
+            var headBefore = ManifestManager.GetHeadSequenceNumber(local);
 
-            if (added > 0)
+            int added;
+            try
             {
-                foreach (var op in incoming.Operations)
-                {
-                    if (op.OperationType == ManifestOperationType.CreateCompetition)
-                    {
-                        _competitionIndex[op.TargetId] = op;
-                    }
-                }
+                added = manager.MergeManifest(local, incoming, peerPublicKeyPem);
             }
-        }
-        catch (Exception ex)
-        {
-            NLog.LogManager.GetCurrentClassLogger().Warn("Merge failed for manifest from user {0} stream {1}: {2}", incoming.UserId, incoming.StreamType, ex.Message);
-            return 0; // reject tampered / over-limit manifests
-        }
+            catch (Exception ex)
+            {
+                NLog.LogManager.GetCurrentClassLogger().Warn("Merge failed for manifest from user {0} stream {1}: {2}", incoming.UserId, incoming.StreamType, ex.Message);
+                if (headBefore < 0 && local.Snapshot == null && local.Operations.Count == 0)
+                    _manifests.TryRemove(key, out _);
+                return 0; // reject tampered / over-limit manifests
+            }
 
-        if (added > 0)
-            SaveToDisk(local);
+            if (headBefore < 0 && ManifestManager.GetHeadSequenceNumber(local) < 0)
+            {
+                _manifests.TryRemove(key, out _);
+                return 0;
+            }
 
-        return added;
+            if (!ReferenceEquals(snapshotBefore, local.Snapshot))
+            {
+                IndexCompetitions(local.AllOperations());
+                SaveToDisk(local, rewrite: true);
+            }
+            else if (added > 0)
+            {
+                var newOps = local.Operations.Where(o => o.SequenceNumber > headBefore).OrderBy(o => o.SequenceNumber).ToList();
+                IndexCompetitions(newOps);
+                SaveToDisk(local, rewrite: headBefore < 0, newOps);
+            }
+
+            return added;
+        }
     }
 
     /// <summary>
@@ -149,7 +176,7 @@ public class PeerManifestStore : IManifestStore
         if (!Directory.Exists(_storeDirectory))
             return;
 
-        foreach (var file in Directory.EnumerateFiles(_storeDirectory, "*.json", SearchOption.TopDirectoryOnly))
+        foreach (var file in Directory.EnumerateFiles(_storeDirectory, "*" + ManifestLog.Extension, SearchOption.TopDirectoryOnly))
             try { File.Delete(file); }
             catch
             {
@@ -161,13 +188,32 @@ public class PeerManifestStore : IManifestStore
     // Private helpers
     // ─────────────────────────────────────────────────────────────────────
 
-    private void SaveToDisk(Manifest manifest)
+    private bool IsKnownAuthor(string userId)
+    {
+        return _manifests.Keys.Any(k => k.UserId == userId);
+    }
+
+    private int CountAuthors()
+    {
+        return _manifests.Keys.Select(k => k.UserId).Distinct().Count();
+    }
+
+    private void IndexCompetitions(IEnumerable<ManifestOperation> operations)
+    {
+        foreach (var op in operations)
+            if (op.OperationType == ManifestOperationType.CreateCompetition)
+                _competitionIndex[op.TargetId] = op;
+    }
+
+    private void SaveToDisk(Manifest manifest, bool rewrite, IReadOnlyList<ManifestOperation>? newOps = null)
     {
         try
         {
-            Directory.CreateDirectory(_storeDirectory);
-            var json = JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = false });
-            File.WriteAllText(FilePath(manifest.UserId, manifest.StreamType), json);
+            var path = FilePath(manifest.UserId, manifest.StreamType);
+            if (rewrite || newOps == null || !File.Exists(path))
+                ManifestLog.Rewrite(path, manifest);
+            else
+                ManifestLog.Append(path, newOps);
         }
         catch { /* best-effort disk write */ }
     }
@@ -177,6 +223,6 @@ public class PeerManifestStore : IManifestStore
         // Sanitise userId to a safe filename  (it is already a GUID-like string per P2PIdentityService)
         var safe = string.Concat(userId.Where(c => char.IsLetterOrDigit(c) || c == '-' || c == '_'));
         var suffix = streamType.ToString().ToLowerInvariant();
-        return Path.Combine(_storeDirectory, $"{safe}.{suffix}.json");
+        return Path.Combine(_storeDirectory, $"{safe}.{suffix}{ManifestLog.Extension}");
     }
 }
