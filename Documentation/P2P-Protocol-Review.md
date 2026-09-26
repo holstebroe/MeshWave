@@ -78,7 +78,7 @@ A replicated stream must be identical on every peer, so that heads can be compar
 
 ### Deviations from the proposed fixes, and follow-ups
 
-- **Ed25519 (S7) is not done.** It would shrink a like from ≈0.8 KB to ≈0.25 KB. But sealed competition votes are RSA-encrypted to the administrator's key (`CompetitionTallyService`), so switching the identity key also needs an X25519 (or separate encryption key) scheme and a key-migration plan, because the `UserId` is derived from the key. `CryptoService` could detect the key type from the PEM and support both during migration.
+- **Ed25519 (S7) is done** (see Part 4). It shrinks a like from ≈0.8 KB to ≈0.25 KB.
 - **Topic-based replication (S3) and per-topic comment logs (S5) are not done.** Every peer replicates every author it hears of, up to 5,000 authors. For large networks, streams should be split or filtered by topic (track, artist, group), so that peers only store and gossip what they are interested in. Until then, the retention cap is the bound on comments: a new peer does not see comments older than the newest 1,000 of a user.
 - **Heads lists grow linearly** (≈110 bytes per stream, at most `MaxHeadsPerExchange` = 4,000 per exchange). When peers hold thousands of streams, replace them with range-based set reconciliation (Negentropy) or send a digest of the heads first.
 - **Forks are detected, not resolved.** First-seen wins, so two peers can keep different versions. A follow-up could publish a signed fork proof (both conflicting operations) so that every peer flags the author.
@@ -86,7 +86,23 @@ A replicated stream must be identical on every peer, so that heads can be compar
 - **A peer that acts as another peer's bootstrap now serves other authors' streams** like any peer (store-and-forward of signed data). The standalone bootstrap still stores and serves nothing (C3).
 - **Storage is JSON lines, not SQLite**, and streams are still held in memory. This is enough for append-only writes; an indexed store is only needed once streams no longer fit in memory.
 
-## Part 4: Out of scope, to be addressed in later sessions
+## Part 4: Identity, fixed in the fourth pass
+
+The app has no released version yet, so this was a straight swap rather than a migration: no dual-key-type
+detection, no re-signing of existing chains, no interop between old and new peers. Any identity file written
+before this pass fails to load (a required field is missing) and is silently regenerated with a new keypair
+and a new `UserId`, which is fine pre-release.
+
+| # | Problem | Fix | Tests |
+|---|---|---|---|
+| J1 | **Signing used RSA-4096.** A like's signature was the dominant cost of a delta push (S1's remaining overhead). .NET's `System.Security.Cryptography` has no Ed25519/X25519 support as of net10.0 (confirmed by inspecting the net10.0 reference assembly), so RSA had been kept for both signing and the sealed-vote encryption in `CompetitionTallyService`. | Signing now uses Ed25519 (`CryptoService.GenerateSigningKeyPair/SignData/VerifySignature`, via BouncyCastle — pure managed, no OS crypto provider dependency, so it behaves the same on Windows and Linux). `UserId` is still derived from the signing public key. Every peer identity (`LocalPeerIdentity`, `PeerInfo`) now also carries a separate **X25519 encryption key pair**: Ed25519 keys cannot encrypt, and reusing a signing key for encryption is unsafe, so the two are unrelated key pairs from the start rather than bolted on during a later migration. `EncryptData`/`DecryptData` seal to the X25519 public key with an ephemeral key pair, HKDF-SHA256 and AES-256-GCM (libsodium's `crypto_box_seal` construction), replacing RSA-OAEP for `CompetitionTallyService`'s vote sealing. A peer's signed `PeerInfo` record (Hello, Announce, PEX) now includes `EncryptionPublicKey`, covered by the same signature as the address and port, so a relayed record cannot swap in a different encryption key. Property and parameter names that said `...Pem` were renamed (`PublicKey`/`PrivateKey`): the values are raw 32-byte keys, base64-encoded, not PEM. | `CryptoServiceTests` (key sizes, sign/verify, encrypt/decrypt round-trip and tamper/wrong-key rejection), all existing signing/merge/session tests (unaffected in behavior, only in key format) |
+
+### Deviations from the proposed fix
+
+- **The X25519 encryption key is not yet wired to any UI.** `CompetitionTallyService` decrypts with it, but nothing in the WPF client yet builds a `CompetitionCastVote` operation that calls `EncryptData` against the administrator's `EncryptionPublicKey`. That vote-casting flow is still to be built.
+- **BouncyCastle.Cryptography is a new dependency** of `MeshWave.Common.Core`, pulled in specifically because .NET has no built-in Ed25519/X25519. If a future .NET version adds first-class support, `CryptoService` could drop it.
+
+## Part 5: Out of scope, to be addressed in later sessions
 
 Each item can be done in its own session.
 

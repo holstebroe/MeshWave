@@ -52,7 +52,7 @@ public class ManifestManager(ILogger logger)
         string targetType,
         string? contentHash,
         Dictionary<string, string>? metadata,
-        string privateKeyPem)
+        string privateKey)
     {
         lock (manifest)
         {
@@ -70,7 +70,7 @@ public class ManifestManager(ILogger logger)
                 Signature = string.Empty
             };
 
-            operation.Signature = CryptoService.SignData(BuildSignablePayload(operation), privateKeyPem);
+            operation.Signature = CryptoService.SignData(BuildSignablePayload(operation), privateKey);
 
             manifest.Operations.Add(operation);
             manifest.Version++;
@@ -212,7 +212,7 @@ public class ManifestManager(ILogger logger)
     /// Squashes redundant operations (Play, Follow, Like, etc.) and keeps latest entity metadata.
     /// Comments and group posts are preserved up to <see cref="SecurityLimits.MaxSnapshotRetainedOperations"/>; older ones are dropped.
     /// </summary>
-    public ManifestSnapshot CreateSnapshot(Manifest manifest, int upToSequenceNumber, string privateKeyPem)
+    public ManifestSnapshot CreateSnapshot(Manifest manifest, int upToSequenceNumber, string privateKey)
     {
         var playCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var followed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -332,7 +332,7 @@ public class ManifestManager(ILogger logger)
             };
 
             snapshot.LibraryStateDigest = ComputeLibraryStateDigest(snapshot);
-            snapshot.Signature = CryptoService.SignData(BuildSnapshotSignablePayload(snapshot), privateKeyPem);
+            snapshot.Signature = CryptoService.SignData(BuildSnapshotSignablePayload(snapshot), privateKey);
 
             return snapshot;
         }
@@ -359,7 +359,7 @@ public class ManifestManager(ILogger logger)
     /// Compacts the manifest if it exceeds the specified threshold.
     /// Squashes old operations into a signed snapshot, keeping only the most recent operations.
     /// </summary>
-    public void Compact(Manifest manifest, string privateKeyPem, int threshold = 500, int keepRecent = 100)
+    public void Compact(Manifest manifest, string privateKey, int threshold = 500, int keepRecent = 100)
     {
         lock (manifest)
         {
@@ -373,7 +373,7 @@ public class ManifestManager(ILogger logger)
             var lastToSnapshot = manifest.Operations.OrderBy(o => o.SequenceNumber)
                 .ElementAt(manifest.Operations.Count - keepRecent - 1).SequenceNumber;
 
-            var snapshot = CreateSnapshot(manifest, lastToSnapshot, privateKeyPem);
+            var snapshot = CreateSnapshot(manifest, lastToSnapshot, privateKey);
 
             manifest.Snapshot = snapshot;
             manifest.Operations = manifest.Operations
@@ -392,12 +392,12 @@ public class ManifestManager(ILogger logger)
     /// Keeps operation IDs, timestamps and content; renumbers sequence numbers if they have holes.
     /// Returns true if the manifest was re-signed.
     /// </summary>
-    public bool EnsureSignedChain(Manifest manifest, string privateKeyPem, string publicKeyPem)
+    public bool EnsureSignedChain(Manifest manifest, string privateKey, string publicKey)
     {
         lock (manifest)
         {
-            manifest.AuthorPublicKey = publicKeyPem;
-            if (VerifyManifest(manifest, publicKeyPem) && (manifest.Snapshot != null || manifest.Operations.Count == 0 || manifest.Operations[0].SequenceNumber == 0))
+            manifest.AuthorPublicKey = publicKey;
+            if (VerifyManifest(manifest, publicKey) && (manifest.Snapshot != null || manifest.Operations.Count == 0 || manifest.Operations[0].SequenceNumber == 0))
                 return false;
 
             logger.Info("Re-signing local {0} manifest of {1} as a hash-linked log ({2} operations).", manifest.StreamType, manifest.UserId, manifest.Operations.Count);
@@ -408,11 +408,11 @@ public class ManifestManager(ILogger logger)
             {
                 var snapshot = manifest.Snapshot;
                 foreach (var op in snapshot.PersistentOperations)
-                    op.Signature = CryptoService.SignData(BuildSignablePayload(op), privateKeyPem);
+                    op.Signature = CryptoService.SignData(BuildSignablePayload(op), privateKey);
                 if (string.IsNullOrEmpty(snapshot.HeadHash))
                     snapshot.HeadHash = CryptoService.ComputeHash(Encoding.UTF8.GetBytes($"migrated-snapshot|{manifest.UserId}|{manifest.StreamType}|{snapshot.LastSequenceNumber}"));
                 snapshot.LibraryStateDigest = ComputeLibraryStateDigest(snapshot);
-                snapshot.Signature = CryptoService.SignData(BuildSnapshotSignablePayload(snapshot), privateKeyPem);
+                snapshot.Signature = CryptoService.SignData(BuildSnapshotSignablePayload(snapshot), privateKey);
                 prevHash = snapshot.HeadHash;
                 nextSeq = snapshot.LastSequenceNumber + 1;
             }
@@ -421,7 +421,7 @@ public class ManifestManager(ILogger logger)
             {
                 op.SequenceNumber = nextSeq++;
                 op.PrevHash = prevHash;
-                op.Signature = CryptoService.SignData(BuildSignablePayload(op), privateKeyPem);
+                op.Signature = CryptoService.SignData(BuildSignablePayload(op), privateKey);
                 prevHash = ComputeOperationHash(op);
             }
             manifest.Operations = manifest.Operations.OrderBy(o => o.SequenceNumber).ToList();

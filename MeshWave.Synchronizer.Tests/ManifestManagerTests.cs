@@ -119,26 +119,27 @@ public class ManifestManagerTests
     public void MergeManifest_LogsDetailedRejection_WhenSignatureFails()
     {
         // Arrange
-        var keys1 = MeshWave.Common.Core.Crypto.CryptoService.GenerateKeyPair();
+        var keys1 = MeshWave.Common.Core.Crypto.CryptoService.GenerateSigningKeyPair();
 
-        var local = _manifestManager.CreateManifest("user-1");
-        var remote = _manifestManager.CreateManifest("user-1");
+        // Uses its own LogFactory (rather than the global NLog.LogManager) so the captured logs cannot be
+        // clobbered by other tests reconfiguring the shared static logging config in parallel.
+        var memoryTarget = new NLog.Targets.MemoryTarget { Name = "mem" };
+        var config = new NLog.Config.LoggingConfiguration();
+        config.AddRuleForAllLevels(memoryTarget);
+        var logFactory = new NLog.LogFactory { Configuration = config };
+        var isolatedManager = new ManifestManager(logFactory.GetCurrentClassLogger());
 
-        _manifestManager.AppendSignedOperation(remote, ManifestOperationType.Create, "t1", "Track", null, null, keys1.privateKeyPem);
+        var local = isolatedManager.CreateManifest("user-1");
+        var remote = isolatedManager.CreateManifest("user-1");
+
+        isolatedManager.AppendSignedOperation(remote, ManifestOperationType.Create, "t1", "Track", null, null, keys1.privateKey);
 
         // Tamper with the signature
         remote.Operations[0].Signature = "invalid-signature";
 
-        // We need a way to capture logs to verify NLog output.
-        // NLog provides a MemoryTarget for this.
-        var memoryTarget = new NLog.Targets.MemoryTarget { Name = "mem" };
-        var config = new NLog.Config.LoggingConfiguration();
-        config.AddRuleForAllLevels(memoryTarget);
-        NLog.LogManager.Configuration = config;
-
         // Act & Assert
         Assert.Throws<System.IO.InvalidDataException>(() =>
-            _manifestManager.MergeManifest(local, remote, keys1.publicKeyPem));
+            isolatedManager.MergeManifest(local, remote, keys1.publicKey));
 
         // Verify logs
         var logs = memoryTarget.Logs;

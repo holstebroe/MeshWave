@@ -69,15 +69,18 @@ public static class TestPeerFactory
             userRepo,
             logger);
 
-        var (privKey, pubKey) = CryptoService.GenerateKeyPair();
+        var (privKey, pubKey) = CryptoService.GenerateSigningKeyPair();
+        var (encryptionPrivKey, encryptionPubKey) = CryptoService.GenerateEncryptionKeyPair();
         var userId = CryptoService.DeriveUserIdFromPublicKey(pubKey);
 
         var identity = new LocalPeerIdentity
         {
             UserId = userId,
             DisplayName = name,
-            PublicKeyPem = pubKey,
-            PrivateKeyPem = privKey,
+            PublicKey = pubKey,
+            PrivateKey = privKey,
+            EncryptionPublicKey = encryptionPubKey,
+            EncryptionPrivateKey = encryptionPrivKey,
             ManifestPort = port
         };
 

@@ -89,7 +89,7 @@ public class AuthorityTests
     [Fact]
     public void ManifestManager_VerifiesLibraryStateDigest()
     {
-        var (priv, pub) = CryptoService.GenerateKeyPair();
+        var (priv, pub) = CryptoService.GenerateSigningKeyPair();
         var manifest = _manifestManager.CreateManifest("user-1");
 
         // Create a snapshot

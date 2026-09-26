@@ -46,7 +46,7 @@ public static class MockScenarioRunner
                      {
                          // Use MergeAndSave via the SyncOrchestrator's internal store logic, or we trigger it via reflection
                          // if we want to raise ManifestMerged
-                         applicationViewModel.ManifestStore.MergeAndSave(peerManifest, peer.Identity.PublicKeyPem, manifestManager);
+                         applicationViewModel.ManifestStore.MergeAndSave(peerManifest, peer.Identity.PublicKey, manifestManager);
                      }
                 }
                 injectedPeers++;

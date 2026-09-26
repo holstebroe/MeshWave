@@ -199,14 +199,14 @@ public partial class SyncOrchestrator
     /// Merges a received page of <paramref name="remote"/>'s author stream, raises events for the new operations, and
     /// (for pushed, fresh operations) forwards them to a few neighbours. Returns how far the stored head advanced.
     /// </summary>
-    private int TryMerge(Manifest remote, string publicKeyPem, string? sourcePeerUserId = null, bool forward = false)
+    private int TryMerge(Manifest remote, string publicKey, string? sourcePeerUserId = null, bool forward = false)
     {
         if (remote.UserId == Identity?.UserId) return 0;
 
         _logger.Debug("Attempting merge of manifest from peer {0} ({1} ops, stream={2})", remote.UserId, remote.Operations.Count, remote.StreamType);
         var previousHead = ManifestManager.GetHeadSequenceNumber(_peerStore.Get(remote.UserId, remote.StreamType));
 
-        _peerStore.MergeAndSave(remote, publicKeyPem, _manifestManager);
+        _peerStore.MergeAndSave(remote, publicKey, _manifestManager);
         var stored = _peerStore.Get(remote.UserId, remote.StreamType);
         var added = Math.Max(0, ManifestManager.GetHeadSequenceNumber(stored) - previousHead);
 
@@ -324,11 +324,11 @@ public partial class SyncOrchestrator
         var stored = Enum.GetValues<ManifestStreamType>()
             .Select(s => _peerStore.Get(authorUserId, s)?.AuthorPublicKey)
             .FirstOrDefault(k => !string.IsNullOrWhiteSpace(k));
-        var routed = _router.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, authorUserId, StringComparison.OrdinalIgnoreCase))?.PublicKeyPem;
-        var fromSender = sender != null && string.Equals(sender.UserId, authorUserId, StringComparison.OrdinalIgnoreCase) ? sender.PublicKeyPem : null;
+        var routed = _router.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, authorUserId, StringComparison.OrdinalIgnoreCase))?.PublicKey;
+        var fromSender = sender != null && string.Equals(sender.UserId, authorUserId, StringComparison.OrdinalIgnoreCase) ? sender.PublicKey : null;
         var fromProfile = incoming?.AllOperations()
             .Where(op => op.OperationType == ManifestOperationType.Profile)
-            .Select(op => op.Metadata.GetValueOrDefault("publicKeyPem"))
+            .Select(op => op.Metadata.GetValueOrDefault("publicKey"))
             .LastOrDefault(pk => !string.IsNullOrWhiteSpace(pk));
 
         return new[] { stored, routed, fromSender, incoming?.AuthorPublicKey, fromProfile }
@@ -343,7 +343,7 @@ public partial class SyncOrchestrator
     /// </summary>
     private async Task SyncWithPeerAsync(PeerInfo peer, CancellationToken ct)
     {
-        if (!CryptoService.IsPublicKeyForUser(peer.UserId, peer.PublicKeyPem)) return;
+        if (!CryptoService.IsPublicKeyForUser(peer.UserId, peer.PublicKey)) return;
         if (peer.UserId == Identity?.UserId) return;
         if (!HasRoute(peer)) return;
 
@@ -442,7 +442,7 @@ public partial class SyncOrchestrator
             var headBefore = ManifestManager.GetHeadSequenceNumber(local);
             try
             {
-                _manifestManager.MergeManifest(local, remote, identity.PublicKeyPem);
+                _manifestManager.MergeManifest(local, remote, identity.PublicKey);
             }
             catch (Exception ex)
             {

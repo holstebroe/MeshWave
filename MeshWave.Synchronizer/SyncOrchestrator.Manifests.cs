@@ -105,7 +105,7 @@ public partial class SyncOrchestrator
             if (manifest.Operations.Count >= 500 && Identity != null)
             {
                 _logger.Info("Compacting local {0} manifest ({1} operations)", streamType, manifest.Operations.Count);
-                _manifestManager.Compact(manifest, Identity.PrivateKeyPem, threshold: 500, keepRecent: 100);
+                _manifestManager.Compact(manifest, Identity.PrivateKey, threshold: 500, keepRecent: 100);
             }
 
             SaveLocalManifest(manifest);

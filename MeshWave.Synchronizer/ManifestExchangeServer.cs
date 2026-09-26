@@ -337,7 +337,8 @@ public class ManifestExchangeServer : IDisposable
             // Always trust the observed source address over a self-reported one.
             Address = string.IsNullOrWhiteSpace(observedAddress) ? announced.Address : observedAddress,
             Port = announcedPort,
-            PublicKeyPem = announced.PublicKeyPem,
+            PublicKey = announced.PublicKey,
+            EncryptionPublicKey = announced.EncryptionPublicKey,
             LastSeen = DateTime.UtcNow,
             Capabilities = announced.Capabilities.Take(8).ToList()
         };

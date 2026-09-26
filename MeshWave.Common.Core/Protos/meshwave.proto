@@ -98,11 +98,12 @@ message ProtoPeerInfo {
     string display_name = 2;
     string address = 3;
     int32 port = 4;
-    string public_key_pem = 5;
+    string public_key = 5;
     google.protobuf.Timestamp last_seen = 6;
     repeated string capabilities = 7;
     optional google.protobuf.Timestamp signed_at = 8;
     string signature = 9;
+    string encryption_public_key = 10;
 }
 
 enum ProtoManifestRequestType {

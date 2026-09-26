@@ -33,7 +33,7 @@ public partial class SyncOrchestrator
             "Group",
             contentHash: null,
             metadata: null,
-            Identity.PrivateKeyPem);
+            Identity.PrivateKey);
         PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 
@@ -51,7 +51,7 @@ public partial class SyncOrchestrator
             "Group",
             contentHash: null,
             metadata: null,
-            Identity.PrivateKeyPem);
+            Identity.PrivateKey);
         PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 
@@ -73,7 +73,7 @@ public partial class SyncOrchestrator
                 ["groupId"] = SecurityLimits.Truncate(groupId, SecurityLimits.MaxTargetIdLength),
                 ["name"] = SecurityLimits.Truncate(name, 100)
             },
-            Identity.PrivateKeyPem);
+            Identity.PrivateKey);
         PersistAndFanoutLocalManifest(manifest.StreamType);
         }
 
@@ -103,7 +103,7 @@ public partial class SyncOrchestrator
             "GroupChannel",
             contentHash: null,
             metadata: meta,
-            Identity.PrivateKeyPem);
+            Identity.PrivateKey);
         PersistAndFanoutLocalManifest(manifest.StreamType);
             }
 
@@ -121,7 +121,7 @@ public partial class SyncOrchestrator
             "Group",
             contentHash: null,
             metadata: null,
-            Identity.PrivateKeyPem);
+            Identity.PrivateKey);
         PersistAndFanoutLocalManifest(manifest.StreamType);
             }
 
@@ -139,7 +139,7 @@ public partial class SyncOrchestrator
             "Group",
             contentHash: null,
             metadata: null,
-            Identity.PrivateKeyPem);
+            Identity.PrivateKey);
         PersistAndFanoutLocalManifest(manifest.StreamType);
             }
 

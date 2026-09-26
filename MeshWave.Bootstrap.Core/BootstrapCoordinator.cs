@@ -117,7 +117,7 @@ public sealed class BootstrapCoordinator : IDisposable
             return;
 
         // Announcements must prove key ownership of the UserId.
-        if (!CryptoService.IsPublicKeyForUser(e.Peer.UserId, e.Peer.PublicKeyPem))
+        if (!CryptoService.IsPublicKeyForUser(e.Peer.UserId, e.Peer.PublicKey))
             return;
 
         RegisterPeer(e.Peer);
@@ -136,7 +136,7 @@ public sealed class BootstrapCoordinator : IDisposable
         if (!SecurityLimits.IsValidDisplayName(peer.DisplayName)) return;
 
         // UserIds are derived from public keys; never let a forged key claim someone else's UserId.
-        if (!string.IsNullOrWhiteSpace(peer.PublicKeyPem) && !CryptoService.IsPublicKeyForUser(peer.UserId, peer.PublicKeyPem))
+        if (!string.IsNullOrWhiteSpace(peer.PublicKey) && !CryptoService.IsPublicKeyForUser(peer.UserId, peer.PublicKey))
         {
             _logger.Warn("Rejected registration for user {0} from {1}: public key does not match the UserId.", peer.UserId, peer.Address);
             return;
@@ -145,9 +145,9 @@ public sealed class BootstrapCoordinator : IDisposable
         if (_peers.TryGetValue(peer.UserId, out var existing))
         {
             existing.LastSeen = DateTime.UtcNow;
-            var publicKeyPem = string.IsNullOrWhiteSpace(peer.PublicKeyPem) ? existing.Peer.PublicKeyPem : peer.PublicKeyPem;
+            var publicKey = string.IsNullOrWhiteSpace(peer.PublicKey) ? existing.Peer.PublicKey : peer.PublicKey;
             existing.Peer = PeerRecords.Clone(peer);
-            existing.Peer.PublicKeyPem = publicKeyPem;
+            existing.Peer.PublicKey = publicKey;
             PeerRefreshed?.Invoke(this, new BootstrapPeerEventArgs(existing.Peer, "refreshed"));
             return;
         }

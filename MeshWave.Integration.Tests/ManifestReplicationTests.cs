@@ -45,7 +45,7 @@ public class ManifestReplicationTests : IAsyncLifetime
 
     private static PeerInfo Endpoint(TestPeer peer)
     {
-        return new PeerInfo { UserId = peer.UserId, DisplayName = peer.Name, Address = "127.0.0.1", Port = peer.Port, PublicKeyPem = peer.Identity.PublicKeyPem };
+        return new PeerInfo { UserId = peer.UserId, DisplayName = peer.Name, Address = "127.0.0.1", Port = peer.Port, PublicKey = peer.Identity.PublicKey };
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public class ManifestReplicationTests : IAsyncLifetime
         var stream = await client.FetchStreamAsync(Endpoint(bob), alice.UserId, ManifestStreamType.Interaction, 0, TestContext.Current.CancellationToken);
         Assert.NotNull(stream);
         Assert.Equal(alice.UserId, stream.UserId);
-        Assert.Equal(alice.Identity.PublicKeyPem, stream.AuthorPublicKey);
+        Assert.Equal(alice.Identity.PublicKey, stream.AuthorPublicKey);
         Assert.True(new ManifestManager().VerifyManifest(stream, stream.AuthorPublicKey!));
         Assert.Contains(stream.Operations, op => op.Metadata.GetValueOrDefault("text") == "hello from alice");
     }

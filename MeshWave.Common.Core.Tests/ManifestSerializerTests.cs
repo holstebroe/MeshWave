@@ -130,7 +130,7 @@ public class ManifestSerializerTests
         var request = new ManifestRequest
         {
             Type = ManifestRequestType.Announce,
-            AnnouncingPeer = new PeerInfo { UserId = "user-1", DisplayName = "User", Address = "", Port = 0, PublicKeyPem = "key" }
+            AnnouncingPeer = new PeerInfo { UserId = "user-1", DisplayName = "User", Address = "", Port = 0, PublicKey = "key" }
         };
 
         var deserialized = ManifestSerializer.DeserializeRequest(ManifestSerializer.SerializeRequest(request));

@@ -11,7 +11,10 @@ public class PeerInfo
     public required string DisplayName { get; set; }
     public required string Address { get; set; }
     public int Port { get; set; }
-    public string PublicKeyPem { get; set; } = string.Empty;
+    public string PublicKey { get; set; } = string.Empty;
+
+    /// <summary>The owner's X25519 encryption public key, so others can seal data to them (e.g. a sealed competition vote).</summary>
+    public string EncryptionPublicKey { get; set; } = string.Empty;
     public DateTime LastSeen { get; set; }
     public List<string> Capabilities { get; set; } = [];
 
@@ -21,8 +24,9 @@ public class PeerInfo
     public DateTime? SignedAtUtc { get; set; }
 
     /// <summary>
-    /// The owner's signature over UserId, Address, Port and <see cref="SignedAtUtc"/>. Only a signed record may change the
-    /// address or port of a peer that is already known, so relayed (PEX) entries cannot redirect traffic.
+    /// The owner's signature over UserId, Address, Port, <see cref="EncryptionPublicKey"/> and <see cref="SignedAtUtc"/>.
+    /// Only a signed record may change the address, port or encryption key of a peer that is already known, so
+    /// relayed (PEX) entries cannot redirect traffic or swap in a different encryption key.
     /// </summary>
     public string Signature { get; set; } = string.Empty;
 }

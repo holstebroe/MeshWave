@@ -28,7 +28,7 @@ public interface IManifestStore
     /// Merges an incoming manifest into the store and persists the changes.
     /// Returns the number of new operations merged.
     /// </summary>
-    int MergeAndSave(Manifest incoming, string peerPublicKeyPem, ManifestManager manager);
+    int MergeAndSave(Manifest incoming, string peerPublicKey, ManifestManager manager);
 
     /// <summary>
     /// Removes the persisted manifests for a peer from the store.

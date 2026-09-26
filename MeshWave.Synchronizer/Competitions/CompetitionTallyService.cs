@@ -76,7 +76,8 @@ public class CompetitionTallyService(
     private async Task ProcessExpiredCompetitionsAsync(CancellationToken cancellationToken)
     {
         if (syncOrchestrator.Identity == null) return;
-        var privateKeyPem = syncOrchestrator.Identity.PrivateKeyPem;
+        var signingPrivateKey = syncOrchestrator.Identity.PrivateKey;
+        var encryptionPrivateKey = syncOrchestrator.Identity.EncryptionPrivateKey;
 
         var localSocialManifest = syncOrchestrator.GetLocalManifest(ManifestStreamType.Social);
         if (localSocialManifest == null) return;
@@ -114,11 +115,11 @@ public class CompetitionTallyService(
             if (localReveals.Any(r => r.TargetId == compId)) continue;
 
             logger.Info("Tallying votes for expired competition {0}", compId);
-            await TallyCompetitionAsync(compOp, privateKeyPem, localSocialManifest);
+            await TallyCompetitionAsync(compOp, signingPrivateKey, encryptionPrivateKey, localSocialManifest);
         }
     }
 
-    private Task TallyCompetitionAsync(ManifestOperation compOp, string privateKeyPem, Manifest localSocialManifest)
+    private Task TallyCompetitionAsync(ManifestOperation compOp, string signingPrivateKey, string encryptionPrivateKey, Manifest localSocialManifest)
     {
         var compId = compOp.TargetId;
 
@@ -158,7 +159,7 @@ public class CompetitionTallyService(
             string? decrypted = null;
             try
             {
-                decrypted = CryptoService.DecryptData(voteOp.ContentHash, privateKeyPem);
+                decrypted = CryptoService.DecryptData(voteOp.ContentHash, encryptionPrivateKey);
             }
             catch (Exception ex)
             {
@@ -205,7 +206,7 @@ public class CompetitionTallyService(
         };
 
         var resultJson = JsonSerializer.Serialize(result);
-        var signature = CryptoService.SignData(resultJson, privateKeyPem);
+        var signature = CryptoService.SignData(resultJson, signingPrivateKey);
         result.AdministratorSignature = signature;
 
         var finalJson = JsonSerializer.Serialize(result);

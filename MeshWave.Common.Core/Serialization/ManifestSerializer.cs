@@ -366,7 +366,8 @@ public static class ManifestSerializer
             DisplayName = peer.DisplayName,
             Address = peer.Address,
             Port = peer.Port,
-            PublicKeyPem = peer.PublicKeyPem,
+            PublicKey = peer.PublicKey,
+            EncryptionPublicKey = peer.EncryptionPublicKey,
             LastSeen = Timestamp.FromDateTime(peer.LastSeen.ToUniversalTime())
         };
         if (peer.Capabilities != null) proto.Capabilities.AddRange(peer.Capabilities);
@@ -383,7 +384,8 @@ public static class ManifestSerializer
             DisplayName = proto.DisplayName,
             Address = proto.Address,
             Port = proto.Port,
-            PublicKeyPem = proto.PublicKeyPem,
+            PublicKey = proto.PublicKey,
+            EncryptionPublicKey = proto.EncryptionPublicKey,
             LastSeen = proto.LastSeen.ToDateTime(),
             Capabilities = proto.Capabilities.ToList(),
             SignedAtUtc = proto.SignedAt?.ToDateTime(),

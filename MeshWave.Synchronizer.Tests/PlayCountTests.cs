@@ -19,9 +19,9 @@ public class PlayCountTests
 
     // ─── helpers ────────────────────────────────────────────────────────────
 
-    private static (string publicKeyPem, string privateKeyPem) GenerateKeyPair()
+    private static (string publicKey, string privateKey) GenerateSigningKeyPair()
     {
-        var (priv, pub) = CryptoService.GenerateKeyPair();
+        var (priv, pub) = CryptoService.GenerateSigningKeyPair();
         return (pub, priv);
     }
 
@@ -30,7 +30,7 @@ public class PlayCountTests
     /// SequenceNumber is set BEFORE signing so verification matches.
     /// </summary>
     private static void AppendPlayAt(
-        Manifest manifest, string trackId, DateTime utcTimestamp, string privateKeyPem, string? contentHash = null)
+        Manifest manifest, string trackId, DateTime utcTimestamp, string privateKey, string? contentHash = null)
     {
         var seq = ManifestManager.GetHeadSequenceNumber(manifest) + 1;
         var op = new ManifestOperation
@@ -48,7 +48,7 @@ public class PlayCountTests
         };
         // Use ManifestManager to build the signable payload to ensure consistency.
         var payload = ManifestManager.BuildSignablePayload(op);
-        op.Signature = CryptoService.SignData(payload, privateKeyPem);
+        op.Signature = CryptoService.SignData(payload, privateKey);
         manifest.Operations.Add(op);
         manifest.Version++;
         manifest.LastUpdated = DateTime.UtcNow;
@@ -90,18 +90,18 @@ public class PlayCountTests
     // ─── Daily play cap (applied when counting) ─────────────────────────────
 
     /// <summary>Merges the author's stream into an empty copy, as a peer would, and returns the copy.</summary>
-    private Manifest Replicate(Manifest remote, string publicKeyPem)
+    private Manifest Replicate(Manifest remote, string publicKey)
     {
         var local = _manager.CreateManifest(remote.UserId);
         local.StreamType = remote.StreamType;
-        _manager.MergeManifest(local, remote, publicKeyPem);
+        _manager.MergeManifest(local, remote, publicKey);
         return local;
     }
 
     [Fact]
     public void CountPlays_CountsPlays_UpToDailyCap()
     {
-        var (pub, priv) = GenerateKeyPair();
+        var (pub, priv) = GenerateSigningKeyPair();
         var remote = _manager.CreateManifest("user-merge-1");
 
         for (var i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay; i++)
@@ -113,7 +113,7 @@ public class PlayCountTests
     [Fact]
     public void CountPlays_IgnoresExcessPlays_BeyondDailyCap_ButMergeKeepsThem()
     {
-        var (pub, priv) = GenerateKeyPair();
+        var (pub, priv) = GenerateSigningKeyPair();
         var remote = _manager.CreateManifest("user-merge-2");
 
         var overCount = SecurityLimits.MaxPlaysPerUserPerTrackPerDay + 5;
@@ -129,7 +129,7 @@ public class PlayCountTests
     [Fact]
     public void CountPlays_CapIsPerTrack_DifferentTracksCountSeparately()
     {
-        var (pub, priv) = GenerateKeyPair();
+        var (pub, priv) = GenerateSigningKeyPair();
         var remote = _manager.CreateManifest("user-merge-4");
 
         for (var i = 0; i < SecurityLimits.MaxPlaysPerUserPerTrackPerDay + 1; i++)
@@ -146,7 +146,7 @@ public class PlayCountTests
     [Fact]
     public void CountPlays_CapIsPerDay_DifferentDaysCountSeparately()
     {
-        var (pub, priv) = GenerateKeyPair();
+        var (pub, priv) = GenerateSigningKeyPair();
         var remote = _manager.CreateManifest("user-merge-5");
 
         var today     = DateTime.UtcNow.Date.AddHours(12);
@@ -164,7 +164,7 @@ public class PlayCountTests
     [Fact]
     public void CountPlays_AddsThePlayCountSquashedIntoTheSnapshot()
     {
-        var (pub, priv) = GenerateKeyPair();
+        var (pub, priv) = GenerateSigningKeyPair();
         var remote = _manager.CreateManifest("user-merge-6");
         var yesterday = DateTime.UtcNow.Date.AddHours(-12);
 
@@ -182,7 +182,7 @@ public class PlayCountTests
     {
         // Arrange
         var manager = new ManifestManager();
-        var (pub, priv) = GenerateKeyPair();
+        var (pub, priv) = GenerateSigningKeyPair();
         var manifest = manager.CreateManifest("user1");
 
         AppendPlayAt(manifest, "track-1", DateTime.UtcNow.AddMinutes(-5), priv, "hash1");

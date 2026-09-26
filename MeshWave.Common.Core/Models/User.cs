@@ -8,7 +8,7 @@ public class User
 {
     public required string UserId { get; set; }
     public required string DisplayName { get; set; }
-    public required string PublicKeyPem { get; set; }
+    public required string PublicKey { get; set; }
     public string? Description { get; set; }
     public string? CoverImageHash { get; set; }
     public bool IsArtist { get; set; } = false;

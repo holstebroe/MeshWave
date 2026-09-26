@@ -45,7 +45,7 @@ public partial class SyncOrchestrator
 
     private void OnPeerAnnounced(object? sender, PeerAnnouncedEventArgs e)
             {
-        if (!CryptoService.IsPublicKeyForUser(e.Peer.UserId, e.Peer.PublicKeyPem))
+        if (!CryptoService.IsPublicKeyForUser(e.Peer.UserId, e.Peer.PublicKey))
             {
             _logger.Warn("Ignored announcement for user {0} from {1}: public key does not match the UserId.", e.Peer.UserId, e.Peer.Address);
             return;
@@ -79,8 +79,8 @@ public partial class SyncOrchestrator
 
         // UserIds are derived from public keys, so only a key that hashes to the manifest's UserId may be used
         // to verify it. Without this check anyone could push a manifest for another user signed with their own key.
-        var publicKeyPem = ResolveAuthorKey(e.Manifest.UserId, e.Manifest, e.AnnouncingPeer);
-        if (string.IsNullOrWhiteSpace(publicKeyPem))
+        var publicKey = ResolveAuthorKey(e.Manifest.UserId, e.Manifest, e.AnnouncingPeer);
+        if (string.IsNullOrWhiteSpace(publicKey))
         {
             // The push response reports that we hold nothing of this stream, so the sender follows up from the start, with the key.
             _logger.Debug("Deferred manifest push for user {0} from {1}: no public key matching the UserId yet.", e.Manifest.UserId, e.PeerAddress);
@@ -103,10 +103,10 @@ public partial class SyncOrchestrator
                 // Port 0 means the sender is outbound-only.
                 Port = Math.Max(0, e.AnnouncingPeer.Port),
                 LastSeen = DateTime.UtcNow,
-                PublicKeyPem = publicKeyPem
+                PublicKey = publicKey
             }]);
         }
 
-        TryMerge(e.Manifest, publicKeyPem, senderUserId, forward: true);
+        TryMerge(e.Manifest, publicKey, senderUserId, forward: true);
     }
 }

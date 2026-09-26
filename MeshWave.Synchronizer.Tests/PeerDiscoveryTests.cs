@@ -7,13 +7,16 @@ public class PeerDiscoveryTests
 {
     private static LocalPeerIdentity CreateTestIdentity()
     {
-        var (priv, pub) = CryptoService.GenerateKeyPair();
+        var (priv, pub) = CryptoService.GenerateSigningKeyPair();
+        var (encPriv, encPub) = CryptoService.GenerateEncryptionKeyPair();
         return new LocalPeerIdentity
         {
             UserId = CryptoService.DeriveUserIdFromPublicKey(pub),
             DisplayName = "TestPeer",
-            PublicKeyPem = pub,
-            PrivateKeyPem = priv
+            PublicKey = pub,
+            PrivateKey = priv,
+            EncryptionPublicKey = encPub,
+            EncryptionPrivateKey = encPriv
         };
     }
 

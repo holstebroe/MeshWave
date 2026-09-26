@@ -90,7 +90,7 @@ public class PeerManifestStore : IManifestStore
     /// <see cref="SecurityLimits.MaxReplicatedAuthors"/> authors are already stored).
     /// Persists to disk after merging.  Returns the number of new operations merged.
     /// </summary>
-    public int MergeAndSave(Manifest incoming, string peerPublicKeyPem, ManifestManager manager)
+    public int MergeAndSave(Manifest incoming, string peerPublicKey, ManifestManager manager)
     {
         if (string.IsNullOrWhiteSpace(incoming.UserId)) return 0;
 
@@ -116,7 +116,7 @@ public class PeerManifestStore : IManifestStore
             int added;
             try
             {
-                added = manager.MergeManifest(local, incoming, peerPublicKeyPem);
+                added = manager.MergeManifest(local, incoming, peerPublicKey);
             }
             catch (Exception ex)
             {
