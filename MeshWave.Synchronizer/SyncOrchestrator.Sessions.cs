@@ -61,9 +61,10 @@ public partial class SyncOrchestrator
                 DisplayName = displayName,
                 Address = address,
                 Port = port,
-                PublicKeyPem = identity.PublicKeyPem
+                PublicKey = identity.PublicKey,
+                EncryptionPublicKey = identity.EncryptionPublicKey
             };
-            _selfRecord = PeerRecords.Sign(record, identity.PrivateKeyPem, DateTime.UtcNow);
+            _selfRecord = PeerRecords.Sign(record, identity.PrivateKey, DateTime.UtcNow);
             return PeerRecords.Clone(_selfRecord);
         }
     }

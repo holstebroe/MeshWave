@@ -12,7 +12,7 @@ public class ManifestManagerSigningTests
     [Fact]
     public void AppendSignedOperation_CreatesVerifiableOperation()
     {
-        var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
+        var (privateKey, publicKey) = CryptoService.GenerateSigningKeyPair();
         var manifest = _manager.CreateManifest("user-1");
 
         _manager.AppendSignedOperation(manifest, ManifestOperationType.Create,
@@ -26,7 +26,7 @@ public class ManifestManagerSigningTests
     [Fact]
     public void VerifyManifest_ReturnsTrueForValidSignatures()
     {
-        var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
+        var (privateKey, publicKey) = CryptoService.GenerateSigningKeyPair();
         var manifest = _manager.CreateManifest("user-1");
 
         _manager.AppendSignedOperation(manifest, ManifestOperationType.Create,
@@ -40,7 +40,7 @@ public class ManifestManagerSigningTests
     [Fact]
     public void VerifyManifest_ReturnsFalseForTamperedOperation()
     {
-        var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
+        var (privateKey, publicKey) = CryptoService.GenerateSigningKeyPair();
         var manifest = _manager.CreateManifest("user-1");
 
         _manager.AppendSignedOperation(manifest, ManifestOperationType.Create,
@@ -55,8 +55,8 @@ public class ManifestManagerSigningTests
     [Fact]
     public void VerifyManifest_ReturnsFalseForWrongPublicKey()
     {
-        var (privateKey, _) = CryptoService.GenerateKeyPair();
-        var (_, otherPublicKey) = CryptoService.GenerateKeyPair();
+        var (privateKey, _) = CryptoService.GenerateSigningKeyPair();
+        var (_, otherPublicKey) = CryptoService.GenerateSigningKeyPair();
         var manifest = _manager.CreateManifest("user-1");
 
         _manager.AppendSignedOperation(manifest, ManifestOperationType.Create,
@@ -68,7 +68,7 @@ public class ManifestManagerSigningTests
     [Fact]
     public void VerifyManifest_ReturnsFalseForOutOfOrderSequence()
     {
-        var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
+        var (privateKey, publicKey) = CryptoService.GenerateSigningKeyPair();
         var manifest = _manager.CreateManifest("user-1");
 
         _manager.AppendSignedOperation(manifest, ManifestOperationType.Create,
@@ -86,7 +86,7 @@ public class ManifestManagerSigningTests
     [Fact]
     public void MergeManifest_AddsNewVerifiedOperations()
     {
-        var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
+        var (privateKey, publicKey) = CryptoService.GenerateSigningKeyPair();
 
         var local = _manager.CreateManifest("user-2");
 
@@ -105,7 +105,7 @@ public class ManifestManagerSigningTests
     [Fact]
     public void MergeManifest_SkipsAlreadyPresentOperations()
     {
-        var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
+        var (privateKey, publicKey) = CryptoService.GenerateSigningKeyPair();
 
         var manifest = _manager.CreateManifest("user-2");
         _manager.AppendSignedOperation(manifest, ManifestOperationType.Create,
@@ -121,7 +121,7 @@ public class ManifestManagerSigningTests
     [Fact]
     public void VerifyManifest_WorksWithDeltas()
     {
-        var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
+        var (privateKey, publicKey) = CryptoService.GenerateSigningKeyPair();
         var manifest = _manager.CreateManifest("user-delta");
 
         _manager.AppendSignedOperation(manifest, ManifestOperationType.Create,
@@ -156,7 +156,7 @@ public class ManifestManagerSigningTests
     [Fact]
     public void MergeManifest_DropsOperations_WhenStringsExceedLimit()
     {
-        var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
+        var (privateKey, publicKey) = CryptoService.GenerateSigningKeyPair();
 
         var local = _manager.CreateManifest("user-3");
         var remote = _manager.CreateManifest("user-3");

@@ -45,7 +45,7 @@ public class MeshIntegrationTests : IAsyncLifetime
 
         // The bootstrap entry itself must not be what satisfies discovery: B must know A by UserId, with A's key.
         var aAsSeenByB = peerB.Orchestrator.GetPeers().Single(p => p.UserId == peerA.UserId);
-        Assert.Equal(peerA.Identity.PublicKeyPem, aAsSeenByB.PublicKeyPem);
+        Assert.Equal(peerA.Identity.PublicKey, aAsSeenByB.PublicKey);
         Assert.Equal(peerA.Port, aAsSeenByB.Port);
     }
 
@@ -157,8 +157,8 @@ public class MeshIntegrationTests : IAsyncLifetime
     public async Task ForgedManifestPush_WithKeyNotMatchingUserId_IsRejected()
     {
         var alice = await _context.CreatePeerAsync("Alice", useBootstrap: false);
-        var victimUserId = CryptoService.DeriveUserIdFromPublicKey(CryptoService.GenerateKeyPair().publicKeyPem);
-        var (attackerPrivateKey, attackerPublicKey) = CryptoService.GenerateKeyPair();
+        var victimUserId = CryptoService.DeriveUserIdFromPublicKey(CryptoService.GenerateSigningKeyPair().publicKey);
+        var (attackerPrivateKey, attackerPublicKey) = CryptoService.GenerateSigningKeyPair();
 
         var manager = new ManifestManager();
         var forged = manager.CreateManifest(victimUserId);
@@ -173,7 +173,7 @@ public class MeshIntegrationTests : IAsyncLifetime
             DisplayName = "Victim",
             Address = "127.0.0.1",
             Port = 1,
-            PublicKeyPem = attackerPublicKey
+            PublicKey = attackerPublicKey
         }, TestContext.Current.CancellationToken);
 
         await Task.Delay(500, TestContext.Current.CancellationToken);

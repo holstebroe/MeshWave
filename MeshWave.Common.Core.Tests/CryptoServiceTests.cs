@@ -7,23 +7,34 @@ namespace MeshWave.Common.Core.Tests;
 public class CryptoServiceTests
 {
     [Fact]
-    public void GenerateKeyPair_ReturnsValidPemKeys()
+    public void GenerateSigningKeyPair_ReturnsDistinct32ByteBase64Keys()
     {
         // Act
-        var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
+        var (privateKey, publicKey) = CryptoService.GenerateSigningKeyPair();
 
-        // Assert
-        Assert.NotNull(privateKey);
-        Assert.NotNull(publicKey);
-        Assert.StartsWith("-----BEGIN RSA PRIVATE KEY-----", privateKey);
-        Assert.StartsWith("-----BEGIN RSA PUBLIC KEY-----", publicKey);
+        // Assert: raw 32-byte Ed25519 keys, base64-encoded (not PEM).
+        Assert.Equal(32, Convert.FromBase64String(privateKey).Length);
+        Assert.Equal(32, Convert.FromBase64String(publicKey).Length);
+        Assert.NotEqual(privateKey, publicKey);
+    }
+
+    [Fact]
+    public void GenerateEncryptionKeyPair_ReturnsDistinct32ByteBase64Keys()
+    {
+        // Act
+        var (privateKey, publicKey) = CryptoService.GenerateEncryptionKeyPair();
+
+        // Assert: raw 32-byte X25519 keys, base64-encoded (not PEM).
+        Assert.Equal(32, Convert.FromBase64String(privateKey).Length);
+        Assert.Equal(32, Convert.FromBase64String(publicKey).Length);
+        Assert.NotEqual(privateKey, publicKey);
     }
 
     [Fact]
     public void DeriveUserIdFromPublicKey_ReturnConsistentGuid()
     {
         // Arrange
-        var (_, publicKey) = CryptoService.GenerateKeyPair();
+        var (_, publicKey) = CryptoService.GenerateSigningKeyPair();
 
         // Act
         var userId1 = CryptoService.DeriveUserIdFromPublicKey(publicKey);
@@ -40,7 +51,7 @@ public class CryptoServiceTests
     public void SignData_ProducesValidSignature()
     {
         // Arrange
-        var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
+        var (privateKey, publicKey) = CryptoService.GenerateSigningKeyPair();
         var data = "Test data to sign";
 
         // Act
@@ -58,7 +69,7 @@ public class CryptoServiceTests
     public void VerifySignature_ReturnsTrue_ForValidSignature()
     {
         // Arrange
-        var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
+        var (privateKey, publicKey) = CryptoService.GenerateSigningKeyPair();
         var data = "Test data to sign";
         var signature = CryptoService.SignData(data, privateKey);
 
@@ -73,7 +84,7 @@ public class CryptoServiceTests
     public void VerifySignature_ReturnsFalse_ForAlteredData()
     {
         // Arrange
-        var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
+        var (privateKey, publicKey) = CryptoService.GenerateSigningKeyPair();
         var data = "Test data to sign";
         var signature = CryptoService.SignData(data, privateKey);
         var alteredData = "Altered test data";
@@ -89,7 +100,7 @@ public class CryptoServiceTests
     public void EncryptDecryptData_Roundtrip_Success()
     {
         // Arrange
-        var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
+        var (privateKey, publicKey) = CryptoService.GenerateEncryptionKeyPair();
         var data = "CastVote payload data";
 
         // Act
@@ -103,11 +114,26 @@ public class CryptoServiceTests
     }
 
     [Fact]
+    public void EncryptData_ProducesADifferentEnvelopeEachTime()
+    {
+        // Arrange: the ephemeral key pair and nonce must differ per call, even for identical input.
+        var (_, publicKey) = CryptoService.GenerateEncryptionKeyPair();
+        var data = "CastVote payload data";
+
+        // Act
+        var first = CryptoService.EncryptData(data, publicKey);
+        var second = CryptoService.EncryptData(data, publicKey);
+
+        // Assert
+        Assert.NotEqual(first, second);
+    }
+
+    [Fact]
     public void DecryptData_ReturnsNull_ForInvalidKey()
     {
         // Arrange
-        var (_, publicKey) = CryptoService.GenerateKeyPair();
-        var (otherPrivateKey, _) = CryptoService.GenerateKeyPair();
+        var (_, publicKey) = CryptoService.GenerateEncryptionKeyPair();
+        var (otherPrivateKey, _) = CryptoService.GenerateEncryptionKeyPair();
         var data = "CastVote payload data";
 
         // Act
@@ -122,7 +148,7 @@ public class CryptoServiceTests
     public void DecryptData_ReturnsNull_ForCorruptedCiphertext()
     {
         // Arrange
-        var (privateKey, _) = CryptoService.GenerateKeyPair();
+        var (privateKey, _) = CryptoService.GenerateEncryptionKeyPair();
 
         // Act & Assert 1: Invalid Base64
         var invalidBase64 = "This is not valid base64!";
@@ -139,7 +165,7 @@ public class CryptoServiceTests
     public void VerifySignature_ReturnsFalse_ForInvalidSignature()
     {
         // Arrange
-        var (_, publicKey) = CryptoService.GenerateKeyPair();
+        var (_, publicKey) = CryptoService.GenerateSigningKeyPair();
         var data = "Test data to sign";
         var invalidSignature = Convert.ToBase64String(new byte[] { 1, 2, 3, 4, 5 });
 
@@ -191,8 +217,8 @@ public class CryptoServiceTests
     [Fact]
     public void IsPublicKeyForUser_OnlyAcceptsTheKeyTheUserIdWasDerivedFrom()
     {
-        var (_, publicKey) = CryptoService.GenerateKeyPair();
-        var (_, otherPublicKey) = CryptoService.GenerateKeyPair();
+        var (_, publicKey) = CryptoService.GenerateSigningKeyPair();
+        var (_, otherPublicKey) = CryptoService.GenerateSigningKeyPair();
         var userId = CryptoService.DeriveUserIdFromPublicKey(publicKey);
 
         Assert.True(CryptoService.IsPublicKeyForUser(userId, publicKey));

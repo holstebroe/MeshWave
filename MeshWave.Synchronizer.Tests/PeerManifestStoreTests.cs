@@ -26,17 +26,17 @@ public class PeerManifestStoreTests : IDisposable
 
     // ─── helpers ────────────────────────────────────────────────────────────
 
-    private static (string publicKeyPem, string privateKeyPem) GenerateKeyPair()
+    private static (string publicKey, string privateKey) GenerateSigningKeyPair()
     {
-        var (priv, pub) = CryptoService.GenerateKeyPair();
+        var (priv, pub) = CryptoService.GenerateSigningKeyPair();
         return (pub, priv);
     }
 
-    private Manifest BuildSignedManifest(string userId, string privateKeyPem)
+    private Manifest BuildSignedManifest(string userId, string privateKey)
     {
         var manifest = _manager.CreateManifest(userId);
         _manager.AppendSignedOperation(manifest, ManifestOperationType.Create,
-            "track-1", "Track", "hash-abc", null, privateKeyPem);
+            "track-1", "Track", "hash-abc", null, privateKey);
         return manifest;
     }
 
@@ -51,7 +51,7 @@ public class PeerManifestStoreTests : IDisposable
     [Fact]
     public void MergeAndSave_ReturnsMergedCount_AndCachesManifest()
     {
-        var (pub, priv) = GenerateKeyPair();
+        var (pub, priv) = GenerateSigningKeyPair();
         var userId = CryptoService.DeriveUserIdFromPublicKey(pub);
         var incoming = BuildSignedManifest(userId, priv);
 
@@ -64,7 +64,7 @@ public class PeerManifestStoreTests : IDisposable
     [Fact]
     public void MergeAndSave_PersistsToDisk()
     {
-        var (pub, priv) = GenerateKeyPair();
+        var (pub, priv) = GenerateSigningKeyPair();
         var userId = CryptoService.DeriveUserIdFromPublicKey(pub);
         var incoming = BuildSignedManifest(userId, priv);
 
@@ -78,7 +78,7 @@ public class PeerManifestStoreTests : IDisposable
     [Fact]
     public void LoadAll_RestoresPersistedManifests()
     {
-        var (pub, priv) = GenerateKeyPair();
+        var (pub, priv) = GenerateSigningKeyPair();
         var userId = CryptoService.DeriveUserIdFromPublicKey(pub);
         var incoming = BuildSignedManifest(userId, priv);
 
@@ -97,7 +97,7 @@ public class PeerManifestStoreTests : IDisposable
     [Fact]
     public void MergeAndSave_IdempotentForSameOperations()
     {
-        var (pub, priv) = GenerateKeyPair();
+        var (pub, priv) = GenerateSigningKeyPair();
         var userId = CryptoService.DeriveUserIdFromPublicKey(pub);
         var incoming = BuildSignedManifest(userId, priv);
 
@@ -111,8 +111,8 @@ public class PeerManifestStoreTests : IDisposable
     [Fact]
     public void MergeAndSave_RejectsManifestWithWrongPublicKey()
     {
-        var (pub, priv) = GenerateKeyPair();
-        var (wrongPub, _) = GenerateKeyPair();
+        var (pub, priv) = GenerateSigningKeyPair();
+        var (wrongPub, _) = GenerateSigningKeyPair();
         var userId = CryptoService.DeriveUserIdFromPublicKey(pub);
         var incoming = BuildSignedManifest(userId, priv);
 
@@ -125,7 +125,7 @@ public class PeerManifestStoreTests : IDisposable
     [Fact]
     public void Remove_DeletesCacheEntryAndDiskFile()
     {
-        var (pub, priv) = GenerateKeyPair();
+        var (pub, priv) = GenerateSigningKeyPair();
         var userId = CryptoService.DeriveUserIdFromPublicKey(pub);
         var incoming = BuildSignedManifest(userId, priv);
         _store.MergeAndSave(incoming, pub, _manager);
@@ -141,7 +141,7 @@ public class PeerManifestStoreTests : IDisposable
     {
         for (var i = 0; i < 3; i++)
         {
-            var (pub, priv) = GenerateKeyPair();
+            var (pub, priv) = GenerateSigningKeyPair();
             var userId = CryptoService.DeriveUserIdFromPublicKey(pub);
             var incoming = BuildSignedManifest(userId, priv);
             _store.MergeAndSave(incoming, pub, _manager);

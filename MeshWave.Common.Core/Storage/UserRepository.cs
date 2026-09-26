@@ -55,8 +55,8 @@ public class UserRepository
         if (metadata.TryGetValue("website", out var website))
             profile.Website = website;
 
-        if (metadata.TryGetValue("publicKeyPem", out var publicKey))
-            profile.PublicKeyPem = publicKey;
+        if (metadata.TryGetValue("publicKey", out var publicKey))
+            profile.PublicKey = publicKey;
 
         SaveProfile(profile);
     }
@@ -135,5 +135,5 @@ public class UserProfileData
     public bool IsArtist { get; set; }
     public string Bio { get; set; } = string.Empty;
     public string Website { get; set; } = string.Empty;
-    public string PublicKeyPem { get; set; } = string.Empty;
+    public string PublicKey { get; set; } = string.Empty;
 }

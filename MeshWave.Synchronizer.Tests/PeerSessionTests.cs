@@ -111,7 +111,7 @@ public class PeerSessionTests : IAsyncDisposable
         PeerInfo? announced = null;
         node.Server.PeerAnnounced += (_, e) => announced = e.Peer;
 
-        var (priv, pub) = CryptoService.GenerateKeyPair();
+        var (priv, pub) = CryptoService.GenerateSigningKeyPair();
         var closedPort = FindFreePort();
         var self = PeerRecords.Sign(new PeerInfo
         {
@@ -119,7 +119,7 @@ public class PeerSessionTests : IAsyncDisposable
             DisplayName = "Bob",
             Address = "127.0.0.1",
             Port = closedPort,
-            PublicKeyPem = pub
+            PublicKey = pub
         }, priv, DateTime.UtcNow);
 
         var result = await new ManifestExchangeClient(5000).AnnounceWithResultAsync("127.0.0.1", node.Port, self, TestContext.Current.CancellationToken);
@@ -148,8 +148,8 @@ public class PeerSessionTests : IAsyncDisposable
             DisplayName = "Bob",
             Address = "127.0.0.1",
             Port = bob.Port,
-            PublicKeyPem = bob.Identity.PublicKeyPem
-        }, bob.Identity.PrivateKeyPem, DateTime.UtcNow);
+            PublicKey = bob.Identity.PublicKey
+        }, bob.Identity.PrivateKey, DateTime.UtcNow);
 
         var result = await new ManifestExchangeClient(5000).AnnounceWithResultAsync("127.0.0.1", node.Port, self, TestContext.Current.CancellationToken);
 
@@ -203,14 +203,17 @@ public class PeerSessionTests : IAsyncDisposable
         public TestNode(string name, bool listen)
         {
             _listen = listen;
-            var (priv, pub) = CryptoService.GenerateKeyPair();
+            var (priv, pub) = CryptoService.GenerateSigningKeyPair();
+            var (encPriv, encPub) = CryptoService.GenerateEncryptionKeyPair();
             Port = FindFreePort();
             Identity = new LocalPeerIdentity
             {
                 UserId = CryptoService.DeriveUserIdFromPublicKey(pub),
                 DisplayName = name,
-                PublicKeyPem = pub,
-                PrivateKeyPem = priv,
+                PublicKey = pub,
+                PrivateKey = priv,
+                EncryptionPublicKey = encPub,
+                EncryptionPrivateKey = encPriv,
                 ManifestPort = Port
             };
 
@@ -241,8 +244,8 @@ public class PeerSessionTests : IAsyncDisposable
                 DisplayName = Identity.DisplayName,
                 Address = "127.0.0.1",
                 Port = _listen ? Port : 0,
-                PublicKeyPem = Identity.PublicKeyPem
-            }, Identity.PrivateKeyPem, DateTime.UtcNow);
+                PublicKey = Identity.PublicKey
+            }, Identity.PrivateKey, DateTime.UtcNow);
 
             Server.Configure(st => st == ManifestStreamType.Content ? LocalManifest : null, selfInfoProvider: () => self);
             Sessions.Configure(Identity, () => self, (request, address, ct) => Server.HandleRequestAsync(request, address, inlineContent: true, ct), isIntroducer: _listen);
@@ -267,7 +270,7 @@ public class PeerSessionTests : IAsyncDisposable
     {
         public Manifest? Get(string userId, ManifestStreamType streamType = ManifestStreamType.Content) => null;
         public IReadOnlyCollection<Manifest> GetAll() => [];
-        public int MergeAndSave(Manifest remote, string publicKeyPem, ManifestManager manager) => 0;
+        public int MergeAndSave(Manifest remote, string publicKey, ManifestManager manager) => 0;
         public void LoadAll() { }
         public void Remove(string userId) { }
         public void ClearAll() { }

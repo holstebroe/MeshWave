@@ -140,7 +140,7 @@ public class PeerDiscovery(int listenPort = PeerDiscovery.DefaultDiscoveryPort) 
                         DisplayName = announcement.DisplayName,
                         Address = sourceAddress,
                         Port = announcement.ManifestPort,
-                        PublicKeyPem = announcement.PublicKeyPem,
+                        PublicKey = announcement.PublicKey,
                         Capabilities = announcement.Capabilities,
                         LastSeen = DateTime.UtcNow
                     };
@@ -166,7 +166,7 @@ public class PeerDiscovery(int listenPort = PeerDiscovery.DefaultDiscoveryPort) 
             UserId = identity.UserId,
             DisplayName = identity.DisplayName,
             ManifestPort = identity.ManifestPort,
-            PublicKeyPem = identity.PublicKeyPem,
+            PublicKey = identity.PublicKey,
             Capabilities = ["manifest-exchange", "content-exchange"]
         };
         return JsonSerializer.Serialize(announcement);
@@ -187,8 +187,18 @@ public class LocalPeerIdentity
 {
     public required string UserId { get; set; }
     public required string DisplayName { get; set; }
-    public required string PublicKeyPem { get; set; }
-    public required string PrivateKeyPem { get; set; }
+
+    /// <summary>Ed25519 signing key pair. <see cref="UserId"/> is derived from <see cref="PublicKey"/>.</summary>
+    public required string PublicKey { get; set; }
+    public required string PrivateKey { get; set; }
+
+    /// <summary>
+    /// X25519 encryption key pair, separate from the signing identity above (Ed25519 keys cannot encrypt).
+    /// Used to seal data to this peer, e.g. a competition administrator's votes.
+    /// </summary>
+    public required string EncryptionPublicKey { get; set; }
+    public required string EncryptionPrivateKey { get; set; }
+
     public int ManifestPort { get; set; } = ManifestExchangeServer.DefaultPort;
 }
 
@@ -200,6 +210,6 @@ internal class PeerAnnouncement
     public string UserId { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
     public int ManifestPort { get; set; }
-    public string PublicKeyPem { get; set; } = string.Empty;
+    public string PublicKey { get; set; } = string.Empty;
     public List<string> Capabilities { get; set; } = [];
 }

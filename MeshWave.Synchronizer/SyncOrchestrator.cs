@@ -240,7 +240,7 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
         lock (_persistedLocal) _persistedLocal.Clear();
         foreach (var manifest in _localManifests.Values)
         {
-            _manifestManager.EnsureSignedChain(manifest, identity.PrivateKeyPem, identity.PublicKeyPem);
+            _manifestManager.EnsureSignedChain(manifest, identity.PrivateKey, identity.PublicKey);
             SaveLocalManifest(manifest);
             _lastFanoutHeads[manifest.StreamType] = ManifestManager.GetHeadSequenceNumber(manifest);
         }
@@ -584,7 +584,7 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
             "Competition",
             contentHash: null,
             metadata: new Dictionary<string, string> { { "ResultPayload", resultJson } },
-            Identity.PrivateKeyPem);
+            Identity.PrivateKey);
         PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 

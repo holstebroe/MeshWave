@@ -12,8 +12,8 @@ namespace MeshWave.Synchronizer.Tests;
 public class ManifestMergeSequenceTests
 {
     private readonly ManifestManager _manager = new();
-    private static readonly (string privateKeyPem, string publicKeyPem) Keys = CryptoService.GenerateKeyPair();
-    private static readonly string UserId = CryptoService.DeriveUserIdFromPublicKey(Keys.publicKeyPem);
+    private static readonly (string privateKey, string publicKey) Keys = CryptoService.GenerateSigningKeyPair();
+    private static readonly string UserId = CryptoService.DeriveUserIdFromPublicKey(Keys.publicKey);
 
     /// <summary>The author's stream, built with the real signing path.</summary>
     private Manifest AuthorStream(ManifestStreamType streamType = ManifestStreamType.Interaction)
@@ -25,7 +25,7 @@ public class ManifestMergeSequenceTests
 
     private ManifestOperation Append(Manifest stream, ManifestOperationType type, string targetId, Dictionary<string, string>? metadata = null)
     {
-        return _manager.AppendSignedOperation(stream, type, targetId, "Track", null, metadata, Keys.privateKeyPem);
+        return _manager.AppendSignedOperation(stream, type, targetId, "Track", null, metadata, Keys.privateKey);
     }
 
     /// <summary>A page of the author's stream, as a peer would send it.</summary>
@@ -49,7 +49,7 @@ public class ManifestMergeSequenceTests
         Append(author, ManifestOperationType.Like, "track-1");
 
         var local = EmptyLocal();
-        var added = _manager.MergeManifest(local, Page(author, 0), Keys.publicKeyPem);
+        var added = _manager.MergeManifest(local, Page(author, 0), Keys.publicKey);
 
         Assert.Equal(author.Operations.Count, added);
         Assert.Equal(ManifestManager.GetHead(author), ManifestManager.GetHead(local));
@@ -65,14 +65,14 @@ public class ManifestMergeSequenceTests
         Append(author, ManifestOperationType.Like, "t1");
 
         var local = EmptyLocal();
-        _manager.MergeManifest(local, Page(author, 0), Keys.publicKeyPem);
+        _manager.MergeManifest(local, Page(author, 0), Keys.publicKey);
 
         Append(author, ManifestOperationType.Like, "t2");
         Append(author, ManifestOperationType.Like, "t3");
 
         // The full stream again adds nothing twice; the delta adds the two new operations.
-        Assert.Equal(2, _manager.MergeManifest(local, Page(author, 0), Keys.publicKeyPem));
-        Assert.Equal(0, _manager.MergeManifest(local, Page(author, 2), Keys.publicKeyPem));
+        Assert.Equal(2, _manager.MergeManifest(local, Page(author, 0), Keys.publicKey));
+        Assert.Equal(0, _manager.MergeManifest(local, Page(author, 2), Keys.publicKey));
         Assert.Equal(3, ManifestManager.GetHeadSequenceNumber(local));
         Assert.Equal(local.Operations.Count, local.Operations.Select(o => o.SequenceNumber).Distinct().Count());
     }
@@ -84,9 +84,9 @@ public class ManifestMergeSequenceTests
         for (var i = 0; i < 7; i++) Append(author, ManifestOperationType.Like, $"t{i}");
 
         var local = EmptyLocal();
-        _manager.MergeManifest(local, Page(author, 0, 0), Keys.publicKeyPem);
+        _manager.MergeManifest(local, Page(author, 0, 0), Keys.publicKey);
 
-        var added = _manager.MergeManifest(local, Page(author, 5), Keys.publicKeyPem);
+        var added = _manager.MergeManifest(local, Page(author, 5), Keys.publicKey);
 
         Assert.Equal(0, added);
         Assert.Equal(0, ManifestManager.GetHeadSequenceNumber(local));
@@ -100,18 +100,18 @@ public class ManifestMergeSequenceTests
         var forkBase = ManifestManager.BuildPage(author, 0);
 
         var local = EmptyLocal();
-        _manager.MergeManifest(local, Page(author, 0), Keys.publicKeyPem);
+        _manager.MergeManifest(local, Page(author, 0), Keys.publicKey);
         Append(author, ManifestOperationType.Like, "version-a");
-        _manager.MergeManifest(local, Page(author, 1), Keys.publicKeyPem);
+        _manager.MergeManifest(local, Page(author, 1), Keys.publicKey);
 
         // The author signs a different operation #1 (e.g. restored an old backup) and a peer offers it.
         var other = EmptyLocal();
-        _manager.MergeManifest(other, forkBase, Keys.publicKeyPem);
+        _manager.MergeManifest(other, forkBase, Keys.publicKey);
         Append(other, ManifestOperationType.Like, "version-b");
 
         var forks = new List<int>();
         _manager.ForkDetected += (_, _, seq) => forks.Add(seq);
-        var added = _manager.MergeManifest(local, Page(other, 0), Keys.publicKeyPem);
+        var added = _manager.MergeManifest(local, Page(other, 0), Keys.publicKey);
 
         Assert.Equal(0, added);
         Assert.Equal([1], forks);
@@ -124,7 +124,7 @@ public class ManifestMergeSequenceTests
         var author = AuthorStream();
         Append(author, ManifestOperationType.Like, "t0");
         var local = EmptyLocal();
-        _manager.MergeManifest(local, Page(author, 0), Keys.publicKeyPem);
+        _manager.MergeManifest(local, Page(author, 0), Keys.publicKey);
 
         // A validly signed operation #1 whose PrevHash does not point at our operation #0.
         var stray = new ManifestOperation
@@ -132,9 +132,9 @@ public class ManifestMergeSequenceTests
             OperationId = Guid.NewGuid().ToString(), OperationType = ManifestOperationType.Like, TargetId = "stray", TargetType = "Track",
             SequenceNumber = 1, PrevHash = "not-the-head", Signature = string.Empty
         };
-        stray.Signature = CryptoService.SignData(ManifestManager.BuildSignablePayload(stray), Keys.privateKeyPem);
+        stray.Signature = CryptoService.SignData(ManifestManager.BuildSignablePayload(stray), Keys.privateKey);
 
-        var added = _manager.MergeManifest(local, new Manifest { UserId = UserId, StreamType = ManifestStreamType.Interaction, Operations = [stray] }, Keys.publicKeyPem);
+        var added = _manager.MergeManifest(local, new Manifest { UserId = UserId, StreamType = ManifestStreamType.Interaction, Operations = [stray] }, Keys.publicKey);
 
         Assert.Equal(0, added);
         Assert.Equal(0, ManifestManager.GetHeadSequenceNumber(local));
@@ -145,12 +145,12 @@ public class ManifestMergeSequenceTests
     {
         // The author's first Content operation (a track release) replayed as the first operation of its Social stream.
         var content = AuthorStream(ManifestStreamType.Content);
-        _manager.AppendSignedOperation(content, ManifestOperationType.Create, "track-1", "Track", "hash", null, Keys.privateKeyPem);
+        _manager.AppendSignedOperation(content, ManifestOperationType.Create, "track-1", "Track", "hash", null, Keys.privateKey);
 
         var replayed = new Manifest { UserId = UserId, StreamType = ManifestStreamType.Social, Operations = content.Operations.ToList() };
 
-        Assert.True(_manager.VerifyManifest(content, Keys.publicKeyPem));
-        Assert.False(_manager.VerifyManifest(replayed, Keys.publicKeyPem));
+        Assert.True(_manager.VerifyManifest(content, Keys.publicKey));
+        Assert.False(_manager.VerifyManifest(replayed, Keys.publicKey));
     }
 
     [Fact]
@@ -159,7 +159,7 @@ public class ManifestMergeSequenceTests
         // Metadata (track title, artist, shader script, ...) is signed, so a peer that forwards a release cannot alter it.
         var content = AuthorStream(ManifestStreamType.Content);
         _manager.AppendSignedOperation(content, ManifestOperationType.Create, "track-1", "Track", "hash",
-            new Dictionary<string, string> { ["title"] = "Original" }, Keys.privateKeyPem);
+            new Dictionary<string, string> { ["title"] = "Original" }, Keys.privateKey);
 
         var page = Page(content, 0);
         var forged = new Manifest
@@ -175,7 +175,7 @@ public class ManifestMergeSequenceTests
             }]
         };
 
-        Assert.False(_manager.VerifyManifest(forged, Keys.publicKeyPem));
+        Assert.False(_manager.VerifyManifest(forged, Keys.publicKey));
     }
 
     [Fact]
@@ -191,7 +191,7 @@ public class ManifestMergeSequenceTests
         do
         {
             page = ManifestManager.BuildPage(author, ManifestManager.GetHeadSequenceNumber(local) + 1, maxPageBytes: 8 * 1024);
-            _manager.MergeManifest(local, page, Keys.publicKeyPem);
+            _manager.MergeManifest(local, page, Keys.publicKey);
             pages++;
         } while (page.HasMore && pages < 100);
 
@@ -203,11 +203,11 @@ public class ManifestMergeSequenceTests
     public void BuildPage_IncludesTheAuthorKey_OnlyFromTheStart()
     {
         var author = AuthorStream();
-        author.AuthorPublicKey = Keys.publicKeyPem;
+        author.AuthorPublicKey = Keys.publicKey;
         Append(author, ManifestOperationType.Like, "t0");
         Append(author, ManifestOperationType.Like, "t1");
 
-        Assert.Equal(Keys.publicKeyPem, ManifestManager.BuildPage(author, 0).AuthorPublicKey);
+        Assert.Equal(Keys.publicKey, ManifestManager.BuildPage(author, 0).AuthorPublicKey);
         Assert.Null(ManifestManager.BuildPage(author, 1).AuthorPublicKey);
     }
 
@@ -237,7 +237,7 @@ public class ManifestMergeSequenceTests
         Append(manifest, type, "group-1");
         Append(manifest, ManifestOperationType.Follow, "someone");
 
-        var snapshot = _manager.CreateSnapshot(manifest, upToSequenceNumber: 1, Keys.privateKeyPem);
+        var snapshot = _manager.CreateSnapshot(manifest, upToSequenceNumber: 1, Keys.privateKey);
 
         Assert.Contains(snapshot.PersistentOperations, o => o.OperationType == type);
     }
@@ -250,13 +250,13 @@ public class ManifestMergeSequenceTests
         for (var i = 0; i < total; i++)
             Append(manifest, ManifestOperationType.Comment, "track-1", new Dictionary<string, string> { ["text"] = $"c{i}" });
 
-        var snapshot = _manager.CreateSnapshot(manifest, total - 1, Keys.privateKeyPem);
+        var snapshot = _manager.CreateSnapshot(manifest, total - 1, Keys.privateKey);
         manifest.Snapshot = snapshot;
         manifest.Operations.Clear();
 
         Assert.Equal(SecurityLimits.MaxSnapshotRetainedOperations, snapshot.PersistentOperations.Count);
         Assert.Equal("c5", snapshot.PersistentOperations[0].Metadata["text"]);
-        Assert.True(_manager.VerifyManifest(manifest, Keys.publicKeyPem));
+        Assert.True(_manager.VerifyManifest(manifest, Keys.publicKey));
     }
 
     [Fact]
@@ -266,15 +266,15 @@ public class ManifestMergeSequenceTests
         for (var i = 0; i < 10; i++) Append(author, ManifestOperationType.Like, $"t{i}");
 
         var local = EmptyLocal();
-        _manager.MergeManifest(local, Page(author, 0), Keys.publicKeyPem);
+        _manager.MergeManifest(local, Page(author, 0), Keys.publicKey);
 
         // The author compacts up to #5; a peer sends only the snapshot and #6.
-        _manager.Compact(author, Keys.privateKeyPem, threshold: 5, keepRecent: 4);
-        _manager.MergeManifest(local, Page(author, 0, 6), Keys.publicKeyPem);
+        _manager.Compact(author, Keys.privateKey, threshold: 5, keepRecent: 4);
+        _manager.MergeManifest(local, Page(author, 0, 6), Keys.publicKey);
 
         Assert.NotNull(local.Snapshot);
         Assert.Equal(ManifestManager.GetHead(author), ManifestManager.GetHead(local));
-        Assert.True(_manager.VerifyManifest(local, Keys.publicKeyPem));
+        Assert.True(_manager.VerifyManifest(local, Keys.publicKey));
     }
 
     [Fact]
@@ -284,11 +284,11 @@ public class ManifestMergeSequenceTests
         Append(legacy, ManifestOperationType.Like, "t0");
         Append(legacy, ManifestOperationType.Like, "t1");
         foreach (var op in legacy.Operations) op.PrevHash = string.Empty; // as stored by older versions
-        Assert.False(_manager.VerifyManifest(legacy, Keys.publicKeyPem));
+        Assert.False(_manager.VerifyManifest(legacy, Keys.publicKey));
 
-        Assert.True(_manager.EnsureSignedChain(legacy, Keys.privateKeyPem, Keys.publicKeyPem));
+        Assert.True(_manager.EnsureSignedChain(legacy, Keys.privateKey, Keys.publicKey));
 
-        Assert.True(_manager.VerifyManifest(legacy, Keys.publicKeyPem));
-        Assert.False(_manager.EnsureSignedChain(legacy, Keys.privateKeyPem, Keys.publicKeyPem));
+        Assert.True(_manager.VerifyManifest(legacy, Keys.publicKey));
+        Assert.False(_manager.EnsureSignedChain(legacy, Keys.privateKey, Keys.publicKey));
     }
 }

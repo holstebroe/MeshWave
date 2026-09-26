@@ -15,7 +15,7 @@ public class JsonSerializerTests
             UserId = "user-1",
             DisplayName = "Test User",
             IsArtist = true,
-            PublicKeyPem = "KEY_PEM"
+            PublicKey = "KEY_PEM"
         };
 
         // Act
@@ -37,7 +37,7 @@ public class JsonSerializerTests
             DisplayName = "Test User",
             IsArtist = false,
             Bio = "Hello world",
-            PublicKeyPem = "KEY_PEM"
+            PublicKey = "KEY_PEM"
         };
         var json = JsonSerializer.SerializeUser(user);
 

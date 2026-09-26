@@ -13,15 +13,15 @@ public static class PeerRecords
     private static readonly TimeSpan MaxClockSkew = TimeSpan.FromMinutes(5);
 
     /// <summary>
-    /// Returns a copy of <paramref name="peer"/> signed with <paramref name="privateKeyPem"/> at <paramref name="signedAtUtc"/>.
+    /// Returns a copy of <paramref name="peer"/> signed with <paramref name="privateKey"/> at <paramref name="signedAtUtc"/>.
     /// </summary>
-    public static PeerInfo Sign(PeerInfo peer, string privateKeyPem, DateTime signedAtUtc)
+    public static PeerInfo Sign(PeerInfo peer, string privateKey, DateTime signedAtUtc)
     {
         var signedAt = TruncateToMilliseconds(signedAtUtc);
         var copy = Clone(peer);
         copy.SignedAtUtc = signedAt;
         copy.LastSeen = signedAt;
-        copy.Signature = CryptoService.SignData(CanonicalRecord(copy.UserId, copy.Address, copy.Port, signedAt), privateKeyPem);
+        copy.Signature = CryptoService.SignData(CanonicalRecord(copy.UserId, copy.Address, copy.Port, copy.EncryptionPublicKey, signedAt), privateKey);
         return copy;
     }
 
@@ -34,24 +34,24 @@ public static class PeerRecords
             return false;
         if (peer.SignedAtUtc.Value > DateTime.UtcNow + MaxClockSkew)
             return false;
-        if (!CryptoService.IsPublicKeyForUser(peer.UserId, peer.PublicKeyPem))
+        if (!CryptoService.IsPublicKeyForUser(peer.UserId, peer.PublicKey))
             return false;
 
-        var data = CanonicalRecord(peer.UserId, peer.Address, peer.Port, peer.SignedAtUtc.Value);
-        return CryptoService.VerifySignature(data, peer.Signature, peer.PublicKeyPem);
+        var data = CanonicalRecord(peer.UserId, peer.Address, peer.Port, peer.EncryptionPublicKey, peer.SignedAtUtc.Value);
+        return CryptoService.VerifySignature(data, peer.Signature, peer.PublicKey);
     }
 
     /// <summary>Signs a session nonce to prove ownership of <paramref name="userId"/>'s key to the peer that chose the nonce.</summary>
-    public static string SignSessionNonce(string userId, long nonce, string privateKeyPem)
+    public static string SignSessionNonce(string userId, long nonce, string privateKey)
     {
-        return CryptoService.SignData(SessionProofData(userId, nonce), privateKeyPem);
+        return CryptoService.SignData(SessionProofData(userId, nonce), privateKey);
     }
 
-    public static bool VerifySessionNonce(string userId, long nonce, string proof, string publicKeyPem)
+    public static bool VerifySessionNonce(string userId, long nonce, string proof, string publicKey)
     {
-        if (string.IsNullOrWhiteSpace(proof) || !CryptoService.IsPublicKeyForUser(userId, publicKeyPem))
+        if (string.IsNullOrWhiteSpace(proof) || !CryptoService.IsPublicKeyForUser(userId, publicKey))
             return false;
-        return CryptoService.VerifySignature(SessionProofData(userId, nonce), proof, publicKeyPem);
+        return CryptoService.VerifySignature(SessionProofData(userId, nonce), proof, publicKey);
     }
 
     public static PeerInfo Clone(PeerInfo peer)
@@ -62,7 +62,8 @@ public static class PeerRecords
             DisplayName = peer.DisplayName,
             Address = peer.Address,
             Port = peer.Port,
-            PublicKeyPem = peer.PublicKeyPem,
+            PublicKey = peer.PublicKey,
+            EncryptionPublicKey = peer.EncryptionPublicKey,
             LastSeen = peer.LastSeen,
             Capabilities = peer.Capabilities.ToList(),
             SignedAtUtc = peer.SignedAtUtc,
@@ -79,10 +80,10 @@ public static class PeerRecords
         return copy;
     }
 
-    private static string CanonicalRecord(string userId, string address, int port, DateTime signedAtUtc)
+    private static string CanonicalRecord(string userId, string address, int port, string encryptionPublicKey, DateTime signedAtUtc)
     {
         var ms = new DateTimeOffset(DateTime.SpecifyKind(signedAtUtc, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
-        return string.Create(CultureInfo.InvariantCulture, $"meshwave-peer-v1|{userId}|{address}|{port}|{ms}");
+        return string.Create(CultureInfo.InvariantCulture, $"meshwave-peer-v2|{userId}|{address}|{port}|{encryptionPublicKey}|{ms}");
     }
 
     private static string SessionProofData(string userId, long nonce)

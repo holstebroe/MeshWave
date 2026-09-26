@@ -143,7 +143,7 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         // Action: John un-releases one of his tracks (deletes it from manifest)
         var johnContentManifest = john.GetLocalManifest(ManifestStreamType.Content);
         var mm = new ManifestManager();
-        mm.AppendSignedOperation(johnContentManifest!, ManifestOperationType.Delete, "john-track-2", "Track", null, null, john.Identity.PrivateKeyPem);
+        mm.AppendSignedOperation(johnContentManifest!, ManifestOperationType.Delete, "john-track-2", "Track", null, null, john.Identity.PrivateKey);
 
         john.Orchestrator.SaveLocalManifests();
         await john.Orchestrator.CatalogueService.IngestAsync(johnContentManifest!);

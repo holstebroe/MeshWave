@@ -36,7 +36,7 @@ public partial class SyncOrchestrator
             "Track",
             contentHash,
             meta,
-            Identity.PrivateKeyPem);
+            Identity.PrivateKey);
         PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 
@@ -56,7 +56,7 @@ public partial class SyncOrchestrator
             "Track",
             contentHash,
             meta,
-            Identity.PrivateKeyPem);
+            Identity.PrivateKey);
         PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 
@@ -77,7 +77,7 @@ public partial class SyncOrchestrator
             "Album",
             contentHash,
             meta,
-            Identity.PrivateKeyPem);
+            Identity.PrivateKey);
         PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 
@@ -97,7 +97,7 @@ public partial class SyncOrchestrator
             "Album",
             contentHash,
             meta,
-            Identity.PrivateKeyPem);
+            Identity.PrivateKey);
         PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 
@@ -120,7 +120,7 @@ public partial class SyncOrchestrator
                 ["title"] = SecurityLimits.Truncate(title, SecurityLimits.MaxTrackTitleLength),
                 ["artist"] = SecurityLimits.Truncate(artist, SecurityLimits.MaxArtistNameLength)
             },
-            Identity.PrivateKeyPem);
+            Identity.PrivateKey);
 
         return true;
         }

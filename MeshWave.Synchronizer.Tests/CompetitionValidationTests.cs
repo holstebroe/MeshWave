@@ -90,7 +90,7 @@ public class CompetitionValidationTests
     [Fact]
     public void Merge_KeepsCompetitionOperationsVerbatim_EvenWhenInvalid()
     {
-        var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
+        var (privateKey, publicKey) = CryptoService.GenerateSigningKeyPair();
         var userId = CryptoService.DeriveUserIdFromPublicKey(publicKey);
         var remote = _manager.CreateManifest(userId);
         remote.StreamType = ManifestStreamType.Social;

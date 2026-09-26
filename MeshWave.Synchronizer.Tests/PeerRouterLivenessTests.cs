@@ -13,7 +13,7 @@ public class PeerRouterLivenessTests
 {
     private static readonly Lazy<(string Private, string Public, string UserId)> Key = new(() =>
     {
-        var (priv, pub) = CryptoService.GenerateKeyPair();
+        var (priv, pub) = CryptoService.GenerateSigningKeyPair();
         return (priv, pub, CryptoService.DeriveUserIdFromPublicKey(pub));
     });
 
@@ -30,7 +30,7 @@ public class PeerRouterLivenessTests
             DisplayName = "Carol",
             Address = address,
             Port = port,
-            PublicKeyPem = Key.Value.Public,
+            PublicKey = Key.Value.Public,
             LastSeen = lastSeen ?? DateTime.UtcNow
         };
     }

@@ -33,7 +33,7 @@ public partial class SyncOrchestrator
             "User",
             contentHash: null,
             metadata: null,
-            Identity.PrivateKeyPem);
+            Identity.PrivateKey);
         PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 
@@ -51,7 +51,7 @@ public partial class SyncOrchestrator
             "User",
             contentHash: null,
             metadata: null,
-            Identity.PrivateKeyPem);
+            Identity.PrivateKey);
         PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 
@@ -69,7 +69,7 @@ public partial class SyncOrchestrator
             "User",
             contentHash: null,
             metadata: null,
-            Identity.PrivateKeyPem);
+            Identity.PrivateKey);
         PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 
@@ -87,7 +87,7 @@ public partial class SyncOrchestrator
             "User",
             contentHash: null,
             metadata: null,
-            Identity.PrivateKeyPem);
+            Identity.PrivateKey);
         PersistAndFanoutLocalManifest(manifest.StreamType);
     }
 
@@ -103,7 +103,7 @@ public partial class SyncOrchestrator
             ["isArtist"] = isArtist.ToString(),
             ["bio"] = SecurityLimits.Truncate(bio, 1000),
             ["website"] = SecurityLimits.Truncate(website, 256),
-            ["publicKeyPem"] = Identity.PublicKeyPem
+            ["publicKey"] = Identity.PublicKey
         };
         if (!string.IsNullOrWhiteSpace(bannerImageHash))
             meta["bannerImageHash"] = bannerImageHash;
@@ -115,7 +115,7 @@ public partial class SyncOrchestrator
             "User",
             contentHash: bannerImageHash,
             meta,
-            Identity.PrivateKeyPem);
+            Identity.PrivateKey);
         PersistAndFanoutLocalManifest(manifest.StreamType);
         }
 
@@ -138,7 +138,7 @@ public partial class SyncOrchestrator
             "Track",
             contentHash: null,
             metadata: meta,
-            Identity.PrivateKeyPem);
+            Identity.PrivateKey);
 
         PersistAndFanoutLocalManifest(manifest.StreamType);
         return op.OperationId;
@@ -161,7 +161,7 @@ public partial class SyncOrchestrator
             {
                 ["commentOperationId"] = SecurityLimits.Truncate(commentOperationId, SecurityLimits.MaxOperationIdLength)
             },
-            Identity.PrivateKeyPem);
+            Identity.PrivateKey);
         PersistAndFanoutLocalManifest(manifest.StreamType);
             }
 
@@ -179,7 +179,7 @@ public partial class SyncOrchestrator
             "Track",
             contentHash: null,
             metadata: null,
-            Identity.PrivateKeyPem);
+            Identity.PrivateKey);
         PersistAndFanoutLocalManifest(manifest.StreamType);
             }
 
@@ -197,7 +197,7 @@ public partial class SyncOrchestrator
             "Track",
             contentHash: null,
             metadata: null,
-            Identity.PrivateKeyPem);
+            Identity.PrivateKey);
         PersistAndFanoutLocalManifest(manifest.StreamType);
             }
 

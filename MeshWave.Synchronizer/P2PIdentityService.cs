@@ -6,8 +6,9 @@ namespace MeshWave.Synchronizer;
 
 /// <summary>
 /// Manages the local peer's cryptographic identity.
-/// Generates an RSA key pair on first run and persists it to a JSON file in AppData.
-/// The UserId is always derived from the public key fingerprint so it is stable and verifiable.
+/// Generates an Ed25519 signing key pair and an X25519 encryption key pair on first run and persists them to a
+/// JSON file in AppData. The UserId is always derived from the signing public key fingerprint so it is stable
+/// and verifiable.
 /// </summary>
 public class P2PIdentityService
 {
@@ -68,15 +69,18 @@ public class P2PIdentityService
 
     private LocalPeerIdentity Generate(string displayName)
     {
-        var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
+        var (privateKey, publicKey) = CryptoService.GenerateSigningKeyPair();
+        var (encryptionPrivateKey, encryptionPublicKey) = CryptoService.GenerateEncryptionKeyPair();
         var userId = CryptoService.DeriveUserIdFromPublicKey(publicKey);
 
         var identity = new LocalPeerIdentity
         {
             UserId = userId,
             DisplayName = SecurityLimits.Truncate(displayName, SecurityLimits.MaxDisplayNameLength),
-            PublicKeyPem = publicKey,
-            PrivateKeyPem = privateKey
+            PublicKey = publicKey,
+            PrivateKey = privateKey,
+            EncryptionPublicKey = encryptionPublicKey,
+            EncryptionPrivateKey = encryptionPrivateKey
         };
 
         Save(identity);
@@ -97,8 +101,14 @@ public class P2PIdentityService
     {
         public string UserId { get; set; } = string.Empty;
         public string DisplayName { get; set; } = string.Empty;
-        public string PublicKeyPem { get; set; } = string.Empty;
-        public string PrivateKeyPem { get; set; } = string.Empty;
+        public string PublicKey { get; set; } = string.Empty;
+        public string PrivateKey { get; set; } = string.Empty;
+
+        // Required so that an identity file written before these existed fails to deserialize and is regenerated,
+        // rather than silently loading with blank encryption keys.
+        public required string EncryptionPublicKey { get; set; }
+        public required string EncryptionPrivateKey { get; set; }
+
         public int ManifestPort { get; set; } = ManifestExchangeServer.DefaultPort;
 
         public LocalPeerIdentity ToLocalPeerIdentity()
@@ -107,8 +117,10 @@ public class P2PIdentityService
             {
                 UserId = UserId,
                 DisplayName = DisplayName,
-                PublicKeyPem = PublicKeyPem,
-                PrivateKeyPem = PrivateKeyPem,
+                PublicKey = PublicKey,
+                PrivateKey = PrivateKey,
+                EncryptionPublicKey = EncryptionPublicKey,
+                EncryptionPrivateKey = EncryptionPrivateKey,
                 ManifestPort = ManifestPort
             };
         }
@@ -119,8 +131,10 @@ public class P2PIdentityService
             {
                 UserId = id.UserId,
                 DisplayName = id.DisplayName,
-                PublicKeyPem = id.PublicKeyPem,
-                PrivateKeyPem = id.PrivateKeyPem,
+                PublicKey = id.PublicKey,
+                PrivateKey = id.PrivateKey,
+                EncryptionPublicKey = id.EncryptionPublicKey,
+                EncryptionPrivateKey = id.EncryptionPrivateKey,
                 ManifestPort = id.ManifestPort
             };
         }

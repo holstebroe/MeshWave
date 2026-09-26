@@ -138,7 +138,7 @@ public class PeerRouter : IDisposable
     {
         var cutoff = LivenessCutoff();
         return _table.Values
-            .Where(p => p.LastSeen >= cutoff && !string.IsNullOrWhiteSpace(p.Info.PublicKeyPem))
+            .Where(p => p.LastSeen >= cutoff && !string.IsNullOrWhiteSpace(p.Info.PublicKey))
             .OrderByDescending(p => p.LastSeen)
             .Take(SecurityLimits.MaxPeersPerExchange)
             .Select(p =>
@@ -166,7 +166,7 @@ public class PeerRouter : IDisposable
     {
         // UserIds are derived from public keys. An entry carrying a key that does not hash to its UserId is forged
         // (e.g. a malicious PEX response) and must not be allowed to replace a real peer's key or address.
-        if (!string.IsNullOrWhiteSpace(peer.PublicKeyPem) && !CryptoService.IsPublicKeyForUser(peer.UserId, peer.PublicKeyPem))
+        if (!string.IsNullOrWhiteSpace(peer.PublicKey) && !CryptoService.IsPublicKeyForUser(peer.UserId, peer.PublicKey))
             return;
 
         var now = DateTime.UtcNow;
@@ -177,8 +177,10 @@ public class PeerRouter : IDisposable
             lock (existing)
             {
                 var info = existing.Info;
-                if (string.IsNullOrWhiteSpace(info.PublicKeyPem) && !string.IsNullOrWhiteSpace(peer.PublicKeyPem))
-                    info.PublicKeyPem = peer.PublicKeyPem;
+                if (string.IsNullOrWhiteSpace(info.PublicKey) && !string.IsNullOrWhiteSpace(peer.PublicKey))
+                    info.PublicKey = peer.PublicKey;
+                if (string.IsNullOrWhiteSpace(info.EncryptionPublicKey) && !string.IsNullOrWhiteSpace(peer.EncryptionPublicKey))
+                    info.EncryptionPublicKey = peer.EncryptionPublicKey;
 
                 if (direct)
                 {

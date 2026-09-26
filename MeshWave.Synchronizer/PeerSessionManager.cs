@@ -232,7 +232,7 @@ public sealed class PeerSessionManager : IDisposable
             Peer = self,
             Nonce = session.LocalNonce,
             Proof = self != null && _identity != null && answeringNonce.HasValue
-                ? PeerRecords.SignSessionNonce(_identity.UserId, answeringNonce.Value, _identity.PrivateKeyPem)
+                ? PeerRecords.SignSessionNonce(_identity.UserId, answeringNonce.Value, _identity.PrivateKey)
                 : string.Empty,
             UdpPort = _udp.Port,
             IsIntroducer = _isIntroducer && _udp.IsRunning
@@ -258,7 +258,7 @@ public sealed class PeerSessionManager : IDisposable
             return;
         }
 
-        if (!PeerRecords.VerifySessionNonce(remote.UserId, session.LocalNonce, hello.Proof, remote.PublicKeyPem))
+        if (!PeerRecords.VerifySessionNonce(remote.UserId, session.LocalNonce, hello.Proof, remote.PublicKey))
         {
             _logger.Warn("Session {0}: {1} failed to prove ownership of its key; closing.", session, remote.UserId);
             session.Close();

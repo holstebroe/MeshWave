@@ -12,7 +12,7 @@ public class ManifestCompactionTests
     [Fact]
     public void Compact_ReducesOperationCount_AndCreatesValidSnapshot()
     {
-        var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
+        var (privateKey, publicKey) = CryptoService.GenerateSigningKeyPair();
         var manifest = _manager.CreateManifest("user-1");
 
         // Add many operations
@@ -38,7 +38,7 @@ public class ManifestCompactionTests
     [Fact]
     public void CreateSnapshot_SquashesRedundantOperations()
     {
-        var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
+        var (privateKey, publicKey) = CryptoService.GenerateSigningKeyPair();
         var manifest = _manager.CreateManifest("user-1");
 
         _manager.AppendSignedOperation(manifest, ManifestOperationType.Follow, "user-2", "User", null, null, privateKey);
@@ -69,7 +69,7 @@ public class ManifestCompactionTests
     [Fact]
     public void MergeManifest_HandlesRemoteSnapshot()
     {
-        var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
+        var (privateKey, publicKey) = CryptoService.GenerateSigningKeyPair();
 
         var local = _manager.CreateManifest("user-1");
 
@@ -92,7 +92,7 @@ public class ManifestCompactionTests
     [Fact]
     public void MergeManifest_UpdatesExistingLocalWithRemoteSnapshot()
     {
-        var (privateKey, publicKey) = CryptoService.GenerateKeyPair();
+        var (privateKey, publicKey) = CryptoService.GenerateSigningKeyPair();
 
         var local = _manager.CreateManifest("user-1");
         for (var i = 0; i < 5; i++) _manager.AppendSignedOperation(local, ManifestOperationType.Play, "track-1", "Track", null, null, privateKey);
