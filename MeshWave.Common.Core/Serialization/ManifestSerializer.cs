@@ -60,6 +60,8 @@ public static class ManifestSerializer
         if (request.AnnouncingPeer != null) proto.AnnouncingPeer = MapToProto(request.AnnouncingPeer);
         if (request.EndSequenceNumber.HasValue) proto.EndSequenceNumber = request.EndSequenceNumber.Value;
         if (request.TargetUserId != null) proto.TargetUserId = request.TargetUserId;
+        if (request.ChunkOffset.HasValue) proto.ChunkOffset = request.ChunkOffset.Value;
+        if (request.ChunkLength.HasValue) proto.ChunkLength = request.ChunkLength.Value;
 
         return proto;
     }
@@ -76,7 +78,9 @@ public static class ManifestSerializer
             AnnouncingPeer = proto.AnnouncingPeer != null ? MapFromProto(proto.AnnouncingPeer) : null,
             StartSequenceNumber = proto.StartSequenceNumber,
             EndSequenceNumber = proto.HasEndSequenceNumber ? proto.EndSequenceNumber : null,
-            TargetUserId = proto.HasTargetUserId ? proto.TargetUserId : null
+            TargetUserId = proto.HasTargetUserId ? proto.TargetUserId : null,
+            ChunkOffset = proto.HasChunkOffset ? proto.ChunkOffset : null,
+            ChunkLength = proto.HasChunkLength ? proto.ChunkLength : null
         };
     }
 
@@ -92,6 +96,7 @@ public static class ManifestSerializer
         if (response.Peers != null) proto.Peers.AddRange(response.Peers.Select(MapToProto));
         if (response.Rendezvous != null) proto.Rendezvous = MapToProto(response.Rendezvous);
         if (response.ContentBytes != null) proto.ContentBytes = ByteString.CopyFrom(response.ContentBytes);
+        if (response.TotalContentLength.HasValue) proto.TotalContentLength = response.TotalContentLength.Value;
 
         return proto;
     }
@@ -105,7 +110,8 @@ public static class ManifestSerializer
             Peers = proto.Peers.Select(MapFromProto).ToList(),
             Rendezvous = proto.Rendezvous != null ? MapFromProto(proto.Rendezvous) : null,
             ContentBytes = proto.HasContentBytes ? proto.ContentBytes.ToByteArray() : null,
-            ContentLength = proto.ContentLength
+            ContentLength = proto.ContentLength,
+            TotalContentLength = proto.HasTotalContentLength ? proto.TotalContentLength : null
         };
     }
 

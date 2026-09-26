@@ -1,5 +1,6 @@
 using MeshWave.Common.Core;
 using System.Collections.Concurrent;
+using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.P2P;
 using NLog;
 
@@ -22,6 +23,8 @@ public class PeerRouter : IDisposable
     private readonly Lock _bootstrapLock = new();
 
     private IReadOnlyList<string> _bootstrapNodes = [];
+    private string? _localUserId;
+    private Func<PeerInfo?>? _selfAnnouncementProvider;
     private CancellationTokenSource? _cts;
     private Task? _bootstrapTask;
     private Task? _maintenanceTask;
@@ -38,9 +41,15 @@ public class PeerRouter : IDisposable
     /// <summary>
     /// Starts LAN discovery, connects to bootstrap nodes, and begins periodic maintenance.
     /// </summary>
-    public async Task StartAsync(LocalPeerIdentity identity, IReadOnlyList<string> bootstrapNodes, CancellationToken cancellationToken = default)
+    /// <param name="selfAnnouncementProvider">
+    /// Returns this peer's info to register with every bootstrap node on each (re)contact, so that bootstrap nodes
+    /// learn about us even if we never push a manifest to them. The announcements double as the registration heartbeat.
+    /// </param>
+    public async Task StartAsync(LocalPeerIdentity identity, IReadOnlyList<string> bootstrapNodes, CancellationToken cancellationToken = default, Func<PeerInfo?>? selfAnnouncementProvider = null)
     {
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _localUserId = identity.UserId;
+        _selfAnnouncementProvider = selfAnnouncementProvider;
 
         _bootstrapNodes = bootstrapNodes;   // remember for periodic re-contact
 
@@ -85,6 +94,7 @@ public class PeerRouter : IDisposable
         {
             if (!SecurityLimits.IsValidUserId(peer.UserId)) continue;
             if (!SecurityLimits.IsValidDisplayName(peer.DisplayName)) continue;
+            if (string.Equals(peer.UserId, _localUserId, StringComparison.OrdinalIgnoreCase)) continue;
             AddOrRefreshPeer(peer);
         }
     }
@@ -107,6 +117,11 @@ public class PeerRouter : IDisposable
 
     private void AddOrRefreshPeer(PeerInfo peer)
     {
+        // UserIds are derived from public keys. An entry carrying a key that does not hash to its UserId is forged
+        // (e.g. a malicious PEX response) and must not be allowed to replace a real peer's key or address.
+        if (!string.IsNullOrWhiteSpace(peer.PublicKeyPem) && !CryptoService.IsPublicKeyForUser(peer.UserId, peer.PublicKeyPem))
+            return;
+
         if (_table.TryGetValue(peer.UserId, out var existing))
         {
             existing.LastSeen = DateTime.UtcNow;
@@ -142,6 +157,8 @@ public class PeerRouter : IDisposable
 
     private async Task TryPexWithPeerAsync(PeerInfo peer, CancellationToken ct)
     {
+        if (!IsDialable(peer)) return;
+
         try
         {
             var discovered = await _exchangeClient.FetchPeersAsync(peer.Address, peer.Port, cancellationToken: ct);
@@ -174,6 +191,23 @@ public class PeerRouter : IDisposable
 
         try
         {
+            // Register ourselves first so the bootstrap node knows our observed public address.
+            var self = _selfAnnouncementProvider?.Invoke();
+            if (self != null)
+            {
+                var responders = await _exchangeClient.AnnounceAsync(host, port, self, ct);
+                // A regular peer acting as bootstrap reports itself here. We just reached it at host:port,
+                // which is more reliable than the address it believes it has. Only its own (first) record is
+                // trusted, so a node cannot pin other users' records to its address.
+                var responder = responders?.FirstOrDefault();
+                if (responder != null)
+                {
+                    responder.Address = host;
+                    responder.Port = port;
+                    LearnPeers([responder]);
+                }
+            }
+
             var peers = await _exchangeClient.FetchPeersAsync(host, port, cancellationToken: ct);
             if (peers != null)
             {
@@ -210,7 +244,7 @@ public class PeerRouter : IDisposable
 
                 // PEX: ask a sample of known peers for their peer lists
                 var sample = GetPeers()
-                    .Where(p => !p.UserId.StartsWith("bootstrap:"))
+                    .Where(p => !p.UserId.StartsWith("bootstrap:") && IsDialable(p))
                     .OrderBy(_ => Guid.NewGuid())
                     .Take(5)
                     .ToList();
@@ -233,6 +267,14 @@ public class PeerRouter : IDisposable
             }
             catch (OperationCanceledException) { break; }
             catch { }
+    }
+
+    /// <summary>
+    /// Peers announced with port 0 are outbound-only (no listener) and cannot be connected to.
+    /// </summary>
+    public static bool IsDialable(PeerInfo peer)
+    {
+        return !string.IsNullOrWhiteSpace(peer.Address) && peer.Port is > 0 and < 65536;
     }
 
     private static bool TryParseEndpoint(string nodeAddress, out string host, out int port)

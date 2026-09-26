@@ -35,7 +35,7 @@ public class ManifestExchangeClient
         CancellationToken cancellationToken = default)
     {
         var existing = store.Get(targetUserId, streamType);
-        var startSeq = (existing?.Snapshot?.LastSequenceNumber ?? -1) + 1 + (existing?.Operations.Count ?? 0);
+        var startSeq = ManifestManager.GetHeadSequenceNumber(existing) + 1;
 
         var isBootstrap = address.Contains("bootstrap") || targetUserId.StartsWith("bootstrap:");
         var relayUserId = isBootstrap && !targetUserId.StartsWith("bootstrap:") ? targetUserId : null;
@@ -232,6 +232,43 @@ public class ManifestExchangeClient
         catch (Exception ex)
         {
             _logger.Warn("Failed to fetch {0} from {1}:{2}: {3}", label, address, port, ex.Message);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Registers this peer with a bootstrap node or peer (<see cref="ManifestRequestType.Announce"/>).
+    /// Returns the peer info the node reports about itself (empty for a standalone bootstrap),
+    /// or null if the node is unreachable.
+    /// </summary>
+    public async Task<IReadOnlyList<PeerInfo>?> AnnounceAsync(string address, int port, PeerInfo self, CancellationToken cancellationToken = default)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(_timeoutMs);
+
+        try
+        {
+            using var client = new TcpClient();
+            await client.ConnectAsync(address, port, cts.Token);
+
+            var stream = client.GetStream();
+            var request = new ManifestRequest { Type = ManifestRequestType.Announce, AnnouncingPeer = self };
+            await ManifestExchangeServer.WriteMessageAsync(stream, request, cts.Token);
+
+            var (bytes, isJson) = await ManifestExchangeServer.ReadMessageAsync(stream, cts.Token);
+            var response = isJson
+                ? JsonSerializer.Deserialize<ManifestResponse>(Encoding.UTF8.GetString(bytes))
+                : ManifestSerializer.DeserializeResponse(bytes);
+
+            _logger.Debug("Announce to {0}:{1} outcome: {2}", address, port, response?.Acknowledged == true);
+            if (response?.Acknowledged != true)
+                return null;
+
+            return response.Peers.Take(SecurityLimits.MaxPeersPerExchange).ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn("Failed to announce to {0}:{1}: {2}", address, port, ex.Message);
             return null;
         }
     }

@@ -23,7 +23,14 @@ public enum ManifestRequestType
     GetPeers,
     RequestRendezvous,
     RequestContent,
-    RelayManifestPush
+    RelayManifestPush,
+
+    /// <summary>
+    /// Registers the sender (<see cref="ManifestRequest.AnnouncingPeer"/>) with the receiving node without sending a manifest.
+    /// The receiver records the observed source IP with the announced port (0 = outbound-only, not dialable).
+    /// The response's <see cref="ManifestResponse.Peers"/> contains the receiver's own peer info when it is a regular peer.
+    /// </summary>
+    Announce
 }
 
 public class ManifestRequest

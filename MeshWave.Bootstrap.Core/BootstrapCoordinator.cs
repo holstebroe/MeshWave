@@ -1,6 +1,7 @@
 using MeshWave.Common.Core;
 using System.Collections.Concurrent;
 using System.Net;
+using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.Models;
 using MeshWave.Common.Core.P2P;
 using MeshWave.Synchronizer;
@@ -40,6 +41,7 @@ public sealed class BootstrapCoordinator : IDisposable
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
         _server.ManifestReceived += OnManifestReceived;
+        _server.PeerAnnounced += OnPeerAnnounced;
 
         await _server.StartAsync(
             localManifestProvider: _ => null,
@@ -52,6 +54,7 @@ public sealed class BootstrapCoordinator : IDisposable
     public async Task StopAsync()
     {
         _server.ManifestReceived -= OnManifestReceived;
+        _server.PeerAnnounced -= OnPeerAnnounced;
         await _server.StopAsync();
     }
 
@@ -117,7 +120,8 @@ public sealed class BootstrapCoordinator : IDisposable
 
         var displayName = latestProfile?.Metadata.GetValueOrDefault("displayName");
         var publicKeyPem = e.AnnouncingPeer?.PublicKeyPem ?? latestProfile?.Metadata.GetValueOrDefault("publicKeyPem") ?? string.Empty;
-        var announcedPort = e.AnnouncingPeer?.Port ?? 0;
+        // Port 0 means the sender is outbound-only. Only senders that don't announce at all get the default port.
+        var announcedPort = e.AnnouncingPeer != null ? Math.Max(0, e.AnnouncingPeer.Port) : ManifestExchangeServer.DefaultPort;
 
         var peer = new PeerInfo
         {
@@ -128,7 +132,7 @@ public sealed class BootstrapCoordinator : IDisposable
                     : displayName,
                 SecurityLimits.MaxDisplayNameLength),
             Address = e.PeerAddress,
-            Port = announcedPort > 0 ? announcedPort : ManifestExchangeServer.DefaultPort,
+            Port = announcedPort,
             PublicKeyPem = publicKeyPem,
             LastSeen = DateTime.UtcNow
         };
@@ -136,6 +140,20 @@ public sealed class BootstrapCoordinator : IDisposable
         RegisterPeer(peer);
 
         if (e.IsRelay) _relayedManifests[manifest.UserId] = manifest;
+    }
+
+    private void OnPeerAnnounced(object? sender, PeerAnnouncedEventArgs e)
+    {
+        Interlocked.Increment(ref _requestCount);
+
+        if (!IPAddress.TryParse(e.Peer.Address, out _))
+            return;
+
+        // Announcements must prove key ownership of the UserId (manifest pushes are verified by their signatures instead).
+        if (!CryptoService.IsPublicKeyForUser(e.Peer.UserId, e.Peer.PublicKeyPem))
+            return;
+
+        RegisterPeer(e.Peer);
     }
 
     private RendezvousResponse OnRendezvousRequested(RendezvousRequest request)
@@ -186,6 +204,13 @@ public sealed class BootstrapCoordinator : IDisposable
     {
         if (!SecurityLimits.IsValidUserId(peer.UserId)) return;
         if (!SecurityLimits.IsValidDisplayName(peer.DisplayName)) return;
+
+        // UserIds are derived from public keys; never let a forged key claim someone else's UserId.
+        if (!string.IsNullOrWhiteSpace(peer.PublicKeyPem) && !CryptoService.IsPublicKeyForUser(peer.UserId, peer.PublicKeyPem))
+        {
+            _logger.Warn("Rejected registration for user {0} from {1}: public key does not match the UserId.", peer.UserId, peer.Address);
+            return;
+        }
 
         if (_peers.TryGetValue(peer.UserId, out var existing))
         {

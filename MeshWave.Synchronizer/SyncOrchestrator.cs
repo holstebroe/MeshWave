@@ -31,6 +31,7 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
     private readonly Dictionary<ManifestStreamType, Manifest> _localManifests = [];
     private bool _actAsListener;
     private CancellationTokenSource? _cts;
+    private Task? _periodicSyncTask;
     private IReadOnlyList<string> _bootstrapNodes = [];
     private int _inboundManifestPushCount;
     private int _outboundManifestFetchCount;
@@ -223,6 +224,7 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
         {
             _server ??= new ManifestExchangeServer(identity.ManifestPort, logger: _logger);
             _server.ManifestReceived += OnManifestReceived;
+            _server.PeerAnnounced += OnPeerAnnounced;
 
             await _natTraversal.StartAsync(identity.ManifestPort, _cts.Token);
             await _natTraversal.SetupPortMappingAsync(identity.ManifestPort, _cts.Token);
@@ -233,10 +235,14 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
                 rendezvousProvider: null,
                 contentProvider: _contentProvider,
                 relayedManifestProvider: (targetUserId, streamType) => null,
+                selfInfoProvider: () => BuildAnnouncingPeerInfo(ManifestStreamType.Content),
                 cancellationToken: _cts.Token);
         }
 
-        await _router.StartAsync(identity, _bootstrapNodes, _cts.Token);
+        await _router.StartAsync(identity, _bootstrapNodes, _cts.Token,
+            selfAnnouncementProvider: () => BuildAnnouncingPeerInfo(ManifestStreamType.Content));
+
+        _periodicSyncTask = PeriodicSyncLoopAsync(_cts.Token);
 
         _tallyService = new Competitions.CompetitionTallyService(this, _peerStore, _logger);
         _tallyService.Start();
@@ -253,7 +259,10 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
         _router.PeerAdded -= OnPeerAdded;
         _router.PeerRemoved -= OnPeerRemoved;
         if (_server != null)
+        {
             _server.ManifestReceived -= OnManifestReceived;
+            _server.PeerAnnounced -= OnPeerAnnounced;
+        }
 
         await _router.StopAsync();
         if (_server != null)
@@ -262,6 +271,9 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
         if (_tallyService != null)
             await _tallyService.StopAsync();
         _cts?.Cancel();
+        if (_periodicSyncTask != null)
+            try { await _periodicSyncTask; } catch { }
+        _periodicSyncTask = null;
     }
 
     /// <summary>

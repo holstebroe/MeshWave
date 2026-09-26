@@ -5,6 +5,7 @@
     <File Path="Documentation/LibraryManagement.md" />
     <File Path="Documentation/P2P-Exchange-Protocol.md" />
     <File Path="Documentation/P2P-Handshake.md" />
+    <File Path="Documentation/P2P-Protocol-Review.md" />
     <File Path="Documentation/UserGuide.md" />
     <File Path="README.md" />
   </Folder>

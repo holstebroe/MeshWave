@@ -19,15 +19,21 @@ public class MeshTestContext : IAsyncDisposable
 
     public IReadOnlyList<TestPeer> Peers => _peers;
 
-    public async Task<TestPeer> CreatePeerAsync(string name, bool useBootstrap = true, string? testDataName = null, Func<string, byte[]?>? contentProvider = null)
+    /// <summary>
+    /// Creates and starts a peer.
+    /// </summary>
+    /// <param name="useBootstrap">Register with the shared standalone bootstrap node (created on first use).</param>
+    /// <param name="bootstrapNodes">Explicit bootstrap endpoints; overrides <paramref name="useBootstrap"/> (e.g. another peer acting as bootstrap).</param>
+    /// <param name="actAsListener">False starts the peer outbound-only (no TCP listener), like a peer behind NAT without port forwarding.</param>
+    public async Task<TestPeer> CreatePeerAsync(string name, bool useBootstrap = true, string? testDataName = null, Func<string, byte[]?>? contentProvider = null,
+        IReadOnlyList<string>? bootstrapNodes = null, bool actAsListener = true)
     {
         var peer = TestPeerFactory.CreatePeer(name);
         _peers.Add(peer);
 
         if (testDataName != null) TestPeerFactory.InitializeWithTestData(peer, testDataName);
 
-        List<string>? bootstrapNodes = null;
-        if (useBootstrap)
+        if (bootstrapNodes == null && useBootstrap)
         {
             if (_bootstrap == null)
             {
@@ -38,7 +44,7 @@ public class MeshTestContext : IAsyncDisposable
             bootstrapNodes = [$"127.0.0.1:{BootstrapPort}"];
         }
 
-        await peer.StartAsync(bootstrapNodes: bootstrapNodes, contentProvider: contentProvider);
+        await peer.StartAsync(bootstrapNodes: bootstrapNodes, actAsListener: actAsListener, contentProvider: contentProvider);
 
         // Ensure they have a profile broadcasted so their public key is in the social manifest
         peer.BroadcastProfile(name, isArtist: true);
@@ -46,54 +52,44 @@ public class MeshTestContext : IAsyncDisposable
         return peer;
     }
 
+    /// <summary>
+    /// Waits until every peer has discovered every other peer through the real discovery path
+    /// (bootstrap announce + PEX + pushes) and holds its Social manifest. Nothing is pushed on the peers' behalf.
+    /// Throws <see cref="TimeoutException"/> if the mesh does not converge, so tests fail on broken discovery.
+    /// </summary>
     public async Task ConnectAndSyncAllAsync(int timeoutMs = 60000)
     {
-        // First, ensure all peers are started and have a chance to talk to bootstrap
-        foreach (var peer in _peers) await peer.SyncAsync();
-
-        // Wait until they see each other in routing table
-        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs / 2.0);
-        while (DateTime.UtcNow < deadline)
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (true)
         {
-            var allConnected = true;
-            foreach (var peer in _peers)
-                if (peer.Orchestrator.GetPeers().Count() < _peers.Count - 1)
-                {
-                    allConnected = false;
-                    break;
-                }
-
-            if (allConnected) break;
-            await Task.Delay(500, TestContext.Current.CancellationToken);
+            // Periodic sync normally runs every minute; trigger it directly to keep tests fast.
             foreach (var peer in _peers) await peer.SyncAsync();
+
+            var missing = FindMissingLinks();
+            if (missing.Count == 0) return;
+
+            if (DateTime.UtcNow >= deadline)
+                throw new TimeoutException("Mesh did not converge: " + string.Join("; ", missing));
+
+            await Task.Delay(500, TestContext.Current.CancellationToken);
         }
+    }
 
-        // Now force a final exchange of all manifests
+    private List<string> FindMissingLinks()
+    {
+        var missing = new List<string>();
         foreach (var peer in _peers)
-        foreach (var other in _peers)
         {
-            if (peer == other) continue;
-
-            var client = new ManifestExchangeClient(timeoutMs: 2000);
-            var peerInfo = new PeerInfo
+            var known = peer.Orchestrator.GetPeers().Select(p => p.UserId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var other in _peers.Where(o => o != peer))
             {
-                UserId = peer.UserId,
-                DisplayName = peer.Name,
-                Address = "127.0.0.1",
-                Port = peer.Port,
-                PublicKeyPem = peer.Identity.PublicKeyPem,
-                LastSeen = DateTime.UtcNow
-            };
-
-            foreach (ManifestStreamType st in Enum.GetValues(typeof(ManifestStreamType)))
-            {
-                var manifest = peer.GetLocalManifest(st);
-                if (manifest != null) await client.PushManifestAsync("127.0.0.1", other.Port, manifest, peerInfo);
+                if (!known.Contains(other.UserId))
+                    missing.Add($"{peer.Name} has not discovered {other.Name}");
+                else if (peer.GetPeerManifest(other.UserId, ManifestStreamType.Social) == null)
+                    missing.Add($"{peer.Name} has no manifest from {other.Name}");
             }
         }
-
-        // Give it a moment to process the pushes
-        await Task.Delay(1000, TestContext.Current.CancellationToken);
+        return missing;
     }
 
     public async ValueTask DisposeAsync()

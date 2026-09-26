@@ -27,25 +27,37 @@ MeshWave uses a decentralized, manifest-based synchronization model. Each user m
 4.  **`GetPeers`**: Peer Exchange (PEX). Requests a list of known peers from a node.
 5.  **`RequestRendezvous`**: Requests a coordinated NAT traversal session via a bootstrap node.
 6.  **`RequestContent`**: Requests raw content bytes (e.g., audio files) by content hash.
+    - `ChunkOffset` / `ChunkLength` (optional): request a byte range. Without `ChunkOffset` the whole content is sent.
+    - The response's `ContentLength` is the number of raw bytes that follow the framed response; `TotalContentLength` is the full content size.
+    - A zero-length chunk at offset 0 is used to probe `TotalContentLength` before a parallel download.
+    - Peers built before chunking ignore the range and send the whole file; clients slice the requested chunk out of it.
+    - Whole-content downloads (`SyncOrchestrator.RequestContentAsync`) are verified against the SHA-256 content hash.
+7.  **`Announce`**: Registers the sender (`AnnouncingPeer`) with the receiving node, without sending a manifest.
+    - The receiver records the **observed** source IP (never the self-reported one) with the announced port.
+    - Port `0` means the sender is outbound-only (no listener). Such peers are listed in PEX but never dialed; they pull updates themselves.
+    - A regular peer answers with its own `PeerInfo` in `Peers`, so a peer that uses it as bootstrap learns it as a real peer (UserId + key). A standalone bootstrap answers with an empty list.
+    - Peers announce to every bootstrap node on startup and on every bootstrap re-contact (`SecurityLimits.BootstrapRetryIntervalMinutes`), which doubles as the registration heartbeat.
 
 ## Distribution Strategies
 
 ### Push on Update
 Whenever a user performs an action (releases a track, likes a post, etc.), the local `SyncOrchestrator` appends a signed operation to its manifest and immediately pushes the updated manifest to all currently connected mesh peers.
 
-### Relay for NATed Peers
+### Relay for NATed Peers (deprecated)
 Peers that are not reachable as listeners (outbound-only) push their manifest updates to bootstrap nodes. Other peers can then fetch these "relayed" manifests from the bootstrap nodes using the `TargetUserId` field in a `GetManifest` request.
+
+This makes the bootstrap a data relay, which contradicts the design goal that bootstraps only help establish connections. It is scheduled for removal; see [P2P-Protocol-Review.md](P2P-Protocol-Review.md).
 
 ### Periodic Poll / Sync
 The `SyncOrchestrator` periodically performs maintenance, which includes:
--   Syncing with all known peers to ensure no updates were missed.
+-   Pulling deltas from all known dialable peers every `SecurityLimits.PeriodicSyncIntervalSeconds` (60 s). This is the only way an outbound-only peer receives updates, because pushes cannot reach it.
 -   Performing PEX to discover new peers.
 -   Re-contacting bootstrap nodes.
 
 ## Delta Synchronization and Compaction
 To minimize bandwidth, MeshWave supports delta sync across its multiple streams.
 
-When requesting a manifest stream, a peer specifies a `StartSequenceNumber` based on the last operation it has already received and verified for that user/group. The server then only returns operations with a sequence number greater than or equal to the requested start.
+When requesting a manifest stream, a peer specifies a `StartSequenceNumber` one past the highest sequence number it has already evaluated for that user/group (`ManifestManager.GetHeadSequenceNumber`). This is not the operation count: operations can be discarded during merge (e.g. the daily play cap), leaving holes. Merges never accept an operation that would leave a gap in the chain. The server then only returns operations with a sequence number greater than or equal to the requested start.
 
 If the requested `StartSequenceNumber` is significantly behind the server's current state, and the server has generated a `ManifestSnapshot` that covers the missing history, the server will return the `ManifestSnapshot` as the baseline. The requesting peer validates the snapshot's signature to securely update its base state (e.g., squashing thousands of historic `Play` operations into the updated totals in the snapshot), and then applies the remaining linear operations on top of it.
 
@@ -56,6 +68,7 @@ Social actions like `Play`, `Like`, `Comment`, and `Follow` are represented as s
 -   **Identity**: `Profile` operations distribute user metadata (display name, bio, public key).
 
 ## Security and Verification
+-   A `UserId` is derived from the user's public key. Any key presented for a user (in a push, an announcement or a PEX entry) is only accepted if it hashes to that `UserId` (`CryptoService.IsPublicKeyForUser`).
 -   All operations are signed with the user's private key.
 -   Peers verify the signature of every operation against the user's public key before merging it into their local store.
 -   Protocol limits (message size, operation count) are strictly enforced to prevent DoS attacks.

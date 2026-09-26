@@ -84,4 +84,59 @@ public class ManifestSerializerTests
         Assert.Equal(ManifestOperationType.PostMessage, op.OperationType);
         Assert.Equal("post-1", op.TargetId);
     }
+
+    [Fact]
+    public void SerializeAndDeserialize_ChunkRequestFields_RoundTrip()
+    {
+        var request = new ManifestRequest
+        {
+            Type = ManifestRequestType.RequestContent,
+            ContentHash = "hash",
+            ChunkOffset = 524288,
+            ChunkLength = 1024
+        };
+
+        var deserialized = ManifestSerializer.DeserializeRequest(ManifestSerializer.SerializeRequest(request));
+
+        Assert.Equal(524288, deserialized.ChunkOffset);
+        Assert.Equal(1024, deserialized.ChunkLength);
+    }
+
+    [Fact]
+    public void SerializeAndDeserialize_RequestWithoutChunk_HasNullChunkFields()
+    {
+        var request = new ManifestRequest { Type = ManifestRequestType.RequestContent, ContentHash = "hash" };
+
+        var deserialized = ManifestSerializer.DeserializeRequest(ManifestSerializer.SerializeRequest(request));
+
+        Assert.Null(deserialized.ChunkOffset);
+        Assert.Null(deserialized.ChunkLength);
+    }
+
+    [Fact]
+    public void SerializeAndDeserialize_TotalContentLength_RoundTrips()
+    {
+        var response = new ManifestResponse { Acknowledged = true, ContentLength = 0, TotalContentLength = 3_000_000 };
+
+        var deserialized = ManifestSerializer.DeserializeResponse(ManifestSerializer.SerializeResponse(response));
+
+        Assert.Equal(3_000_000, deserialized.TotalContentLength);
+        Assert.Null(ManifestSerializer.DeserializeResponse(ManifestSerializer.SerializeResponse(new ManifestResponse())).TotalContentLength);
+    }
+
+    [Fact]
+    public void SerializeAndDeserialize_AnnounceRequest_RoundTrips()
+    {
+        var request = new ManifestRequest
+        {
+            Type = ManifestRequestType.Announce,
+            AnnouncingPeer = new PeerInfo { UserId = "user-1", DisplayName = "User", Address = "", Port = 0, PublicKeyPem = "key" }
+        };
+
+        var deserialized = ManifestSerializer.DeserializeRequest(ManifestSerializer.SerializeRequest(request));
+
+        Assert.Equal(ManifestRequestType.Announce, deserialized.Type);
+        Assert.Equal("user-1", deserialized.AnnouncingPeer!.UserId);
+        Assert.Equal(0, deserialized.AnnouncingPeer.Port);
+    }
 }

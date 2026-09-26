@@ -90,19 +90,10 @@ public class ParallelChunkStream : Stream
             var (bytes, _, failureReason) = await _client.RequestContentChunkAsync(
                 peer.Address, peer.Port, _contentHash, offset, length, token);
 
-            // Be resilient to backwards compatibility where old peers ignore chunk requests and send the full file
-            if (bytes != null && bytes.Length >= length)
+            var chunk = bytes == null ? null : ExtractChunk(bytes, offset, length);
+            if (chunk != null)
             {
-                if (bytes.Length > length)
-                {
-                    var exactChunk = new byte[length];
-                    Array.Copy(bytes, 0, exactChunk, 0, length);
-                    _completedChunks[chunkIndex] = exactChunk;
-                }
-                else
-                {
-                    _completedChunks[chunkIndex] = bytes;
-                }
+                _completedChunks[chunkIndex] = chunk;
                 _chunkReadyEvent.Set();
             }
             else
@@ -115,6 +106,26 @@ public class ParallelChunkStream : Stream
                 await Task.Delay(1000, token);
             }
         }
+    }
+
+    /// <summary>
+    /// Returns the bytes for the requested chunk from a peer response, or null if the response is unusable.
+    /// Peers that support chunking return exactly <paramref name="length"/> bytes. Older peers ignore the chunk
+    /// request and return the whole file, in which case the chunk is sliced out at <paramref name="offset"/>.
+    /// </summary>
+    internal static byte[]? ExtractChunk(byte[] bytes, long offset, long length)
+    {
+        if (bytes.Length == length)
+            return bytes;
+
+        if (bytes.Length >= offset + length && bytes.Length > length)
+        {
+            var exactChunk = new byte[length];
+            Array.Copy(bytes, offset, exactChunk, 0, length);
+            return exactChunk;
+        }
+
+        return null;
     }
 
     public override bool CanRead => true;
