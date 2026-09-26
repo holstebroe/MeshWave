@@ -17,7 +17,7 @@ namespace MeshWave.Synchronizer;
 public class ParallelChunkStream : Stream
 {
     private readonly string _contentHash;
-    private readonly ManifestExchangeClient _client;
+    private readonly Func<PeerInfo, string, long, long, CancellationToken, Task<(byte[]? Bytes, long TotalLength, string FailureReason)>> _requestChunk;
     private readonly Logger _logger;
     private readonly List<PeerInfo> _peers;
 
@@ -34,11 +34,13 @@ public class ParallelChunkStream : Stream
 
     private CancellationTokenSource _cts = new();
 
-    public ParallelChunkStream(string contentHash, IEnumerable<PeerInfo> peers, ManifestExchangeClient client, Logger logger)
+    /// <param name="requestChunk">Fetches (peer, hash, offset, length) and returns the bytes and the total content length.</param>
+    public ParallelChunkStream(string contentHash, IEnumerable<PeerInfo> peers,
+        Func<PeerInfo, string, long, long, CancellationToken, Task<(byte[]? Bytes, long TotalLength, string FailureReason)>> requestChunk, Logger logger)
     {
         _contentHash = contentHash;
         _peers = peers.ToList();
-        _client = client;
+        _requestChunk = requestChunk;
         _logger = logger;
     }
 
@@ -49,8 +51,7 @@ public class ParallelChunkStream : Stream
         // Try to get total length from the first responsive peer
         foreach (var peer in _peers)
         {
-            var (_, totalLength, failureReason) = await _client.RequestContentChunkAsync(
-                peer.Address, peer.Port, _contentHash, 0, 0, _cts.Token);
+            var (_, totalLength, failureReason) = await _requestChunk(peer, _contentHash, 0, 0, _cts.Token);
 
             if (totalLength > 0)
             {
@@ -87,8 +88,7 @@ public class ParallelChunkStream : Stream
             long offset = chunkIndex * ChunkSize;
             long length = Math.Min(ChunkSize, _length - offset);
 
-            var (bytes, _, failureReason) = await _client.RequestContentChunkAsync(
-                peer.Address, peer.Port, _contentHash, offset, length, token);
+            var (bytes, _, failureReason) = await _requestChunk(peer, _contentHash, offset, length, token);
 
             var chunk = bytes == null ? null : ExtractChunk(bytes, offset, length);
             if (chunk != null)

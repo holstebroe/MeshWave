@@ -2,7 +2,6 @@ using MeshWave.Common.Core;
 using System.Collections.Concurrent;
 using System.Net;
 using MeshWave.Common.Core.Crypto;
-using MeshWave.Common.Core.Models;
 using MeshWave.Common.Core.P2P;
 using MeshWave.Synchronizer;
 using NLog;
@@ -10,15 +9,16 @@ using NLog;
 namespace MeshWave.Bootstrap.Core;
 
 /// <summary>
-/// Hosts a bootstrap coordinator that registers live peers and serves PEX responses.
+/// Hosts a bootstrap coordinator: it registers live peers (Announce, with a dial-back check of the announced port),
+/// serves PEX responses, keeps control sessions with peers, and introduces peers to each other for UDP hole
+/// punching. It never stores, relays or serves manifests or content.
 /// </summary>
 public sealed class BootstrapCoordinator : IDisposable
 {
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<string, BootstrapPeerEntry> _peers = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, BootstrapRendezvousSession> _rendezvousSessions = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, Manifest> _relayedManifests = new(StringComparer.OrdinalIgnoreCase);
     private readonly ManifestExchangeServer _server;
+    private readonly PeerSessionManager _sessions;
 
     private int _requestCount;
     private int _peerCount;
@@ -32,30 +32,47 @@ public sealed class BootstrapCoordinator : IDisposable
         _logger = logger;
         Port = port;
         _server = new ManifestExchangeServer(port, logger: logger);
+        // One control session per registered peer.
+        _sessions = new PeerSessionManager(logger) { MaxSessions = SecurityLimits.MaxRoutingTableSize };
     }
 
     public int Port { get; }
     public int RequestCount => _requestCount;
     public int RegisteredPeerCount => _peers.Count;
 
+    /// <summary>Number of peers holding a control session with this node.</summary>
+    public int SessionCount => _sessions.Sessions.Count(s => s.IsAuthenticated);
+
+    /// <summary>The UDP port used for NAT introductions (0 if it could not be bound).</summary>
+    public int UdpPort => _sessions.UdpPort;
+
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
-        _server.ManifestReceived += OnManifestReceived;
         _server.PeerAnnounced += OnPeerAnnounced;
+
+        _sessions.Configure(
+            identity: null,
+            selfRecordProvider: () => null,
+            dataHandler: (request, remoteAddress, ct) => _server.HandleRequestAsync(request, remoteAddress, inlineContent: true, ct),
+            isIntroducer: true);
+        _sessions.SessionActivity += OnSessionActivity;
+        _sessions.SessionAuthenticated += OnSessionActivity;
+        _sessions.Start(Port);
+        _server.SessionUpgradeHandler = _sessions.AcceptTcpSession;
 
         await _server.StartAsync(
             localManifestProvider: _ => null,
             peersProvider: GetLivePeers,
-            rendezvousProvider: OnRendezvousRequested,
-            relayedManifestProvider: (userId, streamType) => streamType == ManifestStreamType.Content ? _relayedManifests.GetValueOrDefault(userId) : null,
             cancellationToken: cancellationToken);
     }
 
     public async Task StopAsync()
     {
-        _server.ManifestReceived -= OnManifestReceived;
         _server.PeerAnnounced -= OnPeerAnnounced;
+        _sessions.SessionActivity -= OnSessionActivity;
+        _sessions.SessionAuthenticated -= OnSessionActivity;
         await _server.StopAsync();
+        _sessions.Stop();
     }
 
     public IReadOnlyList<PeerInfo> GetLivePeers()
@@ -67,19 +84,9 @@ public sealed class BootstrapCoordinator : IDisposable
             .Take(SecurityLimits.MaxPeersPerExchange)
             .Select(e =>
             {
-                var p = e.Peer;
-                if (_relayedManifests.ContainsKey(p.UserId))
-                    return new PeerInfo
-                    {
-                        UserId = p.UserId,
-                        DisplayName = p.DisplayName,
-                        Address = p.Address,
-                        Port = p.Port,
-                        PublicKeyPem = p.PublicKeyPem,
-                        LastSeen = p.LastSeen,
-                        Capabilities = p.Capabilities.Contains("relay") ? p.Capabilities : [.. p.Capabilities, "relay"]
-                    };
-                return p;
+                var copy = PeerRecords.Clone(e.Peer);
+                copy.LastSeen = e.LastSeen;
+                return copy;
             })
             .ToList();
     }
@@ -102,46 +109,6 @@ public sealed class BootstrapCoordinator : IDisposable
             }
     }
 
-    private void OnManifestReceived(object? sender, ManifestReceivedEventArgs e)
-    {
-        Interlocked.Increment(ref _requestCount);
-
-        var manifest = e.Manifest;
-        if (manifest == null)
-            return;
-
-        if (!IPAddress.TryParse(e.PeerAddress, out _))
-            return;
-
-        var latestProfile = manifest.Operations
-            .Where(op => op.OperationType == ManifestOperationType.Profile)
-            .OrderByDescending(op => op.SequenceNumber)
-            .FirstOrDefault();
-
-        var displayName = latestProfile?.Metadata.GetValueOrDefault("displayName");
-        var publicKeyPem = e.AnnouncingPeer?.PublicKeyPem ?? latestProfile?.Metadata.GetValueOrDefault("publicKeyPem") ?? string.Empty;
-        // Port 0 means the sender is outbound-only. Only senders that don't announce at all get the default port.
-        var announcedPort = e.AnnouncingPeer != null ? Math.Max(0, e.AnnouncingPeer.Port) : ManifestExchangeServer.DefaultPort;
-
-        var peer = new PeerInfo
-        {
-            UserId = manifest.UserId,
-            DisplayName = SecurityLimits.Truncate(
-                string.IsNullOrWhiteSpace(displayName)
-                    ? (string.IsNullOrWhiteSpace(e.AnnouncingPeer?.DisplayName) ? manifest.UserId : e.AnnouncingPeer.DisplayName)
-                    : displayName,
-                SecurityLimits.MaxDisplayNameLength),
-            Address = e.PeerAddress,
-            Port = announcedPort,
-            PublicKeyPem = publicKeyPem,
-            LastSeen = DateTime.UtcNow
-        };
-
-        RegisterPeer(peer);
-
-        if (e.IsRelay) _relayedManifests[manifest.UserId] = manifest;
-    }
-
     private void OnPeerAnnounced(object? sender, PeerAnnouncedEventArgs e)
     {
         Interlocked.Increment(ref _requestCount);
@@ -149,55 +116,18 @@ public sealed class BootstrapCoordinator : IDisposable
         if (!IPAddress.TryParse(e.Peer.Address, out _))
             return;
 
-        // Announcements must prove key ownership of the UserId (manifest pushes are verified by their signatures instead).
+        // Announcements must prove key ownership of the UserId.
         if (!CryptoService.IsPublicKeyForUser(e.Peer.UserId, e.Peer.PublicKeyPem))
             return;
 
         RegisterPeer(e.Peer);
     }
 
-    private RendezvousResponse OnRendezvousRequested(RendezvousRequest request)
+    /// <summary>A live control session is first-hand evidence that the peer is online.</summary>
+    private void OnSessionActivity(PeerSession session)
     {
-        if (request == null || !SecurityLimits.IsValidUserId(request.InitiatorUserId) || !SecurityLimits.IsValidUserId(request.TargetUserId))
-            return new RendezvousResponse
-            {
-                Success = false,
-                Message = "Invalid rendezvous request."
-            };
-
-        var now = DateTime.UtcNow;
-        var probeWindow = Math.Clamp(request.RequestedProbeWindowMs, 1_500, 10_000);
-        var probeStart = now.AddMilliseconds(1_200);
-        var expiry = probeStart.AddMilliseconds(probeWindow + 2_000);
-        var session = new BootstrapRendezvousSession
-        {
-            SessionId = Guid.NewGuid().ToString("N"),
-            InitiatorUserId = request.InitiatorUserId,
-            TargetUserId = request.TargetUserId,
-            InitiatorPort = request.InitiatorPort,
-            ProbeStartUtc = probeStart,
-            ProbeWindowMs = probeWindow,
-            CreatedAtUtc = now,
-            ExpiresAtUtc = expiry
-        };
-
-        _rendezvousSessions[session.SessionId] = session;
-
-        foreach (var stale in _rendezvousSessions.Where(kv => kv.Value.ExpiresAtUtc <= now).Select(kv => kv.Key).ToList())
-            _rendezvousSessions.TryRemove(stale, out _);
-
-        var targetKnown = _peers.ContainsKey(request.TargetUserId);
-        return new RendezvousResponse
-        {
-            Success = true,
-            SessionId = session.SessionId,
-            ExpiresAtUtc = expiry,
-            ProbeStartUtc = session.ProbeStartUtc,
-            ProbeWindowMs = session.ProbeWindowMs,
-            Message = targetKnown
-                ? "Rendezvous session issued. Start coordinated outbound probes at probeStartUtc."
-                : "Rendezvous session issued; target is not currently registered on this bootstrap."
-        };
+        if (session.RemoteUserId != null && _peers.TryGetValue(session.RemoteUserId, out var entry))
+            entry.LastSeen = DateTime.UtcNow;
     }
 
     private void RegisterPeer(PeerInfo peer)
@@ -215,11 +145,9 @@ public sealed class BootstrapCoordinator : IDisposable
         if (_peers.TryGetValue(peer.UserId, out var existing))
         {
             existing.LastSeen = DateTime.UtcNow;
-            existing.Peer.Address = peer.Address;
-            existing.Peer.Port = peer.Port;
-            existing.Peer.DisplayName = peer.DisplayName;
-            if (!string.IsNullOrWhiteSpace(peer.PublicKeyPem))
-                existing.Peer.PublicKeyPem = peer.PublicKeyPem;
+            var publicKeyPem = string.IsNullOrWhiteSpace(peer.PublicKeyPem) ? existing.Peer.PublicKeyPem : peer.PublicKeyPem;
+            existing.Peer = PeerRecords.Clone(peer);
+            existing.Peer.PublicKeyPem = publicKeyPem;
             PeerRefreshed?.Invoke(this, new BootstrapPeerEventArgs(existing.Peer, "refreshed"));
             return;
         }
@@ -227,11 +155,11 @@ public sealed class BootstrapCoordinator : IDisposable
         if (_peers.Count >= SecurityLimits.MaxRoutingTableSize)
             EvictStalest();
 
-        var entry = new BootstrapPeerEntry { Peer = peer, LastSeen = DateTime.UtcNow };
+        var entry = new BootstrapPeerEntry { Peer = PeerRecords.Clone(peer), LastSeen = DateTime.UtcNow };
         if (_peers.TryAdd(peer.UserId, entry))
         {
             Interlocked.Increment(ref _peerCount);
-            PeerRegistered?.Invoke(this, new BootstrapPeerEventArgs(peer, "registered"));
+            PeerRegistered?.Invoke(this, new BootstrapPeerEventArgs(entry.Peer, "registered"));
         }
     }
 
@@ -243,18 +171,10 @@ public sealed class BootstrapCoordinator : IDisposable
 
     private void PruneStalePeers()
     {
-        var cutoff = DateTime.UtcNow.AddMinutes(-10);
+        var cutoff = DateTime.UtcNow.AddMinutes(-SecurityLimits.PeerLivenessTimeoutMinutes);
         foreach (var stale in _peers.Where(kv => kv.Value.LastSeen < cutoff).ToList())
             if (_peers.TryRemove(stale.Key, out var removed))
-            {
-                _relayedManifests.TryRemove(stale.Key, out _);
                 PeerDisconnected?.Invoke(this, new BootstrapPeerEventArgs(removed.Peer, "stale-timeout"));
-            }
-
-        // Also prune relayed manifests that might not have an active peer entry
-        foreach (var userId in _relayedManifests.Keys)
-            if (!_peers.ContainsKey(userId))
-                _relayedManifests.TryRemove(userId, out _);
     }
 
     private static (string host, int port) ParseEndpoint(string endpoint, int defaultPort)
@@ -268,6 +188,7 @@ public sealed class BootstrapCoordinator : IDisposable
     public void Dispose()
     {
         _server.Dispose();
+        _sessions.Dispose();
     }
 }
 
@@ -281,16 +202,4 @@ internal sealed class BootstrapPeerEntry
 {
     public required PeerInfo Peer { get; set; }
     public DateTime LastSeen { get; set; }
-}
-
-internal sealed class BootstrapRendezvousSession
-{
-    public required string SessionId { get; set; }
-    public required string InitiatorUserId { get; set; }
-    public required string TargetUserId { get; set; }
-    public int InitiatorPort { get; set; }
-    public DateTime ProbeStartUtc { get; set; }
-    public int ProbeWindowMs { get; set; }
-    public DateTime CreatedAtUtc { get; set; }
-    public DateTime ExpiresAtUtc { get; set; }
 }

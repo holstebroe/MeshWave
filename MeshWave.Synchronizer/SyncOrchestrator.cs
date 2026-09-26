@@ -13,8 +13,9 @@ namespace MeshWave.Synchronizer;
 
 /// <summary>
 /// SyncOrchestrator is the top-level P2P coordinator.
-/// It uses PeerRouter (LAN + bootstrap + PEX) to find peers,
-/// exchanges manifests over TCP, and merges verified operations.
+/// It uses PeerRouter (LAN + bootstrap + PEX) to find peers, keeps persistent sessions with its neighbours
+/// (PeerSessionManager: TCP where a port is open, hole-punched UDP otherwise), exchanges manifests over them,
+/// and merges verified operations.
 /// </summary>
 public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
 {
@@ -26,12 +27,14 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
     private readonly IManifestStore _peerStore;
     private readonly ContentExchange _contentExchange;
     private readonly NatTraversalService _natTraversal;
+    private readonly PeerSessionManager _sessions;
     private readonly IMeshWaveEnvironment _environment;
 
     private readonly Dictionary<ManifestStreamType, Manifest> _localManifests = [];
     private bool _actAsListener;
     private CancellationTokenSource? _cts;
     private Task? _periodicSyncTask;
+    private Task? _sessionMaintenanceTask;
     private IReadOnlyList<string> _bootstrapNodes = [];
     private int _inboundManifestPushCount;
     private int _outboundManifestFetchCount;
@@ -92,6 +95,18 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
     public string? MappingProtocol => _natTraversal.MappingProtocol;
 
     public NatTraversalService NatTraversal => _natTraversal;
+
+    /// <summary>Persistent sessions with neighbours (TCP or hole-punched UDP).</summary>
+    public PeerSessionManager Sessions => _sessions;
+
+    /// <summary>Number of peers with an authenticated persistent session.</summary>
+    public int SessionPeerCount => _sessions.Sessions.Count(s => s.IsAuthenticated);
+
+    /// <summary>
+    /// Result of the last dial-back check by a bootstrap node: true if our announced port is reachable from outside,
+    /// false if not (we then announce ourselves as outbound-only), null if not checked yet.
+    /// </summary>
+    public bool? IsPubliclyReachable => _reachable;
 
     /// <summary>Returns the persisted manifest for a specific peer and stream, or null if not yet received.</summary>
     public Manifest? GetPeerManifest(string userId, ManifestStreamType streamType = ManifestStreamType.Content)
@@ -174,6 +189,7 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
         _contentExchange = contentExchange;
         _natTraversal = natTraversal;
+        _sessions = new PeerSessionManager(_logger);
         _peerStore.LoadAll();
     }
 
@@ -218,31 +234,52 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
         _router.PeerAdded += OnPeerAdded;
         _router.PeerRemoved += OnPeerRemoved;
+        _router.SelfObserved += OnSelfObserved;
+        _router.HasSession = peer => _sessions.GetSession(peer.UserId) != null;
         _bootstrapNodes = bootstrapNodes ?? [];
+
+        // The server answers requests over sessions even when it does not listen, so outbound-only peers can serve too.
+        _server ??= new ManifestExchangeServer(identity.ManifestPort, logger: _logger);
+        _server.ManifestReceived += OnManifestReceived;
+        _server.PeerAnnounced += OnPeerAnnounced;
+        _server.Configure(
+            streamType => _localManifests.GetValueOrDefault(streamType),
+            () => _router.GetPeersForExchange(),
+            contentProvider: _contentProvider,
+            selfInfoProvider: GetSelfRecord);
+
+        _sessions.Configure(
+            identity,
+            GetSelfRecord,
+            (request, remoteAddress, ct) => _server.HandleRequestAsync(request, remoteAddress, inlineContent: true, ct),
+            isIntroducer: _actAsListener);
+        _sessions.SessionAuthenticated += OnSessionAuthenticated;
+        _sessions.SessionActivity += OnSessionActivity;
+        _sessions.Start(identity.ManifestPort);
+        _client.SessionResolver = _sessions.Resolve;
 
         if (_actAsListener)
         {
-            _server ??= new ManifestExchangeServer(identity.ManifestPort, logger: _logger);
-            _server.ManifestReceived += OnManifestReceived;
-            _server.PeerAnnounced += OnPeerAnnounced;
-
-            await _natTraversal.StartAsync(identity.ManifestPort, _cts.Token);
             await _natTraversal.SetupPortMappingAsync(identity.ManifestPort, _cts.Token);
 
+            _server.SessionUpgradeHandler = _sessions.AcceptTcpSession;
             await _server.StartAsync(
                 streamType => _localManifests.GetValueOrDefault(streamType),
                 () => _router.GetPeersForExchange(),
-                rendezvousProvider: null,
                 contentProvider: _contentProvider,
-                relayedManifestProvider: (targetUserId, streamType) => null,
-                selfInfoProvider: () => BuildAnnouncingPeerInfo(ManifestStreamType.Content),
+                selfInfoProvider: GetSelfRecord,
                 cancellationToken: _cts.Token);
         }
 
+        // Control sessions to the bootstrap nodes (in the background: an unreachable node must not delay startup).
+        var sessionToken = _cts.Token;
+        _ = Task.Run(() => EnsureSessionsAsync(sessionToken), sessionToken);
+
         await _router.StartAsync(identity, _bootstrapNodes, _cts.Token,
-            selfAnnouncementProvider: () => BuildAnnouncingPeerInfo(ManifestStreamType.Content));
+            selfAnnouncementProvider: BuildAnnouncement);
 
         _periodicSyncTask = PeriodicSyncLoopAsync(_cts.Token);
+        _sessionMaintenanceTask = SessionMaintenanceLoopAsync(_cts.Token);
 
         _tallyService = new Competitions.CompetitionTallyService(this, _peerStore, _logger);
         _tallyService.Start();
@@ -258,6 +295,9 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
         _logger.Info("Stopping SyncOrchestrator");
         _router.PeerAdded -= OnPeerAdded;
         _router.PeerRemoved -= OnPeerRemoved;
+        _router.SelfObserved -= OnSelfObserved;
+        _sessions.SessionAuthenticated -= OnSessionAuthenticated;
+        _sessions.SessionActivity -= OnSessionActivity;
         if (_server != null)
         {
             _server.ManifestReceived -= OnManifestReceived;
@@ -267,6 +307,7 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
         await _router.StopAsync();
         if (_server != null)
             await _server.StopAsync();
+        _sessions.Stop();
         await _natTraversal.StopAsync();
         if (_tallyService != null)
             await _tallyService.StopAsync();
@@ -274,6 +315,9 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
         if (_periodicSyncTask != null)
             try { await _periodicSyncTask; } catch { }
         _periodicSyncTask = null;
+        if (_sessionMaintenanceTask != null)
+            try { await _sessionMaintenanceTask; } catch { }
+        _sessionMaintenanceTask = null;
     }
 
     /// <summary>
@@ -496,14 +540,11 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
 
     private PeerInfo BuildAnnouncingPeerInfo(ManifestStreamType streamType)
     {
-        var manifest = GetLocalManifest(streamType);
-        return new PeerInfo
+        return GetSelfRecord() ?? new PeerInfo
         {
-            UserId = Identity?.UserId ?? manifest?.UserId ?? string.Empty,
-            DisplayName = SecurityLimits.Truncate(Identity?.DisplayName ?? manifest?.UserId ?? "peer", SecurityLimits.MaxDisplayNameLength),
-            Address = ExternalIPAddress ?? string.Empty,
-            Port = _actAsListener ? (Identity?.ManifestPort ?? ManifestExchangeServer.DefaultPort) : 0,
-            PublicKeyPem = Identity?.PublicKeyPem ?? string.Empty,
+            UserId = GetLocalManifest(streamType)?.UserId ?? string.Empty,
+            DisplayName = "peer",
+            Address = string.Empty,
             LastSeen = DateTime.UtcNow
         };
     }
@@ -532,6 +573,7 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
     public void Dispose()
     {
         _router.Dispose();
+        _sessions.Dispose();
         _server?.Dispose();
         _natTraversal.Dispose();
         _cts?.Dispose();

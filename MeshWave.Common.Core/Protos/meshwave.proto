@@ -90,54 +90,64 @@ message ProtoPeerInfo {
     string public_key_pem = 5;
     google.protobuf.Timestamp last_seen = 6;
     repeated string capabilities = 7;
+    optional google.protobuf.Timestamp signed_at = 8;
+    string signature = 9;
 }
 
 enum ProtoManifestRequestType {
     GET_MANIFEST = 0;
     PUSH_MANIFEST = 1;
     GET_PEERS = 2;
-    REQUEST_RENDEZVOUS = 3;
+    reserved 3, 5; // REQUEST_RENDEZVOUS, RELAY_MANIFEST_PUSH (removed)
     REQUEST_CONTENT = 4;
-    RELAY_MANIFEST_PUSH = 5;
     ANNOUNCE = 6;
+    OPEN_SESSION = 7;
+    PING = 8;
+    REQUEST_INTRODUCTION = 9;
+    INTRODUCTION_OFFER = 10;
+    HELLO = 11;
 }
 
-message ProtoRendezvousRequest {
-    string initiator_user_id = 1;
+message ProtoSessionHello {
+    optional ProtoPeerInfo peer = 1;
+    int64 nonce = 2;
+    string proof = 3;
+    int32 udp_port = 4;
+    bool is_introducer = 5;
+}
+
+message ProtoIntroduction {
+    string requester_user_id = 1;
     string target_user_id = 2;
-    int32 initiator_port = 3;
-    int32 requested_probe_window_ms = 4;
+    string token = 3;
+    int32 introducer_udp_port = 4;
 }
 
 message ProtoManifestRequest {
     ProtoManifestRequestType type = 1;
     ProtoManifestStreamType stream_type = 2;
     optional ProtoManifest manifest = 3;
-    optional ProtoRendezvousRequest rendezvous = 4;
+    reserved 4, 9; // rendezvous, target_user_id (relay fetch; removed)
     optional string content_hash = 5;
     optional ProtoPeerInfo announcing_peer = 6;
     int32 start_sequence_number = 7;
     optional int32 end_sequence_number = 8;
-    optional string target_user_id = 9;
     optional int64 chunk_offset = 10;
     optional int64 chunk_length = 11;
-}
-
-message ProtoRendezvousResponse {
-    bool success = 1;
-    string session_id = 2;
-    google.protobuf.Timestamp expires_at_utc = 3;
-    google.protobuf.Timestamp probe_start_utc = 4;
-    int32 probe_window_ms = 5;
-    string message = 6;
+    optional ProtoSessionHello hello = 12;
+    optional ProtoIntroduction introduction = 13;
 }
 
 message ProtoManifestResponse {
     optional ProtoManifest manifest = 1;
     bool acknowledged = 2;
     repeated ProtoPeerInfo peers = 3;
-    optional ProtoRendezvousResponse rendezvous = 4;
+    reserved 4; // rendezvous (removed)
     optional bytes content_bytes = 5;
     int64 content_length = 6;
     optional int64 total_content_length = 7;
+    optional ProtoSessionHello hello = 8;
+    optional ProtoIntroduction introduction = 9;
+    optional string observed_address = 10;
+    optional bool dial_back_succeeded = 11;
 }

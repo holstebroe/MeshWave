@@ -71,11 +71,10 @@
 - [ ] [Comment permission enforcement across peers](https://github.com/holstebroe/MeshWave/issues/29)
 - [x] Likes sync via manifest operations (one like per user per track, signed)
 - [x] User profile sync (display name, avatar hash, IsArtist flag as signed Profile op)
-- [x] Content exchange: TCP file transfer by content hash (NAT hole-punch prep via UDP probes before direct transfer attempts)
-- [x] Bootstrap rendezvous ("crossing hands") phase 1: explicit rendezvous session ID issuance by bootstrap coordinator
-- [x] Bootstrap rendezvous phase 2: coordinated simultaneous outbound probe window (TCP SYN + UDP punch hints)
-- [ ] [Relay fallback (opt-in): bootstrap-assisted relay only when direct methods fail](https://github.com/holstebroe/MeshWave/issues/33)
-- [ ] [NAT: Outbound-only manifest push via bootstrap](https://github.com/holstebroe/MeshWave/issues/58)
+- [x] Content exchange: TCP file transfer by content hash
+- [x] Persistent bidirectional sessions and UDP hole punching via introducers (replaces the bootstrap rendezvous; see Documentation/P2P-Protocol-Review.md C1, C2)
+- [ ] [Relay fallback (opt-in): bootstrap-assisted relay only when direct methods fail](https://github.com/holstebroe/MeshWave/issues/33) (bootstrap relay rejected by design, see review C3/C4; only opt-in peer relays remain possible)
+- [x] [NAT: Outbound-only manifest push via bootstrap](https://github.com/holstebroe/MeshWave/issues/58) (solved without the bootstrap: outbound-only peers push and receive over persistent sessions)
 - [ ] [Issue #83: [UI] Network Health Indicator and Connectivity Status Bar](https://github.com/holstebroe/MeshWave/issues/83) [DISPATCHED] [DISPATCHED] [DISPATCHED]
 - [ ] [Issue #84: [Net] Automated UPnP/NAT-PMP Port Mapping Support](https://github.com/holstebroe/MeshWave/issues/84) [DISPATCHED]
 - [ ] [Issue #85: [UI] Interactive NAT Troubleshooting and Configuration Guide](https://github.com/holstebroe/MeshWave/issues/85)

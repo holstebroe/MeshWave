@@ -23,17 +23,20 @@ public partial class SyncOrchestrator
     private void OnPeerAdded(object? sender, PeerInfo peer)
     {
         PeerCountChanged?.Invoke(this, EventArgs.Empty);
-        _ = Task.Run(() => TryFetchAndMergeAsync(peer, _cts?.Token ?? CancellationToken.None));
-
-        if (peer.UserId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase))
+        if (IsBootstrapEntry(peer))
             return;
 
-        // Outbound-only peers have no listener; they fetch our manifests themselves.
-        if (!PeerRouter.IsDialable(peer))
-            return;
-
+        var ct = _cts?.Token ?? CancellationToken.None;
         _ = Task.Run(async () =>
         {
+            // Open a persistent session first (TCP, or hole-punched UDP for peers without an open port),
+            // so that the fetch and the pushes below can use it.
+            try { await TryOpenSessionAsync(peer, ct); } catch { }
+            await TryFetchAndMergeAsync(peer, ct);
+
+            if (!HasRoute(peer))
+                return;
+
             foreach (var streamType in Enum.GetValues<ManifestStreamType>())
             {
                 var manifest = GetLocalManifest(streamType);
@@ -56,22 +59,29 @@ public partial class SyncOrchestrator
                         Version = manifest.Version,
                         LastUpdated = manifest.LastUpdated
                     };
-                    }
+                }
 
                 try
-                    {
-                    await _client.PushManifestAsync(peer.Address, peer.Port, manifestToPush, BuildAnnouncingPeerInfo(manifestToPush.StreamType));
-                    RecordPeerMessage(peer.UserId, "PushManifest", success: true,
-                        $"Pushed local {manifestToPush.StreamType} manifest ({manifestToPush.Operations.Count} op) to {peer.Address}:{peer.Port}.");
-                    }
-                catch (Exception ex)
-                    {
-                    RecordPeerMessage(peer.UserId, "PushManifest", success: false,
-                        $"Push failed for {manifestToPush.StreamType} to {peer.Address}:{peer.Port}: {ex.Message}");
-                    }
+                {
+                    var acknowledged = await _client.PushManifestAsync(peer, manifestToPush, BuildAnnouncingPeerInfo(manifestToPush.StreamType), ct);
+                    if (acknowledged) _router.MarkContacted(peer.UserId);
+                    RecordPeerMessage(peer.UserId, "PushManifest", success: acknowledged,
+                        $"Pushed local {manifestToPush.StreamType} manifest ({manifestToPush.Operations.Count} op) to {DescribeRoute(peer)}.");
                 }
-        });
+                catch (Exception ex)
+                {
+                    RecordPeerMessage(peer.UserId, "PushManifest", success: false,
+                        $"Push failed for {manifestToPush.StreamType} to {DescribeRoute(peer)}: {ex.Message}");
+                }
             }
+        });
+    }
+
+    private string DescribeRoute(PeerInfo peer)
+    {
+        var session = _sessions.GetSession(peer.UserId);
+        return session != null ? $"{session.TransportKind} session {session.Id}" : $"{peer.Address}:{peer.Port}";
+    }
 
     private void OnPeerAnnounced(object? sender, PeerAnnouncedEventArgs e)
             {
@@ -83,7 +93,7 @@ public partial class SyncOrchestrator
 
         RecordPeerMessage(e.Peer.UserId, "Announce", success: true,
             $"Peer announced from {e.Peer.Address} (port {e.Peer.Port}{(e.Peer.Port > 0 ? string.Empty : ", outbound-only")}).");
-        _router.LearnPeers([e.Peer]);
+        _router.LearnPeerDirect(e.Peer);
             }
 
     private void OnPeerRemoved(object? sender, string userId)
@@ -148,6 +158,8 @@ public partial class SyncOrchestrator
                 PublicKeyPem = publicKeyPem
             };
 
+            // A push is not proof that its author is online (anyone can forward a signed manifest),
+            // so the sender only introduces an unknown peer; it does not refresh a known one.
             _router.LearnPeers([discovered]);
                     }
 
@@ -155,66 +167,37 @@ public partial class SyncOrchestrator
                 }
 
     private async Task TryFetchAndMergeAsync(PeerInfo peer, CancellationToken ct)
-                {
+    {
         if (!CryptoService.IsPublicKeyForUser(peer.UserId, peer.PublicKeyPem)) return;
         if (peer.UserId == Identity?.UserId) return;
+        if (!HasRoute(peer)) return;
 
         foreach (ManifestStreamType streamType in Enum.GetValues(typeof(ManifestStreamType)))
             try
-                    {
+            {
                 var existing = _peerStore.Get(peer.UserId, streamType);
                 var startSeq = ManifestManager.GetHeadSequenceNumber(existing) + 1;
 
-                Manifest? remoteManifest = null;
-                var fetchedFromPeer = false;
-
-                try
-                        {
-                    if (peer.Port > 0)
-                            {
-                        remoteManifest = await _client.FetchManifestAsync(peer.Address, peer.Port, _peerStore, peer.UserId, streamType, ct);
-                        fetchedFromPeer = remoteManifest != null;
-                            }
-                        }
-                catch
-                        {
-                    /* fallback to relay if peer is unreachable */
-                        }
-
-                if (remoteManifest == null && peer.Capabilities.Contains("relay"))
-                    foreach (var bootstrap in _bootstrapNodes.Take(SecurityLimits.MaxBootstrapNodes))
-                        if (TryParseEndpoint(bootstrap, out var host, out var port))
-                            try
-                        {
-                                remoteManifest = await _client.FetchManifestAsync(host, port, _peerStore, peer.UserId, streamType, ct);
-                                if (remoteManifest != null)
-                            {
-                                    RecordPeerMessage(peer.UserId, "FetchManifestRelay", success: true,
-                                        $"Fetched {streamType} manifest from bootstrap relay {host}:{port}.");
-                                    break;
-                            }
-                        }
-                            catch { }
+                var remoteManifest = await _client.FetchManifestAsync(peer, _peerStore, streamType, ct);
+                _router.MarkContacted(peer.UserId);
 
                 if (remoteManifest == null)
-                        {
+                {
                     RecordPeerMessage(peer.UserId, "FetchManifest", success: false,
-                        $"Peer {peer.Address}:{peer.Port} returned no {streamType} manifest and relay fallback failed.");
+                        $"Peer {DescribeRoute(peer)} returned no {streamType} manifest.");
                     continue;
-                        }
-
-                Interlocked.Increment(ref _outboundManifestFetchCount);
-                var details = $"Fetched {streamType} manifest with {remoteManifest.Operations.Count} operation(s) (delta sync from seq {startSeq}). FromPeer={fetchedFromPeer}";
-                _logger.Debug(details);
-                RecordPeerMessage(peer.UserId, "FetchManifest", success: true,
-                    details);
-                TryMerge(remoteManifest, peer.PublicKeyPem);
-                    }
-            catch (Exception ex)
-                    {
-                RecordPeerMessage(peer.UserId, "FetchManifest", success: false,
-                    $"Fetch failed for {streamType}: {ex.Message}");
-                    }
                 }
 
+                Interlocked.Increment(ref _outboundManifestFetchCount);
+                var details = $"Fetched {streamType} manifest with {remoteManifest.Operations.Count} operation(s) (delta sync from seq {startSeq}) via {DescribeRoute(peer)}.";
+                _logger.Debug(details);
+                RecordPeerMessage(peer.UserId, "FetchManifest", success: true, details);
+                TryMerge(remoteManifest, peer.PublicKeyPem);
             }
+            catch (Exception ex)
+            {
+                RecordPeerMessage(peer.UserId, "FetchManifest", success: false,
+                    $"Fetch failed for {streamType}: {ex.Message}");
+            }
+    }
+}

@@ -104,44 +104,29 @@ public partial class SyncOrchestrator
         _ = CatalogueService.IngestAsync(manifestToShare);
 
         _ = Task.Run(async () =>
-            {
+        {
+            // Peers with a session include those without an open port: the push travels over the connection they opened.
             var meshPeers = _router.GetPeers()
-                .Where(p => !p.UserId.StartsWith("bootstrap:", StringComparison.OrdinalIgnoreCase) && PeerRouter.IsDialable(p))
+                .Where(p => !IsBootstrapEntry(p) && HasRoute(p))
                 .ToList();
             foreach (var peer in meshPeers)
                 try
                 {
-                    _logger.Debug("Pushing local {0} manifest to peer {1} ({2}:{3})", streamType, peer.UserId, peer.Address, peer.Port);
-                    await _client.PushManifestAsync(peer.Address, peer.Port, manifestToShare, BuildAnnouncingPeerInfo(streamType));
-                    RecordPeerMessage(peer.UserId, "PushManifest", success: true,
-                        $"Pushed local {streamType} manifest ({manifestToShare.Operations.Count} op) to {peer.Address}:{peer.Port}.");
+                    _logger.Debug("Pushing local {0} manifest to peer {1} via {2}", streamType, peer.UserId, DescribeRoute(peer));
+                    var acknowledged = await _client.PushManifestAsync(peer, manifestToShare, BuildAnnouncingPeerInfo(streamType));
+                    if (acknowledged) _router.MarkContacted(peer.UserId);
+                    RecordPeerMessage(peer.UserId, "PushManifest", success: acknowledged,
+                        $"Pushed local {streamType} manifest ({manifestToShare.Operations.Count} op) to {DescribeRoute(peer)}.");
                 }
                 catch (Exception ex)
                 {
                     _logger.Warn("Failed to push {0} manifest to {1}: {2}", streamType, peer.UserId, ex.Message);
                     RecordPeerMessage(peer.UserId, "PushManifest", success: false,
-                        $"Push failed for {streamType} to {peer.Address}:{peer.Port}: {ex.Message}");
+                        $"Push failed for {streamType} to {DescribeRoute(peer)}: {ex.Message}");
                     // best-effort push; periodic sync/merge will reconcile later
                 }
-
-            if (!_actAsListener)
-                foreach (var bootstrap in _bootstrapNodes.Take(SecurityLimits.MaxBootstrapNodes))
-                    if (TryParseEndpoint(bootstrap, out var host, out var port))
-                        try
-                {
-                            _logger.Debug("Relaying local {0} manifest via bootstrap {1}:{2}", streamType, host, port);
-                            await _client.RelayManifestPushAsync(host, port, manifestToShare, BuildAnnouncingPeerInfo(streamType));
-                            RecordPeerMessage($"bootstrap:{host}:{port}", "RelayManifestPush", success: true,
-                                $"Pushed local {streamType} manifest to bootstrap for relaying.");
-                }
-                        catch (Exception ex)
-                {
-                            _logger.Warn("Failed to relay {0} manifest via bootstrap {1}:{2}: {3}", streamType, host, port, ex.Message);
-                            RecordPeerMessage($"bootstrap:{host}:{port}", "RelayManifestPush", success: false,
-                                $"Relay push failed for {streamType}: {ex.Message}");
-                }
         });
-            }
+    }
 
     private void TryMerge(Manifest remote, string publicKeyPem)
             {

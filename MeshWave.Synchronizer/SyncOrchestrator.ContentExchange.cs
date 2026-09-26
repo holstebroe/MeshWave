@@ -59,71 +59,43 @@ public partial class SyncOrchestrator
         report.TargetAddress = peer.Address;
         report.TargetPort = peer.Port;
 
-        var directTcpReachable = await CanConnectTcpAsync(peer.Address, peer.Port, timeoutMs: 1_500);
+        var session = _sessions.GetSession(peer.UserId);
         report.Attempts.Add(new PeerConnectionAttemptResult(
-            "direct-tcp-probe",
-            directTcpReachable,
-            directTcpReachable
-                ? "TCP reachability confirmed on peer manifest port."
-                : "TCP probe timed out or was refused."));
+            "persistent-session",
+            session != null,
+            session != null
+                ? $"Persistent {session.TransportKind} session {session.Id} is open."
+                : "No persistent session with this peer."));
+        if (session != null)
+            return (peer, report);
 
-        if (directTcpReachable) _logger.Info("Established direct TCP connection to {0}:{1}", peer.Address, peer.Port);
-
-        var punched = await _natTraversal.TryPunchAsync(peer.Address, peer.Port);
-        report.Attempts.Add(new PeerConnectionAttemptResult(
-            "udp-hole-punch",
-            punched,
-            punched
-                ? "UDP punch ACK received from peer."
-                : "No UDP punch ACK observed; continuing with direct TCP attempt."));
-
-        if (punched) _logger.Info("Established UDP hole-punched connection to {0}:{1}", peer.Address, peer.Port);
-
-        if (!punched && !directTcpReachable)
-            {
-            var rendezvous = await RequestBootstrapRendezvousAsync(peerUserId, report);
+        if (PeerRouter.IsDialable(peer))
+        {
+            var directTcpReachable = await CanConnectTcpAsync(peer.Address, peer.Port, timeoutMs: 1_500);
             report.Attempts.Add(new PeerConnectionAttemptResult(
-                "bootstrap-rendezvous",
-                rendezvous?.Success == true,
-                rendezvous?.Success == true
-                    ? $"Session {rendezvous.SessionId} issued (probe-start={rendezvous.ProbeStartUtc:O}, window={rendezvous.ProbeWindowMs}ms, expires={rendezvous.ExpiresAtUtc:O}). {rendezvous.Message}"
-                    : "Bootstrap rendezvous unavailable or failed."));
+                "direct-tcp-probe",
+                directTcpReachable,
+                directTcpReachable
+                    ? "TCP reachability confirmed on peer manifest port."
+                    : "TCP probe timed out or was refused."));
 
-            if (rendezvous?.Success == true)
-                {
-                await WaitForProbeWindowAsync(rendezvous, report);
-                var synchronizedPunch = await _natTraversal.TryPunchAsync(peer.Address, peer.Port);
-                report.Attempts.Add(new PeerConnectionAttemptResult(
-                    "udp-hole-punch-rendezvous-window",
-                    synchronizedPunch,
-                    synchronizedPunch
-                        ? "UDP punch ACK received during coordinated rendezvous window."
-                        : "No ACK during coordinated rendezvous window."));
-
-                if (synchronizedPunch) _logger.Info("Established synchronized UDP hole-punched connection to {0}:{1} via rendezvous", peer.Address, peer.Port);
-                }
+            if (directTcpReachable)
+            {
+                _logger.Info("Established direct TCP connection to {0}:{1}", peer.Address, peer.Port);
+                return (peer, report);
             }
-
-        return (peer, report);
         }
 
-    private static async Task WaitForProbeWindowAsync(RendezvousResponse rendezvous, PeerConnectionAttemptReport report)
-        {
-        var now = DateTime.UtcNow;
-        if (rendezvous.ProbeStartUtc <= now)
-            return;
+        // No open port (or it is unreachable): ask an introducer we have a session with to set up UDP hole punching.
+        session = await _sessions.RequestIntroductionAsync(peer.UserId);
+        report.Attempts.Add(new PeerConnectionAttemptResult(
+            "udp-introduction",
+            session != null,
+            session != null
+                ? $"Hole-punched UDP session {session.Id} established via an introducer."
+                : "No introducer could connect us (no shared introducer, or both peers are behind symmetric NATs). MeshWave never relays data through the bootstrap; the content can still come from any other peer that holds it."));
 
-        var delay = rendezvous.ProbeStartUtc - now;
-        if (delay > TimeSpan.FromSeconds(8))
-            {
-            report.Attempts.Add(new PeerConnectionAttemptResult(
-                "bootstrap-rendezvous-timing",
-                false,
-                "Probe start is too far in the future; skipping wait."));
-            return;
-            }
-
-        await Task.Delay(delay);
+        return (session != null || PeerRouter.IsDialable(peer) ? peer : null, report);
         }
 
     private static bool TryParseEndpoint(string endpoint, out string host, out int port)
@@ -160,7 +132,7 @@ public partial class SyncOrchestrator
     private static string BuildNatGuidance(string peerAddress, int peerPort, int localPort, string localIp)
         {
         var local = localPort > 0 ? localPort : ManifestExchangeServer.DefaultPort;
-        return $"Could not establish a direct peer content connection after all automatic attempts. Suggested router/NAT mapping: forward TCP+UDP {local} to {localIp}:{local}. Ask remote peer owner to forward TCP+UDP {peerPort} to {peerAddress}:{peerPort}. If both peers are behind symmetric NAT, run one peer with a public IP or use a relay-capable bootstrap in future.";
+        return $"Could not establish a direct peer content connection after all automatic attempts. Suggested router/NAT mapping: forward TCP+UDP {local} to {localIp}:{local}. Ask remote peer owner to forward TCP+UDP {peerPort} to {peerAddress}:{peerPort}. If both peers are behind symmetric NAT, a direct connection is not possible; the content can still be downloaded from any other peer that holds it.";
         }
 
     private static string? GetPrimaryLocalIpv4()
@@ -265,7 +237,7 @@ public partial class SyncOrchestrator
         foreach (var uid in peersWithContent)
                 {
             var peer = _router.GetPeers().FirstOrDefault(p => string.Equals(p.UserId, uid, StringComparison.OrdinalIgnoreCase));
-            if (peer != null && PeerRouter.IsDialable(peer))
+            if (peer != null && HasRoute(peer))
                 availableEndpoints.Add(peer);
                 }
 
@@ -287,7 +259,7 @@ public partial class SyncOrchestrator
 
         _logger.Info("Starting ParallelChunkStream for content {0} from {1} peers", contentHash, availableEndpoints.Count);
 
-        var stream = new ParallelChunkStream(contentHash, availableEndpoints, _client, _logger);
+        var stream = new ParallelChunkStream(contentHash, availableEndpoints, _client.RequestContentChunkAsync, _logger);
         await stream.InitializeAsync();
 
         if (stream.Length <= 0)
