@@ -25,7 +25,6 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
     private readonly ManifestExchangeClient _client;
     private readonly ManifestManager _manifestManager;
     private readonly IManifestStore _peerStore;
-    private readonly ContentExchange _contentExchange;
     private readonly NatTraversalService _natTraversal;
     private readonly PeerSessionManager _sessions;
     private readonly IMeshWaveEnvironment _environment;
@@ -38,7 +37,7 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
     private IReadOnlyList<string> _bootstrapNodes = [];
     private int _inboundManifestPushCount;
     private int _outboundManifestFetchCount;
-    private Func<string, byte[]?>? _contentProvider;
+    private Func<string, long?, long?, ContentSlice?>? _contentProvider;
     private Competitions.CompetitionTallyService? _tallyService;
 
     private readonly Lock _diagnosticsLock = new();
@@ -172,7 +171,6 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
         ManifestExchangeClient client,
         ManifestManager manifestManager,
         IManifestStore peerManifestStore,
-        ContentExchange contentExchange,
         NatTraversalService natTraversal,
         ICatalogueService catalogueService,
         IMeshWaveEnvironment environment,
@@ -195,7 +193,6 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
             RecordPeerMessage(userId, "Fork", success: false,
                 $"Rejected an operation {sequenceNumber} of the {streamType} stream that conflicts with the one already held: the author signed two versions.");
 
-        _contentExchange = contentExchange;
         _natTraversal = natTraversal;
         _sessions = new PeerSessionManager(_logger);
         _peerStore.LoadAll();
@@ -210,7 +207,7 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
     /// Starts P2P sync: LAN discovery, bootstrap node connections, PEX, and manifest exchange server.
     /// </summary>
     /// <param name="contentProvider">
-    /// Optional callback that returns raw file bytes for a given content hash.
+    /// Optional callback that resolves a byte-range slice of content by hash (hash, chunk offset, chunk length) -&gt; slice.
     /// When provided, this node will serve file download requests from peers.
     /// </param>
     public async Task StartAsync(
@@ -218,7 +215,7 @@ public partial class SyncOrchestrator : ISyncBrowseClient, IDisposable
         IEnumerable<Manifest> localManifests,
         IReadOnlyList<string>? bootstrapNodes = null,
         bool actAsListener = true,
-        Func<string, byte[]?>? contentProvider = null,
+        Func<string, long?, long?, ContentSlice?>? contentProvider = null,
         CancellationToken cancellationToken = default)
     {
         _logger.Info("Starting SyncOrchestrator for user {0} (listener={1})", identity.UserId, actAsListener);

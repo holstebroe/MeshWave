@@ -30,6 +30,11 @@ public class ManifestExchangeServer : IDisposable
     private static readonly TimeSpan DialBackCacheDuration = TimeSpan.FromMinutes(1);
     private readonly ConcurrentDictionary<string, (bool Reachable, DateTime CheckedUtc)> _dialBackCache = new(StringComparer.Ordinal);
 
+    private readonly RateLimiter _connectionRateLimiter = new(SecurityLimits.MaxConnectionsPerMinutePerIp, TimeSpan.FromMinutes(1));
+    private readonly RateLimiter _pushRateLimiter = new(SecurityLimits.MaxPushesPerMinutePerSender, TimeSpan.FromMinutes(1));
+    private readonly RateLimiter _pullRateLimiter = new(SecurityLimits.MaxPullsPerMinutePerSender, TimeSpan.FromMinutes(1));
+    private int _acceptedConnectionCount;
+
     private readonly int _port;
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
@@ -37,7 +42,7 @@ public class ManifestExchangeServer : IDisposable
 
     private Func<ManifestStreamType, Manifest?>? _localManifestProvider;
     private Func<IReadOnlyList<PeerInfo>>? _peersProvider;
-    private Func<string, byte[]?>? _contentProvider;
+    private Func<string, long?, long?, ContentSlice?>? _contentProvider;
     private Func<PeerInfo?>? _selfInfoProvider;
     private Func<string, ManifestStreamType, Manifest?>? _streamProvider;
     private Func<IReadOnlyList<StreamHead>>? _headsProvider;
@@ -69,12 +74,16 @@ public class ManifestExchangeServer : IDisposable
     /// </summary>
     /// <param name="localManifestProvider">Returns this peer's current manifest on demand for a given stream.</param>
     /// <param name="peersProvider">Returns known peers for PEX responses. May be null to disable PEX serving.</param>
-    /// <param name="contentProvider">Returns content bytes by hash. May be null to serve no content.</param>
+    /// <param name="contentProvider">
+    /// Resolves a byte-range slice of content by hash (hash, chunk offset, chunk length) -&gt; slice, or null if the hash
+    /// is unknown. A null chunk offset means "from the start"; a null chunk length means "to the end". May be null to
+    /// serve no content.
+    /// </param>
     /// <param name="selfInfoProvider">Returns this node's own peer record, reported in Announce responses. Null for a standalone bootstrap.</param>
     public void Configure(
         Func<ManifestStreamType, Manifest?> localManifestProvider,
         Func<IReadOnlyList<PeerInfo>>? peersProvider = null,
-        Func<string, byte[]?>? contentProvider = null,
+        Func<string, long?, long?, ContentSlice?>? contentProvider = null,
         Func<PeerInfo?>? selfInfoProvider = null)
     {
         _localManifestProvider = localManifestProvider;
@@ -100,7 +109,7 @@ public class ManifestExchangeServer : IDisposable
     public Task StartAsync(
         Func<ManifestStreamType, Manifest?> localManifestProvider,
         Func<IReadOnlyList<PeerInfo>>? peersProvider = null,
-        Func<string, byte[]?>? contentProvider = null,
+        Func<string, long?, long?, ContentSlice?>? contentProvider = null,
         Func<PeerInfo?>? selfInfoProvider = null,
         CancellationToken cancellationToken = default)
     {
@@ -134,6 +143,24 @@ public class ManifestExchangeServer : IDisposable
             try
             {
                 var client = await _listener.AcceptTcpClientAsync(ct);
+                var address = ObservedAddressOf(client);
+
+                if (!_connectionRateLimiter.TryAcquire(address))
+                {
+                    _logger.Warn("Rejected connection from {0}: exceeded {1} connections/minute.", address, SecurityLimits.MaxConnectionsPerMinutePerIp);
+                    client.Dispose();
+                    continue;
+                }
+
+                // Occasionally forget senders we have not heard from in a while, so long-running nodes do not
+                // accumulate one rate-limit bucket per distinct address forever.
+                if (Interlocked.Increment(ref _acceptedConnectionCount) % 200 == 0)
+                {
+                    _connectionRateLimiter.Prune(TimeSpan.FromMinutes(10));
+                    _pushRateLimiter.Prune(TimeSpan.FromMinutes(10));
+                    _pullRateLimiter.Prune(TimeSpan.FromMinutes(10));
+                }
+
                 _ = Task.Run(() => HandleClientAsync(client, ct), ct);
             }
             catch (OperationCanceledException) { break; }
@@ -220,10 +247,21 @@ public class ManifestExchangeServer : IDisposable
         switch (request.Type)
         {
             case ManifestRequestType.GetManifest:
+                if (!_pullRateLimiter.TryAcquire(remoteAddress))
+                {
+                    _logger.Warn("Rejected GetManifest from {0}: exceeded {1} pulls/minute.", remoteAddress, SecurityLimits.MaxPullsPerMinutePerSender);
+                    return (new ManifestResponse { Acknowledged = false }, ReadOnlyMemory<byte>.Empty);
+                }
                 return (new ManifestResponse { Manifest = BuildManifestResponse(request, remoteAddress) }, ReadOnlyMemory<byte>.Empty);
 
             case ManifestRequestType.PushManifest when request.Manifest != null:
                 {
+                    if (!_pushRateLimiter.TryAcquire(remoteAddress))
+                    {
+                        _logger.Warn("Rejected push from {0}: exceeded {1} pushes/minute.", remoteAddress, SecurityLimits.MaxPushesPerMinutePerSender);
+                        return (new ManifestResponse { Acknowledged = false }, ReadOnlyMemory<byte>.Empty);
+                    }
+
                     var pushed = request.Manifest;
                     var opCount = pushed.Operations.Count;
                     if (opCount <= SecurityLimits.MaxManifestOperations)
@@ -248,6 +286,12 @@ public class ManifestExchangeServer : IDisposable
 
             case ManifestRequestType.GetHeads:
                 {
+                    if (!_pullRateLimiter.TryAcquire(remoteAddress))
+                    {
+                        _logger.Warn("Rejected GetHeads from {0}: exceeded {1} pulls/minute.", remoteAddress, SecurityLimits.MaxPullsPerMinutePerSender);
+                        return (new ManifestResponse { Acknowledged = false }, ReadOnlyMemory<byte>.Empty);
+                    }
+
                     var heads = _headsProvider?.Invoke().Take(SecurityLimits.MaxHeadsPerExchange).ToList() ?? [];
                     _logger.Debug("Serving {0} stream heads to {1}", heads.Count, remoteAddress);
                     return (new ManifestResponse { Acknowledged = _headsProvider != null, Heads = heads }, ReadOnlyMemory<byte>.Empty);
@@ -270,25 +314,26 @@ public class ManifestExchangeServer : IDisposable
 
             case ManifestRequestType.RequestContent when !string.IsNullOrWhiteSpace(request.ContentHash):
                 {
-                    var contentBytes = _contentProvider?.Invoke(request.ContentHash);
-                    _logger.Info("Content request from {0} for hash {1}. Found: {2}", remoteAddress, request.ContentHash, contentBytes != null);
+                    // Sessions cap an inline response at MaxSessionContentSliceBytes: cap the *requested* length
+                    // before it reaches the provider, so a huge file is never read past that cap in the first place.
+                    var requestedLength = inlineContent
+                        ? Math.Min(request.ChunkLength ?? MaxSessionContentSliceBytes, MaxSessionContentSliceBytes)
+                        : request.ChunkLength;
 
-                    var found = contentBytes != null && contentBytes.Length > 0;
-                    var (sliceOffset, sliceLength) = found
-                        ? ResolveContentSlice(contentBytes!.LongLength, request.ChunkOffset, request.ChunkLength)
-                        : (0L, 0L);
-                    if (inlineContent)
-                        sliceLength = Math.Min(sliceLength, MaxSessionContentSliceBytes);
+                    var slice = _contentProvider?.Invoke(request.ContentHash, request.ChunkOffset, requestedLength);
+                    _logger.Info("Content request from {0} for hash {1}. Found: {2}", remoteAddress, request.ContentHash, slice != null);
 
-                    var slice = sliceLength > 0 ? contentBytes.AsMemory((int)sliceOffset, (int)sliceLength) : ReadOnlyMemory<byte>.Empty;
+                    var found = slice is { TotalLength: > 0 };
+                    var bytes = found ? slice!.Bytes : [];
                     var response = new ManifestResponse
                     {
                         Acknowledged = found,
-                        ContentLength = sliceLength,
-                        TotalContentLength = found ? contentBytes!.LongLength : null,
-                        ContentBytes = inlineContent && sliceLength > 0 ? slice.ToArray() : null
+                        ContentLength = bytes.LongLength,
+                        TotalContentLength = found ? slice!.TotalLength : null,
+                        ContentBytes = inlineContent && bytes.Length > 0 ? bytes : null,
+                        ChunkMerkleProof = found && slice!.MerkleProof != null ? slice.MerkleProof.ToList() : null
                     };
-                    return (response, inlineContent ? ReadOnlyMemory<byte>.Empty : slice);
+                    return (response, inlineContent ? ReadOnlyMemory<byte>.Empty : bytes);
                 }
 
             default:
@@ -408,7 +453,7 @@ public class ManifestExchangeServer : IDisposable
     /// Without a chunk offset the whole content is sent. A chunk request is clamped to the content bounds;
     /// a zero-length chunk (or an offset past the end) sends no bytes, which lets clients probe the total length.
     /// </summary>
-    internal static (long Offset, long Length) ResolveContentSlice(long totalLength, long? chunkOffset, long? chunkLength)
+    public static (long Offset, long Length) ResolveContentSlice(long totalLength, long? chunkOffset, long? chunkLength)
     {
         if (!chunkOffset.HasValue)
             return (0, totalLength);
@@ -417,6 +462,26 @@ public class ManifestExchangeServer : IDisposable
         var remaining = totalLength - offset;
         var length = chunkLength.HasValue ? Math.Clamp(chunkLength.Value, 0, remaining) : remaining;
         return (offset, length);
+    }
+
+    /// <summary>
+    /// Adapts a provider that returns a whole file's bytes by hash into the range-based content provider contract
+    /// (hash, chunk offset, chunk length) -&gt; <see cref="ContentSlice"/>, by slicing the in-memory bytes with
+    /// <see cref="ResolveContentSlice"/>. Meant for tests, which hold their fixture content as a single byte array
+    /// and have no per-chunk Merkle proof to offer; real content providers (T1/T2) should implement the range-based
+    /// contract directly instead, reading only the requested slice from disk.
+    /// </summary>
+    public static Func<string, long?, long?, ContentSlice?> AdaptWholeFileProvider(Func<string, byte[]?> wholeFileProvider)
+    {
+        return (hash, chunkOffset, chunkLength) =>
+        {
+            var bytes = wholeFileProvider(hash);
+            if (bytes == null) return null;
+
+            var (offset, length) = ResolveContentSlice(bytes.LongLength, chunkOffset, chunkLength);
+            var slice = length > 0 ? bytes[(int)offset..(int)(offset + length)] : [];
+            return new ContentSlice { TotalLength = bytes.LongLength, Bytes = slice };
+        };
     }
 
     internal static Task WriteMessageAsync(Stream stream, ManifestRequest request, CancellationToken ct)

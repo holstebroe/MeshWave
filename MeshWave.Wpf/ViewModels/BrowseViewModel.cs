@@ -81,7 +81,10 @@ public class BrowseViewModel : ViewModelBase
             // If it already exists in Library, just play it
             // (A more robust check would be to see if it's already fully downloaded)
 
-            var (stream, length) = await _sync.RequestContentStreamAsync(t.ArtistUserId, targetHash);
+            // The published Merkle root covers the original file only; a compressed-quality stream has different
+            // bytes (and no root of its own yet), so only pass it through when we are actually streaming the original.
+            var merkleRootForTarget = string.Equals(targetHash, t.ContentHash, StringComparison.OrdinalIgnoreCase) ? t.MerkleRootHex : null;
+            var (stream, length) = await _sync.RequestContentStreamAsync(t.ArtistUserId, targetHash, merkleRootForTarget);
             if (stream == null) return;
 
             // Start writing to temp file in background
@@ -470,6 +473,7 @@ public class BrowseViewModel : ViewModelBase
                     Album = album,
                     ContentHash = entity.ContentHash,
                     CompressedContentHash = compressedHash,
+                    MerkleRootHex = entity.Metadata.GetValueOrDefault("merkleRoot"),
                     FileSize = fileSize,
                     FileSizeDisplay = FormatFileSize(fileSize),
                     ReleasedAt = releasedAt,
