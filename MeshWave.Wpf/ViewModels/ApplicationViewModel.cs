@@ -33,6 +33,7 @@ public class ApplicationViewModel : ViewModelBase
     private readonly DownloadQueueService _downloadQueue = new();
     private readonly UserRepository _userRepository;
     private readonly MetadataLookupRepository _metadataLookup;
+    private readonly LocalContentIndex _contentIndex;
     private bool _resumeStateDirty;
     private readonly IMeshWaveEnvironment _environment;
 
@@ -59,6 +60,16 @@ public class ApplicationViewModel : ViewModelBase
         var settings = SettingsService.LoadSettings();
         _userRepository = new UserRepository(settings.BaseFolder);
         _metadataLookup = new MetadataLookupRepository(SettingsService.GetLocalMusicFolder());
+        _contentIndex = new LocalContentIndex(
+            rootsProvider: () =>
+            [
+                (SettingsService.GetLocalMusicFolder(), false),
+                (SettingsService.GetPeerMusicFolder(), false),
+                (Path.Combine(SettingsService.LoadSettings().BaseFolder, "UserCache", "Images"), true)
+            ],
+            supportedExtensionsProvider: () => SettingsService.LoadSettings().SupportedExtensions
+                .Select(static ext => ext.StartsWith('.') ? ext : "." + ext)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase));
         var catalogueService = new CatalogueService(MeshWave.Common.Core.Processors.CatalogueProcessorDefaults.GetDefaultProcessors());
 
         // DI wire-up of the default file-based PeerManifestStore
@@ -69,7 +80,6 @@ public class ApplicationViewModel : ViewModelBase
         var manifestExchangeClient = new ManifestExchangeClient(timeoutMs: SecurityLimits.ConnectTimeoutMs);
         var peerRouter = new PeerRouter(lanDiscovery, manifestExchangeClient);
         var manifestManager = new ManifestManager();
-        var contentExchange = new ContentExchange();
         var natTraversal = new NatTraversalService(logger: null);
 
         SyncOrchestrator = new SyncOrchestrator(
@@ -77,7 +87,6 @@ public class ApplicationViewModel : ViewModelBase
             client: manifestExchangeClient,
             manifestManager: manifestManager,
             peerManifestStore: manifestStore,
-            contentExchange: contentExchange,
             natTraversal: natTraversal,
             catalogueService: catalogueService,
             environment: environment,
@@ -398,21 +407,31 @@ public class ApplicationViewModel : ViewModelBase
     /// <summary>
     /// Announces a released track to the P2P network.
     /// </summary>
-    public void AnnounceTrackToNetwork(string trackId, string contentHash, string title, string artist, string album)
+    /// <param name="filePath">
+    /// The track's local file, when available. Its Merkle root (see <see cref="ContentMerkleTree"/>) is published
+    /// alongside the content hash, so downloaders can verify each chunk of a streamed download as it arrives (T2).
+    /// </param>
+    public void AnnounceTrackToNetwork(string trackId, string contentHash, string title, string artist, string album, string? filePath = null)
     {
         if (!P2PIsConnected) return;
-        SyncOrchestrator.AnnounceTrack(trackId, contentHash, new Dictionary<string, string>
+        var metadata = new Dictionary<string, string>
         {
             ["title"] = SecurityLimits.Truncate(title, SecurityLimits.MaxTrackTitleLength),
             ["artist"] = SecurityLimits.Truncate(artist, SecurityLimits.MaxArtistNameLength),
             ["album"] = SecurityLimits.Truncate(album, SecurityLimits.MaxAlbumNameLength)
-        });
+        };
+
+        var merkleRoot = TryComputeMerkleRootHex(filePath);
+        if (merkleRoot != null)
+            metadata["merkleRoot"] = merkleRoot;
+
+        SyncOrchestrator.AnnounceTrack(trackId, contentHash, metadata);
     }
 
     /// <summary>
     /// Updates a released track in the P2P network.
     /// </summary>
-    public void UpdateTrackInNetwork(string trackId, string contentHash, string title, string artist, string album, string shaderScript)
+    public void UpdateTrackInNetwork(string trackId, string contentHash, string title, string artist, string album, string shaderScript, string? filePath = null)
     {
         if (!P2PIsConnected) return;
         var metadata = new Dictionary<string, string>
@@ -427,7 +446,26 @@ public class ApplicationViewModel : ViewModelBase
             metadata["shaderScript"] = shaderScript;
         }
 
+        var merkleRoot = TryComputeMerkleRootHex(filePath);
+        if (merkleRoot != null)
+            metadata["merkleRoot"] = merkleRoot;
+
         SyncOrchestrator.UpdateTrack(trackId, contentHash, metadata);
+    }
+
+    /// <summary>Computes the Merkle root (see <see cref="ContentMerkleTree"/>) of a local file, or null if it cannot be read.</summary>
+    private static string? TryComputeMerkleRootHex(string? filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath)) return null;
+        try
+        {
+            using var stream = File.OpenRead(filePath);
+            return ContentMerkleTree.ComputeRootHex(stream);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -542,7 +580,7 @@ public class ApplicationViewModel : ViewModelBase
                 localManifests,
                 bootstrapNodes,
                 actAsListener: _p2pActAsListener,
-                contentProvider: TryGetLocalContentByHash);
+                contentProvider: _contentIndex.TryReadSlice);
             P2PIsConnected = true;
             P2PPeerCount = SyncOrchestrator.ConnectedPeerCount;
             UpdateP2PStatusText();
@@ -671,62 +709,6 @@ public class ApplicationViewModel : ViewModelBase
         }
     }
 
-    private byte[]? TryGetLocalContentByHash(string contentHash)
-    {
-        if (string.IsNullOrWhiteSpace(contentHash))
-            return null;
-
-        try
-        {
-            var settings = SettingsService.LoadSettings();
-            var supportedExtensions = settings.SupportedExtensions
-                .Select(static ext => ext.StartsWith('.') ? ext : "." + ext)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            var roots = new[]
-            {
-                SettingsService.GetLocalMusicFolder(),
-                SettingsService.GetPeerMusicFolder(),
-                Path.Combine(settings.BaseFolder, "UserCache", "Images")
-            }
-            .Where(static p => !string.IsNullOrWhiteSpace(p))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-            foreach (var root in roots)
-            {
-                if (!Directory.Exists(root))
-                    continue;
-
-                var isUserCache = root.Contains("UserCache");
-
-                foreach (var file in Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories))
-                {
-                    if (!isUserCache && !supportedExtensions.Contains(Path.GetExtension(file)))
-                        continue;
-
-                    if (isUserCache && !string.Equals(Path.GetExtension(file), ".png", StringComparison.OrdinalIgnoreCase) && !string.Equals(Path.GetExtension(file), ".jpg", StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    var hash = CryptoService.ComputeFileHash(file);
-                    if (!string.Equals(hash, contentHash, StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    var info = new FileInfo(file);
-                    if (!info.Exists || info.Length <= 0)
-                        continue;
-
-                    return File.ReadAllBytes(file);
-                }
-            }
-        }
-        catch
-        {
-            // best effort
-        }
-
-        return null;
-    }
 
     private static bool TryParseEndpoint(string endpoint, out string host, out int port)
     {
@@ -860,6 +842,10 @@ public class ApplicationViewModel : ViewModelBase
                 };
                 if (!string.IsNullOrWhiteSpace(iconHash))
                     metadata["iconHash"] = iconHash;
+
+                var merkleRoot = TryComputeMerkleRootHex(track.FilePath);
+                if (merkleRoot != null)
+                    metadata["merkleRoot"] = merkleRoot;
 
                 SyncOrchestrator.AnnounceTrack(track.TrackId, CryptoService.ComputeFileHash(track.FilePath), metadata);
             }

@@ -491,7 +491,8 @@ public partial class LibraryViewModel : ViewModelBase, IDisposable
                     CryptoService.ComputeFileHash(track.FilePath),
                     track.Title,
                     track.Artist,
-                    _allAlbumItems.FirstOrDefault(a => a.AlbumId == track.AlbumId)?.Name ?? string.Empty);
+                    _allAlbumItems.FirstOrDefault(a => a.AlbumId == track.AlbumId)?.Name ?? string.Empty,
+                    track.FilePath);
     }
 
     private IEnumerable<PlaybackTrackListItem> GetCurrentPlaybackContext(Track currentTrack)

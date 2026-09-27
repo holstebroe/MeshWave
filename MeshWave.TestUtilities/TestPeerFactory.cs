@@ -52,7 +52,6 @@ public static class TestPeerFactory
         var mgr = new ManifestManager(logger);
         var userRepo = new UserRepository(tempDir);
         var store = PeerManifestStore.CreateAtBase(env, tempDir);
-        var contentExchange = new ContentExchange();
         var natTraversal = new NatTraversalService(logger: logger);
         var catalogueService = new CatalogueService(MeshWave.Common.Core.Processors.CatalogueProcessorDefaults.GetDefaultProcessors());
 
@@ -61,7 +60,6 @@ public static class TestPeerFactory
             client,
             mgr,
             store,
-            contentExchange,
             natTraversal,
             catalogueService,
             env,

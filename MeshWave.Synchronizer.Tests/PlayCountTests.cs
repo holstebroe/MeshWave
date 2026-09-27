@@ -80,7 +80,6 @@ public class PlayCountTests
             new ManifestExchangeClient(timeoutMs: 100),
             new ManifestManager(),
             new PeerManifestStore(env, Path.GetTempPath()),
-            new ContentExchange(),
             new NatTraversalService(logger: null),
             new CatalogueService(MeshWave.Common.Core.Processors.CatalogueProcessorDefaults.GetDefaultProcessors()),
             env

@@ -26,6 +26,21 @@ public static class SecurityLimits
     /// <summary>Maximum inbound connections accepted per minute from a single IP.</summary>
     public const int MaxConnectionsPerMinutePerIp = 10;
 
+    /// <summary>
+    /// Maximum PushManifest requests accepted per minute from a single sender (IP for one-shot TCP, or the
+    /// authenticated peer's address for a session). Bounds the cost a single misbehaving or compromised peer can
+    /// impose through the store-and-forward gossip of S2. Generous enough for legitimate bursts (many local
+    /// operations are already batched into one delta by <see cref="FanoutDebounceMs"/>).
+    /// </summary>
+    public const int MaxPushesPerMinutePerSender = 600;
+
+    /// <summary>
+    /// Maximum GetManifest/GetHeads (pull) requests accepted per minute from a single sender. Sized to allow a
+    /// peer that just joined to catch up on many streams in one anti-entropy round (<see cref="MaxStreamsPulledPerRound"/>)
+    /// while still bounding a flood of pull requests from a misbehaving peer.
+    /// </summary>
+    public const int MaxPullsPerMinutePerSender = 600;
+
     // --- String field limits (characters) ---
 
     public const int MaxDisplayNameLength = 64;

@@ -165,4 +165,5 @@ message ProtoManifestResponse {
     optional string observed_address = 10;
     optional bool dial_back_succeeded = 11;
     repeated ProtoStreamHead heads = 12;
+    repeated bytes chunk_merkle_proof = 13;
 }

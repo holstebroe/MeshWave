@@ -334,9 +334,10 @@ public class ManifestExchangeClient
 
     /// <summary>
     /// Requests a specific chunk of content bytes from a peer by content hash.
-    /// Returns the chunk bytes, the total content length, and a human-readable failure reason.
+    /// Returns the chunk bytes, the total content length, its Merkle proof (see <see cref="MeshWave.Common.Core.Crypto.ContentMerkleTree"/>;
+    /// null when the responder did not supply one), and a human-readable failure reason.
     /// </summary>
-    public Task<(byte[]? Bytes, long TotalLength, string FailureReason)> RequestContentChunkAsync(string address, int port, string contentHash, long offset, long length, CancellationToken cancellationToken = default)
+    public Task<(byte[]? Bytes, long TotalLength, IReadOnlyList<byte[]>? MerkleProof, string FailureReason)> RequestContentChunkAsync(string address, int port, string contentHash, long offset, long length, CancellationToken cancellationToken = default)
     {
         return RequestContentChunkCoreAsync(null, address, port, contentHash, offset, length, cancellationToken);
     }
@@ -344,12 +345,12 @@ public class ManifestExchangeClient
     /// <summary>
     /// Requests a chunk of content from a peer, over its session if there is one.
     /// </summary>
-    public Task<(byte[]? Bytes, long TotalLength, string FailureReason)> RequestContentChunkAsync(PeerInfo peer, string contentHash, long offset, long length, CancellationToken cancellationToken = default)
+    public Task<(byte[]? Bytes, long TotalLength, IReadOnlyList<byte[]>? MerkleProof, string FailureReason)> RequestContentChunkAsync(PeerInfo peer, string contentHash, long offset, long length, CancellationToken cancellationToken = default)
     {
         return RequestContentChunkCoreAsync(peer.UserId, peer.Address, peer.Port, contentHash, offset, length, cancellationToken);
     }
 
-    private async Task<(byte[]? Bytes, long TotalLength, string FailureReason)> RequestContentChunkCoreAsync(string? userId, string address, int port, string contentHash, long offset, long length, CancellationToken cancellationToken)
+    private async Task<(byte[]? Bytes, long TotalLength, IReadOnlyList<byte[]>? MerkleProof, string FailureReason)> RequestContentChunkCoreAsync(string? userId, string address, int port, string contentHash, long offset, long length, CancellationToken cancellationToken)
     {
         var request = new ManifestRequest
         {
@@ -366,16 +367,16 @@ public class ManifestExchangeClient
             {
                 var sessionResponse = await session.RequestAsync(request, _timeoutMs, cancellationToken);
                 if (sessionResponse?.Acknowledged != true)
-                    return (null, 0, sessionResponse == null ? "Session request failed." : "Peer reported the content is not available.");
+                    return (null, 0, null, sessionResponse == null ? "Session request failed." : "Peer reported the content is not available.");
 
                 var bytes = sessionResponse.ContentBytes ?? [];
                 if (bytes.Length != sessionResponse.ContentLength)
-                    return (null, 0, "Peer returned a truncated chunk.");
-                return (bytes, sessionResponse.TotalContentLength ?? sessionResponse.ContentLength, string.Empty);
+                    return (null, 0, null, "Peer returned a truncated chunk.");
+                return (bytes, sessionResponse.TotalContentLength ?? sessionResponse.ContentLength, sessionResponse.ChunkMerkleProof, string.Empty);
             }
 
             if (port <= 0)
-                return (null, 0, "Peer has no open port and no session.");
+                return (null, 0, null, "Peer has no open port and no session.");
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(_timeoutMs);
@@ -394,7 +395,7 @@ public class ManifestExchangeClient
                 var reason = response?.Acknowledged == false
                     ? "Peer acknowledged the chunk request but reported the content is not available."
                     : "Peer returned an empty response (content may not be hosted here).";
-                return (null, 0, reason);
+                return (null, 0, null, reason);
             }
 
             // A zero-length chunk might just mean we requested past the end, or a 0-byte request to get length
@@ -405,15 +406,15 @@ public class ManifestExchangeClient
             }
 
             long totalLength = response.TotalContentLength ?? response.ContentLength;
-            return (chunkBytes, totalLength, string.Empty);
+            return (chunkBytes, totalLength, response.ChunkMerkleProof, string.Empty);
         }
         catch (OperationCanceledException)
         {
-            return (null, 0, "Connection timed out.");
+            return (null, 0, null, "Connection timed out.");
         }
         catch (Exception ex)
         {
-            return (null, 0, ex.Message);
+            return (null, 0, null, ex.Message);
         }
     }
 

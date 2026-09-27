@@ -118,6 +118,27 @@ public class ManifestResponse
     /// knows which operations to send next time (or has to send now, when the push did not connect to what the responder had).
     /// </summary>
     public List<StreamHead> Heads { get; set; } = [];
+
+    /// <summary>
+    /// <see cref="ManifestRequestType.RequestContent"/>: the Merkle sibling-hash proof for this chunk (see
+    /// <see cref="MeshWave.Common.Core.Crypto.ContentMerkleTree"/>), present only when the request's chunk offset and
+    /// length exactly align to one chunk boundary. Null when the responder does not (or cannot) compute a proof;
+    /// the requester then falls back to verifying the whole download's hash once it is complete (F2).
+    /// </summary>
+    public List<byte[]>? ChunkMerkleProof { get; set; }
+}
+
+/// <summary>
+/// One byte-range slice of local content served to a peer (<see cref="ManifestRequestType.RequestContent"/>),
+/// together with the content's total length and, when the slice aligns to a chunk boundary, a Merkle proof for it.
+/// </summary>
+public sealed class ContentSlice
+{
+    public required long TotalLength { get; init; }
+    public required byte[] Bytes { get; init; }
+
+    /// <summary>Sibling-hash proof for this chunk (see <see cref="MeshWave.Common.Core.Crypto.ContentMerkleTree"/>), or null when this slice does not align to one chunk.</summary>
+    public IReadOnlyList<byte[]>? MerkleProof { get; init; }
 }
 
 /// <summary>

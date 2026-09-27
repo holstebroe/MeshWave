@@ -318,7 +318,7 @@ public class MyMusicMetadataEditorViewModel : ViewModelBase, INotifyDataErrorInf
 
                 if (!string.IsNullOrWhiteSpace(trackId))
                 {
-                    appVm.UpdateTrackInNetwork(trackId, contentHash, metadata.Title, metadata.Artist, metadata.Album, metadata.ShaderScript);
+                    appVm.UpdateTrackInNetwork(trackId, contentHash, metadata.Title, metadata.Artist, metadata.Album, metadata.ShaderScript, TrackFilePath);
                 }
             }
         }

@@ -32,6 +32,7 @@
   <Project Path="MeshWave.Integration.Tests/MeshWave.Integration.Tests.csproj" />
   <Project Path="MeshWave.LibraryManager.Tests/MeshWave.LibraryManager.Tests.csproj" />
   <Project Path="MeshWave.LibraryManager/MeshWave.LibraryManager.csproj" />
+  <Project Path="MeshWave.NatLab/MeshWave.NatLab.csproj" />
   <Project Path="MeshWave.Synchronizer.Tests/MeshWave.Synchronizer.Tests.csproj" />
   <Project Path="MeshWave.Synchronizer/MeshWave.Synchronizer.csproj" />
   <Project Path="MeshWave.TestUtilities/MeshWave.TestUtilities.csproj" />

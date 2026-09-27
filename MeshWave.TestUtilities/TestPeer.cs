@@ -39,7 +39,8 @@ public class TestPeer : IAsyncDisposable
     /// </summary>
     public async Task StartAsync(IEnumerable<Manifest>? initialManifests = null, IReadOnlyList<string>? bootstrapNodes = null, bool actAsListener = true, Func<string, byte[]?>? contentProvider = null)
     {
-        await Orchestrator.StartAsync(Identity, initialManifests ?? [], bootstrapNodes, actAsListener, contentProvider);
+        var adapted = contentProvider == null ? null : ManifestExchangeServer.AdaptWholeFileProvider(contentProvider);
+        await Orchestrator.StartAsync(Identity, initialManifests ?? [], bootstrapNodes, actAsListener, adapted);
     }
 
     public async ValueTask DisposeAsync()
