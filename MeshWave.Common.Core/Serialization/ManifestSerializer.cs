@@ -103,6 +103,7 @@ public static class ManifestSerializer
         if (response.ObservedAddress != null) proto.ObservedAddress = response.ObservedAddress;
         if (response.DialBackSucceeded.HasValue) proto.DialBackSucceeded = response.DialBackSucceeded.Value;
         if (response.Heads != null) proto.Heads.AddRange(response.Heads.Take(SecurityLimits.MaxHeadsPerExchange).Select(MapToProto));
+        if (response.ChunkMerkleProof != null) proto.ChunkMerkleProof.AddRange(response.ChunkMerkleProof.Select(ByteString.CopyFrom));
 
         return proto;
     }
@@ -121,7 +122,8 @@ public static class ManifestSerializer
             Introduction = proto.Introduction != null ? MapFromProto(proto.Introduction) : null,
             ObservedAddress = proto.HasObservedAddress ? proto.ObservedAddress : null,
             DialBackSucceeded = proto.HasDialBackSucceeded ? proto.DialBackSucceeded : null,
-            Heads = proto.Heads.Take(SecurityLimits.MaxHeadsPerExchange).Select(MapFromProto).ToList()
+            Heads = proto.Heads.Take(SecurityLimits.MaxHeadsPerExchange).Select(MapFromProto).ToList(),
+            ChunkMerkleProof = proto.ChunkMerkleProof.Count > 0 ? proto.ChunkMerkleProof.Select(b => b.ToByteArray()).ToList() : null
         };
     }
 

@@ -19,8 +19,8 @@ public interface ISyncBrowseClient
     PeerConnectionAttemptReport? LastConnectionAttemptReport { get; }
     IEnumerable<PeerInfo> GetPeers();
     event EventHandler<ManifestMergedEventArgs>? ManifestMerged;
-    Task<byte[]?> RequestContentAsync(string peerUserId, string contentHash);
-    Task<(Stream? Stream, long ContentLength)> RequestContentStreamAsync(string peerUserId, string contentHash);
+    Task<byte[]?> RequestContentAsync(string peerUserId, string contentHash, string? expectedMerkleRootHex = null);
+    Task<(Stream? Stream, long ContentLength)> RequestContentStreamAsync(string peerUserId, string contentHash, string? expectedMerkleRootHex = null);
     Task<bool> IsContentAvailableLocallyAsync(string contentHash);
     UserRepository? UserRepository { get; }
     Task SyncAllPeersAsync(CancellationToken cancellationToken = default);

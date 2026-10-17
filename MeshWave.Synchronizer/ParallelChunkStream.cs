@@ -3,8 +3,10 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
+using MeshWave.Common.Core.Crypto;
 using MeshWave.Common.Core.P2P;
 using NLog;
 
@@ -13,15 +15,20 @@ namespace MeshWave.Synchronizer;
 /// <summary>
 /// A Stream that downloads chunks from multiple peers concurrently in the background,
 /// enabling immediate sequential reading while load balancing.
+/// When <see cref="_expectedMerkleRoot"/> is set, each chunk is verified against it (see
+/// <see cref="ContentMerkleTree"/>) as soon as it arrives, instead of only after the whole file is downloaded
+/// (P2P protocol review T2): a chunk that fails verification is treated as a failed download and retried from
+/// another peer, the same as a network error.
 /// </summary>
 public class ParallelChunkStream : Stream
 {
     private readonly string _contentHash;
-    private readonly Func<PeerInfo, string, long, long, CancellationToken, Task<(byte[]? Bytes, long TotalLength, string FailureReason)>> _requestChunk;
+    private readonly Func<PeerInfo, string, long, long, CancellationToken, Task<(byte[]? Bytes, long TotalLength, IReadOnlyList<byte[]>? MerkleProof, string FailureReason)>> _requestChunk;
     private readonly Logger _logger;
     private readonly List<PeerInfo> _peers;
+    private readonly byte[]? _expectedMerkleRoot;
 
-    private const int ChunkSize = 512 * 1024; // 512 KB chunks
+    private const int ChunkSize = ContentMerkleTree.ChunkSizeBytes;
 
     private long _length;
     private long _position;
@@ -34,14 +41,22 @@ public class ParallelChunkStream : Stream
 
     private CancellationTokenSource _cts = new();
 
-    /// <param name="requestChunk">Fetches (peer, hash, offset, length) and returns the bytes and the total content length.</param>
+    /// <param name="requestChunk">Fetches (peer, hash, offset, length) and returns the bytes, the total content length and the chunk's Merkle proof.</param>
+    /// <param name="expectedMerkleRoot">
+    /// The content's Merkle root (see <see cref="ContentMerkleTree"/>), published by the author alongside the track.
+    /// When set, a chunk is only accepted once its SHA-256 verifies against this root through the proof the peer
+    /// returned; a peer that cannot or does not supply a proof for a given chunk is treated as having failed that
+    /// chunk. Null disables per-chunk verification (falls back to the whole-download hash check of F2).
+    /// </param>
     public ParallelChunkStream(string contentHash, IEnumerable<PeerInfo> peers,
-        Func<PeerInfo, string, long, long, CancellationToken, Task<(byte[]? Bytes, long TotalLength, string FailureReason)>> requestChunk, Logger logger)
+        Func<PeerInfo, string, long, long, CancellationToken, Task<(byte[]? Bytes, long TotalLength, IReadOnlyList<byte[]>? MerkleProof, string FailureReason)>> requestChunk,
+        Logger logger, byte[]? expectedMerkleRoot = null)
     {
         _contentHash = contentHash;
         _peers = peers.ToList();
         _requestChunk = requestChunk;
         _logger = logger;
+        _expectedMerkleRoot = expectedMerkleRoot;
     }
 
     public async Task InitializeAsync()
@@ -51,7 +66,7 @@ public class ParallelChunkStream : Stream
         // Try to get total length from the first responsive peer
         foreach (var peer in _peers)
         {
-            var (_, totalLength, failureReason) = await _requestChunk(peer, _contentHash, 0, 0, _cts.Token);
+            var (_, totalLength, _, failureReason) = await _requestChunk(peer, _contentHash, 0, 0, _cts.Token);
 
             if (totalLength > 0)
             {
@@ -88,9 +103,16 @@ public class ParallelChunkStream : Stream
             long offset = chunkIndex * ChunkSize;
             long length = Math.Min(ChunkSize, _length - offset);
 
-            var (bytes, _, failureReason) = await _requestChunk(peer, _contentHash, offset, length, token);
+            var (bytes, _, merkleProof, failureReason) = await _requestChunk(peer, _contentHash, offset, length, token);
 
             var chunk = bytes == null ? null : ExtractChunk(bytes, offset, length);
+            if (chunk != null && _expectedMerkleRoot != null && !VerifyChunk(chunk, chunkIndex, merkleProof))
+            {
+                _logger.Warn($"Peer {peer.UserId} sent chunk {chunkIndex} of {_contentHash} that failed Merkle verification (bad data or no proof); discarding and retrying elsewhere.");
+                chunk = null;
+                failureReason = "Chunk failed Merkle verification.";
+            }
+
             if (chunk != null)
             {
                 _completedChunks[chunkIndex] = chunk;
@@ -106,6 +128,19 @@ public class ParallelChunkStream : Stream
                 await Task.Delay(1000, token);
             }
         }
+    }
+
+    /// <summary>
+    /// Verifies <paramref name="chunk"/> at <paramref name="chunkIndex"/> against <see cref="_expectedMerkleRoot"/>
+    /// using the peer-supplied <paramref name="proof"/>. False when there is no proof (the peer did not or could not
+    /// supply one) or the recomputed root does not match.
+    /// </summary>
+    private bool VerifyChunk(byte[] chunk, int chunkIndex, IReadOnlyList<byte[]>? proof)
+    {
+        if (proof == null) return false;
+
+        var leafHash = SHA256.HashData(chunk);
+        return ContentMerkleTree.VerifyProof(leafHash, chunkIndex, proof, _expectedMerkleRoot!);
     }
 
     /// <summary>

@@ -168,11 +168,11 @@ public partial class SyncOrchestrator
         return peers.Any(uid => string.Equals(uid, Identity?.UserId, StringComparison.OrdinalIgnoreCase));
         }
 
-    public async Task<byte[]?> RequestContentAsync(string peerUserId, string contentHash)
+    public async Task<byte[]?> RequestContentAsync(string peerUserId, string contentHash, string? expectedMerkleRootHex = null)
         {
         if (string.IsNullOrWhiteSpace(contentHash)) return null;
 
-        var (stream, length) = await RequestContentStreamAsync(peerUserId, contentHash);
+        var (stream, length) = await RequestContentStreamAsync(peerUserId, contentHash, expectedMerkleRootHex);
         if (stream == null || length <= 0) return null;
 
         using (stream)
@@ -208,10 +208,22 @@ public partial class SyncOrchestrator
         return string.Equals(actual, contentHash, StringComparison.OrdinalIgnoreCase);
     }
 
-    public async Task<(Stream? Stream, long ContentLength)> RequestContentStreamAsync(string peerUserId, string contentHash)
+    /// <param name="expectedMerkleRootHex">
+    /// The content's Merkle root (see <see cref="MeshWave.Common.Core.Crypto.ContentMerkleTree"/>), as published in the
+    /// track's Create operation metadata. When supplied, each chunk is verified as it arrives instead of only once the
+    /// whole stream has been read (P2P protocol review T2). Null falls back to unverified streaming.
+    /// </param>
+    public async Task<(Stream? Stream, long ContentLength)> RequestContentStreamAsync(string peerUserId, string contentHash, string? expectedMerkleRootHex = null)
         {
         _logger.Debug("RequestContentStreamAsync: hash={0}", contentHash);
         if (string.IsNullOrWhiteSpace(contentHash)) return (null, 0);
+
+        byte[]? expectedMerkleRoot = null;
+        if (!string.IsNullOrWhiteSpace(expectedMerkleRootHex))
+            {
+            try { expectedMerkleRoot = Convert.FromHexString(expectedMerkleRootHex); }
+            catch (FormatException) { _logger.Warn("Ignoring malformed Merkle root for content {0}.", contentHash); }
+            }
 
         var report = new PeerConnectionAttemptReport
             {
@@ -259,7 +271,7 @@ public partial class SyncOrchestrator
 
         _logger.Info("Starting ParallelChunkStream for content {0} from {1} peers", contentHash, availableEndpoints.Count);
 
-        var stream = new ParallelChunkStream(contentHash, availableEndpoints, _client.RequestContentChunkAsync, _logger);
+        var stream = new ParallelChunkStream(contentHash, availableEndpoints, _client.RequestContentChunkAsync, _logger, expectedMerkleRoot);
         await stream.InitializeAsync();
 
         if (stream.Length <= 0)

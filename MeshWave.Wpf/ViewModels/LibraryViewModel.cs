@@ -252,7 +252,8 @@ public partial class LibraryViewModel : ViewModelBase
                 CryptoService.ComputeFileHash(track.FilePath),
                 track.Title,
                 track.Artist,
-                album.Name);
+                album.Name,
+                track.FilePath);
 
         var count = Tracks.Count(t => t.IsReleased);
         SyncStatus = $"Announced album '{album.Name}' with {count} released track(s) to the network.";
@@ -267,7 +268,8 @@ public partial class LibraryViewModel : ViewModelBase
             CryptoService.ComputeFileHash(track.FilePath),
             track.Title,
             track.Artist,
-            SelectedAlbum?.Name ?? string.Empty);
+            SelectedAlbum?.Name ?? string.Empty,
+            track.FilePath);
 
         SyncStatus = $"Announced '{track.Title}' to the network.";
     }

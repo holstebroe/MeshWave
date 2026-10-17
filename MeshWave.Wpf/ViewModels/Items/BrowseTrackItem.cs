@@ -26,6 +26,9 @@ public class BrowseTrackItem : ViewModelBase
     public string Album { get; set; } = string.Empty;
     public string? ContentHash { get; set; }
     public string? CompressedContentHash { get; set; }
+
+    /// <summary>The content's Merkle root (see <c>ContentMerkleTree</c>), when the author published one, for per-chunk verification of streamed downloads (T2).</summary>
+    public string? MerkleRootHex { get; set; }
     public long FileSize { get; set; }
     public string FileSizeDisplay { get; set; } = string.Empty;
     public DateTime? ReleasedAt { get; set; }

@@ -1,0 +1,42 @@
+name: NAT Lab (real NAT hole-punch scenarios)
+
+# P2P protocol review H3: exercises hole punching (C2) and the symmetric-NAT fallback (C4) against a real Linux
+# network-namespace + iptables MASQUERADE NAT simulation, instead of only ever running peers on 127.0.0.1.
+# Needs root and iproute2/iptables, which GitHub's ubuntu runners provide; it cannot run on the windows-latest
+# runner used by dotnet-desktop.yml, so it is a separate workflow, run on demand and on a schedule rather than on
+# every push (the scenarios take a few minutes and are not part of the fast feedback loop).
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  nat-lab:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install network lab tools
+        run: sudo apt-get update && sudo apt-get install -y iproute2 iptables
+
+      - name: Build
+        run: dotnet build MeshWave.slnx --configuration Debug
+
+      - name: symmetric-pair-no-route (C4, no fallback available: must fail)
+        run: sudo NAT_LAB_SKIP_BUILD=1 bash scripts/nat-lab/run-scenario.sh symmetric-pair-no-route
+
+      - name: symmetric-pair-c4-fallback (C4: falls back to another peer)
+        run: sudo NAT_LAB_SKIP_BUILD=1 bash scripts/nat-lab/run-scenario.sh symmetric-pair-c4-fallback
+
+      - name: cone-pair-best-effort (C2, informational only)
+        run: sudo NAT_LAB_SKIP_BUILD=1 bash scripts/nat-lab/run-scenario.sh cone-pair-best-effort
