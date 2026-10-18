@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using MeshWave.Common.Core.Models;
 using MeshWave.Common.Core.Storage;
+using MeshWave.Common.Core.Enums;
 using Microsoft.Data.Sqlite;
 using TagLib;
 using File = System.IO.File;
@@ -87,7 +88,7 @@ public class LocalLibraryManager
                     CoverImageHash = null,
                     Description = metadata.Artist,
                     Signature = "local",
-                    IsDownloaded = true,
+                    AvailabilityState = TrackAvailabilityState.Downloaded,
                     ContentHash = metadata.ContentHash
                 };
                 _tracks.Add(track);
@@ -139,7 +140,7 @@ public class LocalLibraryManager
                             CoverImageHash = null,
                             Description = metadata.Artist,
                             Signature = "local",
-                            IsDownloaded = false,
+                            AvailabilityState = TrackAvailabilityState.Remote,
                             ContentHash = metadata.ContentHash
                         };
                         _tracks.Add(track);

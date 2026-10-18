@@ -151,10 +151,10 @@
                                     <Style TargetType="MenuItem">
                                         <Setter Property="Visibility" Value="Collapsed"/>
                                         <Style.Triggers>
-                                            <DataTrigger Binding="{Binding PlacementTarget.SelectedItem.IsRemovedFromLibrary, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Value="True">
+                                            <DataTrigger Binding="{Binding PlacementTarget.SelectedItem.AvailabilityState, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Value="Remote">
                                                 <Setter Property="Visibility" Value="Visible"/>
                                             </DataTrigger>
-                                            <DataTrigger Binding="{Binding PlacementTarget.SelectedItem.IsDownloaded, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Value="False">
+                                            <DataTrigger Binding="{Binding PlacementTarget.SelectedItem.AvailabilityState, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Value="Pending">
                                                 <Setter Property="Visibility" Value="Visible"/>
                                             </DataTrigger>
                                         </Style.Triggers>

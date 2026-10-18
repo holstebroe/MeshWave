@@ -1,5 +1,6 @@
 using MeshWave.Common.Core;
 using MeshWave.Wpf.ViewModels;
+using MeshWave.Wpf.ViewModels.Items;
 using Moq;
 using Xunit;
 
@@ -8,7 +9,7 @@ namespace MeshWave.ViewModels.Tests;
 public class LibraryViewModelTests
 {
     [Fact]
-    public void LoadLibrary_SetsIsDownloadedFalse_AndAllowsReDownload_ForMissingFiles()
+    public void LoadLibrary_SetsAvailabilityStateToRemote_AndAllowsReDownload_ForMissingFiles()
     {
         // Arrange
 
@@ -53,14 +54,14 @@ public class LibraryViewModelTests
         var track = vm.Tracks[0];
 
         Assert.Equal("Missing Song", track.Title);
-        Assert.False(track.IsDownloaded);
+        Assert.Equal(MeshWave.Common.Core.Enums.TrackAvailabilityState.Remote, track.AvailabilityState);
         Assert.Equal("hash123", track.ContentHash);
         Assert.Equal("Not Downloaded", track.StatusBadge);
         Assert.False(track.CanPlay);
 
         // Ensure download command is executable
         // We evaluate CanExecute logic without actually resolving it through Moq to avoid errors
-        var canRedownload = ((!vm.IsMyMusicLibrary && track.IsRemovedFromLibrary) || (vm.IsMyMusicLibrary && !track.IsDownloaded)) && !string.IsNullOrWhiteSpace(track.ContentHash);
+        var canRedownload = (track.AvailabilityState == MeshWave.Common.Core.Enums.TrackAvailabilityState.Remote) && !string.IsNullOrWhiteSpace(track.ContentHash);
         Assert.True(canRedownload);
 
         // Cleanup

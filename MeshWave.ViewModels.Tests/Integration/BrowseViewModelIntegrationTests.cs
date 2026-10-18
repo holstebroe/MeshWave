@@ -3,6 +3,7 @@ using MeshWave.Synchronizer;
 using MeshWave.TestUtilities;
 using MeshWave.Wpf.Services;
 using MeshWave.Wpf.ViewModels;
+using MeshWave.Wpf.ViewModels.Items;
 using Xunit;
 
 namespace MeshWave.ViewModels.Tests.Integration;
@@ -217,12 +218,12 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         janeBrowseViewModel.DownloadTrackCommand.Execute(trackItem);
 
         // Verify it enters queued/downloading state
-        await jane.WaitForConditionAsync(() => trackItem.IsQueued || trackItem.IsDownloaded);
+        await jane.WaitForConditionAsync(() => trackItem.AvailabilityState == MeshWave.Common.Core.Enums.TrackAvailabilityState.Pending || trackItem.AvailabilityState == MeshWave.Common.Core.Enums.TrackAvailabilityState.Downloaded);
 
         // Verify completion
-        await jane.WaitForConditionAsync(() => trackItem.IsDownloaded, timeoutMs: 60000);
-        Assert.False(trackItem.IsQueued);
-        Assert.True(trackItem.IsDownloaded);
+        await jane.WaitForConditionAsync(() => trackItem.AvailabilityState == MeshWave.Common.Core.Enums.TrackAvailabilityState.Downloaded, timeoutMs: 60000);
+        Assert.NotEqual(MeshWave.Common.Core.Enums.TrackAvailabilityState.Pending, trackItem.AvailabilityState);
+        Assert.Equal(MeshWave.Common.Core.Enums.TrackAvailabilityState.Downloaded, trackItem.AvailabilityState);
         Assert.False(trackItem.CanDownload);
     }
 
@@ -270,12 +271,12 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         janeBrowseViewModel.DownloadTrackCommand.Execute(trackItem);
 
         // Verify it enters queued/downloading state
-        await jane.WaitForConditionAsync(() => trackItem.IsQueued || trackItem.IsDownloaded);
+        await jane.WaitForConditionAsync(() => trackItem.AvailabilityState == MeshWave.Common.Core.Enums.TrackAvailabilityState.Pending || trackItem.AvailabilityState == MeshWave.Common.Core.Enums.TrackAvailabilityState.Downloaded);
 
         // Verify completion
-        await jane.WaitForConditionAsync(() => trackItem.IsDownloaded, timeoutMs: 15000);
-        Assert.False(trackItem.IsQueued);
-        Assert.True(trackItem.IsDownloaded);
+        await jane.WaitForConditionAsync(() => trackItem.AvailabilityState == MeshWave.Common.Core.Enums.TrackAvailabilityState.Downloaded, timeoutMs: 15000);
+        Assert.NotEqual(MeshWave.Common.Core.Enums.TrackAvailabilityState.Pending, trackItem.AvailabilityState);
+        Assert.Equal(MeshWave.Common.Core.Enums.TrackAvailabilityState.Downloaded, trackItem.AvailabilityState);
 
         // The downloaded file should be the compressed one, check if download queue item hash is the compressed one
         // Removing this assert because it failed on CI. Testing IsDownloaded logic above is sufficient for testing UI flow.
@@ -338,12 +339,12 @@ public class BrowseViewModelIntegrationTests : IAsyncLifetime
         janeBrowseViewModel.DownloadTrackCommand.Execute(trackItem);
 
         // Verify it enters queued/downloading state
-        await jane.WaitForConditionAsync(() => trackItem.IsQueued || trackItem.IsDownloaded);
+        await jane.WaitForConditionAsync(() => trackItem.AvailabilityState == MeshWave.Common.Core.Enums.TrackAvailabilityState.Pending || trackItem.AvailabilityState == MeshWave.Common.Core.Enums.TrackAvailabilityState.Downloaded);
 
         // Verify completion
-        await jane.WaitForConditionAsync(() => trackItem.IsDownloaded, timeoutMs: 15000);
-        Assert.False(trackItem.IsQueued);
-        Assert.True(trackItem.IsDownloaded);
+        await jane.WaitForConditionAsync(() => trackItem.AvailabilityState == MeshWave.Common.Core.Enums.TrackAvailabilityState.Downloaded, timeoutMs: 15000);
+        Assert.NotEqual(MeshWave.Common.Core.Enums.TrackAvailabilityState.Pending, trackItem.AvailabilityState);
+        Assert.Equal(MeshWave.Common.Core.Enums.TrackAvailabilityState.Downloaded, trackItem.AvailabilityState);
     }
 
     private void OutputPeerLogs(TestPeer john, TestPeer jane)
